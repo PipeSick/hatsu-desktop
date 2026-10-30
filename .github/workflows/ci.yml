@@ -19,6 +19,9 @@ jobs:
     name: Windows · restaurar, compilar, probar, publicar artefactos
     runs-on: windows-latest
     timeout-minutes: 45
+    outputs:
+      bin_url: ${{ steps.up_bin.outputs.artifact-url }}
+      report_url: ${{ steps.up_report.outputs.artifact-url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -45,6 +48,7 @@ jobs:
           }
           if ($bad) { exit 1 }
       - name: Subir informe (logs, binlog, trx)
+        id: up_report
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -52,6 +56,7 @@ jobs:
           path: ci-report
           retention-days: 14
       - name: Subir binarios de prototipos (artefacto temporal, NO es una versión oficial)
+        id: up_bin
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -61,12 +66,11 @@ jobs:
           if-no-files-found: warn
 
   windows-smoke:
-    name: Windows · humo no visual (informativo)
+    name: Windows · humo del Dock (selftest, PNG, bench)
     needs: windows-build
     runs-on: windows-latest
-    # Informativo: el runner no tiene monitor/GPU reales. Un fallo aquí NO invalida la compilación ni valida lo visual.
-    continue-on-error: true
-    timeout-minutes: 20
+    # Un fallo aquí SÍ hace fallar el workflow (detección de errores de ejecución). El éxito NO valida lo visual: el runner no tiene monitor/GPU reales.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -79,10 +83,18 @@ jobs:
           New-Item -ItemType Directory -Force smoke | Out-Null
           & ci-publish/S7.PlatformProbe/S7.PlatformProbe.exe *> smoke/S7-platform.txt
           Get-Content smoke/S7-platform.txt
-      - name: Humo del dock (si existe en este commit)
+      - name: Humo del Dock (selftest, PNG de todas las escenas, bench en WARP)
         shell: pwsh
         run: ./tools/ci/Invoke-Smoke.ps1 -PublishDir ci-publish -OutDir smoke
+      - name: Preparar hoja de contacto
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force sheet | Out-Null
+          Copy-Item smoke/contact-sheet.png sheet/ -ErrorAction SilentlyContinue
+          Copy-Item smoke/preview-*.png sheet/ -ErrorAction SilentlyContinue
       - name: Subir resultados de humo
+        id: up_smoke
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -90,6 +102,19 @@ jobs:
           path: smoke
           retention-days: 14
           if-no-files-found: warn
+      - name: Subir hoja de contacto
+        id: up_sheet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dock-hoja-de-contacto-${{ github.sha }}
+          path: sheet
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Resumen visual (Job Summary)
+        if: always()
+        shell: pwsh
+        run: ./tools/ci/Write-Summary.ps1 -SmokeDir smoke -SmokeUrl "${{ steps.up_smoke.outputs.artifact-url }}" -SheetUrl "${{ steps.up_sheet.outputs.artifact-url }}" -BinUrl "${{ needs.windows-build.outputs.bin_url }}" -Sha "${{ github.sha }}"
 
   linux-cross:
     name: Linux · compilación cruzada y pruebas de lógica pura (informativo)

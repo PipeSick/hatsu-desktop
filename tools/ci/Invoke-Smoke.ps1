@@ -44,8 +44,31 @@ foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark
     Write-Host "::endgroup::"
   }
 }
+# Hoja de contacto: compone los PNG REALES del renderizador (no genera imágenes propias) para revisarlos de un vistazo.
+try {
+  Add-Type -AssemblyName System.Drawing
+  $poses = 'rest', 'hover', 'open', 'edge', 'hidden'; $themes = 'light', 'dark'; $cellW = 1200; $labelH = 26
+  $imgs = @{}; $cellH = 0
+  foreach ($t in $themes) { foreach ($p in $poses) { $f = Join-Path $OutDir "dock-$t-$p.png"; if (Test-Path $f) { $im = [System.Drawing.Image]::FromFile($f); $imgs["$t/$p"] = $im; $h = [int]($im.Height * $cellW / $im.Width); if ($h -gt $cellH) { $cellH = $h } } } }
+  if ($imgs.Count -gt 0) {
+    $sheet = New-Object System.Drawing.Bitmap ($cellW * 2), (($cellH + $labelH) * $poses.Count)
+    $g = [System.Drawing.Graphics]::FromImage($sheet); $g.Clear([System.Drawing.Color]::FromArgb(30, 30, 34)); $g.InterpolationMode = 'HighQualityBicubic'
+    $font = New-Object System.Drawing.Font 'Segoe UI', 11; $brush = [System.Drawing.Brushes]::White
+    for ($r = 0; $r -lt $poses.Count; $r++) { for ($c = 0; $c -lt 2; $c++) {
+      $k = "$($themes[$c])/$($poses[$r])"; $x = $c * $cellW; $y = $r * ($cellH + $labelH)
+      $g.DrawString("$k  (renderizador real, WARP, fondo procedural)", $font, $brush, $x + 6, $y + 4)
+      if ($imgs.ContainsKey($k)) { $im = $imgs[$k]; $g.DrawImage($im, $x, $y + $labelH, $cellW, [int]($im.Height * $cellW / $im.Width)) }
+    } }
+    $g.Dispose(); $sheet.Save((Join-Path $OutDir 'contact-sheet.png'), [System.Drawing.Imaging.ImageFormat]::Png); $sheet.Dispose()
+    foreach ($im in $imgs.Values) { $im.Dispose() }
+    Write-Host "Hoja de contacto: $OutDir\contact-sheet.png"
+  }
+} catch { Write-Host "Hoja de contacto no generada: $($_.Exception.Message)" }
+
 $md = "# Humo no interactivo`n`n> Informativo. El runner no tiene monitor ni GPU reales. Un OK aquí no valida lo visual; un fallo no invalida la compilación.`n`n| Paso | Resultado | Detalle |`n|---|---|---|`n"
 foreach ($r in $rows) { $md += "| $($r.Paso) | $($r.Resultado) | $($r.Detalle -replace '\|', '/') |`n" }
 $md | Set-Content (Join-Path $OutDir 'smoke.md') -Encoding UTF8
 if ($env:GITHUB_STEP_SUMMARY) { Add-Content $env:GITHUB_STEP_SUMMARY $md }
+$bad = @($rows | Where-Object { $_.Resultado -ne 'OK' -and $_.Resultado -ne 'omitido' })
+if ($bad.Count) { Write-Host "::error title=Humo del Dock::$($bad.Count) paso(s) fallaron: $(($bad | ForEach-Object { $_.Paso }) -join '; ')"; exit 1 }
 exit 0
