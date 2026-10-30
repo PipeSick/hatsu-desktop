@@ -1,0 +1,104 @@
+name: ci
+
+# Validación NO interactiva en runners de GitHub. No publica versiones, no crea releases, no escribe en el repositorio.
+on:
+  push:
+    branches: ["claude/**", "main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-build:
+    name: Windows · restaurar, compilar, probar, publicar artefactos
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Entorno
+        shell: pwsh
+        run: |
+          dotnet --info
+          (cmd /c ver)
+          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion | Format-Table | Out-String
+      - name: Restaurar, compilar, probar, publicar
+        shell: pwsh
+        run: ./tools/ci/Invoke-Ci.ps1 -Configuration Release
+      - name: Análisis sintáctico de scripts PowerShell
+        if: always()
+        shell: pwsh
+        run: |
+          $bad = 0
+          foreach ($f in Get-ChildItem tools -Recurse -Filter *.ps1) {
+            $e = $null; $t = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$t, [ref]$e)
+            if ($e) { $e | ForEach-Object { Write-Host "::error file=$($f.FullName)::$($_.Message)" }; $bad++ }
+          }
+          if ($bad) { exit 1 }
+      - name: Subir informe (logs, binlog, trx)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-report
+          path: ci-report
+          retention-days: 14
+      - name: Subir binarios de prototipos (artefacto temporal, NO es una versión oficial)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmac-binarios-${{ github.sha }}
+          path: ci-publish
+          retention-days: 14
+          if-no-files-found: warn
+
+  windows-smoke:
+    name: Windows · humo no visual (informativo)
+    needs: windows-build
+    runs-on: windows-latest
+    # Informativo: el runner no tiene monitor/GPU reales. Un fallo aquí NO invalida la compilación ni valida lo visual.
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: winmac-binarios-${{ github.sha }}
+          path: ci-publish
+      - name: Sonda de plataforma (solo lectura)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force smoke | Out-Null
+          & ci-publish/S7.PlatformProbe/S7.PlatformProbe.exe *> smoke/S7-platform.txt
+          Get-Content smoke/S7-platform.txt
+      - name: Humo del dock (si existe en este commit)
+        shell: pwsh
+        run: ./tools/ci/Invoke-Smoke.ps1 -PublishDir ci-publish -OutDir smoke
+      - name: Subir resultados de humo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ github.sha }}
+          path: smoke
+          retention-days: 14
+          if-no-files-found: warn
+
+  linux-cross:
+    name: Linux · compilación cruzada y pruebas de lógica pura (informativo)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - shell: pwsh
+        run: ./tools/ci/Invoke-Ci.ps1 -Configuration Release -NoPublish
