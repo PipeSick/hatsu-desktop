@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64</Platforms>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <!-- Autocontenido: no exige instalar el Windows App Runtime en el equipo de pruebas. -->
+    <WindowsAppSDKSelfContained Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</WindowsAppSDKSelfContained>
+    <WindowsAppSDKSelfContained Condition="!$([MSBuild]::IsOSPlatform('Windows'))">false</WindowsAppSDKSelfContained>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <DisableXamlGeneratedMain>true</DisableXamlGeneratedMain>
+    <!-- makepri.exe es solo Windows: en compilación cruzada (Linux) se omite la generación de PRI. En Windows queda activa. -->
+    <AppxGeneratePriEnabled Condition="!$([MSBuild]::IsOSPlatform('Windows'))">false</AppxGeneratePriEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.4" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.*" />
+  </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\Common\Common.csproj" /></ItemGroup>
+</Project>

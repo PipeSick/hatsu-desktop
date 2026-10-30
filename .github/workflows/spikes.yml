@@ -1,13 +1,33 @@
 name: spikes
 on:
   pull_request:
-    paths: ["spikes/**"]
+    paths: ["spikes/**", "tools/**"]
   workflow_dispatch:
 jobs:
-  build:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: "10.0.x" }
-      - run: dotnet build spikes/WinMac.Spikes.slnx -c Release --nologo
+      - name: Pruebas unitarias de la lógica compartida
+        run: dotnet test spikes/Common.Tests -c Release --nologo
+      - name: Compilar prototipos (WinUI 3 incluye PRI/manifiesto reales)
+        shell: pwsh
+        run: |
+          foreach ($n in 'S2.DockWpf','S4.DockDComp','S7.PlatformProbe','S1.WindowTracker','S6.UiaMenus','S5.TaskbarGuard') {
+            dotnet build "spikes/$n/$n.csproj" -c Release --nologo; if ($LASTEXITCODE) { exit 1 }
+          }
+          dotnet build spikes/S3.DockWinUI/S3.DockWinUI.csproj -c Release -p:Platform=x64 --nologo; if ($LASTEXITCODE) { exit 1 }
+      - name: Análisis sintáctico del script de pruebas
+        shell: pwsh
+        run: |
+          $e=$null;$t=$null;[void][System.Management.Automation.Language.Parser]::ParseFile("tools/Run-Phase1Tests.ps1",[ref]$t,[ref]$e); if($e){$e;exit 1}
+  linux-cross:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "10.0.x" }
+      - run: dotnet test spikes/Common.Tests -c Release --nologo
+      - run: for n in S2.DockWpf S4.DockDComp S7.PlatformProbe S1.WindowTracker S6.UiaMenus S5.TaskbarGuard; do dotnet build spikes/$n/$n.csproj -c Release --nologo || exit 1; done

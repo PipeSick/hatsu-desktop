@@ -1,4 +1,6 @@
 bin/
 obj/
+artifacts/
 bench-results/
 last-path.txt
+.mono/

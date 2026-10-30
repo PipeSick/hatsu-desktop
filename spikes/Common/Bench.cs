@@ -45,19 +45,6 @@ public sealed class CpuSampler
     }
 }
 
-public sealed record BenchReport(
-    string Spike, string Variant, string OsVersion, double RefreshHz, uint Dpi,
-    double StartupMs, double IdleCpuPct, double AnimCpuPct, double WorkingSetMb, FrameStats Frames)
-{
-    public string Save(string dir = "bench-results")
-    {
-        Directory.CreateDirectory(dir);
-        string path = Path.Combine(dir, $"{Spike}-{Variant}-{DateTime.Now:yyyyMMdd-HHmmss}.json");
-        File.WriteAllText(path, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
-        return path;
-    }
-}
-
 public static class Native
 {
     [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hWnd);
@@ -73,37 +60,3 @@ public static class Native
     }
 }
 
-/// <summary>Modelo de magnificación compartido por todos los spikes del dock para que las comparaciones sean justas.</summary>
-public static class DockMath
-{
-    public const int IconCount = 12;
-    public const double BaseSize = 56, MaxScale = 1.75, Radius = 150, Gap = 10, Pad = 14;
-
-    public static double Scale(double distance)
-    {
-        double d = Math.Abs(distance);
-        return d >= Radius ? 1 : 1 + (MaxScale - 1) * 0.5 * (1 + Math.Cos(Math.PI * d / Radius));
-    }
-
-    /// <summary>Devuelve posiciones X (izquierda) y tamaños; <paramref name="cursorX"/> es relativo al dock sin magnificar.</summary>
-    public static (double[] X, double[] Size, double Total) Layout(double cursorX)
-    {
-        var size = new double[IconCount]; var x = new double[IconCount];
-        double rest = Pad;
-        for (int i = 0; i < IconCount; i++)
-        {
-            double center = Pad + i * (BaseSize + Gap) + BaseSize / 2;
-            size[i] = BaseSize * Scale(center - cursorX);
-        }
-        double total = size.Sum() + Gap * (IconCount - 1) + 2 * Pad;
-        for (int i = 0; i < IconCount; i++) { x[i] = rest; rest += size[i] + Gap; }
-        return (x, size, total);
-    }
-
-    public static double RestWidth => IconCount * BaseSize + (IconCount - 1) * Gap + 2 * Pad;
-    public static double MaxWidth => RestWidth + (MaxScale - 1) * BaseSize * 4 + 40;
-
-    /// <summary>Barrido determinista del cursor: va y viene sobre el dock cada <paramref name="period"/> s.</summary>
-    public static double SweepX(double t, double period = 2.5)
-        => RestWidth * (0.5 + 0.5 * Math.Sin(2 * Math.PI * t / period - Math.PI / 2));
-}

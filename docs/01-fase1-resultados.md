@@ -1,12 +1,14 @@
 # WinMac — Fase 1: incertidumbres resueltas y spikes
 
-Estado: **ENTREGA PARA REVISIÓN. Los spikes compilan pero NO se han ejecutado.**
+Estado: **v2 — PARA REVISIÓN. Todo compila y la lógica compartida tiene pruebas unitarias; NINGÚN prototipo se ha ejecutado todavía en Windows.**
 Fecha: 2026-10-30. Rama: `claude/vibrant-keller-7tyi6u`.
 
 > **Límite honesto de esta entrega.** Esta sesión corre en Linux. Pude instalar el SDK de .NET 10 y
-> **compilar** los spikes apuntando a `net10.0-windows` (compilación cruzada), lo que valida sintaxis y
-> firmas de API, pero **no** ejecutarlos. Por eso **no hay todavía números de FPS, CPU ni memoria**; esos
-> los producen los spikes en tus equipos (§3). La recomendación de §5 es por tanto **provisional**.
+> **compilar** todo apuntando a `net10.0-windows` (compilación cruzada), lo que valida sintaxis y firmas de API,
+> pero **no** ejecutar los prototipos. Por eso **no hay todavía números de FPS, CPU ni memoria ni capturas reales**:
+> los produce `tools\Run-Phase1Tests.ps1` en tus equipos. **No se declara tecnología ganadora.**
+> Cuatro categorías se mantienen separadas en todo el informe: **Objetivo** (umbral deseado) · **Medición real**
+> (la que produzca el script en tu equipo; hoy: ninguna) · **Hipótesis** (a probar) · **Limitación** (conocida).
 
 Convención: **[V]** verificado hoy en fuente (enlace al final) · **[C]** conocimiento previo no re-verificado ·
 **[H]** hipótesis a probar · **[B]** verificado por compilación (no por ejecución).
@@ -17,8 +19,8 @@ Convención: **[V]** verificado hoy en fuente (enlace al final) · **[C]** conoc
 
 | # | Incertidumbre | Resultado |
 |---|---|---|
-| U1 | ¿Versión de Windows App SDK? | Estable actual **2.6.4 (27-oct-2026)**; hay un canal experimental 2.5.4 [V]. Compatible hacia atrás hasta Win10 1809 y solo con versiones de Windows en soporte [V]. **Aún no confirmado** que su plantilla soporte `net10.0-windows10.0.19041.0`; los ejemplos oficiales hallados usan net8 [V]. → verificar al crear el proyecto WinUI (spike S3). |
-| U2 | ¿.NET 10 sirve para el resto? | Los 6 proyectos (Win32, WPF, UIA) **compilan con SDK 10.0.114 y TFM `net10.0-windows`** [B]. |
+| U1 | ¿Versión de Windows App SDK? | Estable actual **2.6.4 (27-oct-2026)**; hay un canal experimental 2.5.4 [V]. Compatible hacia atrás hasta Win10 1809 y solo con versiones de Windows en soporte [V]. Los ejemplos oficiales hallados usan net8 [V], pero **`net10.0-windows10.0.19041.0` + WinAppSDK 2.6.4 restaura y compila** (hasta ensamblado, en Linux) [B]; ver §3. |
+| U2 | ¿.NET 10 sirve para el resto? | Todos los proyectos (Win32, WPF, UIA, WinUI 3, DirectComposition) **compilan con SDK 10.0.114 y TFM `net10.0-windows`** [B]. |
 | U3 | Licencia de Seelen UI | **AGPL-3.0** [V, fuente secundaria]. Copiar su código a un proyecto Apache-2.0 **no es compatible** → solo referencia de ideas/UX, **no se reutiliza código**. |
 | U4 | Licencias de otros candidatos | Flow Launcher **MIT** [V]; PowerToys **MIT** [V]; Files **MIT** [V, Fase 0]; MScholtes/VirtualDesktop **MIT** [V]; MaximizeToVirtualDesktop **MIT** [V]. Everything SDK (voidtools): licencia propia, **no verificada** → no depender de él hasta leerla. FlaUI y Velopack: MIT según mi memoria, **sin verificar** [C]. |
 | U5 | Escritorios virtuales en 24H2/25H2 | MScholtes mantiene `VirtualDesktop11-24H2.cs` (última versión citada: 1.21, ago-2025) [V]. **No** hay confirmación explícita de 25H2. MaximizeToVirtualDesktop declara soporte "21H2 a 24H2+", con **dos layouts de vtable** (pre-24H2 y 24H2+), prueba de humo al arrancar y modo degradado si falla [V]. Como nuestro mínimo es 24H2, solo necesitamos el layout 24H2+. Confirmación de 25H2: la mide S7 en tu equipo si lo tienes (§3). |
@@ -34,125 +36,127 @@ Reglas derivadas para el repositorio (a revisar antes de aplicarlas):
 
 ---
 
-## 2. Qué se construyó (en `spikes/`)
+## 2. Qué se entrega en la v2
 
-Solución `spikes/WinMac.Spikes.slnx`, .NET 10, DPI PerMonitorV2, `TreatWarningsAsErrors`, sin dependencias NuGet. [B]
-
-| Spike | Pregunta que responde | Qué mide |
+| Entregable | Dónde | Estado |
 |---|---|---|
-| **S7.PlatformProbe** | ¿Qué hay realmente en este equipo? | Build exacta (con UBR), monitores/DPI, API **documentada** de escritorios virtuales, `SHQueryUserNotificationState`, soporte DWM de esquinas/backdrop |
-| **S1.WindowTracker** | ¿`SetWinEventHook` basta para seguir ventanas sin polling? | eventos/s, costo del handler p50/p95 en µs, CPU, y costo de un escaneo completo `EnumWindows` (la alternativa de polling), exactitud de la heurística "ventana de app" |
-| **S5.TaskbarGuard** | ¿Se puede ocultar la barra y garantizar su restauración aunque el proceso muera? | Éxito/fallo de `ABM_SETSTATE` en Win11; tiempo de restauración tras `taskkill /F` (centinela independiente) |
-| **S6.UiaMenus** | ¿Cuánto del menú de apps ajenas es legible? | Por app: ¿se halló MenuBar?, ítems de primer nivel, submenús del primero, ms |
-| **S2.DockWpf** | Línea base de dock: cadencia, CPU, memoria, fidelidad | Frame-time p50/p95/p99/máx, % frames perdidos, CPU reposo y animación, memoria, arranque. Variantes `layered` (forma propia, vidrio simulado) y `dwm` (acrílico real del sistema, esquinas del sistema) |
+| Paquete de pruebas (un solo script PowerShell) | `tools/Run-Phase1Tests.ps1` + `tools/thresholds.json` | Sintaxis validada con PowerShell 7.6 en Linux; lógica de resumen probada con datos **sintéticos** (no reales); **no ejecutado en Windows** |
+| Instrucciones sencillas | `docs/INSTRUCCIONES-PRUEBAS.md` | Listo |
+| Prototipo mínimo WPF | `spikes/S2.DockWpf` (variantes `layered`, `dwm`) | Compila [B] |
+| Prototipo mínimo WinUI 3 | `spikes/S3.DockWinUI` (variantes `acrylic`, `plain`) | Compila hasta el ensamblado [B]; ver §3 |
+| Prototipo mínimo Win32 + DirectComposition/D3D11/D2D | `spikes/S4.DockDComp` (variante `glass`) | Compila [B] |
+| Escena, geometría y guion de medición idénticos para los 3 | `spikes/Common` + 12 pruebas unitarias | **12/12 pasan** (ejecutadas en Linux) |
+| Evaluación de fidelidad y vista de geometría | `docs/02-fidelidad.md`, `docs/img/*.svg` | Listo (la vista es la *intención*, no una captura) |
+| Criterios de aceptación definitivos y regla de decisión | `docs/03-criterios-aceptacion.md` | Para tu firma |
+| Spikes de Fase 1 previos (S1, S5, S6, S7) | `spikes/` | Compilan; **S5 jamás lo ejecuta el script** |
 
-`Common` aporta el modelo de magnificación y el barrido de cursor **deterministas**, para que cualquier
-tecnología futura (WinUI, Win32+DirectComposition) se compare con exactamente la misma carga.
+Los tres prototipos dibujan **la misma escena** (14 ítems: 12 apps con 5 abiertas, separador, carpeta, papelera),
+con la misma magnificación, el mismo barrido de cursor, el mismo guion de ocultar/mostrar y los mismos íconos
+generados por código (squircle + degradado + letra; **sin recursos de Apple**).
 
-### Deliberadamente NO entregado
-- **S3 (dock WinUI 3)**: el compilador XAML de WinUI solo funciona en Windows; no voy a entregar código que
-  no pude compilar. Se crea en cuanto confirmes que puedes compilar en Windows, o en CI (`windows-latest`).
-- **S4 (Win32 + DirectComposition/D3D11, vidrio por captura)**: ver §5; lo condiciona el resultado de S2.
-- No se escribió nada del Dock real.
+Guion de medición idéntico: calentamiento 2 s → **reposo 10 s sin bucle de render** → **barrido 15 s** → **ocultar/mostrar ×3**.
+Métricas por prototipo: frame-time p50/p95/p99/máx y % de frames perdidos (barrido y ocultar), CPU en reposo y en
+animación, working set, arranque hasta primer render, costo de CPU de aplicar cada frame (proxy de latencia).
 
 ---
 
-## 3. Cómo ejecutarlos (equipo físico Win11 24H2+, de preferencia con 2 monitores)
+## 3. Validación de compilación de WinUI 3 (pedida en el punto 7.3)
 
-```powershell
-cd spikes
-dotnet build WinMac.Spikes.slnx -c Release
-dotnet run -c Release --project S7.PlatformProbe
-dotnet run -c Release --project S1.WindowTracker -- 60
-dotnet run -c Release --project S6.UiaMenus -- 5        # repetir con 10+ apps
-dotnet run -c Release --project S2.DockWpf -- --variant layered
-dotnet run -c Release --project S2.DockWpf -- --variant dwm
-dotnet run -c Release --project S2.DockWpf -- --variant dwm --interactive   # para juzgar visualmente
-```
-S5 es el único que toca el sistema (solo el autohide de la barra, reversible). **Léelo antes** y prueba
-primero `status`; si algo queda mal, `restore` o activar manualmente en Configuración → Personalización → Barra de tareas.
-```powershell
-dotnet run -c Release --project S5.TaskbarGuard -- status
-dotnet run -c Release --project S5.TaskbarGuard -- guarded-hide   # luego, desde otra consola: taskkill /F /IM S5.TaskbarGuard.exe
-```
-Los resultados quedan en `bench-results/*.json` (ignorados por git). Envíamelos o pega la salida.
-Repetir S2 en: monitor a 100 %, 150 % y 200 % de escala, y con un monitor ≥120 Hz si lo hay.
-Ejecuta S2 también en la VM **solo como dato adicional**: la VM suele usar render por software y no es
-representativa de rendimiento.
-
-### Criterios de aceptación propuestos (para tu aprobación)
-| Métrica | Umbral | Aplica a |
+| Comprobación | Resultado | Evidencia |
 |---|---|---|
-| Frames > 1,5× presupuesto (16,7 ms a 60 Hz) | ≤ 1 % | S2 |
-| Frame-time p99 | ≤ 2× presupuesto | S2 |
-| CPU reposo | ≤ 0,5 % | S2 |
-| CPU en animación continua | ≤ 8 % (un núcleo lógico normalizado) | S2 |
-| Working set | ≤ 150 MB | S2 |
-| Handler de eventos p95 | ≤ 200 µs | S1 |
-| Restauración de la barra tras muerte forzada | ≤ 3 s, 10/10 intentos | S5 |
-| Menús legibles en apps nativas (Win32/WPF) | ≥ 80 % de las probadas | S6 |
+| Restaurar `Microsoft.WindowsAppSDK 2.6.4` + `Microsoft.Windows.SDK.BuildTools` para `net10.0-windows10.0.19041.0`, win-x64, **sin empaquetar** (`WindowsPackageType=None`) | **OK** [B] | build en Linux, 0 errores |
+| Compilar C# (App, Window, `DesktopAcrylicBackdrop`, `AppWindow`, `CompositionTarget.Rendering`, `Path`/`PolyLineSegment`) contra las proyecciones de WinUI | **OK** [B] | 0 errores, 0 advertencias (`TreatWarningsAsErrors`) |
+| Compatibilidad `.NET 10` + WinAppSDK 2.6.4 + TFM `net10.0-windows10.0.19041.0` | **OK a nivel de compilación** [B] (antes: no confirmado) | resuelve y compila |
+| Generación de PRI (`makepri.exe`) y fusión de manifiesto (`mt.exe`) para autocontenido | **No verificable en Linux**: son ejecutables de Windows. El proyecto los desactiva solo fuera de Windows (`AppxGeneratePriEnabled`, `WindowsAppSDKSelfContained` condicionados al SO) | errores `Exec format error` observados antes de condicionar |
+| Compilador XAML | **No ejercitado**: el prototipo se escribió **sin archivos .xaml** (todo en código). Un dock real con XAML requiere compilar en Windows/CI | — |
+| Ejecución | **No hecha** | — |
 
-Son umbrales **propuestos**, no medidos; ajustaremos con los primeros datos reales.
-Limitación declarada de S2: `CompositionTarget.Rendering` mide cadencia de render de WPF, no la presentación
-real al monitor. Para el dato definitivo usar **PresentMon** [C, licencia a verificar].
+Limitación: «compila» ≠ «funciona». Lo que sigue siendo **hipótesis**: que una ventana WinUI 3 sin backdrop no admite fondo
+transparente (variante `plain` existe precisamente para comprobarlo visualmente), y que el modo autocontenido arranca
+y funciona en 24H2.
 
 ---
 
-## 4. Lo que la documentación ya dice sobre fidelidad visual (sin medir)
+## 4. Comparación técnica de los tres enfoques
 
-Esto es lo que más importa para tu criterio de fidelidad, y viene de fuentes, no de pruebas:
+Estado de evidencia: **documental/conceptual [C/H] + compilación [B]. Cero mediciones.** Se resumen diferencias estructurales; los números salen del script.
 
-1. Backdrops del sistema: Mica es opaco y pensado para la capa base; **Acrílico se recomienda solo para
-   superficies transitorias** (flyouts, menús) [V]. Un dock siempre visible es un caso límite de esa guía.
-2. `DWMWA_WINDOW_CORNER_PREFERENCE` solo ofrece esquinas **del sistema** (no un radio arbitrario) [V/C].
-   Un dock con radio propio exige otra técnica.
-3. Existen vías no documentadas (p. ej. `SetWindowCompositionAttribute`) muy usadas para blur con forma propia
-   [C]. **No las adoptamos** (regla: no depender de lo no documentado cuando hay alternativa; las
-   interfaces de escritorios virtuales son la excepción justificada, y aisladas).
-4. "Liquid Glass" real (refracción, brillo especular, lensing) **no existe como API nativa de Windows** [C].
-   Reproducirlo implica un shader propio sobre una captura del fondo (Windows.Graphics.Capture + D3D11) [H].
-   Es costoso en GPU y debe medirse (S4).
-
-Escalera de fidelidad propuesta (cada peldaño se valida con spike antes de subir):
-
-| Nivel | Técnica | Fidelidad | Riesgo/costo |
+| Aspecto | WPF | WinUI 3 (WinAppSDK) | Win32 + DirectComposition/D3D11/D2D |
 |---|---|---|---|
-| F1 | Ventana propia + acrílico DWM + esquinas del sistema | Media-baja | Mínimo; forma fija |
-| F2 | F1 + `SetWindowRgn` con radio propio | Media | Bordes sin antialias [H] |
-| F3 | Ventana en capas + vidrio simulado por degradados/sombras (variante `layered` de S2) | Media | Sin blur real del fondo |
-| F4 | Captura del fondo + shader D3D11 + DirectComposition (blur, saturación, borde especular, distorsión) | **Alta (Liquid Glass aproximado)** | GPU, batería, capturas protegidas (DRM/juegos) |
+| **Estado de compilación hoy** | OK [B] | OK hasta ensamblado [B] | OK [B] (depende de Vortice.* 3.8.3) |
+| **Líneas de código del prototipo** (indicativo de costo) | 160 líneas | 171 líneas | 252 líneas (incluye ~35 de P/Invoke) |
+| **Dependencias externas** | ninguna (parte del SDK de .NET) | Windows App SDK 2.6.4 (NuGet; autocontenido añade el runtime al paquete) | Vortice.* (bindings DirectX, MIT [C]) |
+| **Transparencia con forma propia** | `AllowsTransparency=true` (ventana en capas) [C] | **No hay ventana transparente nativa** [C] (hipótesis a comprobar con `plain`) | Sí: swap chain de composición con alfa premultiplicado [C] |
+| **Material del sistema (acrílico DWM)** | Solo con `AllowsTransparency=false`: cubre **toda** la ventana [C] | `DesktopAcrylicBackdrop`: cubre **toda** la ventana [V: API documentada] | No se usa en el prototipo; blur real exigiría captura del fondo + shader (S4b) [H] |
+| **Esquinas/radio propio** | Con ventana en capas, sí; con acrílico DWM, solo esquinas del sistema [V/C] | Esquinas del sistema, o región (`SetWindowRgn`) sin antialias [H] | Total |
+| **Sombra de la barra** | `DropShadowEffect` (costo a medir; en ventana en capas puede ser por CPU) [H] | No implementada en el prototipo | Aproximada por capas en D2D (no gaussiana) |
+| **Animación de magnificación** | Layout WPF por frame, hilo UI | Layout XAML por frame, hilo UI (con Composition disponible para animaciones declarativas, no usada aquí) | Redibujo D2D por frame; control total del pacing (vsync) |
+| **Ocultar/mostrar** | Mueve la ventana | Mueve la ventana | Anima offset del Visual (no mueve la ventana) |
+| **Accesibilidad (UIA)** | Proveedores automáticos para controles [C] | Proveedores automáticos para controles [C] | **Hay que implementarla a mano** [C] |
+| **Mantenimiento / contribuciones** | Madura, muchos desarrolladores; código en maduración lenta [C] | Activa (2.6.4, 27-oct-2026) [V]; ecosistema menor [C] | Más código propio y conocimiento DirectX; barrera de entrada mayor [C] |
+| **Techo de fidelidad visual (documentado)** | F1–F3 | F1–F2 (según hipótesis) | **F1–F4** (única vía a Liquid Glass aproximado sin APIs no documentadas) [H] |
+| **Idoneidad natural en WinMac** | Plan B / UI de utilidades | Settings, Finder, Launchpad (controles, accesibilidad) | Dock, barra superior, Mission Control (superficies de alta fidelidad) |
+
+Lectura honesta: la tabla describe **qué cabe esperar y qué hay que comprobar**, no un veredicto.
+**No se declara ganadora ninguna tecnología.** Las hipótesis más decisivas (H1 WPF layered+shadow rinde a 60 FPS en 150 % DPI; H2 WinUI `plain`
+es opaco; H3 D3D11/DComp mantiene CPU ≤ 8 % con 5+ efectos) se aceptan o refutan con los JSON del script.
 
 ---
 
-## 5. Recomendación técnica (PROVISIONAL, antes de medir)
+## 5. Prototipos visuales mínimos
 
-Con evidencia medida **cero** sobre rendimiento, solo puedo recomendar el *camino de validación*:
+Qué dibuja cada prototipo (resumen; lo que **no** hacen está en el JSON de cada ejecución en `FeaturesMissing`):
 
-1. **Ejecutar S7, S1, S5, S6, S2 ya.** Son baratos y desbloquean decisiones concretas (24H2/25H2, política de
-   ventanas, seguridad de la barra, viabilidad de menús).
-2. **Hipótesis de trabajo para el Dock y la Barra superior:** HWND propio en C# (Win32) con superficie
-   DirectComposition + renderizado D3D11, porque es la única vía que puede llegar a F4 (tu criterio
-   principal es fidelidad visual) sin depender de APIs no documentadas. WPF (`S2`) queda como **línea base y
-   plan B** (F1–F3). WinUI 3 (S3) se reserva para ventanas de aplicación (Settings, Finder, Launchpad), donde sus
-   controles aportan y la forma/transparencia personalizada pesa menos.
-3. **Hipótesis refutables:** si S2-`layered` ya cumple los umbrales con fidelidad aceptable, WPF podría bastar
-   para el dock en la v1 y F4 pasaría a una fase posterior. Si S2 incumple p99 o CPU, la hipótesis D3D/DComp gana peso.
-4. **Siguiente iteración tras tus datos:** S3 (WinUI) y S4 (DComp+D3D11 con vidrio por captura, mismo `Common`)
-   para decidir con números, y recién ahí el ADR-001.
+| Atributo | S2 WPF `layered` | S2 WPF `dwm` | S3 WinUI `acrylic` | S3 WinUI `plain` | S4 DComp `glass` |
+|---|---|---|---|---|---|
+| Geometría compartida / squircle | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Barra con forma propia | ✔ | ✘ (acrílico cubre toda la ventana) | ✘ (ídem) | ? (depende de la transparencia) | ✔ |
+| Material translúcido | simulado (degradado) | **acrílico real** | **acrílico real** | tinte plano | simulado (degradado) |
+| Blur real del fondo con forma de barra | ✘ | ✘ | ✘ | ✘ | ✘ (S4b) |
+| Borde especular | ✔ | ✔ | ✔ (uniforme) | ✔ (uniforme) | ✔ |
+| Sombra | ✔ (DropShadow) | ✘ | ✘ | ✘ | aprox. por capas |
+| Indicadores de app abierta / separador | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Magnificación | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Ocultar/mostrar animado | ✔ | ✔ | ✔ | ✔ | ✔ |
 
-### No adelantado
-No avanzo a la Fase 2. No se hizo `push` de esta fase: queda en commit local para tu revisión
-(tu autorización cubría solo el commit anterior de documentación).
+Capturas reales: las genera el script (`screenshots/<prototipo>-<variante>-{rest,hover,hidden}.png`). Vista de la **geometría
+objetivo** (no de ningún prototipo): `docs/img/geometria-{reposo,hover,oculto}.svg`.
 
 ---
 
-## Fuentes (consultadas hoy)
+## 6. Criterios de aceptación definitivos
+
+Ver `docs/03-criterios-aceptacion.md` (umbrales de rendimiento, criterios de fidelidad con rúbrica, puertas de decisión,
+peso de cada factor y regla de desempate). Los umbrales de rendimiento son **objetivos**; ningún resultado los ha verificado.
+
+---
+
+## 7. Lo comprobado y lo pendiente
+
+**Comprobado (con evidencia de esta sesión)**
+- [B] Los 9 proyectos .NET de `spikes/` compilan en .NET 10.0.114, incluido WinUI 3 con WinAppSDK 2.6.4 (hasta ensamblado) y Vortice 3.8.3.
+- [B] 12 pruebas unitarias de la lógica compartida pasan (geometría sin solapes, ventana suficiente para magnificación máxima, separador, barrido, squircle, guion de medición, percentiles).
+- [B] `Run-Phase1Tests.ps1` supera el análisis sintáctico de PowerShell 7.6; su generación de resumen produjo resultados correctos con datos sintéticos.
+- [V] Versión estable de Windows App SDK (2.6.4), licencias de Seelen UI (AGPL), MIT de Flow Launcher/PowerToys/MScholtes/MaximizeToVirtualDesktop/Files, vía de firma gratuita SignPath (condiciones), requisitos del listener de notificaciones (ver §1).
+
+**Pendiente (requiere tu Windows)**
+- Ejecutar el script (≥ 3 repeticiones, 100 % y ≥ 150 % DPI, con y sin 2.º monitor) → mediciones reales.
+- Comprobar visualmente `plain` (¿transparencia en WinUI?), `dwm`/`acrylic` (acrílico a todo el rectángulo) y la fidelidad con tus capturas de referencia de Tahoe.
+- Compilar S3 en Windows (PRI/manifiesto/autocontenido) y ejecutarlo.
+- PresentMon para frame pacing real (S2/S3/S4).
+- Verificar licencias pendientes: Everything SDK, FlaUI, Velopack, Vortice (MIT según mi memoria), PresentMon.
+- S5 (barra de tareas) en VM con snapshot; S6 con 10+ apps; S7 (build/25H2 escritorios virtuales).
+- Decidir el ADR-001 **solo** tras lo anterior. **No se avanza a la Fase 2.**
+
+---
+
+## Fuentes (consultadas)
 - Canales y última versión estable de Windows App SDK: https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/release-channels · https://learn.microsoft.com/en-us/windows/apps/whats-new/whats-new-for-developers · https://learn.microsoft.com/en-us/windows/apps/get-started/versioning-overview
 - Backdrops: https://learn.microsoft.com/en-us/windows/apps/develop/ui/system-backdrops
 - DWM attributes: https://learn.microsoft.com/en-us/windows/desktop/api/dwmapi/ne-dwmapi-dwmwindowattribute
-- MScholtes/VirtualDesktop (MIT; `VirtualDesktop11-24H2.cs`): https://github.com/MScholtes/VirtualDesktop
-- MaximizeToVirtualDesktop (MIT): https://github.com/xuejiaW/MaximizeToVirtualDesktop
+- MScholtes/VirtualDesktop (MIT): https://github.com/MScholtes/VirtualDesktop · MaximizeToVirtualDesktop (MIT): https://github.com/xuejiaW/MaximizeToVirtualDesktop
 - Seelen UI (AGPL-3.0, vía reseña): https://github.com/eythaann/Seelen-UI · https://hysenlabs.com/projects/eythaann-seelen-ui
 - Flow Launcher (MIT): https://flow-launcher.com/ · PowerToys Run: https://learn.microsoft.com/en-us/windows/powertoys/run
 - SignPath Foundation: https://about.signpath.io/product/open-source · https://signpath.org/
 - Notification listener: https://learn.microsoft.com/en-us/windows/apps/develop/notifications/app-notifications/notification-listener
+- Paquetes NuGet consultados: Microsoft.WindowsAppSDK 2.6.4, Vortice.* 3.8.3 (api.nuget.org)

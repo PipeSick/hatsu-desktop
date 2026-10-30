@@ -1,0 +1,11 @@
+{
+  "_status": "OBJETIVOS provisionales aceptados por el usuario (Fase 1). No son resultados medidos. Ver docs/03-criterios-aceptacion.md.",
+  "sweep_droppedPct_max": 1.0,
+  "hide_droppedPct_max": 1.0,
+  "sweep_p99_budgetMultiple_max": 2.0,
+  "idleCpuPct_max": 0.5,
+  "sweepCpuPct_max": 8.0,
+  "workingSetMb_max": 150,
+  "applyP95_budgetFraction_max": 0.5,
+  "startupMs_max": 1500
+}
