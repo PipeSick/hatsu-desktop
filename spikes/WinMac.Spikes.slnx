@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Common/Common.csproj" />
+  <Project Path="S1.WindowTracker/S1.WindowTracker.csproj" />
+  <Project Path="S2.DockWpf/S2.DockWpf.csproj" />
+  <Project Path="S5.TaskbarGuard/S5.TaskbarGuard.csproj" />
+  <Project Path="S6.UiaMenus/S6.UiaMenus.csproj" />
+  <Project Path="S7.PlatformProbe/S7.PlatformProbe.csproj" />
+</Solution>
