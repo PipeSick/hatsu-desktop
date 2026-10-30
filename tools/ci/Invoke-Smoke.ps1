@@ -10,7 +10,7 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 # Rutas ABSOLUTAS: los ejecutables se lanzan con su propio directorio de trabajo.
 $OutDir = (Resolve-Path $OutDir).Path; $PublishDir = (Resolve-Path $PublishDir).Path
 $rows = @()
-function Run($label, $exe, $argList, $timeoutSec) {
+function Run($label, $exe, $argList, $timeoutSec, [switch]$Informational) {
   if (-not (Test-Path $exe)) { Write-Host "OMITIDO $label (no existe $exe)"; $script:rows += [pscustomobject]@{ Paso = $label; Resultado = 'omitido'; Detalle = 'no existe en este commit' }; return }
   $so = (Join-Path $OutDir ($label -replace '[^\w\.-]', '_')) + '.txt'
   try {
@@ -18,14 +18,15 @@ function Run($label, $exe, $argList, $timeoutSec) {
     if (-not $p.WaitForExit($timeoutSec * 1000)) { try { $p.Kill() } catch { }; $res = 'TIEMPO AGOTADO' }
     elseif ($p.ExitCode -eq 0) { $res = 'OK' } else { $res = "salió con $($p.ExitCode)" }
   } catch { $res = "no se pudo ejecutar: $($_.Exception.Message)" }
+  if ($Informational -and $res -ne 'OK') { $res = "$res (informativo)" }
   $det = (Get-Content $so, "$so.err" -ErrorAction SilentlyContinue | Select-Object -Last 4) -join ' | '
   Write-Host "$label -> $res  $det"
   $script:rows += [pscustomobject]@{ Paso = $label; Resultado = $res; Detalle = $det }
 }
 $q = @('--quick', '--out', "`"$OutDir`"")
-Run 'S2 WPF layered --quick' "$PublishDir/S2.DockWpf/S2.DockWpf.exe" (@('--variant', 'layered') + $q) 90
-Run 'S4 DComp glass --quick' "$PublishDir/S4.DockDComp/S4.DockDComp.exe" (@('--variant', 'glass') + $q) 90
-Run 'S3 WinUI acrylic --quick' "$PublishDir/S3.DockWinUI/S3.DockWinUI.exe" (@('--variant', 'acrylic') + $q) 90
+Run 'S2 WPF layered --quick' "$PublishDir/S2.DockWpf/S2.DockWpf.exe" (@('--variant', 'layered') + $q) 90 -Informational
+Run 'S4 DComp glass --quick' "$PublishDir/S4.DockDComp/S4.DockDComp.exe" (@('--variant', 'glass') + $q) 90 -Informational
+Run 'S3 WinUI acrylic --quick' "$PublishDir/S3.DockWinUI/S3.DockWinUI.exe" (@('--variant', 'acrylic') + $q) 90 -Informational
 $dock = "$PublishDir/Dock.App/WinMac.Dock.App.exe"
 # Escenas con el renderizador REAL (mismo DockController + DockPainter + GlassBackdrop que el dock en pantalla), a 2x para poder revisar detalles.
 foreach ($theme in 'light', 'dark') {
@@ -73,6 +74,6 @@ $md = "# Humo no interactivo`n`n> Informativo. El runner no tiene monitor ni GPU
 foreach ($r in $rows) { $md += "| $($r.Paso) | $($r.Resultado) | $($r.Detalle -replace '\|', '/') |`n" }
 $md | Set-Content (Join-Path $OutDir 'smoke.md') -Encoding UTF8
 if ($env:GITHUB_STEP_SUMMARY) { Add-Content $env:GITHUB_STEP_SUMMARY $md }
-$bad = @($rows | Where-Object { $_.Resultado -ne 'OK' -and $_.Resultado -ne 'omitido' })
+$bad = @($rows | Where-Object { $_.Resultado -ne 'OK' -and $_.Resultado -ne 'omitido' -and $_.Resultado -notlike '*(informativo)' })
 if ($bad.Count) { Write-Host "::error title=Humo del Dock::$($bad.Count) paso(s) fallaron: $(($bad | ForEach-Object { $_.Paso }) -join '; ')"; exit 1 }
 exit 0

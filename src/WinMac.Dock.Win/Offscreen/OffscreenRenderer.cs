@@ -41,8 +41,8 @@ public static class OffscreenRenderer
 
         using var dev = new D2DDevice(software); dev.SetDpi(scale);
         var ctx = dev.Context; int pw = (int)Math.Ceiling(view.WindowWidth * scale), ph = (int)Math.Ceiling(view.WindowHeight * scale);
-        using var under = SyntheticBackdrop.Create(dev, pw, ph, theme);
-        using var blurred = tier == GlassTier.Tint ? null : GlassBackdrop.Build(dev, under, new RectD(0, 0, pw, ph), view.WindowWidth, view.WindowHeight, scale, style);
+        using var under = SyntheticBackdrop.Create(dev, view.WindowWidth, view.WindowHeight, scale, theme);
+        using var blurred = tier == GlassTier.Tint ? null : GlassBackdrop.Build(dev, under, new RectD(0, 0, view.WindowWidth, view.WindowHeight), view.WindowWidth, view.WindowHeight, scale, style);
         using var painter = new DockPainter(dev, metrics, style, new NoIcons());
         painter.SetBackdrop(blurred);
 

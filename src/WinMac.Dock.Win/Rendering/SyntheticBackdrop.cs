@@ -9,11 +9,14 @@ namespace WinMac.Dock.Win.Rendering;
 /// <summary>Fondo procedural con zonas claras/oscuras y colores saturados, para ver el efecto del vidrio en renders de CI. No es un fondo real de escritorio.</summary>
 public static class SyntheticBackdrop
 {
-    public static ID2D1Bitmap1 Create(D2DDevice dev, int pw, int ph, DockTheme theme = DockTheme.Light)
+    /// <param name="wDip">Ancho de la ventana en DIP.</param>
+    /// <param name="hDip">Alto de la ventana en DIP.</param>
+    /// <param name="scale">Escala (DPI/96). El bitmap tiene wDip*scale píxeles y se dibuja en DIP con el DPI actual del contexto.</param>
+    public static ID2D1Bitmap1 Create(D2DDevice dev, double wDip, double hDip, double scale, DockTheme theme = DockTheme.Light)
     {
-        bool dark = theme == DockTheme.Dark;
+        bool dark = theme == DockTheme.Dark; float pw = (float)wDip, ph = (float)hDip;  // coordenadas en DIP
         var ctx = dev.Context; var prev = ctx.Target;
-        var bmp = GlassBackdrop.CreateTarget(ctx, pw, ph, 1.0);
+        var bmp = GlassBackdrop.CreateTarget(ctx, (int)Math.Ceiling(wDip * scale), (int)Math.Ceiling(hDip * scale), scale);
         try
         {
             ctx.Target = bmp; ctx.BeginDraw();

@@ -22,9 +22,9 @@ public static class OffscreenBench
 
         using var dev = new D2DDevice(software); dev.SetDpi(scale); var ctx = dev.Context;
         int pw = (int)Math.Ceiling(v0.WindowWidth * scale), ph = (int)Math.Ceiling(v0.WindowHeight * scale);
-        using var under = SyntheticBackdrop.Create(dev, pw, ph, theme);
+        using var under = SyntheticBackdrop.Create(dev, v0.WindowWidth, v0.WindowHeight, scale, theme);
         var swBuild = Stopwatch.StartNew();
-        using var blurred = tier == GlassTier.Tint ? null : GlassBackdrop.Build(dev, under, new RectD(0, 0, pw, ph), v0.WindowWidth, v0.WindowHeight, scale, style);
+        using var blurred = tier == GlassTier.Tint ? null : GlassBackdrop.Build(dev, under, new RectD(0, 0, v0.WindowWidth, v0.WindowHeight), v0.WindowWidth, v0.WindowHeight, scale, style);
         if (blurred is not null) OffscreenRenderer.Readback(dev, blurred, pw, ph, scale); // fuerza la ejecución del efecto
         double buildMs = swBuild.Elapsed.TotalMilliseconds;
 

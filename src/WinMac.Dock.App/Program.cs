@@ -29,6 +29,7 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        try { Console.OutputEncoding = new System.Text.UTF8Encoding(false); } catch { }
         try { Directory.CreateDirectory(Path.GetDirectoryName(DockDefaults.LogPath)!); _log = new StreamWriter(DockDefaults.LogPath, true); } catch { }
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Log("EXCEPCIÓN NO CONTROLADA: " + e.ExceptionObject);
         var tier = (Arg(args, "--tier")?.ToLowerInvariant()) switch { "tint" => GlassTier.Tint, "wallpaper" => GlassTier.WallpaperBlur, _ => (GlassTier?)null };
