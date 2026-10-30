@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Lógica pura del Dock: sin dependencias de Windows ni de ninguna tecnología de render. Se prueba también en Linux. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinMac.Dock</RootNamespace>
+  </PropertyGroup>
+</Project>

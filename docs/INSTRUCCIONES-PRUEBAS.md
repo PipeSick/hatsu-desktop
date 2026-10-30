@@ -52,3 +52,7 @@ powershell -NoProfile -File tools\Run-Phase1Tests.ps1 -SummaryFrom bench-results
 - **Un prototipo se queda colgado**: el script lo mata a los 120 s y lo marca como fallido.
 - **Algo quedó abierto** (por Ctrl+C): cierra `S2.DockWpf`, `S3.DockWinUI`, `S4.DockDComp` desde el Administrador de tareas. No hay ninguna otra reversión pendiente, porque estas pruebas no modifican el sistema.
 - Los binarios quedan en `artifacts\` (ignorada por git). Puedes borrarla cuando quieras.
+
+## Probar el Dock (iteración 1) y ver el CI sin Windows
+- Instrucciones del Dock, lista de lo pendiente de validación y cómo descargar los PNG/artefactos del CI desde macOS: [`06-dock-iteracion-1.md`](06-dock-iteracion-1.md) §4.
+- Este script (`Run-Phase1Tests.ps1`) cubre los **prototipos** S2/S3/S4; el Dock tiene su propio `--selftest` y `--render-png` (no invasivos).

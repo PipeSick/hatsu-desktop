@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>WinMac.Dock.App</RootNamespace>
+    <AssemblyName>WinMac.Dock.App</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\WinMac.Dock.Win\WinMac.Dock.Win.csproj" /></ItemGroup>
+</Project>

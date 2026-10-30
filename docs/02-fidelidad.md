@@ -1,5 +1,7 @@
 # Fidelidad visual — referencia macOS Tahoe
 
+> **Estado: la rúbrica y todos los valores de este documento son PROVISIONALES y NO están aprobados.** Se aprobarán con referencias visuales reales y pruebas en Windows.
+
 La fidelidad es criterio principal. Este documento define **qué se evalúa**, **cómo se calibra contra una referencia real** y
 **qué rúbrica se usa**. No contiene medidas oficiales de Apple ni usa recursos de Apple.
 

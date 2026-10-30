@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Integración con Windows y render (Direct2D/DirectComposition). Todo lo específico de Windows vive aquí, detrás de las abstracciones de Dock.Core. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>WinMac.Dock.Win</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Bindings .NET de DirectX (licencia MIT [C]; verificar y anotar en THIRD_PARTY.md antes de publicar). -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.Direct2D1" Version="3.8.3" />
+    <PackageReference Include="Vortice.DirectComposition" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+  </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\WinMac.Dock.Core\WinMac.Dock.Core.csproj" /></ItemGroup>
+</Project>
