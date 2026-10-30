@@ -7,14 +7,18 @@
 param([string]$PublishDir = 'ci-publish', [string]$OutDir = 'smoke')
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+# Rutas ABSOLUTAS: los ejecutables se lanzan con su propio directorio de trabajo.
+$OutDir = (Resolve-Path $OutDir).Path; $PublishDir = (Resolve-Path $PublishDir).Path
 $rows = @()
 function Run($label, $exe, $argList, $timeoutSec) {
   if (-not (Test-Path $exe)) { Write-Host "OMITIDO $label (no existe $exe)"; $script:rows += [pscustomobject]@{ Paso = $label; Resultado = 'omitido'; Detalle = 'no existe en este commit' }; return }
-  $so = Join-Path $OutDir ($label -replace '[^\w\.-]', '_') + '.txt'
-  $p = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory (Split-Path $exe) -PassThru -RedirectStandardOutput $so -RedirectStandardError "$so.err" -WindowStyle Hidden
-  if (-not $p.WaitForExit($timeoutSec * 1000)) { try { $p.Kill() } catch { }; $res = 'TIEMPO AGOTADO' }
-  elseif ($p.ExitCode -eq 0) { $res = 'OK' } else { $res = "salió con $($p.ExitCode)" }
-  $det = (Get-Content $so, "$so.err" -ErrorAction SilentlyContinue | Select-Object -Last 3) -join ' | '
+  $so = (Join-Path $OutDir ($label -replace '[^\w\.-]', '_')) + '.txt'
+  try {
+    $p = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory (Split-Path $exe) -PassThru -RedirectStandardOutput $so -RedirectStandardError "$so.err" -ErrorAction Stop
+    if (-not $p.WaitForExit($timeoutSec * 1000)) { try { $p.Kill() } catch { }; $res = 'TIEMPO AGOTADO' }
+    elseif ($p.ExitCode -eq 0) { $res = 'OK' } else { $res = "salió con $($p.ExitCode)" }
+  } catch { $res = "no se pudo ejecutar: $($_.Exception.Message)" }
+  $det = (Get-Content $so, "$so.err" -ErrorAction SilentlyContinue | Select-Object -Last 4) -join ' | '
   Write-Host "$label -> $res  $det"
   $script:rows += [pscustomobject]@{ Paso = $label; Resultado = $res; Detalle = $det }
 }
