@@ -3,7 +3,9 @@
 Estado: **primera implementación. Compila (Linux y, para los prototipos previos, Windows en CI). El Dock NO se ha ejecutado nunca en Windows.**
 Lo no ejecutado está marcado **PENDIENTE DE VALIDACIÓN**. Nada aquí declara terminada la Fase 2.
 
-## 0. Resultado del CI en Windows (ejecución real)
+> **Actualización:** el CI de Windows ya termina en éxito y ejecuta `--selftest`, `--render-png` y `--bench-offscreen`. Ver **docs/07-validacion-ci.md** (la tabla de abajo es del primer run, ya superado).
+
+## 0. Resultado del CI en Windows (primera ejecución, superada)
 Ejecución [41115820149](https://github.com/PipeSick/win11-macos/actions/runs/41115820149) sobre `32d92dd` (Windows Server 2025, build 26100, SDK 10.0.403):
 
 | Comprobación | Resultado |
