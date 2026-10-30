@@ -355,3 +355,34 @@ public class DemoAndMetricsTests
         }
     }
 }
+
+public class ThemeTests
+{
+    [Fact]
+    public void Dark_preset_is_darker_denser_and_has_its_own_marks()
+    {
+        var l = GlassStyle.For(DockTheme.Light); var d = GlassStyle.For(DockTheme.Dark);
+        Assert.Equal(DockTheme.Light, l.Theme); Assert.Equal(DockTheme.Dark, d.Theme);
+        Assert.True(d.TintR + d.TintG + d.TintB < l.TintR + l.TintG + l.TintB);
+        Assert.True(d.TintAlpha > l.TintAlpha); Assert.True(d.ShadowAlpha > l.ShadowAlpha); Assert.True(d.RimTopAlpha < l.RimTopAlpha);
+    }
+
+    [Fact]
+    public void Config_theme_roundtrips_and_defaults_to_system()
+    {
+        Assert.Equal(ThemeMode.System, new DockConfig().Theme);
+        Assert.Equal(ThemeMode.Dark, DockConfig.FromJson(new DockConfig { Theme = ThemeMode.Dark }.ToJson()).Theme);
+    }
+
+    [Fact]
+    public void AllOpen_scene_has_every_pinned_app_running_and_a_minimized_one()
+    {
+        var items = DemoData.AllOpen();
+        Assert.Equal(items.Count, items.Select(i => i.Id).Distinct().Count());
+        var apps = items.Where(i => i.Kind == DockItemKind.App).ToList();
+        Assert.All(apps, a => Assert.True(a.Running)); Assert.Contains(apps, a => a.AllMinimized); Assert.Contains(apps, a => a.WindowCount > 1); Assert.Single(apps, a => a.Active);
+        var c = new DockController(new DockMetrics(), new DockConfig()); c.SetItems(items);
+        for (int i = 0; i < 120; i++) c.Step(1.0 / 60);
+        Assert.True(c.Step(0).BarWidth + 2 * c.Metrics.ShadowMargin <= c.WindowWidth);
+    }
+}

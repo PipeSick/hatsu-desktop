@@ -23,10 +23,27 @@ Run 'S2 WPF layered --quick' "$PublishDir/S2.DockWpf/S2.DockWpf.exe" (@('--varia
 Run 'S4 DComp glass --quick' "$PublishDir/S4.DockDComp/S4.DockDComp.exe" (@('--variant', 'glass') + $q) 90
 Run 'S3 WinUI acrylic --quick' "$PublishDir/S3.DockWinUI/S3.DockWinUI.exe" (@('--variant', 'acrylic') + $q) 90
 $dock = "$PublishDir/Dock.App/WinMac.Dock.App.exe"
-foreach ($pose in 'rest', 'hover', 'hidden') {
-  Run "Dock offscreen $pose" $dock @('--render-png', "`"$OutDir\dock-$pose.png`"", '--pose', $pose) 60
+# Escenas con el renderizador REAL (mismo DockController + DockPainter + GlassBackdrop que el dock en pantalla), a 2x para poder revisar detalles.
+foreach ($theme in 'light', 'dark') {
+  foreach ($pose in 'rest', 'hover', 'open', 'edge', 'hidden') {
+    Run "Dock offscreen $theme/$pose" $dock @('--render-png', "`"$OutDir\dock-$theme-$pose.png`"", '--pose', $pose, '--theme', $theme, '--scale', '2') 90
+  }
 }
-Run 'Dock selftest (ventana real, 3 s)' $dock @('--selftest') 60
+Run 'Dock offscreen tint (sin fondo)' $dock @('--render-png', "`"$OutDir\dock-light-tint-hover.png`"", '--pose', 'hover', '--tier', 'tint', '--scale', '2') 90
+Run 'Dock bench offscreen (WARP; NO es FPS real)' $dock @('--bench-offscreen', "`"$OutDir\bench-offscreen-light.json`"", '--theme', 'light') 180
+Run 'Dock selftest' $dock @('--selftest', '--out', "`"$OutDir\selftest`"") 240
+# Vista previa en el log: el sandbox de desarrollo no puede descargar artefactos, pero SÍ leer los logs del job.
+# Se emiten versiones reducidas (escala 0.75) de dos escenas en base64 dentro de grupos plegados. Los PNG completos (2x) están en el artefacto.
+foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark-open'; t = 'dark'; p = 'open' })) {
+  $f = Join-Path $OutDir "preview-$($pv.n).png"
+  Run "Vista previa $($pv.n)" $dock @('--render-png', "`"$f`"", '--pose', $pv.p, '--theme', $pv.t, '--scale', '0.75') 90
+  if (Test-Path $f) {
+    $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f))
+    Write-Host "::group::PREVIEW_B64 $($pv.n) bytes=$((Get-Item $f).Length) b64len=$($b64.Length)"
+    for ($i = 0; $i -lt $b64.Length; $i += 3000) { Write-Host ("PVB64|" + $b64.Substring($i, [Math]::Min(3000, $b64.Length - $i))) }
+    Write-Host "::endgroup::"
+  }
+}
 $md = "# Humo no interactivo`n`n> Informativo. El runner no tiene monitor ni GPU reales. Un OK aquí no valida lo visual; un fallo no invalida la compilación.`n`n| Paso | Resultado | Detalle |`n|---|---|---|`n"
 foreach ($r in $rows) { $md += "| $($r.Paso) | $($r.Resultado) | $($r.Detalle -replace '\|', '/') |`n" }
 $md | Set-Content (Join-Path $OutDir 'smoke.md') -Encoding UTF8

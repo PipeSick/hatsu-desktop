@@ -103,11 +103,11 @@ public sealed class DockPainter : IDisposable
             using var brush = _ctx.CreateBitmapBrush(_backdropBlurred, new BitmapBrushProperties { ExtendModeX = ExtendMode.Clamp, ExtendModeY = ExtendMode.Clamp, InterpolationMode = BitmapInterpolationMode.Linear });
             _ctx.FillRoundedRectangle(rr, brush);
         }
-        else { Solid(0.80f, 0.84f, 0.90f, 0.55f); _ctx.FillRoundedRectangle(rr, _solid); }
+        else { if (_g.Theme == DockTheme.Dark) Solid(0.16f, 0.17f, 0.21f, 0.70f); else Solid(0.80f, 0.84f, 0.90f, 0.55f); _ctx.FillRoundedRectangle(rr, _solid); }
 
         // 2) Tinte claro (vidrio «lechoso»), más denso abajo.
         using (var tint = Grad(new Vector2(0, bar.Top), new Vector2(0, bar.Bottom),
-            (0f, new Color4(1, 1, 1, (float)(_g.TintAlpha + _g.Brightness))), (1f, new Color4(1, 1, 1, (float)(_g.TintAlpha * 0.8)))))
+            (0f, new Color4((float)_g.TintR, (float)_g.TintG, (float)_g.TintB, (float)(_g.TintAlpha + _g.Brightness))), (1f, new Color4((float)_g.TintR, (float)_g.TintG, (float)_g.TintB, (float)(_g.TintAlpha * 0.8)))))
             _ctx.FillRoundedRectangle(rr, tint);
 
         // 3) Brillo suave en la mitad superior (reflejo).
@@ -131,7 +131,7 @@ public sealed class DockPainter : IDisposable
         foreach (var it in v.Items)
         {
             if (it.Model.Kind != DockItemKind.Separator) continue;
-            Solid(1, 1, 1, 0.38f);
+            Solid((float)_g.MarkR, (float)_g.MarkG, (float)_g.MarkB, (float)_g.SeparatorAlpha);
             _ctx.DrawLine(new Vector2((float)it.X, barTop + barH * .2f), new Vector2((float)it.X, barTop + barH * .8f), _solid, 1f);
         }
     }
@@ -162,7 +162,7 @@ public sealed class DockPainter : IDisposable
         // indicador de app abierta
         if (it.Model.Running)
         {
-            Solid(1, 1, 1, it.Model.Active ? 0.95f : 0.75f);
+            Solid((float)_g.MarkR, (float)_g.MarkG, (float)_g.MarkB, it.Model.Active ? (float)Math.Min(1, _g.MarkAlpha + 0.10) : (float)(_g.MarkAlpha - 0.10));
             _ctx.FillEllipse(new Ellipse(new Vector2(x + s / 2, barBottom - (float)_m.PadBottom + 6.5f), (float)_m.DotSize / 2, (float)_m.DotSize / 2), _solid);
         }
     }

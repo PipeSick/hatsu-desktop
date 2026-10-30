@@ -3,6 +3,21 @@
 Estado: **primera implementación. Compila (Linux y, para los prototipos previos, Windows en CI). El Dock NO se ha ejecutado nunca en Windows.**
 Lo no ejecutado está marcado **PENDIENTE DE VALIDACIÓN**. Nada aquí declara terminada la Fase 2.
 
+## 0. Resultado del CI en Windows (ejecución real)
+Ejecución [41115820149](https://github.com/PipeSick/win11-macos/actions/runs/41115820149) sobre `32d92dd` (Windows Server 2025, build 26100, SDK 10.0.403):
+
+| Comprobación | Resultado |
+|---|---|
+| Restaurar dependencias (todos los componentes) | **OK** |
+| Compilar Dock.Core, Dock.Win, Dock.App y los prototipos en Windows | **OK**, 0 errores, 0 advertencias |
+| Pruebas unitarias de Dock.Core en Windows | **OK** (código de salida 0; el recuento exacto no quedó en el log de consola) |
+| Publicar binarios (`dotnet publish -r win-x64`) | **FALLÓ** en todas las apps: error NETSDK1047/1112 — fallo **del script de CI** (`--no-restore` con identificador de runtime), no del código |
+| `--selftest` y `--render-png` | **NO SE EJECUTARON**: el job de humo depende de la publicación y quedó omitido |
+| Artefactos | `ci-report` generado (logs, binlog, trx); el artefacto de binarios quedó **vacío** por el fallo anterior |
+
+Corrección local (pendiente de autorización para subirla): publicar sin `--no-restore`, mostrar el recuento de pruebas en el log, y ampliar el humo.
+**Un CI en verde no valida el aspecto ni el comportamiento visual.**
+
 ## 1. Estructura (`src/`)
 | Proyecto | Contenido | Dependencias |
 |---|---|---|
@@ -17,6 +32,7 @@ Lo no ejecutado está marcado **PENDIENTE DE VALIDACIÓN**. Nada aquí declara t
 | **Geometría** | Barra con radio propio, íconos squircle, separadores, espaciado; todo en `DockMetrics` (calibrable) |
 | **Ampliación** | Magnificación coseno con alcance configurable; **resortes por ítem** (ligero rebote); la barra crece y centra; los íconos nunca se solapan (probado) |
 | **Animaciones** | Aparición de ítems nuevos (crecen desde 0), **salto de lanzamiento** con rebote, ocultar/mostrar por resorte (desplazamiento del Visual) |
+| **Temas** | Claro y oscuro (`GlassStyle.For`), `Theme: System/Light/Dark` en la configuración (el modo Sistema lee `AppsUseLightTheme`); *implementado, sin validar visualmente* |
 | **Transparencia/material** | Vidrio en capas: fondo de pantalla desenfocado+saturado cacheado, tinte, brillo superior, **borde especular doble**, sombra en 14 capas; nivel `Tint` de reserva |
 | **Indicadores** | Punto bajo apps abiertas (más intenso si está activa); etiqueta con el nombre sobre el ícono bajo el cursor |
 | **Apps** | Ancladas (JSON en `%AppData%\WinMac\dock.json`), recientes (apps en ejecución no ancladas, máx. 3, orden estable), carpeta Descargas, **Papelera** (ícono propio; abre `shell:RecycleBinFolder`) |
@@ -25,7 +41,7 @@ Lo no ejecutado está marcado **PENDIENTE DE VALIDACIÓN**. Nada aquí declara t
 | **Entrada** | Solo la barra captura el ratón (`WM_NCHITTEST` → el resto es transparente); no roba el foco (`WS_EX_NOACTIVATE`, `WM_MOUSEACTIVATE`) |
 | **Rendimiento (diseño)** | Sin render en reposo; bucle a ~20 Hz solo para sondear; fondo del vidrio cacheado; fallback a WARP |
 | **Seguridad/Convivencia** | **No** toca la barra de tareas, el registro, ni archivos del sistema; no inyecta en procesos; instancia única; configuración con escritura atómica y carga tolerante a errores |
-| **CI** | Render fuera de pantalla → PNG (3 poses) y `--selftest` en runner Windows como humo informativo |
+| **CI** | Render fuera de pantalla → PNG (5 escenas × 2 temas, a 2×), `--bench-offscreen` (coste de dibujo en WARP; **no es FPS real**) y `--selftest` en runner Windows como humo informativo |
 
 ## 3. Pendiente de validación (NO ejecutado en Windows)
 | # | Funcionalidad | Qué se debe comprobar | Cómo |

@@ -18,6 +18,7 @@ public sealed record DockConfig
     public bool ClickActiveMinimizes { get; init; } = false;
     public string? DownloadsPath { get; init; }
     public GlassTier GlassTier { get; init; } = GlassTier.WallpaperBlur;
+    public ThemeMode Theme { get; init; } = ThemeMode.System;
 
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
     public string ToJson() => JsonSerializer.Serialize(this, Json);

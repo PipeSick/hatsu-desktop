@@ -20,4 +20,18 @@ public static class DemoData
         l.Add(new DockItemModel("trash", DockItemKind.Trash, "Papelera", "shell:RecycleBinFolder"));
         return l;
     }
+
+    /// <summary>Escena «muchas apps abiertas»: todas las ancladas en ejecución (algunas con varias ventanas, una minimizada) y varias recientes.</summary>
+    public static IReadOnlyList<DockItemModel> AllOpen()
+    {
+        var l = new List<DockItemModel>();
+        for (int i = 0; i < Names.Length; i++)
+            l.Add(new DockItemModel($"app:demo{i}", DockItemKind.App, Names[i], $@"C:\Demo\{Names[i]}.exe", true, true, 1 + i % 3, i == 1, i == 4));
+        l.Add(new DockItemModel("sep:recents", DockItemKind.Separator, "", null));
+        foreach (var n in new[] { "Editor", "Hoja", "Visor" }) l.Add(new DockItemModel($"app:demo-{n}", DockItemKind.App, n, $@"C:\Demo\{n}.exe", false, true, 1));
+        l.Add(new DockItemModel("sep:system", DockItemKind.Separator, "", null));
+        l.Add(new DockItemModel("folder:downloads", DockItemKind.Folder, "Descargas", @"C:\Users\demo\Downloads"));
+        l.Add(new DockItemModel("trash", DockItemKind.Trash, "Papelera", "shell:RecycleBinFolder"));
+        return l;
+    }
 }

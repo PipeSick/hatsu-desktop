@@ -62,12 +62,12 @@ foreach ($c in $components) {
     & dotnet test $c.Path -c $Configuration --no-build --logger "trx;LogFileName=$n.trx" --results-directory "$ReportDir/trx" *> "$log-test.log"
     $r.Test = if ($LASTEXITCODE -eq 0) { 'OK' } else { 'FALLO' }
     $line = Select-String -Path "$log-test.log" -Pattern '(Passed!|Failed!)' | Select-Object -Last 1
-    if ($line) { $r.Detail = $line.Line.Trim() }
+    if ($line) { $r.Detail = $line.Line.Trim(); Write-Host "  $($r.Detail)" }
   }
   if ($c.Kind -eq 'app' -and $r.Build -eq 'OK' -and -not $NoPublish -and ($isWin -or $n -ne 'S3.DockWinUI')) {
     $sc = if ($n -eq 'S3.DockWinUI') { 'true' } else { 'false' }
     $rid = if ($isWin) { @('-r', 'win-x64', "--self-contained", $sc) } else { @() }
-    & dotnet publish $c.Path -c $Configuration --no-restore -o "$PublishDir/$n" @($c.Extra) @($rid) *> "$log-publish.log"
+    & dotnet publish $c.Path -c $Configuration -o "$PublishDir/$n" @($c.Extra) @($rid) *> "$log-publish.log"
     $r.Publish = if ($LASTEXITCODE -eq 0) { 'OK' } else { 'FALLO' }
     if ($r.Publish -eq 'FALLO' -and -not $r.Detail) { $r.Detail = (Select-String -Path "$log-publish.log" -Pattern ': error ' | Select-Object -First 2 | ForEach-Object { $_.Line.Trim() }) -join ' || ' }
   }
