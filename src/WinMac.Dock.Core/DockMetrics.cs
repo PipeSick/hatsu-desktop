@@ -47,8 +47,13 @@ public sealed record DockMetrics
     public double DotSize => BaseSize * DotRatio;
     public double DotCenterBelowIcon => BaseSize * DotCenterBelowIconRatio;
 
-    /// <summary>Altura de ventana: barra + holgura de magnificación + salto + etiqueta + márgenes de sombra.</summary>
-    public double WindowHeight => BarHeight + BaseSize * (MaxScale - 1) + BounceHeight + LabelHeight + LabelGap + ShadowMargin * 2;
+    /// <summary>Alto extra de ventana para la vista previa de ventanas (0 = sin vista previa; la ventana mide lo mismo que antes). Lo fija el host.</summary>
+    public double PreviewHeadroom { get; init; } = 0;
+    /// <summary>Ancho máximo del panel de vista previa (0 = sin vista previa). La ventana se ensancha (zona transparente) para que quepa; la barra sigue centrada.</summary>
+    public double PreviewMaxWidth { get; init; } = 0;
+
+    /// <summary>Altura de ventana: barra + holgura de magnificación + salto + etiqueta + márgenes de sombra (+ vista previa si está activada).</summary>
+    public double WindowHeight => BarHeight + BaseSize * (MaxScale - 1) + BounceHeight + LabelHeight + LabelGap + ShadowMargin * 2 + PreviewHeadroom;
     /// <summary>Distancia total que recorre el dock al ocultarse.</summary>
     public double HideDistance => BarHeight + ShadowMargin + 10;
 }

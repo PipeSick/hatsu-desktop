@@ -30,12 +30,13 @@ Run 'S3 WinUI acrylic --quick' "$PublishDir/S3.DockWinUI/S3.DockWinUI.exe" (@('-
 $dock = "$PublishDir/Dock.App/WinMac.Dock.App.exe"
 # Escenas con el renderizador REAL (mismo DockController + DockPainter + GlassBackdrop que el dock en pantalla), a 2x para poder revisar detalles.
 foreach ($theme in 'light', 'dark') {
-  foreach ($pose in 'rest', 'hover', 'open', 'edge', 'hidden') {
+  foreach ($pose in 'rest', 'hover', 'open', 'edge', 'hidden', 'preview') {
     Run "Dock offscreen $theme/$pose" $dock @('--render-png', "`"$OutDir\dock-$theme-$pose.png`"", '--pose', $pose, '--theme', $theme, '--scale', '2') 90
   }
 }
 Run 'Dock offscreen tint (sin fondo)' $dock @('--render-png', "`"$OutDir\dock-light-tint-hover.png`"", '--pose', 'hover', '--tier', 'tint', '--scale', '2') 90
 Run 'Dock bench offscreen (WARP; NO es FPS real)' $dock @('--bench-offscreen', "`"$OutDir\bench-offscreen-light.json`"", '--theme', 'light') 180
+Run 'Miniaturas de ventanas reales (--thumb-test, informativo)' $dock @('--thumb-test', '--out', "`"$OutDir\thumbs`"") 90 -Informational
 Run 'Dock selftest' $dock @('--selftest', '--out', "`"$OutDir\selftest`"") 240
 # Iconos REALES con el servicio de iconos (IShellItemImageFactory) de aplicaciones presentes en el runner. Informativo: el runner no es un escritorio de usuario.
 foreach ($app in @('%WINDIR%\explorer.exe', '%WINDIR%\notepad.exe', '%WINDIR%\System32\calc.exe', '%WINDIR%\System32\mspaint.exe')) {
@@ -44,7 +45,7 @@ foreach ($app in @('%WINDIR%\explorer.exe', '%WINDIR%\notepad.exe', '%WINDIR%\Sy
 }
 # Vista previa en el log: el sandbox de desarrollo no puede descargar artefactos, pero SÍ leer los logs del job.
 # Se emiten versiones reducidas (escala 0.75) de dos escenas en base64 dentro de grupos plegados. Los PNG completos (2x) están en el artefacto.
-foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark-open'; t = 'dark'; p = 'open' })) {
+foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark-open'; t = 'dark'; p = 'open' }, @{ n = 'light-preview'; t = 'light'; p = 'preview' }, @{ n = 'dark-preview'; t = 'dark'; p = 'preview' })) {
   $f = Join-Path $OutDir "preview-$($pv.n).png"
   Run "Vista previa $($pv.n)" $dock @('--render-png', "`"$f`"", '--pose', $pv.p, '--theme', $pv.t, '--scale', '0.75') 90
   if (Test-Path $f) {
@@ -57,7 +58,7 @@ foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark
 # Hoja de contacto: compone los PNG REALES del renderizador (no genera imágenes propias) para revisarlos de un vistazo.
 try {
   Add-Type -AssemblyName System.Drawing
-  $poses = 'rest', 'hover', 'open', 'edge', 'hidden'; $themes = 'light', 'dark'; $cellW = 1200; $labelH = 26
+  $poses = 'rest', 'hover', 'open', 'edge', 'hidden', 'preview'; $themes = 'light', 'dark'; $cellW = 1200; $labelH = 26
   $imgs = @{}; $cellH = 0
   foreach ($t in $themes) { foreach ($p in $poses) { $f = Join-Path $OutDir "dock-$t-$p.png"; if (Test-Path $f) { $im = [System.Drawing.Image]::FromFile($f); $imgs["$t/$p"] = $im; $h = [int]($im.Height * $cellW / $im.Width); if ($h -gt $cellH) { $cellH = $h } } } }
   if ($imgs.Count -gt 0) {

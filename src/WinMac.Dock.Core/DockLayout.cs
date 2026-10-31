@@ -60,7 +60,7 @@ public static class DockLayout
         return worst;
     }
 
-    public static double WindowWidth(DockMetrics m, IReadOnlyList<DockItemModel> items) => MaxBarWidth(m, items) + 2 * m.ShadowMargin + 8;
+    public static double WindowWidth(DockMetrics m, IReadOnlyList<DockItemModel> items) => Math.Max(MaxBarWidth(m, items) + 2 * m.ShadowMargin + 8, m.PreviewMaxWidth + 2 * m.ShadowMargin);
 
     /// <summary>Índice del ítem bajo X (coordenada relativa a la barra) o -1. Ignora separadores.</summary>
     public static int HitTestX(DockFrame frame, IReadOnlyList<DockItemModel> items, double x)

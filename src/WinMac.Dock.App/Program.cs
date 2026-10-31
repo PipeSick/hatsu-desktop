@@ -8,7 +8,7 @@
 //   WinMac.Dock.App --pin <ruta.exe|AUMID> [--title T]   ancla una app (Win32 por ruta; empaquetada por AUMID, p. ej. Microsoft.WindowsCalculator_8wekyb3d8bbwe!App)
 //   WinMac.Dock.App --unpin <id|ruta|AUMID> desancla una app
 //   WinMac.Dock.App --icon-test <ruta.exe|AUMID> [--out icono.png]   extrae el icono original con el mismo servicio que usa el dock y lo guarda como PNG
-//   WinMac.Dock.App --render-png f.png [--pose rest|hover|hidden|open|edge] [--theme light|dark] [--tier tint|wallpaper] [--scale 1.5]
+//   WinMac.Dock.App --render-png f.png [--pose rest|hover|hidden|open|edge|preview] [--theme light|dark] [--tier tint|wallpaper] [--scale 1.5]
 //                                           renderiza FUERA de pantalla (no abre ventana) con el renderizador real y guarda un PNG (para CI)
 //   WinMac.Dock.App --bench-offscreen f.json [--theme ..] [--tier ..] [--scale ..]
 //                                           mide el coste de dibujar (WARP en CI; NO es FPS real) y escribe un JSON con sus limitaciones
@@ -46,7 +46,7 @@ internal static class Program
         {
             if (Arg(args, "--render-png") is string png)
             {
-                var pose = Arg(args, "--pose")?.ToLowerInvariant() switch { "hover" => DemoPose.Hover, "hidden" => DemoPose.Hidden, "open" => DemoPose.Open, "edge" => DemoPose.Edge, _ => DemoPose.Rest };
+                var pose = Arg(args, "--pose")?.ToLowerInvariant() switch { "hover" => DemoPose.Hover, "hidden" => DemoPose.Hidden, "open" => DemoPose.Open, "edge" => DemoPose.Edge, "preview" => DemoPose.Preview, _ => DemoPose.Rest };
                 double scale = double.TryParse(Arg(args, "--scale"), System.Globalization.CultureInfo.InvariantCulture, out var s) ? s : 1.0;
                 string info = OffscreenRenderer.Render(png, pose, tier ?? GlassTier.WallpaperBlur, SystemTheme.Resolve(themeArg ?? ThemeMode.Light), scale);
                 Log($"PNG escrito: {png} ({info})"); return 0;
@@ -62,6 +62,7 @@ internal static class Program
             if (Arg(args, "--pin") is string toPin) return ConfigCommand(args, ("pin", toPin));
             if (Arg(args, "--unpin") is string toUnpin) return ConfigCommand(args, ("unpin", toUnpin));
             if (Arg(args, "--icon-test") is string iconTarget) return IconTest(iconTarget, Arg(args, "--out"));
+            if (args.Contains("--thumb-test")) return ThumbTest(Arg(args, "--out"));
             return RunDock(args, tier, themeArg);
         }
         catch (Exception e) { Log("ERROR: " + e); return 1; }
@@ -120,6 +121,25 @@ internal static class Program
         if (b is null) { Log($"Sin icono válido para {id.Id}: el Dock usaría el mosaico de reemplazo. Estadísticas: {svc.Stats}"); return 1; }
         Log($"Icono de {id.Id}: {b.Width}x{b.Height}px (proporción {(double)b.Width / b.Height:0.00}); válido");
         if (outPng is not null) { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPng))!); File.WriteAllBytes(outPng, PngWriter.EncodeRgba(PngWriter.BgraPremulToRgba(b.Bgra, b.Width * 4, b.Width, b.Height), b.Width, b.Height)); Log("PNG: " + outPng); }
+        return 0;
+    }
+
+    /// <summary>Captura las miniaturas de todas las ventanas de app abiertas (las mismas que usa la vista previa) y las guarda como PNG. Informativo: depende de las ventanas que haya.</summary>
+    private static int ThumbTest(string? outDir)
+    {
+        using var tracker = new WinMac.Dock.Win.Shell.WindowTracker(); var apps = tracker.Snapshot(); int ok = 0, fail = 0, skipped = 0, n = 0;
+        if (outDir is not null) Directory.CreateDirectory(outDir);
+        foreach (var app in apps)
+            foreach (var w in app.Windows)
+            {
+                n++;
+                if (w.Minimized) { skipped++; Log($"  (minimizada, se omite) {app.Identity.DisplayName}: {w.Title}"); continue; }
+                var sw = Stopwatch.StartNew(); var b = WinMac.Dock.Win.Shell.WindowThumbnails.Capture(new IntPtr(w.Hwnd));
+                if (b is null) { fail++; Log($"  FALLÓ {app.Identity.DisplayName}: {w.Title} ({sw.ElapsedMilliseconds} ms; negra, protegida o sin respuesta)"); continue; }
+                ok++; Log($"  OK {app.Identity.DisplayName}: {w.Title} → {b.Width}x{b.Height}px ({sw.ElapsedMilliseconds} ms)");
+                if (outDir is not null) File.WriteAllBytes(Path.Combine(outDir, $"thumb-{n:00}-{new string(app.Identity.DisplayName.Where(char.IsLetterOrDigit).ToArray())}.png"), PngWriter.EncodeRgba(PngWriter.BgraPremulToRgba(b.Bgra, b.Width * 4, b.Width, b.Height), b.Width, b.Height));
+            }
+        Log($"Miniaturas: {ok} correctas, {fail} fallidas, {skipped} minimizadas omitidas, de {n} ventanas en {apps.Count} apps.");
         return 0;
     }
 
@@ -195,6 +215,16 @@ internal static class Program
             if (apps.Select(i => i.Id).Distinct().Count() != apps.Count) throw new InvalidOperationException("ítems de app duplicados");
             var first = apps.FirstOrDefault(); int menu = first is null ? 0 : DockMenu.ForItem(first, 0, apps.Count(a => a.Pinned)).Count;
             return $"{apps.Count} apps ({apps.Count(a => a.Pinned)} ancladas, {apps.Count(a => a.Running)} abiertas); entradas del menú del primero = {menu}";
+        });
+        Step("Miniaturas de ventanas (reducción + captura de las ventanas abiertas)", () =>
+        {
+            var src = new byte[200 * 100 * 4]; for (int i = 0; i < src.Length; i += 4) { src[i] = 200; src[i + 1] = 120; src[i + 2] = 40; src[i + 3] = 255; }
+            var small = WinMac.Dock.Win.Shell.WindowThumbnails.Downscale(src, 200, 0, 0, 200, 100, 50, 50) ?? throw new Exception("la reducción devolvió null");
+            if (small.Width != 50 || small.Height != 25) throw new Exception($"tamaño inesperado {small.Width}x{small.Height}");
+            if (WinMac.Dock.Win.Shell.WindowThumbnails.Downscale(new byte[200 * 100 * 4], 200, 0, 0, 200, 100, 50, 50) is not null) throw new Exception("una imagen negra debía descartarse");
+            using var tr = new WinMac.Dock.Win.Shell.WindowTracker(); int ok = 0, fail = 0, total = 0;
+            foreach (var app in tr.Snapshot()) foreach (var w in app.Windows) { total++; if (w.Minimized) continue; if (WinMac.Dock.Win.Shell.WindowThumbnails.Capture(new IntPtr(w.Hwnd)) is null) fail++; else ok++; }
+            return $"reducción OK (200x100→50x25; negro descartado); capturas de ventanas reales: {ok} correctas, {fail} fallidas de {total} (informativo)";
         });
         Step("Detector de pantalla completa", () => $"suprimir={FullscreenWatcher.ShouldSuppress()}");
         Step("Render fuera de pantalla (D2D) → PNG, 5 escenas × 2 temas", () =>

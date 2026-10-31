@@ -39,3 +39,15 @@ No modifica archivos del sistema, no reemplaza el Explorador, no oculta la barra
 - Iconos de apps empaquetadas dependen del Shell; si falla, se usa el fallback determinista.
 - Los iconos alternativos se configuran editando `dock.json` (sin interfaz).
 - Varios monitores y DPI mixtos sin validar.
+
+## Iteración 3: apps temporales movibles y vista previa de ventanas
+**Temporales movibles.** Las apps abiertas no ancladas se pueden arrastrar, pero solo entre ellas (nunca mezcladas con las ancladas, y viceversa). El orden vive en memoria (`DockModelBuilder.SetRecentOrder`): se olvida al cerrarse la app o el Dock; no se guarda en `dock.json`.
+
+**Vista previa de ventanas** (estructura de la referencia aportada: panel de vidrio con pico sobre el icono, cabecera con icono y nombre, una tarjeta por ventana con su título en una píldora y su miniatura; las minimizadas llevan la píldora «Minimizada»).
+- Aparece a los 0,35 s de pasar el ratón sobre una app con ventanas (`PreviewDelaySeconds`), cambia al instante entre apps, y se oculta 0,25 s después de salir del icono, del pasillo o del panel. Clic en una tarjeta = activar (y restaurar si está minimizada) esa ventana. No aparece al arrastrar, con el Dock oculto ni a pantalla completa. Se desactiva con `"PreviewsEnabled": false`.
+- El panel se ancla a la posición **en reposo** del icono (con holgura para la magnificación máxima) para que no se mueva mientras el puntero sube hacia él; mientras está abierto reemplaza a la etiqueta de nombre.
+- **Decisión de arquitectura:** se dibuja DENTRO de la ventana del Dock, que crece hacia arriba y a los lados (zona transparente, el ratón la atraviesa). Alternativa descartada: una segunda ventana (otro dispositivo, otro swap chain, enrutado de ratón entre ventanas). La barra no cambia de tamaño ni de posición; con `PreviewsEnabled: false` la ventana mide lo mismo que antes. Hasta 5 tarjetas (el resto se anuncia como «+N más»); en pantallas estrechas las miniaturas se reducen.
+- **Miniaturas:** `PrintWindow(PW_RENDERFULLCONTENT)` en un hilo aparte (el Dock nunca espera), sin los bordes invisibles de redimensión, recortadas a 480×300, refrescadas cada ~1,5 s mientras se pasa el ratón. Se omiten ventanas que no responden y capturas totalmente negras; las minimizadas conservan su última captura (o muestran el icono de la app). Alternativas: miniaturas en vivo de DWM (`DwmRegisterThumbnail`, necesita una ventana destino propia) o `Windows.Graphics.Capture` (más coste); se pueden revisar si esta resulta insuficiente.
+- **Limitación conocida:** es una instantánea, no vídeo; apps con contenido protegido o aceleración especial pueden salir negras (se muestra el icono). Medidas del panel sin calibrar.
+- Pruebas: geometría (centrado, bordes, reducción, proporciones raras, holgura en la ventana), comportamiento (retardo, cambio, salida, clic, bloqueo tras clic, config, arrastre), arrastre de temporales y orden en memoria. CI: escena `--pose preview` con ventanas sintéticas (claro/oscuro), `--thumb-test` y una sección del selftest.
+- CLI nueva: `--thumb-test [--out carpeta]` captura las ventanas abiertas con el mismo servicio y las guarda como PNG.

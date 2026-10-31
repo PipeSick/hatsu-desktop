@@ -34,4 +34,13 @@ public static class DemoData
         l.Add(new DockItemModel("trash", DockItemKind.Trash, "Papelera", "shell:RecycleBinFolder"));
         return l;
     }
+
+    /// <summary>Como <see cref="AllOpen"/> pero con la lista de ventanas de cada app (para la escena de la vista previa). La app 2 tiene 3 ventanas, una minimizada.</summary>
+    public static IReadOnlyList<DockItemModel> AllOpenWithWindows() =>
+        AllOpen().Select(it =>
+        {
+            if (it.Kind != DockItemKind.App || it.WindowCount == 0) return it;
+            var w = Enumerable.Range(0, it.WindowCount).Select(j => new WindowInfo(5000 + (it.Id.Sum(c => c) % 1000) * 10 + j, j == 0 ? $"{it.Title} — documento principal" : $"{it.Title} {j + 1}", it.AllMinimized || (it.Id == "app:demo2" && j == 1), it.Active && j == 0)).ToList();
+            return it with { Windows = w };
+        }).ToList();
 }

@@ -8,7 +8,7 @@ public sealed record ItemView(int Index, DockItemModel Model, double X, double S
 /// <summary>Instantánea que el render dibuja. Coordenadas en DIP relativas a la ventana del dock.</summary>
 public sealed record DockView(
     ItemView[] Items, double WindowWidth, double WindowHeight, double BarLeft, double BarWidth, double BarHeight,
-    double HideT, int HoverIndex, bool NeedsFrames, bool Suppressed, int DragIndex = -1);
+    double HideT, int HoverIndex, bool NeedsFrames, bool Suppressed, int DragIndex = -1, PreviewView? Preview = null);
 
 /// <summary>
 /// Núcleo del comportamiento del Dock: modelo, magnificación con resortes, ocultamiento automático, reglas de clic y salto de lanzamiento.
@@ -25,7 +25,19 @@ public sealed class DockController
     // reordenación por arrastre
     private string? _dragId; private double _dragX; private IReadOnlyList<DockItemModel>? _dragOriginal, _pendingItems;
 
-    public DockController(DockMetrics m, DockConfig cfg) { _m = m; _cfg = cfg; _anim = new DockAnimator(m); }
+    private readonly PreviewController _preview;
+    private bool _dragTemporary;
+    /// <summary>Último arrastre terminado: true si movió una app TEMPORAL (no anclada); su orden solo dura mientras el dock está abierto.</summary>
+    public bool LastDropTemporary { get; private set; }
+    /// <summary>Última vista previa calculada (null si no hay).</summary>
+    public PreviewView? Preview { get; private set; }
+    public Func<long, double>? ThumbAspect { get => _preview.Aspect; set => _preview.Aspect = value; }
+    public void DismissPreview() => _preview.Dismiss();
+    /// <summary>Clic sobre una tarjeta de la vista previa (activa esa ventana). Null si el clic no fue sobre una tarjeta.</summary>
+    public DockAction? PreviewClick() { var a = _preview.Click(Preview); return a; }
+    public bool PreviewContains(double x, double y) => Preview is { } p && (p.Frame.Panel.Inflate(2).Contains(x, y));
+
+    public DockController(DockMetrics m, DockConfig cfg) { _m = m; _cfg = cfg; _anim = new DockAnimator(m); _preview = new PreviewController(m, cfg); }
 
     public DockMetrics Metrics => _m;
     public IReadOnlyList<DockItemModel> Items => _items;
@@ -39,13 +51,13 @@ public sealed class DockController
     }
 
     public bool IsDragging => _dragId is not null;
-    /// <summary>Solo las apps ancladas se pueden reordenar.</summary>
-    public bool CanDrag(int index) => (uint)index < (uint)_items.Count && _items[index] is { Kind: DockItemKind.App, Pinned: true };
+    /// <summary>Las apps ancladas y las temporales (abiertas, no ancladas) se pueden reordenar, cada grupo dentro de sí mismo.</summary>
+    public bool CanDrag(int index) => (uint)index < (uint)_items.Count && _items[index] is { Kind: DockItemKind.App } it && (it.Pinned || it.Running);
 
     public bool BeginDrag(int index)
     {
         if (!CanDrag(index) || _dragId is not null) return false;
-        _dragId = _items[index].Id; _dragOriginal = _items; _dragX = double.NaN; return true;
+        _dragId = _items[index].Id; _dragTemporary = !_items[index].Pinned; _dragOriginal = _items; _dragX = double.NaN; _preview.Dismiss(); return true;
     }
 
     /// <summary>Mueve el ítem arrastrado: su posición entre las ancladas sale de comparar el puntero (coordenadas de la ventana) con los centros de las demás.</summary>
@@ -53,9 +65,16 @@ public sealed class DockController
     {
         if (_dragId is null) return; _dragX = pointerX;
         var dragged = _items.First(i => i.Id == _dragId); var rest = _items.Where(i => i.Id != _dragId).ToList();
-        int pinnedEnd = 0; while (pinnedEnd < rest.Count && rest[pinnedEnd] is { Kind: DockItemKind.App, Pinned: true }) pinnedEnd++;
+        // Grupo en el que se puede soltar: las ancladas (prefijo) o las temporales (bloque tras «sep:recents»).
+        int gs = 0, ge;
+        if (_dragTemporary)
+        {
+            int sep = rest.FindIndex(i => i.Id == "sep:recents"); gs = sep < 0 ? rest.Count : sep + 1; ge = gs;
+            while (ge < rest.Count && rest[ge] is { Kind: DockItemKind.App, Pinned: false }) ge++;
+        }
+        else { ge = 0; while (ge < rest.Count && rest[ge] is { Kind: DockItemKind.App, Pinned: true }) ge++; }
         var frame = DockLayout.Compute(_m, rest, null); double left = (_windowWidth - frame.BarWidth) / 2;
-        int target = 0; for (int i = 0; i < pinnedEnd; i++) if (left + frame.Items[i].X + frame.Items[i].Size / 2 < pointerX) target = i + 1;
+        int target = gs; for (int i = gs; i < ge; i++) if (left + frame.Items[i].X + frame.Items[i].Size / 2 < pointerX) target = i + 1;
         var order = new List<DockItemModel>(rest); order.Insert(target, dragged);
         if (!order.Select(x => x.Id).SequenceEqual(_items.Select(x => x.Id))) _items = order;
     }
@@ -66,7 +85,8 @@ public sealed class DockController
         if (_dragId is null) return null;
         var changed = !_items.Select(x => x.Id).SequenceEqual(_dragOriginal!.Select(x => x.Id));
         IReadOnlyList<string>? result = null;
-        if (commit && changed) result = _items.TakeWhile(i => i is { Kind: DockItemKind.App, Pinned: true }).Select(i => i.Identity?.Id ?? i.Id).ToList();
+        LastDropTemporary = _dragTemporary;
+        if (commit && changed) result = (_dragTemporary ? _items.Where(i => i is { Kind: DockItemKind.App, Pinned: false }) : _items.TakeWhile(i => i is { Kind: DockItemKind.App, Pinned: true })).Select(i => i.Identity?.Id ?? i.Id).ToList();
         else if (!commit) _items = _dragOriginal!;
         _dragId = null; _dragOriginal = null; _dragX = double.NaN;
         if (_pendingItems is not null) { var p = _pendingItems; _pendingItems = null; SetItems(p); }
@@ -116,7 +136,7 @@ public sealed class DockController
             }
             else
             {
-                bool over = _edgeHot || (_pointer is PointerSample p && InZone(p, barLeft, cur.BarWidth)); // el borde caliente cuenta como «encima»
+                bool over = _edgeHot || (_pointer is PointerSample p && (InZone(p, barLeft, cur.BarWidth) || PreviewContains(p.X, p.Y))); // el borde caliente y la vista previa cuentan como «encima»
                 _outside = over ? 0 : _outside + dt;
                 if (_outside >= _cfg.HideDelaySeconds) _hiddenTarget = true;
             }
@@ -138,8 +158,11 @@ public sealed class DockController
             }
         }
         int hover = inZone && _pointer is PointerSample pp ? DockLayout.HitTestX(frame, _items, pp.X - left) : -1;
-        bool needs = !_anim.IsSettled || inZone || (_cfg.AutoHide && !_hiddenTarget) || _dragId is not null;
-        return new DockView(views, _windowWidth, _m.WindowHeight, left, frame.BarWidth, _m.BarHeight, _anim.HideT, hover, needs, _suppressed, dragIndex);
+        var baseView = new DockView(views, _windowWidth, _m.WindowHeight, left, frame.BarWidth, _m.BarHeight, _anim.HideT, hover, false, _suppressed, dragIndex);
+        var restFrame = DockLayout.Compute(_m, _items, null); double restL = (_windowWidth - restFrame.BarWidth) / 2;
+        Preview = _preview.Step(dt, baseView, _pointer, _dragId is not null, restFrame.Items.Select(f => restL + f.X + f.Size / 2).ToArray());
+        bool needs = !_anim.IsSettled || inZone || (_cfg.AutoHide && !_hiddenTarget) || _dragId is not null || Preview is not null || _preview.IsActive;
+        return baseView with { NeedsFrames = needs, Preview = Preview };
     }
 
     /// <summary>Convierte un clic en una acción para el adaptador de Windows (el núcleo no ejecuta nada).</summary>

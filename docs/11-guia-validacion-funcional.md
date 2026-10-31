@@ -20,7 +20,7 @@ Para cerrar el Dock: `& $dock --quit`. Anota cada resultado como OK / FALLO + qu
 1. Arrastra un icono **anclado** a otra posición y suéltalo: los demás se apartan, sin magnificación durante el arrastre.
 2. Suelta fuera del Dock / pulsa Esc a mitad: debe volver a su sitio (si Esc no funciona, anótalo).
 3. Alternativa: clic derecho → **Mover a la izquierda / derecha**.
-4. Un icono temporal (no anclado) no se puede arrastrar.
+4. Un icono temporal (no anclado) también se puede arrastrar, pero solo entre los temporales (y las ancladas solo entre ellas). El orden de los temporales dura mientras el Dock está abierto.
 
 ## 3. Abrir, activar y restaurar
 1. App cerrada y anclada: clic → se lanza **una sola** vez (haz doble clic rápido: no debe duplicarse).
@@ -54,3 +54,12 @@ Para cerrar el Dock: `& $dock --quit`. Anota cada resultado como OK / FALLO + qu
 
 ## Qué reportar
 Una tabla `punto → OK/FALLO → observación` y, si hay fallo, las últimas líneas de `dock.log`. Las líneas `[dock] …` muestran los tamaños de ventana y búfer.
+
+## 8. Vista previa de ventanas (nuevo)
+1. Pasa el ratón sobre una app con ventanas y espera ~0,4 s: aparece un panel sobre el icono con el nombre y una miniatura por ventana. Mueve el ratón hacia el panel: no debe desaparecer ni moverse.
+2. Con varias ventanas (Bloc de notas con Ctrl+N): una tarjeta por ventana, con su título. Clic en una tarjeta = esa ventana pasa al frente (si estaba minimizada, se restaura).
+3. Minimiza una ventana: su tarjeta lleva «Minimizada» y muestra la última captura o el icono.
+4. Pasa de un icono a otro: el panel cambia al instante. Sal del Dock: se oculta en ~0,3 s.
+5. Comprueba que la barra del Dock se ve y se comporta igual que antes (misma posición, tamaño y magnificación).
+6. Captura de miniaturas sueltas: `& $dock --thumb-test --out "$HOME\Desktop\thumbs"` guarda un PNG por ventana abierta. Si alguna sale negra o falla, anota qué app es.
+7. Para desactivarla: pon `"PreviewsEnabled": false` en `dock.json`.

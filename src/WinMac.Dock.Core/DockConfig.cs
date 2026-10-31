@@ -34,6 +34,9 @@ public sealed record DockConfig
     public int MaxRecents { get; init; } = 0;
     /// <summary>macOS no minimiza al hacer clic sobre la app activa; en Windows muchos usuarios lo esperan. Por defecto, estilo macOS.</summary>
     public bool ClickActiveMinimizes { get; init; } = false;
+    /// <summary>Vista previa de las ventanas de una app al pasar el ratón sobre su ícono.</summary>
+    public bool PreviewsEnabled { get; init; } = true;
+    public double PreviewDelaySeconds { get; init; } = 0.35;
     public string? DownloadsPath { get; init; }
     public GlassTier GlassTier { get; init; } = GlassTier.WallpaperBlur;
     public ThemeMode Theme { get; init; } = ThemeMode.System;

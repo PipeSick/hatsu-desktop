@@ -20,6 +20,13 @@ public sealed class DockModelBuilder
     public static string Norm(string path) => AppIdentity.NormPath(path);
     public static string DefaultTitle(string path) => AppIdentity.StemTitle(path);
 
+    /// <summary>Fija el orden de las apps temporales (solo en memoria: se olvida al cerrarse la app o el dock). Las ids desconocidas se ignoran.</summary>
+    public void SetRecentOrder(IEnumerable<string> ids)
+    {
+        var ordered = ids.Where(_firstSeen.Contains).Distinct().ToList(); ordered.AddRange(_firstSeen.Where(k => !ordered.Contains(k)));
+        _firstSeen.Clear(); _firstSeen.AddRange(ordered);
+    }
+
     private sealed class Group { public required AppIdentity Identity; public List<WindowInfo> Windows = new(); }
 
     public IReadOnlyList<DockItemModel> Build(IReadOnlyList<RunningApp> running, string? downloadsPath = null)

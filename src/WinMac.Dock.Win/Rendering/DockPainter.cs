@@ -12,6 +12,9 @@ namespace WinMac.Dock.Win.Rendering;
 /// <summary>Origen de iconos reales de las apps. Debe ser rápido y no bloquear (devuelve null si todavía no está listo; el painter usa entonces su reemplazo).</summary>
 public interface IIconSource { IconBitmap? Get(DockItemModel item); }
 
+/// <summary>Miniaturas de ventanas (por HWND). Rápido y sin bloquear: null si todavía no hay captura.</summary>
+public interface IThumbnailSource { IconBitmap? Get(long hwnd); }
+
 /// <summary>
 /// Dibuja un <see cref="DockView"/> con Direct2D. No conoce ventanas ni swap chains: se usa igual en pantalla (DirectComposition)
 /// y fuera de pantalla (CI → PNG). Unidades en DIP; el contexto debe tener el DPI configurado.
@@ -23,20 +26,24 @@ public sealed class DockPainter : IDisposable
     private readonly DockMetrics _m; private readonly GlassStyle _g; private readonly IIconSource _icons;
     private readonly ID2D1PathGeometry _squircle; private readonly IDWriteFactory _dw; private readonly IDWriteTextFormat _glyphFmt, _labelFmt;
     private readonly ID2D1SolidColorBrush _solid;
+    private readonly IThumbnailSource? _thumbs; private readonly IDWriteTextFormat _nameFmt, _pillFmt;
+    private readonly Dictionary<long, (IconBitmap Src, ID2D1Bitmap Bmp)> _thumbCache = new();
+    private float _fade = 1f;   // opacidad global de lo que se dibuja (solo la vista previa la baja durante su aparición/desaparición)
     private readonly ID2D1LinearGradientBrush _grad;
     private readonly Dictionary<string, ID2D1Bitmap?> _iconCache = new(); private readonly Dictionary<string, IconBitmap> _iconSrc = new();
     private ID2D1Bitmap? _backdropBlurred;
     public int IconCacheCount => _iconCache.Count;
 
-    public DockPainter(D2DDevice dev, DockMetrics m, GlassStyle g, IIconSource icons)
+    public DockPainter(D2DDevice dev, DockMetrics m, GlassStyle g, IIconSource icons, IThumbnailSource? thumbs = null)
     {
-        _dev = dev; _ctx = dev.Context; _m = m; _g = g; _icons = icons;
+        _dev = dev; _ctx = dev.Context; _m = m; _g = g; _icons = icons; _thumbs = thumbs;
         _solid = _ctx.CreateSolidColorBrush(new Color4(1, 1, 1, 1));
         _grad = _ctx.CreateLinearGradientBrush(new LinearGradientBrushProperties { StartPoint = new Vector2(0, 0), EndPoint = new Vector2(0, 1) },
             _ctx.CreateGradientStopCollection([new GradientStop { Position = 0, Color = new Color4(1, 1, 1, 1) }, new GradientStop { Position = 1, Color = new Color4(1, 1, 1, 1) }], Gamma.StandardRgb, ExtendMode.Clamp));
         _dw = Vortice.DirectWrite.DWrite.DWriteCreateFactory<IDWriteFactory>();
         _glyphFmt = _dw.CreateTextFormat("Segoe UI Semibold", 24f);
         _labelFmt = _dw.CreateTextFormat("Segoe UI", 13f);
+        _nameFmt = _dw.CreateTextFormat("Segoe UI Semibold", 14f); _pillFmt = _dw.CreateTextFormat("Segoe UI", 12f);
         _squircle = _dev.Factory.CreatePathGeometry();
         using var sink = _squircle.Open();
         var pts = Squircle.Unit();
@@ -49,15 +56,15 @@ public sealed class DockPainter : IDisposable
     public void SetBackdrop(ID2D1Bitmap? blurred) => _backdropBlurred = blurred;
 
     // ---------------------------------------------------------------- helpers
-    private void Solid(float r, float g, float b, float a) { _solid.Color = new Color4(r, g, b, a); }
+    private void Solid(float r, float g, float b, float a) { _solid.Color = new Color4(r, g, b, a * _fade); }
     private ID2D1LinearGradientBrush Grad(Vector2 a, Vector2 b, params (float pos, Color4 c)[] stops)
     {
-        using var sc = _ctx.CreateGradientStopCollection(stops.Select(s => new GradientStop { Position = s.pos, Color = s.c }).ToArray(), Gamma.StandardRgb, ExtendMode.Clamp);
+        using var sc = _ctx.CreateGradientStopCollection(stops.Select(s => new GradientStop { Position = s.pos, Color = new Color4(s.c.R, s.c.G, s.c.B, s.c.A * _fade) }).ToArray(), Gamma.StandardRgb, ExtendMode.Clamp);
         return _ctx.CreateLinearGradientBrush(new LinearGradientBrushProperties { StartPoint = a, EndPoint = b }, sc);
     }
 
     private void DrawBmp(ID2D1Bitmap bmp, RawRectF dest, bool smooth) =>
-        _ctx.DrawBitmap(bmp, (RawRectF?)dest, 1f, smooth ? BitmapInterpolationMode.Linear : BitmapInterpolationMode.NearestNeighbor, (RawRectF?)null);
+        _ctx.DrawBitmap(bmp, (RawRectF?)dest, _fade, smooth ? BitmapInterpolationMode.Linear : BitmapInterpolationMode.NearestNeighbor, (RawRectF?)null);
 
     // ---------------------------------------------------------------- pintado
     public void Paint(DockView v, GlassTier tier, ID2D1Bitmap? underlay = null)
@@ -80,6 +87,7 @@ public sealed class DockPainter : IDisposable
         for (int pass = 0; pass < 2; pass++)
             foreach (var it in v.Items) if (it.Model.Kind != DockItemKind.Separator && ((it.Index == v.DragIndex) == (pass == 1))) DrawItem(it, barBottom);   // el ítem arrastrado se dibuja encima
         DrawLabel(v, barBottom);
+        if (v.Preview is { } pv) DrawPreview(pv);
 
         ctx.Transform = Matrix3x2.Identity;
         ctx.EndDraw();
@@ -248,6 +256,7 @@ public sealed class DockPainter : IDisposable
     private void DrawLabel(DockView v, float barBottom)
     {
         if (v.HoverIndex < 0 || v.HoverIndex >= v.Items.Length) return;
+        if (v.Preview is { Alpha: > 0.02 } shown && shown.ItemIndex == v.HoverIndex) return;   // con la vista previa abierta, su cabecera ya muestra el nombre
         var it = v.Items[v.HoverIndex]; if (string.IsNullOrEmpty(it.Model.Title)) return;
         using var layout = _dw.CreateTextLayout(it.Model.Title, _labelFmt, 400, 40);
         var tm = layout.Metrics; float w = tm.Width + 24, h = (float)_m.LabelHeight;
@@ -270,19 +279,152 @@ public sealed class DockPainter : IDisposable
     {
         string key = m.Id + "|" + m.IconOverride;
         if (_iconCache.TryGetValue(key, out var b) && b is not null && ReferenceEquals(_iconSrc.GetValueOrDefault(key), px)) return b;
-        ID2D1Bitmap? bmp = null;
+        var bmp = CreateBitmap(px);
+        if (_iconCache.TryGetValue(key, out var old)) old?.Dispose();
+        _iconCache[key] = bmp; _iconSrc[key] = px; return bmp;
+    }
+
+    private ID2D1Bitmap? CreateBitmap(IconBitmap px)
+    {
         try
         {
             unsafe
             {
                 fixed (byte* p = px.Bgra)
-                    bmp = _ctx.CreateBitmap(new Vortice.Mathematics.SizeI(px.Width, px.Height), (IntPtr)p, (uint)(px.Width * 4),
+                    return _ctx.CreateBitmap(new Vortice.Mathematics.SizeI(px.Width, px.Height), (IntPtr)p, (uint)(px.Width * 4),
                         new BitmapProperties1(new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96, 96));
             }
         }
-        catch (Exception) { bmp = null; }
-        if (_iconCache.TryGetValue(key, out var old)) old?.Dispose();
-        _iconCache[key] = bmp; _iconSrc[key] = px; return bmp;
+        catch (Exception) { return null; }
+    }
+
+    private ID2D1Bitmap? ThumbFor(long hwnd)
+    {
+        IconBitmap? src; try { src = _thumbs?.Get(hwnd); } catch (Exception) { src = null; }
+        if (src is null) return null;
+        if (_thumbCache.TryGetValue(hwnd, out var c) && ReferenceEquals(c.Src, src)) return c.Bmp;
+        if (_thumbCache.Count > 24) { foreach (var e in _thumbCache.Values) e.Bmp.Dispose(); _thumbCache.Clear(); }
+        if (_thumbCache.Remove(hwnd, out var old)) old.Bmp.Dispose();
+        var bmp = CreateBitmap(src); if (bmp is null) return null;
+        _thumbCache[hwnd] = (src, bmp); return bmp;
+    }
+
+    // ---------------------------------------------------------------- vista previa de ventanas
+    /// <summary>Panel de vidrio con pico sobre el ícono: cabecera (icono + nombre) y una tarjeta por ventana (píldora con el título + miniatura). Estructura de la referencia aportada por el usuario; medidas sin calibrar.</summary>
+    private void DrawPreview(PreviewView pv)
+    {
+        if (pv.Alpha <= 0.01) return;
+        _fade = (float)Math.Clamp(pv.Alpha, 0, 1);
+        try
+        {
+            var f = pv.Frame; var P = f.Panel; float r = (float)PreviewSpec.Radius;
+            using var geo = PanelGeometry(f);
+            var rect = new RawRectF((float)P.X, (float)P.Y, (float)P.Right, (float)P.Bottom);
+
+            // sombra (capas concéntricas con opacidad acumulada controlada, como la barra)
+            const int n = 10; float spread = 18f, dy = 6f; var alphas = ShadowMath.LayerAlphas(n, _g.Theme == DockTheme.Dark ? 0.16 : 0.12);
+            for (int i = n; i >= 1; i--)
+            {
+                float gg = spread * i / n; Solid(0, 0, 0, (float)alphas[i - 1]);
+                _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(rect.Left - gg, rect.Top - gg + dy, rect.Right + gg, rect.Bottom + gg + dy), RadiusX = r + gg, RadiusY = r + gg }, _solid);
+            }
+            // material: fondo desenfocado (si lo hay) + tinte + brillo superior, como el vidrio de la barra
+            if (_backdropBlurred is not null)
+            {
+                using var brush = _ctx.CreateBitmapBrush(_backdropBlurred, new BitmapBrushProperties { ExtendModeX = ExtendMode.Clamp, ExtendModeY = ExtendMode.Clamp, InterpolationMode = BitmapInterpolationMode.Linear });
+                brush.Opacity = _fade; _ctx.FillGeometry(geo, brush);
+            }
+            else { if (_g.Theme == DockTheme.Dark) Solid(0.16f, 0.17f, 0.21f, 0.70f); else Solid(0.80f, 0.84f, 0.90f, 0.55f); _ctx.FillGeometry(geo, _solid); }
+            using (var tint = Grad(new Vector2(0, rect.Top), new Vector2(0, rect.Bottom),
+                (0f, new Color4((float)_g.TintR, (float)_g.TintG, (float)_g.TintB, (float)(_g.TintAlpha + _g.Brightness + 0.10))),
+                (1f, new Color4((float)_g.TintR, (float)_g.TintG, (float)_g.TintB, (float)((_g.TintAlpha + 0.10) * _g.TintBottomFactor)))))
+                _ctx.FillGeometry(geo, tint);
+            Solid(0, 0, 0, (float)_g.SideContourAlpha); _ctx.DrawGeometry(geo, _solid, 1f);
+            using (var rim = Grad(new Vector2(0, rect.Top), new Vector2(0, rect.Bottom), (0f, new Color4(1, 1, 1, (float)_g.RimTopAlpha + 0.10f)), (0.5f, new Color4(1, 1, 1, 0.08f)), (1f, new Color4(1, 1, 1, (float)_g.RimBottomAlpha))))
+                _ctx.DrawGeometry(geo, rim, 1.25f);
+
+            // cabecera: icono + nombre de la app (+ aviso si hay más ventanas de las que caben)
+            var H = f.Header; float hs = 22f, hy = (float)(H.Y + (H.H - hs) / 2);
+            var icon = IconFor(pv.Item); var iv = new ItemView(pv.ItemIndex, pv.Item, H.X, hs, 1, 0);
+            if (pv.Item.Kind == DockItemKind.App) DrawAppGlyph(iv, (float)H.X, hy, hs, icon);
+            Solid(1, 1, 1, 0.96f); DrawText(pv.Item.Title, _nameFmt, (float)H.X + hs + 8, (float)H.Y, (float)H.H, (float)H.W - hs - 8, false);
+            if (pv.Extra > 0) { Solid(1, 1, 1, 0.70f); DrawText($"+{pv.Extra} más", _pillFmt, (float)H.X, (float)H.Y, (float)H.H, (float)H.W, true); }
+
+            // tarjetas
+            for (int i = 0; i < pv.Windows.Count && i < f.Cards.Length; i++) DrawCard(pv, f.Cards[i], pv.Windows[i], i == pv.HoverCard, icon);
+        }
+        finally { _fade = 1f; }
+    }
+
+    private ID2D1PathGeometry PanelGeometry(PreviewFrame f)
+    {
+        var P = f.Panel; float x = (float)P.X, y = (float)P.Y, w = (float)P.W, h = (float)P.H, r = (float)PreviewSpec.Radius, tw = (float)PreviewSpec.TailW / 2;
+        float tx = (float)f.TailX, by = y + h, tip = (float)f.TailTipY;
+        var geo = _dev.Factory.CreatePathGeometry(); using var sink = geo.Open();
+        ArcSegment Arc(float px, float py) => new() { Point = new Vector2(px, py), Size = new Vortice.Mathematics.Size(r, r), RotationAngle = 0, SweepDirection = SweepDirection.Clockwise, ArcSize = ArcSize.Small };
+        sink.BeginFigure(new Vector2(x + r, y), FigureBegin.Filled);
+        sink.AddLine(new Vector2(x + w - r, y)); sink.AddArc(Arc(x + w, y + r));
+        sink.AddLine(new Vector2(x + w, by - r)); sink.AddArc(Arc(x + w - r, by));
+        sink.AddLine(new Vector2(tx + tw, by)); sink.AddLine(new Vector2(tx, tip)); sink.AddLine(new Vector2(tx - tw, by));
+        sink.AddLine(new Vector2(x + r, by)); sink.AddArc(Arc(x, by - r));
+        sink.AddLine(new Vector2(x, y + r)); sink.AddArc(Arc(x + r, y));
+        sink.EndFigure(FigureEnd.Closed); sink.Close();
+        return geo;
+    }
+
+    private void DrawCard(PreviewView pv, PreviewCardFrame c, WindowInfo w, bool hovered, IconBitmap? appIcon)
+    {
+        var T = c.Thumb; float tr = (float)PreviewSpec.ThumbRadius;
+        var rr = new RoundedRectangle { Rect = new RawRectF((float)T.X, (float)T.Y, (float)T.Right, (float)T.Bottom), RadiusX = tr, RadiusY = tr };
+        Solid(0.05f, 0.06f, 0.09f, 0.40f); _ctx.FillRoundedRectangle(rr, _solid);
+        var thumb = ThumbFor(w.Hwnd);
+        if (thumb is not null)
+        {
+            var (fx, fy, fw, fh) = IconLayout.AspectFit((int)thumb.PixelSize.Width, (int)thumb.PixelSize.Height, T.X, T.Y, T.W, T.H);
+            using var brush = _ctx.CreateBitmapBrush(thumb, new BitmapBrushProperties { ExtendModeX = ExtendMode.Clamp, ExtendModeY = ExtendMode.Clamp, InterpolationMode = BitmapInterpolationMode.Linear });
+            brush.Transform = Matrix3x2.CreateScale((float)(fw / thumb.PixelSize.Width), (float)(fh / thumb.PixelSize.Height)) * Matrix3x2.CreateTranslation((float)fx, (float)fy);
+            brush.Opacity = _fade * (w.Minimized ? 0.55f : 1f);
+            var fit = new RoundedRectangle { Rect = new RawRectF((float)fx, (float)fy, (float)(fx + fw), (float)(fy + fh)), RadiusX = tr, RadiusY = tr };
+            _ctx.FillRoundedRectangle(fit, brush);
+        }
+        else if (pv.Item.Kind == DockItemKind.App)
+        {   // sin captura (minimizada sin captura previa, ventana protegida o aún cargando): icono de la app centrado
+            float s = (float)Math.Min(56, Math.Min(T.W, T.H) * 0.55); var iv = new ItemView(pv.ItemIndex, pv.Item, T.X, s, 1, 0);
+            DrawAppGlyph(iv, (float)(T.X + (T.W - s) / 2), (float)(T.Y + (T.H - s) / 2), s, appIcon);
+        }
+        if (hovered) { Solid(1, 1, 1, 0.10f); _ctx.FillRoundedRectangle(rr, _solid); }
+        Solid(1, 1, 1, hovered ? 0.85f : 0.30f); _ctx.DrawRoundedRectangle(rr, _solid, hovered ? 2f : 1f);
+
+        // píldoras: «Minimizada» (opcional) + título de la ventana
+        var P = c.Pill; float x = (float)P.X, right = (float)P.Right; string title = string.IsNullOrWhiteSpace(w.Title) ? pv.Item.Title : w.Title;
+        if (w.Minimized) x += DrawPill("Minimizada", x, (float)P.Y, (float)P.H, right - x, 0.34f) + 6;
+        if (right - x > 36) DrawPill(title, x, (float)P.Y, (float)P.H, right - x, hovered ? 0.34f : 0.22f);
+    }
+
+    /// <summary>Píldora de vidrio con texto (recortado con «…» si no cabe). Devuelve su ancho.</summary>
+    private float DrawPill(string text, float x, float y, float h, float maxW, float alpha)
+    {
+        string t = Fit(text, _pillFmt, maxW - 20); using var layout = _dw.CreateTextLayout(t, _pillFmt, 1000, h); float w = Math.Min(maxW, layout.Metrics.Width + 20);
+        var pill = new RoundedRectangle { Rect = new RawRectF(x, y, x + w, y + h), RadiusX = h / 2, RadiusY = h / 2 };
+        Solid(1, 1, 1, alpha); _ctx.FillRoundedRectangle(pill, _solid); Solid(1, 1, 1, 0.28f); _ctx.DrawRoundedRectangle(pill, _solid, 1f);
+        Solid(1, 1, 1, 0.97f); _ctx.DrawTextLayout(new Vector2(x + 10, y + (h - layout.Metrics.Height) / 2), layout, _solid);
+        return w;
+    }
+
+    private string Fit(string text, IDWriteTextFormat fmt, float maxW)
+    {
+        if (maxW <= 8) return "…";
+        using (var l = _dw.CreateTextLayout(text, fmt, 4000, 40)) if (l.Metrics.Width <= maxW) return text;
+        int lo = 0, hi = text.Length;   // mayor prefijo cuyo ancho con «…» cabe
+        while (lo < hi) { int mid = (lo + hi + 1) / 2; using var l = _dw.CreateTextLayout(text[..mid].TrimEnd() + "…", fmt, 4000, 40); if (l.Metrics.Width <= maxW) lo = mid; else hi = mid - 1; }
+        return lo == 0 ? "…" : text[..lo].TrimEnd() + "…";
+    }
+
+    private void DrawText(string text, IDWriteTextFormat fmt, float x, float y, float h, float maxW, bool right)
+    {
+        string t = Fit(text, fmt, maxW); using var layout = _dw.CreateTextLayout(t, fmt, Math.Max(1, maxW), h);
+        layout.ParagraphAlignment = ParagraphAlignment.Center; layout.TextAlignment = right ? TextAlignment.Trailing : TextAlignment.Leading;
+        _ctx.DrawTextLayout(new Vector2(x, y), layout, _solid);
     }
 
     private static Color4 Hsv(float h, float s, float v)
@@ -295,6 +437,7 @@ public sealed class DockPainter : IDisposable
     public void Dispose()
     {
         foreach (var b in _iconCache.Values) b?.Dispose();
-        _solid.Dispose(); _grad.Dispose(); _squircle.Dispose(); _glyphFmt.Dispose(); _labelFmt.Dispose(); _dw.Dispose();
+        foreach (var e in _thumbCache.Values) e.Bmp.Dispose();
+        _solid.Dispose(); _grad.Dispose(); _squircle.Dispose(); _glyphFmt.Dispose(); _labelFmt.Dispose(); _nameFmt.Dispose(); _pillFmt.Dispose(); _dw.Dispose();
     }
 }
