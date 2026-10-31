@@ -29,7 +29,7 @@ Seguridad: `ABM_REMOVE` al salir, evento `Local\WinMac.Bar.Quit` para `--quit`, 
 
 **D4 · Capas** (igual que el Dock): `Bar.Core` (puro y probado en Linux: estado, formato del reloj, distribución, controlador, configuración, acciones), `Bar.Win` (proveedores del sistema, AppBar, ventana y pintor), `Bar.App` (ejecutable y CLI).
 
-**D5 · Aspecto (provisional).** Barra transparente sobre el fondo (como en Tahoe) o con vidrio desenfocado (`Background=Glass`); texto blanco/negro según el tema de Windows (la adaptación al brillo del fondo queda pendiente); iconos de estado **vectoriales dibujados con Direct2D** (sin fuentes ni recursos de terceros). Altura 28 DIP. Todo está en `BarMetrics`/`BarStyle` para calibrar con capturas del Mac.
+**D5 · Aspecto — ELEGIDO por el usuario: variante B (vidrio a todo el ancho).** Las variantes A (transparente) y C (dos islas) quedan descartadas por ahora; A sigue disponible con `Background=Transparent`. Detalles provisionales: Barra transparente sobre el fondo (como en Tahoe) o con vidrio desenfocado (`Background=Glass`); texto blanco/negro según el tema de Windows (la adaptación al brillo del fondo queda pendiente); iconos de estado **vectoriales dibujados con Direct2D** (sin fuentes ni recursos de terceros). Altura 28 DIP. Todo está en `BarMetrics`/`BarStyle` para calibrar con capturas del Mac.
 
 **D6 · Convivencia con la otra app del usuario (tipo «notch»).** La barra deja libre el centro: sin elementos en el tercio central por defecto (`CenterGap`), de modo que una superposición en el centro superior no tape información. Si esa app va a reservar espacio arriba también, hay que coordinar quién es dueño del AppBar (pendiente de definir con el usuario).
 
@@ -41,3 +41,11 @@ Sin administrador, sin tocar Explorer ni la barra de tareas, cierre normal (`--q
 
 ## Pruebas
 Unitarias (Linux): formato del reloj (es-CL, 12/24 h, segundos, fecha), distribución y hit-test, hover/clic/acciones, configuración tolerante, mapeo de estado → icono. CI Windows: PNG de la barra (claro/oscuro), `--status`, selftest. Manual (Windows físico): ver `PENDIENTE-WINDOWS-FISICO.md` §Barra superior.
+
+## Integración futura con la «isla» central (app propia del usuario)
+Decisión: **sí se contempla**, pero no se implementa hasta que esa app exista y se acuerde el contrato. La barra ya deja libre el tercio central (`CenterGap`, 30 %) y no coloca nada ahí.
+Opciones (a decidir con el usuario cuando su app esté lista):
+1. **Procesos separados que conviven** (la más simple y robusta): la isla es una ventana superpuesta propia, centrada sobre la barra; la barra no sabe nada de ella. Hay que acordar quién reserva el espacio superior (AppBar): lo natural es que lo haga solo la barra y la isla se dibuje encima sin reservar.
+2. **Ranura central en la barra**: la barra expone un punto de extensión (p. ej. tubería con nombre) donde la isla le pide ancho/alto y la barra le cede el centro; sirve si la isla debe crecer y empujar los indicadores.
+3. **Un solo proceso/librería**: la isla como módulo dentro de WinMac; mayor integración, pero acopla ambos proyectos.
+Datos que faltan: tecnología de esa app (lenguaje, UI), si reserva espacio de pantalla, si debe recibir eventos de la barra (reloj, app activa, volumen) o solo dibujarse encima.
