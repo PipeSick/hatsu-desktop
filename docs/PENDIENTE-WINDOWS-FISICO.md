@@ -2,6 +2,15 @@
 
 Estado a 2026-10-31. Todo lo de esta lista **no está validado**: el CI de Windows (runner virtual, sin GPU real) solo comprueba compilación, pruebas unitarias, ejecución sin errores y dibujo fuera de pantalla sobre WARP.
 
+## Validado en Windows físico (2026-10-31, equipo del usuario)
+Windows 11 build 26200, GPU NVIDIA GeForce RTX 5070 Ti, escala 100 %, SDK .NET 10.0.403, compilado desde la rama.
+| Qué | Resultado |
+|---|---|
+| `--selftest` | **todo OK**: configuración, seguimiento de ventanas (5 ganchos, 9 apps con ventana en 8 ms), íconos del Shell (128×128), detector de pantalla completa, render fuera de pantalla (10 PNG, WARP), ventana + DirectComposition con **GPU real** (30 fotogramas, fondo de pantalla cargado) |
+| `--demo` en pantalla | **correcto según el usuario**: aparece sobre la barra de tareas, vidrio con el fondo real, íconos, indicadores, separadores, carpeta y papelera visibles |
+| Aspecto | confirma lo medido en docs/09: sombra inferior pesada, placas de ícono gruesas, bordes intensos (a corregir en la iteración de calibración) |
+Nota: W3 (ventana real con DirectComposition) y parte de W4 (fondo real) quedan **validadas en este equipo**, sin cubrir otras GPU, DPI ≠ 100 % ni varios monitores.
+
 ## Limitaciones conocidas que hay que revisar antes de seguir
 | # | Limitación | Estado | Cuándo revisarla |
 |---|---|---|---|
