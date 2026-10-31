@@ -33,6 +33,9 @@ $components = @(
 )
 # Componentes del Dock (se añaden si existen en este commit)
 foreach ($d in @(
+  @{ Name = 'Apps.Core';       Path = 'src/WinMac.Apps.Core/WinMac.Apps.Core.csproj';             Kind = 'lib';  Extra = @() },
+  @{ Name = 'Apps.Core.Tests'; Path = 'src/WinMac.Apps.Core.Tests/WinMac.Apps.Core.Tests.csproj'; Kind = 'test'; Extra = @() },
+  @{ Name = 'Apps.Win';        Path = 'src/WinMac.Apps.Win/WinMac.Apps.Win.csproj';               Kind = 'lib';  Extra = @() },
   @{ Name = 'Dock.Core';       Path = 'src/WinMac.Dock.Core/WinMac.Dock.Core.csproj';             Kind = 'lib';  Extra = @() },
   @{ Name = 'Dock.Core.Tests'; Path = 'src/WinMac.Dock.Core.Tests/WinMac.Dock.Core.Tests.csproj'; Kind = 'test'; Extra = @() },
   @{ Name = 'Dock.Win';        Path = 'src/WinMac.Dock.Win/WinMac.Dock.Win.csproj';               Kind = 'lib';  Extra = @() },

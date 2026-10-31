@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Catálogo de aplicaciones reutilizable por Dock, Spotlight y Launchpad: identidad estable de apps, iconos (servicio + caché). Sin dependencias de Windows ni de render. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinMac.Apps</RootNamespace>
+  </PropertyGroup>
+</Project>

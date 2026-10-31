@@ -62,5 +62,5 @@ public static class OffscreenBench
         return $"paint p50={report.PaintMs.P50} ms p95={report.PaintMs.P95} ms; con lectura p50={report.PaintPlusReadbackMs.P50} ms; build fondo={report.BackdropBuildMs} ms; {dev.Description}";
     }
 
-    private sealed class NoIconsBench : IIconSource { public Shell.IconPixels? Get(DockItemModel item) => null; }
+    private sealed class NoIconsBench : IIconSource { public WinMac.Apps.IconBitmap? Get(DockItemModel item) => null; }
 }

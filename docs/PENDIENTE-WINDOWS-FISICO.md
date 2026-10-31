@@ -36,3 +36,20 @@ Nota: W3 (ventana real con DirectComposition) y parte de W4 (fondo real) quedan 
 
 ## Qué NO bloquea el trabajo visual
 La calibración contra macOS Tahoe (docs/08) se hace con capturas del Mac y los PNG del CI; no necesita Windows físico. Los valores calibrados se confirmarán después en Windows físico (W3, W4, W7).
+
+## Validación manual del Dock funcional (docs/10)
+Código compilado y probado en lógica pura; **sin ejecutar en Windows**. Orden sugerido:
+| # | Qué probar |
+|---|---|
+| V1 | `--selftest` (secciones nuevas) y `--icon-test` con explorer/notepad/calc y un AUMID (p. ej. Calculadora/Configuración) |
+| V2 | Iconos reales: nitidez, transparencia, proporciones; apps MSIX/UWP; icono corrupto no cuelga |
+| V3 | Anclar/desanclar desde el menú y desde CLI; persistencia tras reiniciar el Dock |
+| V4 | Reordenar arrastrando y con "Mover a…"; el orden persiste |
+| V5 | Apps abiertas no ancladas aparecen y desaparecen al cerrarlas; indicadores correctos |
+| V6 | Clic: lanzar si no corre, activar, restaurar minimizada, sin duplicados con doble clic |
+| V7 | Varias ventanas de una app: lista en el menú y activación de cada una |
+| V8 | Cerrar ventana / Salir de la aplicación (cooperativo; app con diálogo de guardar) |
+| V9 | Menú nativo: aparece, se cierra con clic fuera/Esc, no roba el foco de forma anómala |
+| V10 | Pantalla completa/juego: el Dock se aparta; `--quit` lo cierra |
+| V11 | Editar `dock.json` a mano: recarga en ≤2 s; JSON inválido no rompe el Dock |
+| V12 | Sin permisos de administrador; Explorador y barra de tareas intactos |

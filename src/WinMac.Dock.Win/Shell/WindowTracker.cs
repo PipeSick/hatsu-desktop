@@ -1,4 +1,6 @@
 using System.Text;
+using WinMac.Apps;
+using WinMac.Apps.Win;
 using WinMac.Dock.Win.Interop;
 
 namespace WinMac.Dock.Win.Shell;
@@ -51,11 +53,11 @@ public sealed class WindowTracker : IDisposable
         return c.ToString() is not ("Progman" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "WorkerW" or "Windows.UI.Core.CoreWindow");
     }
 
-    /// <summary>Instantánea de apps en ejecución con ventanas de app, agrupadas por ejecutable. Excluye al propio dock.</summary>
+    /// <summary>Instantánea de apps en ejecución con ventanas de app, agrupadas por IDENTIDAD estable (AUMID para apps empaquetadas, ejecutable para Win32). Excluye al propio dock. El orden de ventanas es el Z-order (la superior primero).</summary>
     public IReadOnlyList<RunningApp> Snapshot()
     {
         var fg = Native.GetAncestor(Native.GetForegroundWindow(), 2 /* GA_ROOT */);
-        var byPid = new Dictionary<uint, List<WindowInfo>>(); var pathOf = new Dictionary<uint, string?>();
+        var groups = new Dictionary<string, (AppIdentity Id, uint Pid, List<WindowInfo> W)>(); var pathOf = new Dictionary<uint, string?>();
         Native.EnumWindows((h, _) =>
         {
             try
@@ -71,13 +73,14 @@ public sealed class WindowTracker : IDisposable
                 Native.GetWindowThreadProcessId(h, out uint pid);
                 if (!pathOf.TryGetValue(pid, out var path)) pathOf[pid] = path = Native.ProcessPath(pid);
                 if (path is null || string.Equals(path, _self, StringComparison.OrdinalIgnoreCase)) return true;
-                if (!byPid.TryGetValue(pid, out var l)) byPid[pid] = l = [];
-                l.Add(new WindowInfo(h.ToInt64(), t.ToString(), minimized, h == fg));
+                var id = WindowIdentityResolver.Resolve(h, pid, path); if (id is null) return true;   // p. ej. marco de ApplicationFrameHost sin AUMID
+                if (!groups.TryGetValue(id.Id, out var g)) groups[id.Id] = g = (id, pid, new List<WindowInfo>());
+                g.W.Add(new WindowInfo(h.ToInt64(), t.ToString(), minimized, h == fg));
             }
             catch (Exception) { /* una ventana problemática no debe romper el dock */ }
             return true;
         }, IntPtr.Zero);
-        return byPid.Select(kv => new RunningApp(pathOf[kv.Key]!, (int)kv.Key, kv.Value)).ToList();
+        return groups.Values.Select(g => new RunningApp(g.Id, (int)g.Pid, g.W)).ToList();
     }
 
     public void Dispose() { foreach (var h in _hooks) Native.UnhookWinEvent(h); _hooks.Clear(); }

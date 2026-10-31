@@ -1,5 +1,7 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
+using WinMac.Apps;
+using WinMac.Apps.Win;
+using WinMac.Dock.Win.Rendering;
 
 namespace WinMac.Dock.Win.Shell;
 
@@ -7,6 +9,8 @@ namespace WinMac.Dock.Win.Shell;
 public static class DockDefaults
 {
     [DllImport("shell32.dll")] private static extern int SHGetKnownFolderPath([MarshalAs(UnmanagedType.LPStruct)] Guid id, uint flags, IntPtr token, [MarshalAs(UnmanagedType.LPWStr)] out string path);
+
+    public const string QuitEventName = @"Local\WinMac.Dock.Quit";
 
     public static string? DownloadsPath()
     {
@@ -18,32 +22,42 @@ public static class DockDefaults
     public static DockConfig Create()
     {
         string win = Environment.GetFolderPath(Environment.SpecialFolder.Windows), sys = Environment.GetFolderPath(Environment.SpecialFolder.System);
-        var pinned = new List<PinnedApp>();
+        var cfg = new DockConfig { DownloadsPath = DownloadsPath() };
         foreach (var p in new[] { Path.Combine(win, "explorer.exe"), Path.Combine(sys, "notepad.exe"), Path.Combine(sys, "calc.exe"), Path.Combine(sys, "mspaint.exe") })
-            if (File.Exists(p)) pinned.Add(new PinnedApp(p));
-        return new DockConfig { Pinned = pinned, DownloadsPath = DownloadsPath() };
+            if (File.Exists(p)) cfg = DockPinning.Pin(cfg, AppIdentity.FromExe(p), DisplayNames.Resolve(AppIdentity.FromExe(p)));
+        return cfg;
     }
 
+    public static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac");
     public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "dock.json");
-    public static string LogPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "dock.log");
+    public static string LogPath => Path.Combine(DataDir, "logs", "dock.log");
+    /// <summary>Caché de iconos en disco, compartible con otros módulos (Spotlight, Launchpad).</summary>
+    public static string IconCachePath => Path.Combine(DataDir, "icons");
 
-    /// <summary>Título legible: descripción del archivo (FileVersionInfo) o nombre del ejecutable.</summary>
-    public static string Title(string path)
-    {
-        try { var d = FileVersionInfo.GetVersionInfo(Environment.ExpandEnvironmentVariables(path)).FileDescription; if (!string.IsNullOrWhiteSpace(d)) return d.Trim(); } catch (Exception) { }
-        return DockModelBuilder.DefaultTitle(path);
-    }
+    /// <summary>Título legible de una app (descripción del archivo, nombre del Shell para apps empaquetadas, o el nombre del ejecutable).</summary>
+    public static string Title(AppIdentity id) => DisplayNames.Resolve(id);
 }
 
-public sealed class ShellIconSource : Rendering.IIconSource
+/// <summary>Adapta el servicio de iconos (reutilizable) al painter. No bloquea: devuelve el icono si ya está cargado y, si no, encola la carga.</summary>
+public sealed class AppIconSource : IIconSource, IDisposable
 {
-    private readonly Dictionary<string, IconPixels?> _cache = new();
-    public IconPixels? Get(DockItemModel item)
+    public IconService Service { get; }
+    private int _dirty;
+    public const int RequestSize = 256;
+
+    public AppIconSource(string? cacheDir = null, IIconProvider? provider = null)
     {
-        if (item.Kind != DockItemKind.App || item.Path is null) return null;
-        if (!_cache.TryGetValue(item.Path, out var px)) _cache[item.Path] = px = IconProvider.Load(item.Path);
-        return px;
+        Service = new IconService(provider ?? new ShellIconProvider(), new IconCache(512, cacheDir ?? DockDefaults.IconCachePath));
+        Service.Loaded += _ => Interlocked.Exchange(ref _dirty, 1);
     }
-    public int Loaded => _cache.Values.Count(v => v is not null);
-    public int Requested => _cache.Count;
+
+    /// <summary>True (una sola vez) si llegó algún icono nuevo desde la última consulta: hay que repintar.</summary>
+    public bool TakeDirty() => Interlocked.Exchange(ref _dirty, 0) == 1;
+
+    public IconBitmap? Get(DockItemModel item) => item.Identity is null ? null : Service.TryGet(new IconRequest(item.Identity, item.IconOverride, RequestSize));
+
+    public void Dispose() => Service.Dispose();
 }
+
+/// <summary>Sin iconos reales (modo demostración y pruebas automatizadas).</summary>
+public sealed class NoIconSource : IIconSource { public IconBitmap? Get(DockItemModel item) => null; }

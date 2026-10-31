@@ -1,8 +1,13 @@
 // WinMac Dock — primera iteración (PROVISIONAL). Overlay propio sobre la barra de tareas; NO reemplaza ni modifica la barra de tareas de Windows.
 //
 // Uso:
-//   WinMac.Dock.App                         ejecuta el dock con las apps reales
-//   WinMac.Dock.App --demo                  ejecuta el dock con datos de demostración (sin seguir ventanas reales)
+//   WinMac.Dock.App                         ejecuta el dock con las apps reales (íconos originales, apps ancladas persistentes, menú con clic derecho)
+//   WinMac.Dock.App --demo                  SOLO PRUEBAS: dock con datos de demostración (íconos de letra, sin seguir ventanas reales)
+//   WinMac.Dock.App --quit                  pide al dock en ejecución que se cierre normalmente
+//   WinMac.Dock.App --list-pinned           muestra las apps ancladas (id estable, tipo, título)
+//   WinMac.Dock.App --pin <ruta.exe|AUMID> [--title T]   ancla una app (Win32 por ruta; empaquetada por AUMID, p. ej. Microsoft.WindowsCalculator_8wekyb3d8bbwe!App)
+//   WinMac.Dock.App --unpin <id|ruta|AUMID> desancla una app
+//   WinMac.Dock.App --icon-test <ruta.exe|AUMID> [--out icono.png]   extrae el icono original con el mismo servicio que usa el dock y lo guarda como PNG
 //   WinMac.Dock.App --render-png f.png [--pose rest|hover|hidden|open|edge] [--theme light|dark] [--tier tint|wallpaper] [--scale 1.5]
 //                                           renderiza FUERA de pantalla (no abre ventana) con el renderizador real y guarda un PNG (para CI)
 //   WinMac.Dock.App --bench-offscreen f.json [--theme ..] [--tier ..] [--scale ..]
@@ -10,7 +15,10 @@
 //   WinMac.Dock.App --selftest              comprobaciones no interactivas con diagnóstico; código de salida 0 si todo funciona
 //   Opciones: --tier tint|wallpaper · --theme light|dark (por defecto: tema de Windows) · --config ruta.json · --no-config (ignora el archivo guardado)
 using System.Diagnostics;
+using WinMac.Apps;
+using WinMac.Apps.Win;
 using WinMac.Dock;
+using WinMac.Dock.Imaging;
 using WinMac.Dock.Win.Offscreen;
 using WinMac.Dock.Win.Rendering;
 using WinMac.Dock.Win.Shell;
@@ -49,6 +57,11 @@ internal static class Program
                 Log("BENCH: " + OffscreenBench.Run(json, tier ?? GlassTier.WallpaperBlur, SystemTheme.Resolve(themeArg ?? ThemeMode.Light), scale)); return 0;
             }
             if (args.Contains("--selftest")) return SelfTest(tier ?? GlassTier.WallpaperBlur);
+            if (args.Contains("--quit")) return Quit();
+            if (args.Contains("--list-pinned")) return ConfigCommand(args, null);
+            if (Arg(args, "--pin") is string toPin) return ConfigCommand(args, ("pin", toPin));
+            if (Arg(args, "--unpin") is string toUnpin) return ConfigCommand(args, ("unpin", toUnpin));
+            if (Arg(args, "--icon-test") is string iconTarget) return IconTest(iconTarget, Arg(args, "--out"));
             return RunDock(args, tier, themeArg);
         }
         catch (Exception e) { Log("ERROR: " + e); return 1; }
@@ -63,11 +76,51 @@ internal static class Program
         if (tier is GlassTier t) cfg = cfg with { GlassTier = t };
         if (themeArg is ThemeMode tm) cfg = cfg with { Theme = tm };
         if (!File.Exists(cfgPath) && !args.Contains("--no-config")) { try { cfg.Save(cfgPath); } catch (Exception e) { Log("No se pudo guardar la configuración: " + e.Message); } }
-        using var host = new DockHost(cfg, new DockMetrics(), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), args.Contains("--demo"), Log);
+        using var host = new DockHost(cfg, new DockMetrics(), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), args.Contains("--demo"), Log, args.Contains("--no-config") ? null : cfgPath);
         Log("Iniciando dock…");
         int rc = host.Run();
         Log("Dock terminado. " + host.Report());
         return rc;
+    }
+
+    private static int Quit()
+    {
+        try { using var ev = EventWaitHandle.OpenExisting(DockDefaults.QuitEventName); ev.Set(); Log("Señal de cierre enviada al dock."); return 0; }
+        catch (WaitHandleCannotBeOpenedException) { Log("No hay un dock en ejecución."); return 0; }
+    }
+
+    /// <summary>Identidad desde un argumento: «aumid:XXX», un AUMID (contiene «!») o la ruta de un ejecutable.</summary>
+    private static AppIdentity ParseTarget(string t, string? title)
+    {
+        if (t.StartsWith("aumid:", StringComparison.OrdinalIgnoreCase)) return AppIdentity.FromAumid(t[6..], title);
+        if (t.Contains('!') && !t.Contains('\\') && !t.Contains('/')) return AppIdentity.FromAumid(t, title);
+        return AppIdentity.FromExe(Path.GetFullPath(Environment.ExpandEnvironmentVariables(t)), title);
+    }
+
+    private static int ConfigCommand(string[] args, (string Op, string Target)? op)
+    {
+        string path = Arg(args, "--config") ?? DockDefaults.ConfigPath; var cfg = DockConfig.LoadOrDefault(path, DockDefaults.Create);
+        if (op is { } o)
+        {
+            var id = ParseTarget(o.Target, Arg(args, "--title") ?? null);
+            if (o.Op == "pin") { var n = DockPinning.Pin(cfg, id, Arg(args, "--title") ?? DockDefaults.Title(id)); Log(ReferenceEquals(n, cfg) ? "Ya estaba anclada." : $"Anclada: {id.Id}"); cfg = n; }
+            else { var n = DockPinning.Unpin(cfg, id.Id); Log(ReferenceEquals(n, cfg) ? "No estaba anclada." : $"Desanclada: {id.Id}"); cfg = n; }
+            if (!cfg.TrySave(path)) { Log("No se pudo guardar la configuración."); return 1; }
+            Log("Si el dock está en ejecución, recarga el archivo en unos segundos.");
+        }
+        foreach (var p in cfg.Pinned) Log($"  {p.StableId}  [{p.ToIdentity()?.Kind}]  {p.Title}");
+        return 0;
+    }
+
+    private static int IconTest(string target, string? outPng)
+    {
+        var id = ParseTarget(target, null);
+        using var svc = new IconService(new ShellIconProvider(), new IconCache(8, null));
+        var b = svc.GetAsync(new IconRequest(id)).WaitAsync(TimeSpan.FromSeconds(15)).GetAwaiter().GetResult();
+        if (b is null) { Log($"Sin icono válido para {id.Id}: el Dock usaría el mosaico de reemplazo. Estadísticas: {svc.Stats}"); return 1; }
+        Log($"Icono de {id.Id}: {b.Width}x{b.Height}px (proporción {(double)b.Width / b.Height:0.00}); válido");
+        if (outPng is not null) { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPng))!); File.WriteAllBytes(outPng, PngWriter.EncodeRgba(PngWriter.BgraPremulToRgba(b.Bgra, b.Width * 4, b.Width, b.Height), b.Width, b.Height)); Log("PNG: " + outPng); }
+        return 0;
     }
 
     /// <summary>Cada sección se ejecuta aislada para que un fallo no oculte los demás. Pensado para el runner de CI (sin monitor ni GPU reales).</summary>
@@ -81,18 +134,67 @@ internal static class Program
             catch (Exception e) { failures++; Log($"[FALLO] {name}: {e.GetType().Name}: {e.Message}"); }
         }
         Log($"Windows: {Environment.OSVersion.VersionString}; 64 bits: {Environment.Is64BitProcess}");
-        Step("Configuración por defecto", () => $"{DockDefaults.Create().Pinned.Count} apps ancladas; Descargas={DockDefaults.DownloadsPath()}");
+        Step("Configuración por defecto", () => $"{DockDefaults.Create().Pinned.Count} apps ancladas; Descargas={DockDefaults.DownloadsPath()}; iconos en caché: {DockDefaults.IconCachePath}");
         Step("Seguimiento de ventanas (SetWinEventHook + EnumWindows)", () =>
         {
             using var tr = new WindowTracker(); var snap = tr.Snapshot();
-            return $"hooks={tr.HookCount}; apps con ventana={snap.Count} [{string.Join(", ", snap.Take(5).Select(a => Path.GetFileName(a.ExePath)))}]";
+            return $"hooks={tr.HookCount}; apps con ventana={snap.Count}";
         });
-        Step("Íconos del Shell (IShellItemImageFactory)", () =>
+        Step("Identidad de las ventanas abiertas (AUMID / ejecutable)", () =>
         {
-            string[] probes = [Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "notepad.exe")];
-            var results = probes.Select(p => (p, px: IconProvider.Load(p))).ToList();
-            if (results.All(r => r.px is null)) throw new InvalidOperationException("ningún ícono cargado");
-            return string.Join("; ", results.Select(r => $"{Path.GetFileName(r.p)}={(r.px is null ? "null" : $"{r.px.Width}x{r.px.Height}")}"));
+            using var tr = new WindowTracker(); var snap = tr.Snapshot();
+            if (snap.Select(x => x.Identity.Id).Distinct().Count() != snap.Count) throw new InvalidOperationException("identidades duplicadas en la instantánea");
+            return $"{snap.Count} apps; empaquetadas={snap.Count(x => x.Identity.Kind == AppKind.Packaged)}; [{string.Join(", ", snap.Take(6).Select(a => a.Identity.Id.Length > 48 ? a.Identity.Id[..48] + "…" : a.Identity.Id))}]";
+        });
+        Step("Servicio de iconos Win32 (original, sin deformar) + caché de disco", () =>
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "winmac-selftest-icons-" + Guid.NewGuid().ToString("N")); var report = new List<string>();
+            try
+            {
+                string win = Environment.GetFolderPath(Environment.SpecialFolder.Windows), sys = Environment.GetFolderPath(Environment.SpecialFolder.System);
+                var ids = new[] { Path.Combine(win, "explorer.exe"), Path.Combine(sys, "notepad.exe"), Path.Combine(sys, "cmd.exe") }.Where(File.Exists).Select(p => AppIdentity.FromExe(p)).ToList();
+                int ok = 0;
+                using (var svc = new IconService(new ShellIconProvider(), new IconCache(16, dir)))
+                    foreach (var id in ids) { var b = svc.GetAsync(new IconRequest(id)).WaitAsync(TimeSpan.FromSeconds(15)).GetAwaiter().GetResult(); if (b is not null) { ok++; report.Add($"{Path.GetFileName(id.ExePath)}={b.Width}x{b.Height}"); } else report.Add($"{Path.GetFileName(id.ExePath)}=sin icono"); }
+                if (ok == 0) throw new InvalidOperationException("ningún icono Win32 cargado");
+                using var svc2 = new IconService(new ShellIconProvider(), new IconCache(16, dir));
+                foreach (var id in ids) svc2.GetAsync(new IconRequest(id)).WaitAsync(TimeSpan.FromSeconds(15)).GetAwaiter().GetResult();
+                report.Add($"caché de disco: {svc2.Stats.DiskHits} aciertos de {ids.Count}");
+                if (svc2.Stats.DiskHits == 0) throw new InvalidOperationException("la caché de disco no sirvió ningún icono en la segunda ejecución");
+            }
+            finally { try { Directory.Delete(dir, true); } catch { } }
+            return string.Join("; ", report);
+        });
+        Step("Apps empaquetadas MSIX/UWP (informativo: depende de lo instalado en el equipo)", () =>
+        {
+            string[] aumids = ["Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App", "windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel", "MicrosoftWindows.Client.CBS_cw5n1h2txyewy!CortanaUI"];
+            var found = new List<string>(); using var svc = new IconService(new ShellIconProvider(), new IconCache(8, null));
+            foreach (var a in aumids) { var id = AppIdentity.FromAumid(a); var b = svc.GetAsync(new IconRequest(id)).WaitAsync(TimeSpan.FromSeconds(15)).GetAwaiter().GetResult(); found.Add($"{a.Split('_')[0]}={(b is null ? "sin icono/no instalada" : $"{b.Width}x{b.Height}")} nombre='{DisplayNames.Resolve(id)}'"); }
+            return string.Join("; ", found);
+        });
+        Step("Ancladas: anclar, reordenar, desanclar, guardar y recuperar (configuración temporal)", () =>
+        {
+            string f = Path.Combine(Path.GetTempPath(), "winmac-selftest-" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                string sys = Environment.GetFolderPath(Environment.SpecialFolder.System);
+                var a = AppIdentity.FromExe(Path.Combine(sys, "notepad.exe")); var b = AppIdentity.FromExe(Path.Combine(sys, "cmd.exe")); var c = AppIdentity.FromAumid("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", "Calculadora");
+                var cfg = DockPinning.Pin(DockPinning.Pin(DockPinning.Pin(new DockConfig(), a, "A"), b, "B"), c, "C");
+                cfg = DockPinning.Move(cfg, c.Id, 0); cfg = DockPinning.Unpin(cfg, b.Id);
+                if (!cfg.TrySave(f)) throw new InvalidOperationException("no se pudo guardar");
+                var back = DockConfig.LoadOrDefault(f, () => new DockConfig()); var order = string.Join(",", back.Pinned.Select(p => p.Title));
+                if (order != "C,A") throw new InvalidOperationException("orden inesperado tras recuperar: " + order);
+                return $"orden recuperado = {order}; tipos = {string.Join(",", back.Pinned.Select(p => p.ToIdentity()!.Kind))}";
+            }
+            finally { try { File.Delete(f); } catch { } }
+        });
+        Step("Modelo del Dock con apps REALES (ancladas por defecto + abiertas, sin duplicados) y menú", () =>
+        {
+            using var tr = new WindowTracker(); var cfg = DockDefaults.Create(); var items = new DockModelBuilder(cfg, DockDefaults.Title).Build(tr.Snapshot(), cfg.DownloadsPath);
+            var apps = items.Where(i => i.Kind == DockItemKind.App).ToList();
+            if (apps.Select(i => i.Id).Distinct().Count() != apps.Count) throw new InvalidOperationException("ítems de app duplicados");
+            var first = apps.FirstOrDefault(); int menu = first is null ? 0 : DockMenu.ForItem(first, 0, apps.Count(a => a.Pinned)).Count;
+            return $"{apps.Count} apps ({apps.Count(a => a.Pinned)} ancladas, {apps.Count(a => a.Running)} abiertas); entradas del menú del primero = {menu}";
         });
         Step("Detector de pantalla completa", () => $"suprimir={FullscreenWatcher.ShouldSuppress()}");
         Step("Render fuera de pantalla (D2D) → PNG, 5 escenas × 2 temas", () =>

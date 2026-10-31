@@ -37,6 +37,11 @@ foreach ($theme in 'light', 'dark') {
 Run 'Dock offscreen tint (sin fondo)' $dock @('--render-png', "`"$OutDir\dock-light-tint-hover.png`"", '--pose', 'hover', '--tier', 'tint', '--scale', '2') 90
 Run 'Dock bench offscreen (WARP; NO es FPS real)' $dock @('--bench-offscreen', "`"$OutDir\bench-offscreen-light.json`"", '--theme', 'light') 180
 Run 'Dock selftest' $dock @('--selftest', '--out', "`"$OutDir\selftest`"") 240
+# Iconos REALES con el servicio de iconos (IShellItemImageFactory) de aplicaciones presentes en el runner. Informativo: el runner no es un escritorio de usuario.
+foreach ($app in @('%WINDIR%\explorer.exe', '%WINDIR%\notepad.exe', '%WINDIR%\System32\calc.exe', '%WINDIR%\System32\mspaint.exe')) {
+  $exp = [Environment]::ExpandEnvironmentVariables($app); $leaf = [IO.Path]::GetFileNameWithoutExtension($exp)
+  Run "Icono real $leaf" $dock @('--icon-test', "`"$exp`"", '--out', "`"$OutDir\icon-$leaf.png`"") 60 -Informational
+}
 # Vista previa en el log: el sandbox de desarrollo no puede descargar artefactos, pero SÍ leer los logs del job.
 # Se emiten versiones reducidas (escala 0.75) de dos escenas en base64 dentro de grupos plegados. Los PNG completos (2x) están en el artefacto.
 foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark-open'; t = 'dark'; p = 'open' })) {

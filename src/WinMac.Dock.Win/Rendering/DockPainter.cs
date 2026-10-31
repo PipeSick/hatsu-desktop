@@ -4,11 +4,13 @@ using Vortice.Direct2D1;
 using Vortice.DirectWrite;
 using Vortice.Mathematics;
 using WinMac.Dock.Imaging;
+using WinMac.Apps;
 using WinMac.Dock.Win.Shell;
 
 namespace WinMac.Dock.Win.Rendering;
 
-public interface IIconSource { IconPixels? Get(DockItemModel item); }
+/// <summary>Origen de iconos reales de las apps. Debe ser rápido y no bloquear (devuelve null si todavía no está listo; el painter usa entonces su reemplazo).</summary>
+public interface IIconSource { IconBitmap? Get(DockItemModel item); }
 
 /// <summary>
 /// Dibuja un <see cref="DockView"/> con Direct2D. No conoce ventanas ni swap chains: se usa igual en pantalla (DirectComposition)
@@ -22,7 +24,7 @@ public sealed class DockPainter : IDisposable
     private readonly ID2D1PathGeometry _squircle; private readonly IDWriteFactory _dw; private readonly IDWriteTextFormat _glyphFmt, _labelFmt;
     private readonly ID2D1SolidColorBrush _solid;
     private readonly ID2D1LinearGradientBrush _grad;
-    private readonly Dictionary<string, ID2D1Bitmap?> _iconCache = new();
+    private readonly Dictionary<string, ID2D1Bitmap?> _iconCache = new(); private readonly Dictionary<string, IconBitmap> _iconSrc = new();
     private ID2D1Bitmap? _backdropBlurred;
     public int IconCacheCount => _iconCache.Count;
 
@@ -75,7 +77,8 @@ public sealed class DockPainter : IDisposable
         DrawBarShadow(bar);
         DrawGlass(rr, bar, tier);
         DrawSeparators(v, barTop, barH);
-        foreach (var it in v.Items) if (it.Model.Kind != DockItemKind.Separator) DrawItem(it, barBottom);
+        for (int pass = 0; pass < 2; pass++)
+            foreach (var it in v.Items) if (it.Model.Kind != DockItemKind.Separator && ((it.Index == v.DragIndex) == (pass == 1))) DrawItem(it, barBottom);   // el ítem arrastrado se dibuja encima
         DrawLabel(v, barBottom);
 
         ctx.Transform = Matrix3x2.Identity;
@@ -157,22 +160,26 @@ public sealed class DockPainter : IDisposable
 
         var oldT = _ctx.Transform;
         // Los íconos de demostración/reemplazo (letra) son un mosaico a sangre completa, como un ícono de app; la placa clara solo se usa bajo íconos reales (planos y con transparencia).
-        bool fullBleed = it.Model.Kind == DockItemKind.App && IconFor(it.Model) is null;
-        if (!fullBleed)
+        var realIcon = it.Model.Kind == DockItemKind.App ? IconFor(it.Model) : null;   // icono original de la app (si ya está disponible)
+        bool fullBleed = it.Model.Kind == DockItemKind.App && realIcon is null;
+        if (!fullBleed && realIcon is null)
         {
             _ctx.Transform = Matrix3x2.CreateScale(s, s) * Matrix3x2.CreateTranslation(x, y) * oldT;
             DrawPlate(it.Model);
             _ctx.Transform = oldT;
         }
 
-        if (it.Model.Kind == DockItemKind.App) DrawAppGlyph(it, x, y, s);
+        if (it.Model.Kind == DockItemKind.App) DrawAppGlyph(it, x, y, s, realIcon);
         else if (it.Model.Kind == DockItemKind.Folder) DrawFolder(x, y, s);
         else if (it.Model.Kind == DockItemKind.Trash) DrawTrash(x, y, s);
 
-        // contorno fino del squircle
-        _ctx.Transform = Matrix3x2.CreateScale(s, s) * Matrix3x2.CreateTranslation(x, y) * oldT;
-        Solid(1, 1, 1, 0.30f); _ctx.DrawGeometry(_squircle, _solid, 1f / s);
-        _ctx.Transform = oldT;
+        // contorno fino del squircle (no para iconos reales: no se encierran en un cuadrado)
+        if (realIcon is null)
+        {
+            _ctx.Transform = Matrix3x2.CreateScale(s, s) * Matrix3x2.CreateTranslation(x, y) * oldT;
+            Solid(1, 1, 1, 0.30f); _ctx.DrawGeometry(_squircle, _solid, 1f / s);
+            _ctx.Transform = oldT;
+        }
 
         // indicador de app abierta
         if (it.Model.Running)
@@ -193,18 +200,19 @@ public sealed class DockPainter : IDisposable
         _ctx.FillGeometry(_squircle, g);
     }
 
-    private void DrawAppGlyph(ItemView it, float x, float y, float s)
+    private void DrawAppGlyph(ItemView it, float x, float y, float s, IconBitmap? icon)
     {
-        var bmp = IconFor(it.Model);
-        if (bmp is not null)
+        var bmp = icon is null ? null : BitmapFor(it.Model, icon);
+        if (bmp is not null && icon is not null)
         {
-            float pad = s * 0.14f;
-            DrawBmp(bmp, new RawRectF(x + pad, y + pad, x + s - pad, y + s - pad), true);
+            // Icono original: se ajusta a la caja SIN deformar (proporción conservada, centrado, alfa intacto) y sin placa ni contorno.
+            var (fx, fy, fw, fh) = IconLayout.AspectFit(icon.Width, icon.Height, x, y, s, s);
+            DrawBmp(bmp, new RawRectF((float)fx, (float)fy, (float)(fx + fw), (float)(fy + fh)), true);
             return;
         }
         // Reemplazo: placa de color + inicial (ícono real no disponible).
-        int h = Math.Abs((it.Model.Path ?? it.Model.Title).GetHashCode());
-        float hue = (h % 360) / 360f; var c = Hsv(hue, 0.55f, 0.85f);
+        float hue = (float)FallbackIcon.Hue(it.Model.Id); var c = Hsv(hue, 0.55f, 0.85f);   // tono determinista por identidad
+        
         using (var g = Grad(new Vector2(0, 0), new Vector2(0, 1), (0f, new Color4(Math.Min(1, c.R + .15f), Math.Min(1, c.G + .15f), Math.Min(1, c.B + .15f), 1)), (1f, c)))
         {
             var old = _ctx.Transform;
@@ -252,24 +260,29 @@ public sealed class DockPainter : IDisposable
     }
 
     // ---------------------------------------------------------------- recursos
-    private ID2D1Bitmap? IconFor(DockItemModel m)
+    /// <summary>Icono original ya disponible para este ítem (null → se dibuja el mosaico de reemplazo). Se consulta en cada pintado: la consulta es un acceso a diccionario.</summary>
+    private IconBitmap? IconFor(DockItemModel m)
     {
-        string key = m.Path ?? m.Id;
-        if (_iconCache.TryGetValue(key, out var b)) return b;
+        try { return _icons.Get(m); } catch (Exception) { return null; }   // un origen defectuoso nunca debe tumbar el render
+    }
+
+    private ID2D1Bitmap? BitmapFor(DockItemModel m, IconBitmap px)
+    {
+        string key = m.Id + "|" + m.IconOverride;
+        if (_iconCache.TryGetValue(key, out var b) && b is not null && ReferenceEquals(_iconSrc.GetValueOrDefault(key), px)) return b;
         ID2D1Bitmap? bmp = null;
         try
         {
-            var px = _icons.Get(m);
-            if (px is not null)
-                unsafe
-                {
-                    fixed (byte* p = px.Bgra)
-                        bmp = _ctx.CreateBitmap(new Vortice.Mathematics.SizeI(px.Width, px.Height), (IntPtr)p, (uint)(px.Width * 4),
-                            new BitmapProperties1(new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96, 96));
-                }
+            unsafe
+            {
+                fixed (byte* p = px.Bgra)
+                    bmp = _ctx.CreateBitmap(new Vortice.Mathematics.SizeI(px.Width, px.Height), (IntPtr)p, (uint)(px.Width * 4),
+                        new BitmapProperties1(new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96, 96));
+            }
         }
         catch (Exception) { bmp = null; }
-        _iconCache[key] = bmp; return bmp;
+        if (_iconCache.TryGetValue(key, out var old)) old?.Dispose();
+        _iconCache[key] = bmp; _iconSrc[key] = px; return bmp;
     }
 
     private static Color4 Hsv(float h, float s, float v)

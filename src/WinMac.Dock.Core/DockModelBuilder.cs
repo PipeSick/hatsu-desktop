@@ -1,70 +1,67 @@
+using WinMac.Apps;
+
 namespace WinMac.Dock;
 
-/// <summary>Combina apps ancladas + apps en ejecución + carpeta/papelera en la lista lógica de ítems. Mantiene un orden estable de «recientes».</summary>
+/// <summary>
+/// Combina apps ancladas + apps en ejecución + carpeta/papelera en la lista lógica de ítems, usando la IDENTIDAD estable de cada app (no solo la ruta).
+/// Evita duplicados: una app anclada y en ejecución es UN ítem; las abiertas pero no ancladas aparecen como «recientes temporales», con orden estable.
+/// </summary>
 public sealed class DockModelBuilder
 {
-    private readonly DockConfig _cfg;
-    private readonly Func<string, string> _title;
+    private readonly Func<AppIdentity, string> _title;
     private readonly List<string> _firstSeen = new();
+    public DockConfig Config { get; set; }
 
-    public DockModelBuilder(DockConfig cfg, Func<string, string>? titleResolver = null)
+    public DockModelBuilder(DockConfig cfg, Func<AppIdentity, string>? titleResolver = null)
     {
-        _cfg = cfg; _title = titleResolver ?? DefaultTitle;
+        Config = cfg; _title = titleResolver ?? (i => i.DisplayName);
     }
 
-    public static string Norm(string path) => path.Replace('/', '\\').Trim().ToUpperInvariant();
+    public static string Norm(string path) => AppIdentity.NormPath(path);
+    public static string DefaultTitle(string path) => AppIdentity.StemTitle(path);
 
-    public static string DefaultTitle(string path)
-    {
-        string file = path.Replace('/', '\\'); int i = file.LastIndexOf('\\'); if (i >= 0) file = file[(i + 1)..];
-        int dot = file.LastIndexOf('.'); if (dot > 0) file = file[..dot];
-        return file.Length == 0 ? path : char.ToUpperInvariant(file[0]) + file[1..];
-    }
+    private sealed class Group { public required AppIdentity Identity; public List<WindowInfo> Windows = new(); }
 
     public IReadOnlyList<DockItemModel> Build(IReadOnlyList<RunningApp> running, string? downloadsPath = null)
     {
-        var byPath = new Dictionary<string, List<WindowInfo>>();
+        var cfg = Config; var groups = new List<Group>();
         foreach (var r in running)
         {
-            string k = Norm(r.ExePath);
-            if (!byPath.TryGetValue(k, out var l)) byPath[k] = l = [];
-            l.AddRange(r.Windows);
-            if (!_firstSeen.Contains(k)) _firstSeen.Add(k);
+            var g = groups.FirstOrDefault(x => string.Equals(x.Identity.Id, r.Identity.Id, StringComparison.Ordinal));
+            if (g is null) { g = new Group { Identity = r.Identity }; groups.Add(g); }
+            g.Windows.AddRange(r.Windows);
+            if (!_firstSeen.Contains(r.Identity.Id)) _firstSeen.Add(r.Identity.Id);
         }
-        _firstSeen.RemoveAll(k => !byPath.ContainsKey(k));
+        _firstSeen.RemoveAll(k => !groups.Any(g => g.Identity.Id == k));
 
-        var items = new List<DockItemModel>();
-        var pinnedKeys = new HashSet<string>();
-        foreach (var p in _cfg.Pinned)
+        var items = new List<DockItemModel>(); var consumed = new HashSet<string>(); var seenPinned = new List<AppIdentity>();
+        foreach (var p in cfg.Pinned)
         {
-            string k = Norm(p.Path); pinnedKeys.Add(k);
-            byPath.TryGetValue(k, out var w);
-            items.Add(Make(k, p.Path, p.Title ?? _title(p.Path), true, w));
+            var id = p.ToIdentity(); if (id is null || seenPinned.Any(x => x.SameApp(id))) continue;   // entrada corrupta o duplicada
+            seenPinned.Add(id);
+            var g = groups.FirstOrDefault(x => id.SameApp(x.Identity)); if (g is not null) consumed.Add(g.Identity.Id);
+            items.Add(Make(id, string.IsNullOrWhiteSpace(p.Title) ? _title(id) : p.Title!, pinned: true, g?.Windows, p.IconOverride));
         }
 
-        var recents = _cfg.ShowRecents
-            ? _firstSeen.Where(k => !pinnedKeys.Contains(k)).Take(Math.Max(0, _cfg.MaxRecents)).ToList()
+        var recents = cfg.ShowRecents
+            ? _firstSeen.Where(k => !consumed.Contains(k)).Take(Math.Max(0, cfg.MaxRecents)).Select(k => groups.First(g => g.Identity.Id == k)).ToList()
             : [];
         if (recents.Count > 0)
         {
             items.Add(new DockItemModel("sep:recents", DockItemKind.Separator, "", null));
-            foreach (var k in recents)
-            {
-                string original = running.First(r => Norm(r.ExePath) == k).ExePath;
-                items.Add(Make(k, original, _title(original), false, byPath[k]));
-            }
+            foreach (var g in recents) items.Add(Make(g.Identity, _title(g.Identity), pinned: false, g.Windows, null));
         }
 
         items.Add(new DockItemModel("sep:system", DockItemKind.Separator, "", null));
-        items.Add(new DockItemModel("folder:downloads", DockItemKind.Folder, "Descargas", downloadsPath ?? _cfg.DownloadsPath));
+        items.Add(new DockItemModel("folder:downloads", DockItemKind.Folder, "Descargas", downloadsPath ?? cfg.DownloadsPath));
         items.Add(new DockItemModel("trash", DockItemKind.Trash, "Papelera", "shell:RecycleBinFolder"));
         return items;
     }
 
-    private static DockItemModel Make(string key, string path, string title, bool pinned, List<WindowInfo>? w)
+    private static DockItemModel Make(AppIdentity id, string title, bool pinned, List<WindowInfo>? w, string? iconOverride)
     {
         int n = w?.Count ?? 0;
-        return new DockItemModel("app:" + key, DockItemKind.App, title, path, pinned, n > 0, n,
-            w?.Any(x => x.Active) ?? false, n > 0 && w!.All(x => x.Minimized));
+        return new DockItemModel("app:" + id.Id, DockItemKind.App, title, id.LaunchTarget, pinned, n > 0, n,
+            w?.Any(x => x.Active) ?? false, n > 0 && w!.All(x => x.Minimized), id, w?.ToList(), iconOverride);
     }
 }

@@ -15,7 +15,7 @@ public enum DemoPose { Rest, Hover, Hidden, Open, Edge }
 /// </summary>
 public static class OffscreenRenderer
 {
-    private sealed class NoIcons : IIconSource { public Shell.IconPixels? Get(DockItemModel item) => null; }
+    private sealed class NoIcons : IIconSource { public WinMac.Apps.IconBitmap? Get(DockItemModel item) => null; }
 
     internal static DockView BuildView(DemoPose pose, DockMetrics metrics, DockConfig cfg, out DockController ctl)
     {

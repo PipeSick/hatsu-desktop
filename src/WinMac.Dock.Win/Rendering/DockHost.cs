@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Vortice.Direct2D1;
 using Vortice.DirectComposition;
 using Vortice.DXGI;
+using WinMac.Apps;
 using WinMac.Dock.Imaging;
 using WinMac.Dock.Win.Interop;
 using WinMac.Dock.Win.Shell;
@@ -17,11 +18,15 @@ namespace WinMac.Dock.Win.Rendering;
 /// </summary>
 public sealed class DockHost : IDisposable
 {
-    private const int WM_DESTROY = 2, WM_SETTINGCHANGE = 0x1A, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_NCHITTEST = 0x84, WM_LBUTTONUP = 0x202, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12;
+    private const int WM_DESTROY = 2, WM_SETTINGCHANGE = 0x1A, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_NCHITTEST = 0x84, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_MOUSEMOVE = 0x200, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
 
-    private readonly DockController _ctl; private readonly DockConfig _cfg; private readonly DockMetrics _m; private readonly GlassStyle _glass;
-    private readonly WindowTracker? _tracker; private readonly WindowActions? _actions; private readonly DockModelBuilder _builder; private readonly ShellIconSource _icons = new();
+    private readonly DockController _ctl; private DockConfig _cfg; private readonly DockMetrics _m; private readonly GlassStyle _glass;
+    private readonly WindowTracker? _tracker; private readonly WindowActions? _actions; private readonly DockModelBuilder _builder;
+    private readonly IIconSource _icons; private readonly AppIconSource? _appIcons;
+    private readonly string? _cfgPath; private readonly LaunchGuard _launch = new(); private readonly EventWaitHandle? _quit;
+    private DateTime? _saveDue; private DateTime _cfgStamp = DateTime.MinValue, _lastCfgCheck = DateTime.MinValue; private bool _quitting;
+    private int _pressed = -1; private System.Drawing.Point _pressPx; private bool _pressDrag;
     private readonly Action<string> _log; private readonly bool _demo;
     private readonly WndProc _proc;
     private IntPtr _hwnd; private double _scale = 1; private int _winLeftPx, _winTopPx, _winWpx, _winHpx; private Native.RECT _monitor;
@@ -33,12 +38,20 @@ public sealed class DockHost : IDisposable
 
     public string Diagnostics { get; private set; } = "";
 
-    public DockHost(DockConfig cfg, DockMetrics m, GlassStyle glass, bool demo, Action<string> log)
+    /// <param name="configPath">Si se indica, las apps ancladas y su orden se guardan aquí (escritura atómica, con retardo) y se recargan si el archivo cambia desde fuera.</param>
+    public DockHost(DockConfig cfg, DockMetrics m, GlassStyle glass, bool demo, Action<string> log, string? configPath = null)
     {
-        _cfg = cfg; _m = m; _glass = glass; _demo = demo; _log = log; _proc = WndProcImpl;
+        _cfg = cfg; _m = m; _glass = glass; _demo = demo; _log = log; _proc = WndProcImpl; _cfgPath = demo ? null : configPath;
         _ctl = new DockController(m, cfg);
         _builder = new DockModelBuilder(cfg, DockDefaults.Title);
-        if (!demo) { _tracker = new WindowTracker(); _actions = new WindowActions(_tracker) { Log = log }; _tracker.Changed += RefreshItems; }
+        if (demo) _icons = new NoIconSource();        // los íconos de demostración (letras) son solo para pruebas automatizadas y --demo
+        else
+        {
+            _appIcons = new AppIconSource(); _icons = _appIcons;
+            _tracker = new WindowTracker(); _actions = new WindowActions(_tracker) { Log = log }; _tracker.Changed += RefreshItems;
+            try { _quit = new EventWaitHandle(false, EventResetMode.ManualReset, DockDefaults.QuitEventName); } catch (Exception e) { log("No se pudo crear el evento de cierre: " + e.Message); }
+        }
+        if (_cfgPath is not null && File.Exists(_cfgPath)) _cfgStamp = File.GetLastWriteTimeUtc(_cfgPath);
     }
 
     // ------------------------------------------------------------------ ciclo de vida
@@ -52,6 +65,8 @@ public sealed class DockHost : IDisposable
             while (Native2.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1)) { if (msg.message == WM_QUIT) return 0; Native2.TranslateMessage(ref msg); Native2.DispatchMessage(ref msg); }
             _tracker?.Pump();
             PollInputs();
+            Housekeeping();
+            if (_quitting) return 0;
             if (selfTest) { _force = true; if (clock.Elapsed.TotalSeconds > 10) throw new TimeoutException("selftest: no se alcanzaron los frames en 10 s"); }
             double now = clock.Elapsed.TotalSeconds, dt = Math.Min(now - last, 0.1); last = now;
             _view = _ctl.Step(dt);
@@ -84,6 +99,7 @@ public sealed class DockHost : IDisposable
     {
         var running = _demo ? [] : _tracker!.Snapshot();
         IReadOnlyList<DockItemModel> items = _demo ? DemoData.Items() : _builder.Build(running, _cfg.DownloadsPath);
+        foreach (var it in items) if (it.Running) _launch.Clear(it.Id);
         double oldW = _ctl.WindowWidth;
         _ctl.SetItems(items);
         if (Math.Abs(_ctl.WindowWidth - oldW) > 0.5 && _hwnd != IntPtr.Zero) ResizeWindow();
@@ -189,16 +205,38 @@ public sealed class DockHost : IDisposable
                 int x = (short)((long)l & 0xFFFF), y = (short)(((long)l >> 16) & 0xFFFF);
                 return InteractiveAt((x - _winLeftPx) / _scale, (y - _winTopPx) / _scale) ? (IntPtr)1 : (IntPtr)(-1); // HTCLIENT / HTTRANSPARENT: el resto deja pasar el ratón
             }
-            case WM_LBUTTONUP:
+            case WM_LBUTTONDOWN:
             {
                 if (_view is null) return IntPtr.Zero;
-                double x = (short)((long)l & 0xFFFF) / _scale;
-                for (int i = 0; i < _view.Items.Length; i++)
-                {
-                    var it = _view.Items[i]; if (it.Model.Kind == DockItemKind.Separator) continue;
-                    if (x >= it.X - 3 && x <= it.X + it.Size + 3) { var a = _ctl.OnClick(i); _actions?.Execute(a); _force = true; break; }
-                }
+                _pressed = HitIndex((short)((long)l & 0xFFFF) / _scale); _pressDrag = false;
+                _pressPx = new System.Drawing.Point((short)((long)l & 0xFFFF), (short)(((long)l >> 16) & 0xFFFF)); Native2.SetCapture(h);
                 return IntPtr.Zero;
+            }
+            case WM_MOUSEMOVE:
+            {
+                if (_pressed < 0 || (Native2.GetKeyState(0x01) & 0x8000) == 0) return IntPtr.Zero;   // solo con el botón izquierdo pulsado
+                int px = (short)((long)l & 0xFFFF), py = (short)(((long)l >> 16) & 0xFFFF);
+                if (!_pressDrag && Math.Abs(px - _pressPx.X) + Math.Abs(py - _pressPx.Y) > 8 * _scale && _ctl.CanDrag(_pressed)) _pressDrag = _ctl.BeginDrag(_pressed);
+                if (_pressDrag) { _ctl.UpdateDrag(px / _scale); _force = true; }
+                return IntPtr.Zero;
+            }
+            case WM_LBUTTONUP:
+            {
+                Native2.ReleaseCapture();
+                if (_view is null) return IntPtr.Zero;
+                int pressed = _pressed; _pressed = -1;
+                if (_pressDrag) { _pressDrag = false; var order = _ctl.EndDrag(true); if (order is not null) { _cfg = DockPinning.ReorderTo(_cfg, order); OnConfigChanged(); } _force = true; return IntPtr.Zero; }
+                int hit = HitIndex((short)((long)l & 0xFFFF) / _scale);
+                if (hit >= 0 && hit == pressed) ExecuteAction(_ctl.OnClick(hit));   // clic = pulsar y soltar sobre el mismo ícono
+                _force = true; return IntPtr.Zero;
+            }
+            case WM_RBUTTONUP:
+            {
+                if (_view is null) return IntPtr.Zero;
+                int hit = HitIndex((short)((long)l & 0xFFFF) / _scale);
+                var entries = hit >= 0 ? _ctl.MenuFor(hit) : DockMenu.ForBackground();
+                var chosen = ShowMenu(entries); if (chosen is not null) ExecuteAction(chosen);
+                _force = true; return IntPtr.Zero;
             }
             case WM_DPICHANGED: _scale = (int)((long)w & 0xFFFF) / 96.0; _dev.SetDpi(_scale); ResizeWindow(); return IntPtr.Zero;
             case WM_DISPLAYCHANGE: ResizeWindow(); return IntPtr.Zero;
@@ -206,6 +244,91 @@ public sealed class DockHost : IDisposable
             case WM_DESTROY: Native2.PostQuitMessage(0); return IntPtr.Zero;
         }
         return Native2.DefWindowProc(h, msg, w, l);
+    }
+
+    /// <summary>Índice del ítem bajo X (coordenada de ventana en DIP) o -1. Ignora separadores.</summary>
+    private int HitIndex(double x)
+    {
+        if (_view is null) return -1;
+        for (int i = 0; i < _view.Items.Length; i++)
+        {
+            var it = _view.Items[i]; if (it.Model.Kind == DockItemKind.Separator) continue;
+            if (x >= it.X - 3 && x <= it.X + it.Size + 3) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>Punto único de ejecución de acciones. Cada una está aislada: un fallo se registra y el Dock sigue.</summary>
+    private void ExecuteAction(DockAction a)
+    {
+        try
+        {
+            switch (a.Kind)
+            {
+                case DockActionKind.None: return;
+                case DockActionKind.Quit: _quitting = true; return;
+                case DockActionKind.Pin: if (a.App is not null) { _cfg = DockPinning.Pin(_cfg, a.App, DockDefaults.Title(a.App)); OnConfigChanged(); } return;
+                case DockActionKind.Unpin: if (a.App is not null) { _cfg = DockPinning.Unpin(_cfg, a.App.Id); OnConfigChanged(); } return;
+                case DockActionKind.MoveLeft: if (a.App is not null) { _cfg = DockPinning.MoveBy(_cfg, a.App.Id, -1); OnConfigChanged(); } return;
+                case DockActionKind.MoveRight: if (a.App is not null) { _cfg = DockPinning.MoveBy(_cfg, a.App.Id, +1); OnConfigChanged(); } return;
+                case DockActionKind.Launch:
+                    if (a.ItemId is not null && !_launch.TryBegin(a.ItemId)) return;   // evita duplicados por clics repetidos mientras arranca
+                    break;
+            }
+            _actions?.Execute(a);
+        }
+        catch (Exception e) { _log($"Acción {a.Kind} falló: {e.GetType().Name}: {e.Message}"); }
+    }
+
+    private void OnConfigChanged()
+    {
+        _builder.Config = _cfg; RefreshItems(); _saveDue = DateTime.UtcNow.AddMilliseconds(400);   // guardado con retardo: agrupa varios cambios seguidos
+    }
+
+    /// <summary>Tareas periódicas baratas: señal de cierre, iconos nuevos, guardado diferido y recarga si la configuración cambió desde fuera (p. ej. --pin).</summary>
+    private void Housekeeping()
+    {
+        if (_quit is not null && _quit.WaitOne(0)) { _quitting = true; return; }
+        if (_appIcons is not null && _appIcons.TakeDirty()) _force = true;
+        var now = DateTime.UtcNow;
+        if (_cfgPath is null) return;
+        if (_saveDue is DateTime due && now >= due)
+        {
+            _saveDue = null;
+            if (_cfg.TrySave(_cfgPath)) { try { _cfgStamp = File.GetLastWriteTimeUtc(_cfgPath); } catch (Exception) { } } else _log("No se pudo guardar la configuración de apps ancladas.");
+        }
+        else if ((now - _lastCfgCheck).TotalSeconds >= 2 && _saveDue is null)
+        {
+            _lastCfgCheck = now;
+            try
+            {
+                var stamp = File.Exists(_cfgPath) ? File.GetLastWriteTimeUtc(_cfgPath) : DateTime.MinValue;
+                if (stamp != _cfgStamp && stamp != DateTime.MinValue) { _cfgStamp = stamp; _cfg = DockConfig.LoadOrDefault(_cfgPath, () => _cfg); _builder.Config = _cfg; RefreshItems(); _log("Configuración recargada desde el archivo."); }
+            }
+            catch (Exception) { }
+        }
+    }
+
+    /// <summary>Menú contextual NATIVO de Windows (accesible, con el estilo del sistema). Devuelve la acción elegida o null.</summary>
+    private DockAction? ShowMenu(IReadOnlyList<MenuEntry> entries)
+    {
+        IntPtr menu = Native2.CreatePopupMenu(); if (menu == IntPtr.Zero) return null;
+        try
+        {
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var e = entries[i];
+                if (e.IsSeparator) Native2.AppendMenuW(menu, 0x800 /* MF_SEPARATOR */, UIntPtr.Zero, null);
+                else Native2.AppendMenuW(menu, (e.Enabled && !e.IsHeader ? 0u : 0x3u /* GRAYED|DISABLED */), (UIntPtr)(uint)(i + 1), e.Text.Replace("&", "&&"));
+            }
+            Native.GetCursorPos(out var p);
+            Native.SetForegroundWindow(_hwnd);   // requisito documentado de TrackPopupMenu: sin esto el menú no se cierra al pulsar fuera
+            int cmd = Native2.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x20 | 0x4 | 0x2 /* RETURNCMD|NONOTIFY|BOTTOMALIGN|CENTERALIGN|RIGHTBUTTON */, p.X, p.Y, _hwnd, IntPtr.Zero);
+            Native.PostMessage(_hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
+            return cmd > 0 && cmd <= entries.Count ? entries[cmd - 1].Action : null;
+        }
+        catch (Exception e) { _log("Menú contextual falló: " + e.Message); return null; }
+        finally { Native2.DestroyMenu(menu); }
     }
 
     /// <summary>Solo la barra (y los íconos ampliados) capturan el ratón; el resto de la ventana, transparente, lo deja pasar a las apps de abajo.</summary>
@@ -217,11 +340,12 @@ public sealed class DockHost : IDisposable
         return x >= _view.BarLeft && x <= _view.BarLeft + _view.BarWidth && y >= barTop - headroom && y <= barBottom;
     }
 
-    public string Report() => $"{Diagnostics}; ventana {_winWpx}x{_winHpx}px escala {_scale:0.##}; fondo={(_blurred is not null ? "sí" : "no")}; íconos {_icons.Loaded}/{_icons.Requested}; hooks={_tracker?.HookCount}";
+    public string Report() => $"{Diagnostics}; ventana {_winWpx}x{_winHpx}px escala {_scale:0.##}; fondo={(_blurred is not null ? "sí" : "no")}; íconos {(_appIcons is null ? "n/a" : $"cargados {_appIcons.Service.Stats.Loaded}, fallidos {_appIcons.Service.Stats.Failed + _appIcons.Service.Stats.TimedOut + _appIcons.Service.Stats.Rejected}")}; hooks={_tracker?.HookCount}";
 
     public void Dispose()
     {
-        _tracker?.Dispose(); _blurred?.Dispose(); _wall.Dispose(); _painter?.Dispose(); _bmp?.Dispose(); _swap?.Dispose(); _dev?.Dispose();
+        if (_saveDue is not null && _cfgPath is not null) _cfg.TrySave(_cfgPath);   // guarda lo pendiente al cerrar
+        _tracker?.Dispose(); _appIcons?.Dispose(); _quit?.Dispose(); _blurred?.Dispose(); _wall.Dispose(); _painter?.Dispose(); _bmp?.Dispose(); _swap?.Dispose(); _dev?.Dispose();
         if (_hwnd != IntPtr.Zero) Native2.DestroyWindow(_hwnd);
     }
 
@@ -243,6 +367,13 @@ public sealed class DockHost : IDisposable
         [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hgt, uint flags);
         [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
         [DllImport("user32.dll")] public static extern IntPtr LoadCursor(IntPtr inst, int id);
+        [DllImport("user32.dll")] public static extern IntPtr SetCapture(IntPtr h);
+        [DllImport("user32.dll")] public static extern bool ReleaseCapture();
+        [DllImport("user32.dll")] public static extern short GetKeyState(int vk);
+        [DllImport("user32.dll")] public static extern IntPtr CreatePopupMenu();
+        [DllImport("user32.dll")] public static extern bool DestroyMenu(IntPtr m);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool AppendMenuW(IntPtr m, uint flags, UIntPtr id, string? text);
+        [DllImport("user32.dll")] public static extern int TrackPopupMenuEx(IntPtr m, uint flags, int x, int y, IntPtr hwnd, IntPtr tpm);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr GetModuleHandle(string? name);
     }
 }
