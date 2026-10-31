@@ -56,9 +56,31 @@ public sealed class Supervisor
         }
     }
 
+    private volatile bool _shuttingDown;
+
+    /// <summary>Vuelve a lanzar un módulo que está detenido (cierre voluntario) o en <see cref="ModuleState.Failed"/> (cortacircuito o sin ejecutable), a petición del usuario.
+    /// Reinicia el historial de caídas. No hace nada si el módulo está desactivado, ya está en marcha, o el host se está cerrando.</summary>
+    public bool Restart(string id)
+    {
+        Runner? r; lock (_runners) r = _runners.FirstOrDefault(x => x.Spec.Id == id);
+        if (r is null || _shuttingDown || r.State is not (ModuleState.Stopped or ModuleState.Failed)) return false;
+        if (r.Loop is { IsCompleted: false }) return false;   // el bucle anterior aún no terminó: se ignora (el usuario puede repetir)
+        r.Crashes.Clear(); r.Proc = null; Log($"[{id}] apertura manual");
+        r.Loop = Task.Run(() => RunAsync(r));
+        return true;
+    }
+
+    /// <summary>Reabre todos los módulos detenidos o caídos (en el orden de arranque). Devuelve los ids lanzados.</summary>
+    public IReadOnlyList<string> RestartStopped()
+    {
+        List<string> ids; lock (_runners) ids = _runners.Select(r => r.Spec.Id).ToList();
+        return ids.Where(Restart).ToList();
+    }
+
     /// <summary>Cierre ordenado en orden inverso al arranque. Termina cuando todos los módulos han salido (o se han forzado como último recurso).</summary>
     public async Task StopAllAsync()
     {
+        _shuttingDown = true;
         List<Runner> list; lock (_runners) list = [.. _runners]; list.Reverse();
         foreach (var r in list) await StopAsync(r).ConfigureAwait(false);
     }

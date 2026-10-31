@@ -206,3 +206,50 @@ public class IpcHostBusTests
 
     private static async Task<bool> Wait(Func<bool> c) { for (int i = 0; i < 300; i++) { if (c()) return true; await Task.Delay(20); } return c(); }
 }
+
+public class ManualReopenTests
+{
+    [Fact]
+    public async Task A_module_closed_on_purpose_can_be_reopened_by_the_user()
+    {
+        var f = new Fixture().With(("dock", true)); await f.StartAllAsync(); await f.ReadyAsync("dock");
+        f.Bus.RaiseBye("dock"); f.Launcher.Last("dock").Exit(0); await Task.Delay(30); Assert.Equal(ModuleState.Stopped, f.State("dock"));
+        Assert.True(f.Sup.Restart("dock")); await Task.Delay(30); Assert.Equal(2, f.Launcher.Count("dock"));
+        await f.ReadyAsync("dock"); Assert.Equal(ModuleState.Running, f.State("dock"));
+    }
+
+    [Fact]
+    public async Task A_failed_module_can_be_reopened_and_gets_a_clean_crash_history()
+    {
+        var f = new Fixture().With(("bar", true)); await f.StartAllAsync();
+        for (int i = 1; i <= 5; i++) { f.Launcher.Last("bar").Exit(7); await Task.Delay(20); await f.Clock.AdvanceAsync(TimeSpan.FromSeconds(Math.Pow(2, i - 1) + 0.1)); }
+        Assert.Equal(ModuleState.Failed, f.State("bar"));
+        Assert.True(f.Sup.Restart("bar")); await Task.Delay(30); Assert.Equal(6, f.Launcher.Count("bar"));
+        f.Launcher.Last("bar").Exit(7); await Task.Delay(20); Assert.Equal(ModuleState.Crashed, f.State("bar"));   // el cortacircuito no se dispara de inmediato: el historial se limpió
+    }
+
+    [Fact]
+    public async Task Reopening_does_nothing_for_running_or_disabled_modules_or_unknown_ids()
+    {
+        var f = new Fixture().With(("bar", true), ("notch", false)); await f.StartAllAsync(); await f.ReadyAsync("bar");
+        Assert.False(f.Sup.Restart("bar")); Assert.False(f.Sup.Restart("notch")); Assert.False(f.Sup.Restart("nope"));
+        Assert.Equal(1, f.Launcher.Count("bar")); Assert.Equal(0, f.Launcher.Count("notch"));
+    }
+
+    [Fact]
+    public async Task RestartStopped_reopens_only_the_closed_ones()
+    {
+        var f = new Fixture().With(("bar", true), ("dock", true)); await f.StartAllAsync(); await f.ReadyAsync("bar"); await f.ReadyAsync("dock");
+        f.Bus.RaiseBye("bar"); f.Launcher.Last("bar").Exit(0); await Task.Delay(30);
+        Assert.Equal(["bar"], f.Sup.RestartStopped()); await Task.Delay(30);
+        Assert.Equal(2, f.Launcher.Count("bar")); Assert.Equal(1, f.Launcher.Count("dock")); Assert.Empty(f.Sup.RestartStopped());
+    }
+
+    [Fact]
+    public async Task Nothing_is_reopened_once_the_host_is_shutting_down()
+    {
+        var f = new Fixture().With(("bar", true)); await f.StartAllAsync(); await f.ReadyAsync("bar");
+        f.Bus.RaiseBye("bar"); f.Launcher.Last("bar").Exit(0); await Task.Delay(30);
+        await f.Sup.StopAllAsync(); Assert.False(f.Sup.Restart("bar")); Assert.Equal(1, f.Launcher.Count("bar"));
+    }
+}

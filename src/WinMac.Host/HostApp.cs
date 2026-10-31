@@ -32,15 +32,21 @@ internal sealed class FileLog(string path)
 /// </summary>
 internal static class HostApp
 {
-    public const string MutexName = @"Local\WinMac.Host", QuitEventName = @"Local\WinMac.Host.Quit";
+    public const string MutexName = @"Local\WinMac.Host", QuitEventName = @"Local\WinMac.Host.Quit", ReopenEventName = @"Local\WinMac.Host.Reopen";
 
     public static int Run(HostOptions o)
     {
         var log = new FileLog(o.LogPath).Write;
         using var mutex = new Mutex(true, MutexName, out bool first);
-        if (!first) { log("[host] ya hay una instancia de WinMac en ejecución: esta se cierra sin hacer nada."); return 0; }
+        if (!first)
+        {   // Segunda instancia: no duplica nada, pero le pide al host vivo que reabra los módulos que estén cerrados o caídos.
+            try { using var ev = EventWaitHandle.OpenExisting(ReopenEventName); ev.Set(); log("[host] ya hay una instancia de WinMac: se le pidió reabrir los módulos cerrados; esta se cierra."); }
+            catch (Exception) { log("[host] ya hay una instancia de WinMac en ejecución: esta se cierra sin hacer nada."); }
+            return 0;
+        }
         using var quit = new EventWaitHandle(false, EventResetMode.ManualReset, QuitEventName);
         quit.Reset();
+        using var reopen = new EventWaitHandle(false, EventResetMode.AutoReset, ReopenEventName);
 
         var cfg = HostConfig.Load(o.ConfigPath);
         string baseDir = AppContext.BaseDirectory, pipe = o.PipeName ?? PipeNames.ForCurrentUser(), token = PipeNames.NewToken();
@@ -65,7 +71,7 @@ internal static class HostApp
 
         bool quitting = false; void RequestQuit() => quitting = true;
         Tray? tray = null;
-        try { tray = new Tray(() => sup.States, RequestQuit, log, showIcon: !o.NoTray); }
+        try { tray = new Tray(() => sup.States, RequestQuit, id => sup.Restart(id), log, showIcon: !o.NoTray); }
         catch (Exception e) { log("[host] sin ventana/bandeja: " + e.Message); }
 
         sup.StartAsync().GetAwaiter().GetResult();
@@ -75,6 +81,7 @@ internal static class HostApp
         while (!quitting)
         {
             while (Native.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1)) { Native.TranslateMessage(ref msg); Native.DispatchMessage(ref msg); }
+            if (reopen.WaitOne(0)) { var ids = sup.RestartStopped(); log("[host] reapertura pedida: " + (ids.Count == 0 ? "nada que reabrir" : string.Join(", ", ids))); }
             if (quit.WaitOne(0)) { log("[host] señal de cierre recibida (--quit)"); break; }
             Native.MsgWaitForMultipleObjectsEx(0, null, 100, Native.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);
         }

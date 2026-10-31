@@ -21,7 +21,8 @@ Fuera de F1, tal como se aprobó: configuración central, servicios compartidos,
 | El host muere de golpe (`taskkill /F`, fallo) | El **Job Object** hace que Windows cierre a los hijos (y libera su AppBar) |
 | Se pierde solo el canal (host colgado, reinicio del servidor) | Los módulos **siguen funcionando** y reintentan conectar |
 | Dock/Barra sin `--hosted` | Funcionan **exactamente como antes** (independientes) |
-| Un segundo `WinMac.exe` | Sale solo y sin hacer nada; la Barra también tiene instancia única (el Dock ya la tenía) |
+| Un segundo `WinMac.exe` | No duplica nada y sale solo; **si hay módulos cerrados o caídos, le pide al host que los reabra**. La Barra también tiene instancia única (el Dock ya la tenía) |
+| Cerraste un módulo (o quedó en `Failed`) | Menú de la bandeja → **«Abrir Dock» / «Abrir Barra superior»** (solo aparece si está cerrado o caído); también sirve lanzar `WinMac.exe` otra vez. Reinicia el historial de caídas |
 | NotchWin | No interviene: está desactivado por defecto y ausente; nada depende de él |
 
 ## 3. Pruebas
@@ -77,6 +78,7 @@ Deja todo en `dist\WinMac\`. **Cierra antes** cualquier Dock o Barra que tuviera
 | M9 | Cierra **solo** la barra desde su menú (clic derecho → «Salir de la barra superior») | **No vuelve** (cierre voluntario); el Dock sigue |
 | M10 | Sin permisos de administrador y sin que Explorer se cierre en ningún momento (salvo M8) | Todo lo anterior funciona así |
 | M11 | Sin el host: `dist\WinMac\WinMac.Dock.App.exe` y `WinMac.Bar.App.exe` por separado | Funcionan como antes (con sus `--quit`) |
+| M12 | Cierra el Dock (o la Barra) desde su menú; clic derecho en la bandeja | Aparece «Abrir Dock» (o «Abrir Barra superior»); al pulsarlo vuelve. También vuelve si lanzas `WinMac.exe` otra vez |
 
 **Si algo falla**, pega las últimas líneas de `%LOCALAPPDATA%\WinMac\logs\host.log` (host), `bar.log` y `dock.log`.
 **Para desactivar un módulo** crea `%APPDATA%\WinMac\winmac.json`, por ejemplo `{ "modules": { "dock": { "enabled": false } } }`, y reinicia WinMac.
