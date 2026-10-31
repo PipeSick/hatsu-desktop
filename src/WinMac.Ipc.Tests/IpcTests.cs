@@ -261,6 +261,24 @@ public class ModuleLinkTests
     }
 
     [Fact]
+    public async Task A_hosted_module_can_subscribe_to_host_state_and_send_events_back()
+    {
+        var pipe = T.Pipe(); await using var server = new IpcServer(new ServerOptions(pipe, "secreto")); server.Start();
+        var asked = new TaskCompletionSource<string>(); server.MessageReceived += (m, e) => { if (e.T == MsgType.Evt && e.Topic == "config.notch.set") asked.TrySetResult(m + ":" + e.Data?.GetProperty("glassLevel").GetInt32()); };
+        server.Publish("config.notch", new { glassLevel = 42 });   // el host ya tenía estado ANTES de que el módulo conectara
+        Environment.SetEnvironmentVariable(ModuleHostLink.TokenEnvVar, "secreto");
+        try
+        {
+            var link = ModuleHostLink.FromArgs(["--hosted", "--pipe", pipe], "notch", "1")!; var got = new TaskCompletionSource<int>();
+            link.Subscribe("config.notch", d => got.TrySetResult(d!.Value.GetProperty("glassLevel").GetInt32())); link.Start();
+            Assert.Equal(42, await got.Task.WaitAsync(TimeSpan.FromSeconds(5)));   // recibe el valor retenido al conectar
+            link.Event("config.notch.set", new { glassLevel = 77 }); Assert.Equal("notch:77", await asked.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            await link.DisposeAsync();
+        }
+        finally { Environment.SetEnvironmentVariable(ModuleHostLink.TokenEnvVar, null); }
+    }
+
+    [Fact]
     public async Task A_hosted_module_announces_ready_and_exits_on_shutdown()
     {
         var pipe = T.Pipe(); await using var server = new IpcServer(new ServerOptions(pipe, "secreto")); server.Start(); var ready = new TaskCompletionSource<string>();

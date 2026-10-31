@@ -27,6 +27,11 @@ public sealed class ModuleHostLink : IAsyncDisposable
         return new ModuleHostLink(new IpcClient(new ClientOptions(args[i + 1], token, module) { ModuleVersion = version }), module);
     }
 
+    /// <summary>Se suscribe a un tópico del host (estado retenido o evento): se recibe el último valor retenido al conectar y se vuelve a pedir tras cada reconexión.</summary>
+    public void Subscribe(string topic, Action<System.Text.Json.JsonElement?> handler) => _client.Subscribe(topic, handler);
+    /// <summary>Evento puntual hacia el host (p. ej. una petición de cambio de ajustes); no se retiene.</summary>
+    public void Event(string topic, object? data = null) => _client.Event(topic, data);
+
     public void Start() => _client.Start();
     public Task ByeAsync(TimeSpan timeout) => _client.SayByeAsync(timeout);
     public ValueTask DisposeAsync() => _client.DisposeAsync();
