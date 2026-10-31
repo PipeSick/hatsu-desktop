@@ -1,6 +1,6 @@
 # F1 — host + IPC: resultados, limitaciones y guía de validación en Windows
 
-Estado: **implementado y verificado en Linux** (pruebas + compilación cruzada). **Todavía no se ha ejecutado en Windows** (ni en el CI ni en tu PC): las secciones marcadas ⏳ dependen de eso. Alcance aprobado: `docs/14`. Verificación local completa (mismo script que el CI, sin publicar): **26 componentes sin fallos ni advertencias y 228 pruebas en verde** (Common 12, Apps 25, Dock 110, Barra 23, Ipc 27, Host.Core 31). Sin cambios visuales en el Dock ni en la Barra.
+Estado: **implementado y verificado en el CI de Windows** (run 19, commit `abd1a47`: 3 jobs en verde, 228 pruebas y 26 de 26 comprobaciones de `Test-Host.ps1`, incluidas la Barra y el Dock REALES bajo el host). **Todavía no se ha ejecutado en tu PC**: la guía manual M1–M11 (§5) sigue pendiente. Alcance aprobado: `docs/14`. Sin cambios visuales en el Dock ni en la Barra. Verificación local previa: 26 componentes sin fallos ni advertencias.
 
 ## 1. Qué se hizo (tres incrementos, un commit cada uno)
 | Incremento | Entrega | Proyectos |
@@ -27,24 +27,27 @@ Fuera de F1, tal como se aprobó: configuración central, servicios compartidos,
 ## 3. Pruebas
 | Suite | Pruebas | Dónde corre |
 |---|---|---|
-| `WinMac.Ipc.Tests` (**27**) | tramas, versiones, token, retención, suscriptor lento, desconexión/reconexión, comprobación de salud, token fuera del entorno | Linux ✔ · Windows ⏳ |
-| `WinMac.Host.Core.Tests` (**31**) | 22 unitarias (relojes y procesos de mentira) + 9 de extremo a extremo con **procesos reales** y el canal real | Linux ✔ · Windows ⏳ |
-| `tools/ci/Test-Host.ps1` | `WinMac.exe` real: instancia única, cierre ordenado, host muerto → hijos muertos (Job Object), caída/cortacircuito, módulo sin ejecutable, cierre voluntario, autoarranque (una sola clave), sin puertos TCP, **Barra y Dock REALES bajo el host** | Windows ⏳ (solo CI) |
+| `WinMac.Ipc.Tests` (**27**) | tramas, versiones, token, retención, suscriptor lento, desconexión/reconexión, comprobación de salud, token fuera del entorno | Linux ✔ · Windows ✔ |
+| `WinMac.Host.Core.Tests` (**31**) | 22 unitarias (relojes y procesos de mentira) + 9 de extremo a extremo con **procesos reales** y el canal real | Linux ✔ · Windows ✔ |
+| `tools/ci/Test-Host.ps1` (**26 comprobaciones**, todas PASS) | `WinMac.exe` real: instancia única, cierre ordenado, host muerto → hijos muertos (Job Object), caída/cortacircuito, módulo sin ejecutable, cierre voluntario, autoarranque (una sola clave), sin puertos TCP, **Barra y Dock REALES bajo el host** | Windows ✔ (solo CI) |
 | Dock 110 · Barra 23 · Apps 25 · Common 12 | sin cambios | Linux ✔ · Windows ✔ (antes de F1) |
 
 ### Criterios de aceptación de `docs/14`
 | Criterio | Estado |
 |---|---|
 | A1–A5 (tramas, versiones, token, retención/lentos, desconexión) | ✔ Linux |
-| A6 (sin puertos TCP) | ⏳ `Test-Host.ps1` |
-| B1 instancia única · B3 cierre ordenado · B4 host muerto · B8 autoarranque | ⏳ `Test-Host.ps1` |
-| B2 módulos habilitados/sin ejecutable · B5 caídas/cortacircuito · B6 colgado | ✔ lógica en Linux (con procesos reales) · ⏳ repetido con `WinMac.exe` en Windows |
+| A6 (sin puertos TCP) | ✔ `Test-Host.ps1` |
+| B1 instancia única · B3 cierre ordenado · B4 host muerto · B8 autoarranque | ✔ `Test-Host.ps1` (B3/B4 también con Barra y Dock reales) |
+| B2 módulos habilitados/sin ejecutable · B5 caídas/cortacircuito | ✔ Linux (procesos reales) · ✔ `WinMac.exe` en Windows |
+| B6 módulo colgado | ✔ Linux (procesos reales, con la comprobación de interfaz viva); **sin prueba con `WinMac.exe` en Windows** |
 | B7 | **Reinterpretado** (ver §4): el canal que se pierde no tumba a los módulos; el host que muere sí los cierra (Job Object), como pediste |
-| C1 sin regresiones | ✔ Linux · ⏳ CI Windows |
+| C1 sin regresiones | ✔ Linux · ✔ CI Windows (Dock 110, Barra 23, Apps 25, Common 12 sin cambios) |
 | C2 pruebas nuevas | ✔ |
 
 ## 4. Limitaciones y lo que NO está verificado
-- **Nada de esto se ha ejecutado en Windows.** Sin ver todavía: Job Object real, icono y menú de la bandeja, `WM_CLOSE` cortés, `--hosted` de la Barra y el Dock reales, `TaskbarCreated`, el inicio automático. Es lo que cubren `Test-Host.ps1` y la guía de abajo.
+- **Verificado en el runner de Windows (sin pantalla real ni usuario):** Job Object, `--hosted` de la Barra y el Dock reales, cierre ordenado, instancia única, inicio automático, ningún puerto TCP, y que el icono de la bandeja se crea.
+- **Sin verificar todavía (solo tu PC):** el aspecto y el menú de la bandeja, `WM_CLOSE` cortés sobre ventanas reales, **`TaskbarCreated` al reiniciar Explorer**, el inicio automático al iniciar sesión, la Barra con AppBar reservando espacio bajo el host y el Dock con ventanas reales abiertas. Eso es la guía M1–M11.
+- **Lo que la comprobación en CI no demuestra:** el runner no tiene pantalla ni apps abiertas, así que «Running» significa «el módulo arrancó, se conectó y contesta», no que se vea bien.
 - **B7 y tus aclaraciones:** «si el host termina inesperadamente, los hijos se cierran» (Job Object) y «los módulos funcionan solos sin `--hosted`» son compatibles; lo que **no** hacen los módulos es sobrevivir a la muerte del proceso host. Lo que sí sobreviven es la **pérdida del canal** con el host vivo.
 - **Detección de cuelgues:** se comprueba que la interfaz sigue avanzando (el bucle de mensajes) y que el proceso contesta; un menú contextual abierto cuenta como «vivo». No detecta un módulo que avanza pero dibuja mal.
 - **Token por variable de entorno** (en vez de herencia de handle, como proponía `docs/13`): el módulo la borra al leerla, así que las apps que lance el Dock no la heredan. El canal solo acepta clientes con ese token y, en Windows, cuyo PID sea el de un módulo lanzado por el host.
