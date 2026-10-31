@@ -1,0 +1,8 @@
+Test run for /home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+Results File: /home/user/win11-macos/ci-report/trx/Ipc.Tests.trx
+
+Passed!  - Failed:     0, Passed:    29, Skipped:     0, Total:    29, Duration: 2 s - WinMac.Ipc.Tests.dll (net10.0)

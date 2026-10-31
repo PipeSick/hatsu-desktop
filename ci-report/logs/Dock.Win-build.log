@@ -1,0 +1,10 @@
+  WinMac.Apps.Core -> /home/user/win11-macos/src/WinMac.Apps.Core/bin/Release/net10.0/WinMac.Apps.Core.dll
+  WinMac.Apps.Win -> /home/user/win11-macos/src/WinMac.Apps.Win/bin/Release/net10.0-windows/WinMac.Apps.Win.dll
+  WinMac.Dock.Core -> /home/user/win11-macos/src/WinMac.Dock.Core/bin/Release/net10.0/WinMac.Dock.Core.dll
+  WinMac.Dock.Win -> /home/user/win11-macos/src/WinMac.Dock.Win/bin/Release/net10.0-windows/WinMac.Dock.Win.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.85

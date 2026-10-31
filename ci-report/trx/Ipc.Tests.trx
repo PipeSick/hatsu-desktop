@@ -1,0 +1,202 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="19128925-edd5-4aa5-98ee-73a1fde2c001" name="@vm 2026-10-31 22:38:28" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-31T22:38:28.2247090+00:00" queuing="2026-10-31T22:38:28.2247091+00:00" start="2026-10-31T22:38:26.5308799+00:00" finish="2026-10-31T22:38:30.1974831+00:00" />
+  <TestSettings name="default" id="1f2ca2d8-249d-44c3-adb5-8b6bd6481474">
+    <Deployment runDeploymentRoot="_vm_2026-10-31_22_38_28" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="ac290868-0a69-427c-b293-2b584eced7b5" testId="6fe80b34-918a-5d61-ea44-4270e46a1d65" testName="ConnectionLifecycleTests.The_client_waits_patiently_when_the_host_does_not_exist_yet_and_connects_when_it_appears" computerName="vm" duration="00:00:00.7113651" startTime="2026-10-31T22:38:28.8604415+00:00" endTime="2026-10-31T22:38:28.8604416+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ac290868-0a69-427c-b293-2b584eced7b5" />
+    <UnitTestResult executionId="9b8dd340-11de-4f0d-b850-1cc3ae8104a1" testId="42c694f6-97c3-9229-d7df-eac2455995fe" testName="HandshakeTests.Incompatible_protocol_range_gets_an_error_and_a_close" computerName="vm" duration="00:00:00.0721468" startTime="2026-10-31T22:38:27.9612334+00:00" endTime="2026-10-31T22:38:27.9612554+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9b8dd340-11de-4f0d-b850-1cc3ae8104a1" />
+    <UnitTestResult executionId="fd115872-b487-4d71-b9ce-1b9f46f5b0fc" testId="67031582-4892-1a5c-bf83-13e6d6b75bc6" testName="FrameCodecTests.Frames_roundtrip_even_when_the_bytes_arrive_one_at_a_time" computerName="vm" duration="00:00:00.0139117" startTime="2026-10-31T22:38:28.3770742+00:00" endTime="2026-10-31T22:38:28.3770742+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fd115872-b487-4d71-b9ce-1b9f46f5b0fc" />
+    <UnitTestResult executionId="3d3a6733-80e7-46b8-92f4-a70774347c1d" testId="fcb65420-69a7-eda0-17ba-434426a5da48" testName="StateTests.A_late_subscriber_receives_the_retained_value_immediately" computerName="vm" duration="00:00:00.1253598" startTime="2026-10-31T22:38:30.0816081+00:00" endTime="2026-10-31T22:38:30.0816083+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3d3a6733-80e7-46b8-92f4-a70774347c1d" />
+    <UnitTestResult executionId="a142e04d-f697-4e23-b0f2-5f7c3454712f" testId="819e87e4-a672-717d-fd62-24d2737c633b" testName="HandshakeTests.A_silent_client_is_dropped_after_the_handshake_timeout" computerName="vm" duration="00:00:00.3033245" startTime="2026-10-31T22:38:28.3237843+00:00" endTime="2026-10-31T22:38:28.3237844+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a142e04d-f697-4e23-b0f2-5f7c3454712f" />
+    <UnitTestResult executionId="9aef1680-8273-4ad4-bb2c-7b80b6c87011" testId="6d9ad5f8-38fe-da8e-d3af-5b8c8238cb49" testName="HandshakeTests.A_wrong_token_is_dropped_without_a_single_byte_back_and_never_registers" computerName="vm" duration="00:00:00.0068945" startTime="2026-10-31T22:38:27.9830753+00:00" endTime="2026-10-31T22:38:27.9830754+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9aef1680-8273-4ad4-bb2c-7b80b6c87011" />
+    <UnitTestResult executionId="1a4f9772-a8f7-4da4-aabe-7c8d3570e994" testId="7df8f5a5-3a77-8a77-7b6b-95a07b4b2725" testName="FrameCodecTests.Version_negotiation_picks_the_highest_common(min: 0, max: 1, expected: 1)" computerName="vm" duration="00:00:00.0043169" startTime="2026-10-31T22:38:28.3840556+00:00" endTime="2026-10-31T22:38:28.3840558+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1a4f9772-a8f7-4da4-aabe-7c8d3570e994" />
+    <UnitTestResult executionId="31190d38-645f-4291-bd75-840a705197d9" testId="c65e493b-096d-7eff-bba3-95817b9f9d92" testName="FrameCodecTests.Version_negotiation_picks_the_highest_common(min: 1, max: 5, expected: 1)" computerName="vm" duration="00:00:00.0000176" startTime="2026-10-31T22:38:28.3848632+00:00" endTime="2026-10-31T22:38:28.3848633+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="31190d38-645f-4291-bd75-840a705197d9" />
+    <UnitTestResult executionId="507386c7-f0c2-48cd-8d9a-b615da5181d9" testId="cc81f4b5-b107-0907-3df9-2952f2b255a8" testName="StateTests.An_unhealthy_module_does_not_answer_heartbeats_and_a_healthy_one_does" computerName="vm" duration="00:00:00.8356381" startTime="2026-10-31T22:38:29.3940703+00:00" endTime="2026-10-31T22:38:29.3940704+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="507386c7-f0c2-48cd-8d9a-b615da5181d9" />
+    <UnitTestResult executionId="773c5b38-dce1-4c33-ac56-175024d2e8d5" testId="92db2dba-b98d-a475-4e26-e9c2695ddc82" testName="StateTests.Events_are_not_retained_and_reach_only_current_subscribers" computerName="vm" duration="00:00:01.2068930" startTime="2026-10-31T22:38:28.5572586+00:00" endTime="2026-10-31T22:38:28.5572587+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="773c5b38-dce1-4c33-ac56-175024d2e8d5" />
+    <UnitTestResult executionId="b5a63609-a65e-47df-98fa-dc21c67bb6b5" testId="5cc4dd19-1f25-1baf-5c6f-6cd374a26959" testName="FrameCodecTests.Version_negotiation_fails_without_overlap(min: 5, max: 9)" computerName="vm" duration="00:00:00.0004669" startTime="2026-10-31T22:38:28.3816424+00:00" endTime="2026-10-31T22:38:28.3816425+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b5a63609-a65e-47df-98fa-dc21c67bb6b5" />
+    <UnitTestResult executionId="ba42511c-3a66-4fc0-a0c5-8d3fc8e6c638" testId="7ebd0b5a-7c47-8992-5bc3-4f3ba0e23f2b" testName="StateTests.A_subscriber_that_never_reads_does_not_block_the_publisher_and_its_queue_is_bounded" computerName="vm" duration="00:00:00.4904902" startTime="2026-10-31T22:38:29.8854925+00:00" endTime="2026-10-31T22:38:29.8854927+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ba42511c-3a66-4fc0-a0c5-8d3fc8e6c638" />
+    <UnitTestResult executionId="b5acd523-aec9-4752-b138-676b774f3830" testId="a55dc3c8-cd3e-0cc4-f337-661b80ec4106" testName="FrameCodecTests.Version_negotiation_fails_without_overlap(min: 2, max: 3)" computerName="vm" duration="00:00:00.0003753" startTime="2026-10-31T22:38:28.3815839+00:00" endTime="2026-10-31T22:38:28.3815840+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b5acd523-aec9-4752-b138-676b774f3830" />
+    <UnitTestResult executionId="f4e3be07-737a-4af3-9953-1d27443eeae0" testId="3547e136-8e89-f9a2-5c2e-7bdfd307cf8f" testName="ModuleLinkTests.A_hosted_module_can_subscribe_to_host_state_and_send_events_back" computerName="vm" duration="00:00:00.0115971" startTime="2026-10-31T22:38:28.3490029+00:00" endTime="2026-10-31T22:38:28.3490031+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f4e3be07-737a-4af3-9953-1d27443eeae0" />
+    <UnitTestResult executionId="2730cadf-e30b-48ce-a83d-8ac229d9f08c" testId="8325caef-f466-8014-8353-2ba36b4717ab" testName="ModuleLinkTests.A_hosted_module_announces_ready_and_exits_on_shutdown" computerName="vm" duration="00:00:00.0062966" startTime="2026-10-31T22:38:28.3585077+00:00" endTime="2026-10-31T22:38:28.3585079+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2730cadf-e30b-48ce-a83d-8ac229d9f08c" />
+    <UnitTestResult executionId="2d137831-e416-40ea-88e0-fa3e1a7fe5e4" testId="68f9f3b2-ea51-a8c2-86fd-61560c2d9c89" testName="ModuleLinkTests.The_token_is_removed_from_the_environment_so_child_processes_never_inherit_it" computerName="vm" duration="00:00:00.0012960" startTime="2026-10-31T22:38:28.3509409+00:00" endTime="2026-10-31T22:38:28.3509411+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2d137831-e416-40ea-88e0-fa3e1a7fe5e4" />
+    <UnitTestResult executionId="d5ce528f-8528-4bd7-93ea-ba77c0a5dbe2" testId="3603c75f-47bf-0ddf-f06e-384819447f8e" testName="FrameCodecTests.Clean_end_of_stream_between_frames_returns_null_and_two_frames_read_in_order" computerName="vm" duration="00:00:00.0026444" startTime="2026-10-31T22:38:28.3621388+00:00" endTime="2026-10-31T22:38:28.3621389+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d5ce528f-8528-4bd7-93ea-ba77c0a5dbe2" />
+    <UnitTestResult executionId="f0dda00a-0445-4dda-9539-1921dc705642" testId="46ae97dc-640e-f5b9-ba5e-323319e4b481" testName="ConnectionLifecycleTests.A_second_connection_with_the_same_module_id_replaces_the_first" computerName="vm" duration="00:00:00.7580900" startTime="2026-10-31T22:38:28.1090581+00:00" endTime="2026-10-31T22:38:28.1090582+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f0dda00a-0445-4dda-9539-1921dc705642" />
+    <UnitTestResult executionId="37fc4eb4-0c0d-4c21-90a3-908305768f7f" testId="218ef27d-3e0a-a78b-abdd-a7a235783921" testName="HandshakeTests.Unknown_fields_and_unknown_message_types_are_tolerated_and_the_connection_keeps_working" computerName="vm" duration="00:00:00.0109884" startTime="2026-10-31T22:38:27.9754881+00:00" endTime="2026-10-31T22:38:27.9754882+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="37fc4eb4-0c0d-4c21-90a3-908305768f7f" />
+    <UnitTestResult executionId="232fcd3a-93be-4a6d-9778-68c518e1b65b" testId="ad4b5b5d-5680-358a-3dbb-944dd566f3c0" testName="FrameCodecTests.Oversized_zero_truncated_and_invalid_frames_are_rejected_without_crashing" computerName="vm" duration="00:00:00.0270027" startTime="2026-10-31T22:38:28.4120274+00:00" endTime="2026-10-31T22:38:28.4120275+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="232fcd3a-93be-4a6d-9778-68c518e1b65b" />
+    <UnitTestResult executionId="8fadb698-3ce0-4f49-ace4-3f6d82e8b503" testId="15fff2c9-d318-acf2-c9b5-7d05bbcb38b1" testName="HandshakeTests.A_first_message_that_is_not_hello_is_dropped" computerName="vm" duration="00:00:00.0053040" startTime="2026-10-31T22:38:28.3300295+00:00" endTime="2026-10-31T22:38:28.3300296+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8fadb698-3ce0-4f49-ace4-3f6d82e8b503" />
+    <UnitTestResult executionId="6856ac63-a930-4541-8bea-1388d6de53c6" testId="cb155977-bfb8-f662-3ff9-84e9dfd8790f" testName="EmitTests.Emit_reaches_subscribers_now_but_is_not_retained_for_later_ones" computerName="vm" duration="00:00:01.1776629" startTime="2026-10-31T22:38:28.5280363+00:00" endTime="2026-10-31T22:38:28.5280364+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6856ac63-a930-4541-8bea-1388d6de53c6" />
+    <UnitTestResult executionId="4d0b4627-9563-427d-aa62-306ef433dfb6" testId="b732af71-bf1e-e978-f531-e103c829f8ae" testName="HandshakeTests.A_valid_client_registers_and_ping_pong_reaches_the_server" computerName="vm" duration="00:00:00.0352477" startTime="2026-10-31T22:38:28.0191729+00:00" endTime="2026-10-31T22:38:28.0191730+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4d0b4627-9563-427d-aa62-306ef433dfb6" />
+    <UnitTestResult executionId="c363fb8c-f058-4a67-8317-a8871ab9459a" testId="c2393c32-0916-0f61-8ab5-46c5732ebd01" testName="ModuleLinkTests.Without_hosted_or_without_token_there_is_no_link_so_the_module_runs_standalone" computerName="vm" duration="00:00:00.0002318" startTime="2026-10-31T22:38:28.3512869+00:00" endTime="2026-10-31T22:38:28.3512870+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c363fb8c-f058-4a67-8317-a8871ab9459a" />
+    <UnitTestResult executionId="c70e744e-7e75-4378-b797-870985a3dd19" testId="eec95012-0586-9c3e-407d-034fbf19a50f" testName="FrameCodecTests.Unknown_fields_are_ignored" computerName="vm" duration="00:00:00.0012194" startTime="2026-10-31T22:38:28.3785119+00:00" endTime="2026-10-31T22:38:28.3785121+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c70e744e-7e75-4378-b797-870985a3dd19" />
+    <UnitTestResult executionId="0a2503fc-d12a-49be-8d17-27074f7c9cb2" testId="fc8f2d5d-b281-2df0-ba79-abd02b18f32a" testName="StateTests.Shutdown_and_bye_flow_between_host_and_module" computerName="vm" duration="00:00:00.0686153" startTime="2026-10-31T22:38:29.9553390+00:00" endTime="2026-10-31T22:38:29.9553392+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0a2503fc-d12a-49be-8d17-27074f7c9cb2" />
+    <UnitTestResult executionId="297f3265-2040-419a-8b51-dcbb665b1259" testId="ceb5aab6-670f-4067-4e7d-adea211a7231" testName="ConnectionLifecycleTests.The_server_frees_a_client_that_died_and_publishes_state_again_after_a_reconnect" computerName="vm" duration="00:00:00.0384435" startTime="2026-10-31T22:38:28.1483808+00:00" endTime="2026-10-31T22:38:28.1483808+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="297f3265-2040-419a-8b51-dcbb665b1259" />
+    <UnitTestResult executionId="cd8a178b-7cdf-4e85-87bb-e04926642144" testId="414c43c9-43b2-03ad-84d1-240637475e78" testName="FrameCodecTests.Version_negotiation_picks_the_highest_common(min: 1, max: 1, expected: 1)" computerName="vm" duration="00:00:00.0005541" startTime="2026-10-31T22:38:28.3847746+00:00" endTime="2026-10-31T22:38:28.3847748+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cd8a178b-7cdf-4e85-87bb-e04926642144" />
+    <UnitTestResult executionId="6133f4af-c211-4f15-b10f-a4e9adb23e51" testId="3e4bb4ca-b3b1-c58d-b8d2-c275d7c22252" testName="ConnectionLifecycleTests.The_client_notices_a_dead_server_within_3_seconds_and_reconnects_when_it_returns" computerName="vm" duration="00:00:00.2295875" startTime="2026-10-31T22:38:29.0909685+00:00" endTime="2026-10-31T22:38:29.0909687+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6133f4af-c211-4f15-b10f-a4e9adb23e51" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="StateTests.An_unhealthy_module_does_not_answer_heartbeats_and_a_healthy_one_does" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="cc81f4b5-b107-0907-3df9-2952f2b255a8">
+      <Execution id="507386c7-f0c2-48cd-8d9a-b615da5181d9" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="StateTests" name="An_unhealthy_module_does_not_answer_heartbeats_and_a_healthy_one_does" />
+    </UnitTest>
+    <UnitTest name="ModuleLinkTests.The_token_is_removed_from_the_environment_so_child_processes_never_inherit_it" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="68f9f3b2-ea51-a8c2-86fd-61560c2d9c89">
+      <Execution id="2d137831-e416-40ea-88e0-fa3e1a7fe5e4" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="ModuleLinkTests" name="The_token_is_removed_from_the_environment_so_child_processes_never_inherit_it" />
+    </UnitTest>
+    <UnitTest name="FrameCodecTests.Unknown_fields_are_ignored" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="eec95012-0586-9c3e-407d-034fbf19a50f">
+      <Execution id="c70e744e-7e75-4378-b797-870985a3dd19" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="FrameCodecTests" name="Unknown_fields_are_ignored" />
+    </UnitTest>
+    <UnitTest name="ConnectionLifecycleTests.The_server_frees_a_client_that_died_and_publishes_state_again_after_a_reconnect" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="ceb5aab6-670f-4067-4e7d-adea211a7231">
+      <Execution id="297f3265-2040-419a-8b51-dcbb665b1259" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="ConnectionLifecycleTests" name="The_server_frees_a_client_that_died_and_publishes_state_again_after_a_reconnect" />
+    </UnitTest>
+    <UnitTest name="FrameCodecTests.Version_negotiation_picks_the_highest_common(min: 1, max: 1, expected: 1)" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="414c43c9-43b2-03ad-84d1-240637475e78">
+      <Execution id="cd8a178b-7cdf-4e85-87bb-e04926642144" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="FrameCodecTests" name="Version_negotiation_picks_the_highest_common" />
+    </UnitTest>
+    <UnitTest name="FrameCodecTests.Version_negotiation_fails_without_overlap(min: 2, max: 3)" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="a55dc3c8-cd3e-0cc4-f337-661b80ec4106">
+      <Execution id="b5acd523-aec9-4752-b138-676b774f3830" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="FrameCodecTests" name="Version_negotiation_fails_without_overlap" />
+    </UnitTest>
+    <UnitTest name="HandshakeTests.A_silent_client_is_dropped_after_the_handshake_timeout" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="819e87e4-a672-717d-fd62-24d2737c633b">
+      <Execution id="a142e04d-f697-4e23-b0f2-5f7c3454712f" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="HandshakeTests" name="A_silent_client_is_dropped_after_the_handshake_timeout" />
+    </UnitTest>
+    <UnitTest name="FrameCodecTests.Version_negotiation_picks_the_highest_common(min: 1, max: 5, expected: 1)" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="c65e493b-096d-7eff-bba3-95817b9f9d92">
+      <Execution id="31190d38-645f-4291-bd75-840a705197d9" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="FrameCodecTests" name="Version_negotiation_picks_the_highest_common" />
+    </UnitTest>
+    <UnitTest name="ModuleLinkTests.A_hosted_module_announces_ready_and_exits_on_shutdown" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="8325caef-f466-8014-8353-2ba36b4717ab">
+      <Execution id="2730cadf-e30b-48ce-a83d-8ac229d9f08c" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="ModuleLinkTests" name="A_hosted_module_announces_ready_and_exits_on_shutdown" />
+    </UnitTest>
+    <UnitTest name="ConnectionLifecycleTests.The_client_notices_a_dead_server_within_3_seconds_and_reconnects_when_it_returns" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="3e4bb4ca-b3b1-c58d-b8d2-c275d7c22252">
+      <Execution id="6133f4af-c211-4f15-b10f-a4e9adb23e51" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="ConnectionLifecycleTests" name="The_client_notices_a_dead_server_within_3_seconds_and_reconnects_when_it_returns" />
+    </UnitTest>
+    <UnitTest name="HandshakeTests.A_wrong_token_is_dropped_without_a_single_byte_back_and_never_registers" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="6d9ad5f8-38fe-da8e-d3af-5b8c8238cb49">
+      <Execution id="9aef1680-8273-4ad4-bb2c-7b80b6c87011" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="HandshakeTests" name="A_wrong_token_is_dropped_without_a_single_byte_back_and_never_registers" />
+    </UnitTest>
+    <UnitTest name="HandshakeTests.A_valid_client_registers_and_ping_pong_reaches_the_server" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="b732af71-bf1e-e978-f531-e103c829f8ae">
+      <Execution id="4d0b4627-9563-427d-aa62-306ef433dfb6" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="HandshakeTests" name="A_valid_client_registers_and_ping_pong_reaches_the_server" />
+    </UnitTest>
+    <UnitTest name="FrameCodecTests.Version_negotiation_fails_without_overlap(min: 5, max: 9)" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="5cc4dd19-1f25-1baf-5c6f-6cd374a26959">
+      <Execution id="b5a63609-a65e-47df-98fa-dc21c67bb6b5" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="FrameCodecTests" name="Version_negotiation_fails_without_overlap" />
+    </UnitTest>
+    <UnitTest name="FrameCodecTests.Frames_roundtrip_even_when_the_bytes_arrive_one_at_a_time" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="67031582-4892-1a5c-bf83-13e6d6b75bc6">
+      <Execution id="fd115872-b487-4d71-b9ce-1b9f46f5b0fc" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="FrameCodecTests" name="Frames_roundtrip_even_when_the_bytes_arrive_one_at_a_time" />
+    </UnitTest>
+    <UnitTest name="ModuleLinkTests.A_hosted_module_can_subscribe_to_host_state_and_send_events_back" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="3547e136-8e89-f9a2-5c2e-7bdfd307cf8f">
+      <Execution id="f4e3be07-737a-4af3-9953-1d27443eeae0" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="ModuleLinkTests" name="A_hosted_module_can_subscribe_to_host_state_and_send_events_back" />
+    </UnitTest>
+    <UnitTest name="FrameCodecTests.Clean_end_of_stream_between_frames_returns_null_and_two_frames_read_in_order" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="3603c75f-47bf-0ddf-f06e-384819447f8e">
+      <Execution id="d5ce528f-8528-4bd7-93ea-ba77c0a5dbe2" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="FrameCodecTests" name="Clean_end_of_stream_between_frames_returns_null_and_two_frames_read_in_order" />
+    </UnitTest>
+    <UnitTest name="HandshakeTests.Incompatible_protocol_range_gets_an_error_and_a_close" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="42c694f6-97c3-9229-d7df-eac2455995fe">
+      <Execution id="9b8dd340-11de-4f0d-b850-1cc3ae8104a1" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="HandshakeTests" name="Incompatible_protocol_range_gets_an_error_and_a_close" />
+    </UnitTest>
+    <UnitTest name="StateTests.Shutdown_and_bye_flow_between_host_and_module" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="fc8f2d5d-b281-2df0-ba79-abd02b18f32a">
+      <Execution id="0a2503fc-d12a-49be-8d17-27074f7c9cb2" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="StateTests" name="Shutdown_and_bye_flow_between_host_and_module" />
+    </UnitTest>
+    <UnitTest name="FrameCodecTests.Oversized_zero_truncated_and_invalid_frames_are_rejected_without_crashing" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="ad4b5b5d-5680-358a-3dbb-944dd566f3c0">
+      <Execution id="232fcd3a-93be-4a6d-9778-68c518e1b65b" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="FrameCodecTests" name="Oversized_zero_truncated_and_invalid_frames_are_rejected_without_crashing" />
+    </UnitTest>
+    <UnitTest name="StateTests.Events_are_not_retained_and_reach_only_current_subscribers" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="92db2dba-b98d-a475-4e26-e9c2695ddc82">
+      <Execution id="773c5b38-dce1-4c33-ac56-175024d2e8d5" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="StateTests" name="Events_are_not_retained_and_reach_only_current_subscribers" />
+    </UnitTest>
+    <UnitTest name="ConnectionLifecycleTests.A_second_connection_with_the_same_module_id_replaces_the_first" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="46ae97dc-640e-f5b9-ba5e-323319e4b481">
+      <Execution id="f0dda00a-0445-4dda-9539-1921dc705642" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="ConnectionLifecycleTests" name="A_second_connection_with_the_same_module_id_replaces_the_first" />
+    </UnitTest>
+    <UnitTest name="HandshakeTests.A_first_message_that_is_not_hello_is_dropped" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="15fff2c9-d318-acf2-c9b5-7d05bbcb38b1">
+      <Execution id="8fadb698-3ce0-4f49-ace4-3f6d82e8b503" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="HandshakeTests" name="A_first_message_that_is_not_hello_is_dropped" />
+    </UnitTest>
+    <UnitTest name="ConnectionLifecycleTests.The_client_waits_patiently_when_the_host_does_not_exist_yet_and_connects_when_it_appears" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="6fe80b34-918a-5d61-ea44-4270e46a1d65">
+      <Execution id="ac290868-0a69-427c-b293-2b584eced7b5" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="ConnectionLifecycleTests" name="The_client_waits_patiently_when_the_host_does_not_exist_yet_and_connects_when_it_appears" />
+    </UnitTest>
+    <UnitTest name="StateTests.A_late_subscriber_receives_the_retained_value_immediately" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="fcb65420-69a7-eda0-17ba-434426a5da48">
+      <Execution id="3d3a6733-80e7-46b8-92f4-a70774347c1d" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="StateTests" name="A_late_subscriber_receives_the_retained_value_immediately" />
+    </UnitTest>
+    <UnitTest name="StateTests.A_subscriber_that_never_reads_does_not_block_the_publisher_and_its_queue_is_bounded" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="7ebd0b5a-7c47-8992-5bc3-4f3ba0e23f2b">
+      <Execution id="ba42511c-3a66-4fc0-a0c5-8d3fc8e6c638" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="StateTests" name="A_subscriber_that_never_reads_does_not_block_the_publisher_and_its_queue_is_bounded" />
+    </UnitTest>
+    <UnitTest name="HandshakeTests.Unknown_fields_and_unknown_message_types_are_tolerated_and_the_connection_keeps_working" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="218ef27d-3e0a-a78b-abdd-a7a235783921">
+      <Execution id="37fc4eb4-0c0d-4c21-90a3-908305768f7f" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="HandshakeTests" name="Unknown_fields_and_unknown_message_types_are_tolerated_and_the_connection_keeps_working" />
+    </UnitTest>
+    <UnitTest name="EmitTests.Emit_reaches_subscribers_now_but_is_not_retained_for_later_ones" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="cb155977-bfb8-f662-3ff9-84e9dfd8790f">
+      <Execution id="6856ac63-a930-4541-8bea-1388d6de53c6" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="EmitTests" name="Emit_reaches_subscribers_now_but_is_not_retained_for_later_ones" />
+    </UnitTest>
+    <UnitTest name="FrameCodecTests.Version_negotiation_picks_the_highest_common(min: 0, max: 1, expected: 1)" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="7df8f5a5-3a77-8a77-7b6b-95a07b4b2725">
+      <Execution id="1a4f9772-a8f7-4da4-aabe-7c8d3570e994" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="FrameCodecTests" name="Version_negotiation_picks_the_highest_common" />
+    </UnitTest>
+    <UnitTest name="ModuleLinkTests.Without_hosted_or_without_token_there_is_no_link_so_the_module_runs_standalone" storage="/home/user/win11-macos/src/winmac.ipc.tests/bin/release/net10.0/winmac.ipc.tests.dll" id="c2393c32-0916-0f61-8ab5-46c5732ebd01">
+      <Execution id="c363fb8c-f058-4a67-8317-a8871ab9459a" />
+      <TestMethod codeBase="/home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="ModuleLinkTests" name="Without_hosted_or_without_token_there_is_no_link_so_the_module_runs_standalone" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="6fe80b34-918a-5d61-ea44-4270e46a1d65" executionId="ac290868-0a69-427c-b293-2b584eced7b5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="42c694f6-97c3-9229-d7df-eac2455995fe" executionId="9b8dd340-11de-4f0d-b850-1cc3ae8104a1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="67031582-4892-1a5c-bf83-13e6d6b75bc6" executionId="fd115872-b487-4d71-b9ce-1b9f46f5b0fc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fcb65420-69a7-eda0-17ba-434426a5da48" executionId="3d3a6733-80e7-46b8-92f4-a70774347c1d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="819e87e4-a672-717d-fd62-24d2737c633b" executionId="a142e04d-f697-4e23-b0f2-5f7c3454712f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6d9ad5f8-38fe-da8e-d3af-5b8c8238cb49" executionId="9aef1680-8273-4ad4-bb2c-7b80b6c87011" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7df8f5a5-3a77-8a77-7b6b-95a07b4b2725" executionId="1a4f9772-a8f7-4da4-aabe-7c8d3570e994" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c65e493b-096d-7eff-bba3-95817b9f9d92" executionId="31190d38-645f-4291-bd75-840a705197d9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cc81f4b5-b107-0907-3df9-2952f2b255a8" executionId="507386c7-f0c2-48cd-8d9a-b615da5181d9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="92db2dba-b98d-a475-4e26-e9c2695ddc82" executionId="773c5b38-dce1-4c33-ac56-175024d2e8d5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5cc4dd19-1f25-1baf-5c6f-6cd374a26959" executionId="b5a63609-a65e-47df-98fa-dc21c67bb6b5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7ebd0b5a-7c47-8992-5bc3-4f3ba0e23f2b" executionId="ba42511c-3a66-4fc0-a0c5-8d3fc8e6c638" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a55dc3c8-cd3e-0cc4-f337-661b80ec4106" executionId="b5acd523-aec9-4752-b138-676b774f3830" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3547e136-8e89-f9a2-5c2e-7bdfd307cf8f" executionId="f4e3be07-737a-4af3-9953-1d27443eeae0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8325caef-f466-8014-8353-2ba36b4717ab" executionId="2730cadf-e30b-48ce-a83d-8ac229d9f08c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="68f9f3b2-ea51-a8c2-86fd-61560c2d9c89" executionId="2d137831-e416-40ea-88e0-fa3e1a7fe5e4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3603c75f-47bf-0ddf-f06e-384819447f8e" executionId="d5ce528f-8528-4bd7-93ea-ba77c0a5dbe2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="46ae97dc-640e-f5b9-ba5e-323319e4b481" executionId="f0dda00a-0445-4dda-9539-1921dc705642" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="218ef27d-3e0a-a78b-abdd-a7a235783921" executionId="37fc4eb4-0c0d-4c21-90a3-908305768f7f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ad4b5b5d-5680-358a-3dbb-944dd566f3c0" executionId="232fcd3a-93be-4a6d-9778-68c518e1b65b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="15fff2c9-d318-acf2-c9b5-7d05bbcb38b1" executionId="8fadb698-3ce0-4f49-ace4-3f6d82e8b503" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cb155977-bfb8-f662-3ff9-84e9dfd8790f" executionId="6856ac63-a930-4541-8bea-1388d6de53c6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b732af71-bf1e-e978-f531-e103c829f8ae" executionId="4d0b4627-9563-427d-aa62-306ef433dfb6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c2393c32-0916-0f61-8ab5-46c5732ebd01" executionId="c363fb8c-f058-4a67-8317-a8871ab9459a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="eec95012-0586-9c3e-407d-034fbf19a50f" executionId="c70e744e-7e75-4378-b797-870985a3dd19" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fc8f2d5d-b281-2df0-ba79-abd02b18f32a" executionId="0a2503fc-d12a-49be-8d17-27074f7c9cb2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ceb5aab6-670f-4067-4e7d-adea211a7231" executionId="297f3265-2040-419a-8b51-dcbb665b1259" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="414c43c9-43b2-03ad-84d1-240637475e78" executionId="cd8a178b-7cdf-4e85-87bb-e04926642144" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3e4bb4ca-b3b1-c58d-b8d2-c275d7c22252" executionId="6133f4af-c211-4f15-b10f-a4e9adb23e51" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="29" executed="29" passed="29" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.8.2+699d445a1a (64-bit .NET 10.0.14)
+[xUnit.net 00:00:00.10]   Discovering: WinMac.Ipc.Tests
+[xUnit.net 00:00:00.18]   Discovered:  WinMac.Ipc.Tests
+[xUnit.net 00:00:00.19]   Starting:    WinMac.Ipc.Tests
+[xUnit.net 00:00:02.99]   Finished:    WinMac.Ipc.Tests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

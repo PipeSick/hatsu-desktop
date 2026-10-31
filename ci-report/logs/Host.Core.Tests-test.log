@@ -1,0 +1,8 @@
+Test run for /home/user/win11-macos/src/WinMac.Host.Core.Tests/bin/Release/net10.0/WinMac.Host.Core.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+Results File: /home/user/win11-macos/ci-report/trx/Host.Core.Tests.trx
+
+Passed!  - Failed:     0, Passed:    64, Skipped:     0, Total:    64, Duration: 35 s - WinMac.Host.Core.Tests.dll (net10.0)

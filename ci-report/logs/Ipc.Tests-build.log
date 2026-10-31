@@ -1,0 +1,8 @@
+  WinMac.Ipc -> /home/user/win11-macos/src/WinMac.Ipc/bin/Release/net10.0/WinMac.Ipc.dll
+  WinMac.Ipc.Tests -> /home/user/win11-macos/src/WinMac.Ipc.Tests/bin/Release/net10.0/WinMac.Ipc.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.19
