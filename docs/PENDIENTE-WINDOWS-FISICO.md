@@ -71,3 +71,6 @@ Compilada y con 23 pruebas de lógica pura; **sin ejecutar en Windows**. Orden s
 | B11 | Varias pantallas / DPI ≠ 100 %: solo se cubre la principal; anotar cualquier desajuste |
 | B12 | Convivencia con la app tipo «notch» del usuario (quién reserva el espacio superior) |
 Limitaciones conocidas: sin intensidad de señal Wi-Fi, sin Bluetooth, sin menús de la app activa, sin iconos de bandeja de terceros, solo el monitor principal; aspecto provisional (sin referencia del Mac).
+
+## Host de WinMac (F1, docs/15) — validación manual pendiente
+Implementado y probado en Linux; **sin ejecutar en Windows**. Construir con `powershell -ExecutionPolicy Bypass -File tools\Build-Local.ps1` y seguir la tabla M1–M11 de `docs/15-f1-resultados.md` §5 (arranque, bandeja, cierre ordenado, módulo que cae, host muerto → hijos muertos, instancia única, inicio automático, reinicio de Explorer, cierre voluntario, sin administrador, módulos independientes).

@@ -11,5 +11,6 @@ Estado: **Fase 1** (validación de tecnologías). No hay producto utilizable tod
 - Dock (iteración 1, provisional): [`docs/06-dock-iteracion-1.md`](docs/06-dock-iteracion-1.md) · ADR provisional: [`docs/04-adr-001-provisional.md`](docs/04-adr-001-provisional.md) · Liquid Glass: [`docs/05-liquid-glass.md`](docs/05-liquid-glass.md)
 - CI: `.github/workflows/ci.yml` (informe, pruebas y artefactos temporales; **no publica versiones**)
 - Dock funcional (iconos reales, anclado, ventanas, menús): [`docs/10-dock-funcional.md`](docs/10-dock-funcional.md)
+- Host de WinMac (F1: supervisor, IPC local, guía de validación): [`docs/15-f1-resultados.md`](docs/15-f1-resultados.md) · alcance: [`docs/14-f1-alcance-minimo.md`](docs/14-f1-alcance-minimo.md)
 - Barra superior (diseño, alternativas y limitaciones): [`docs/12-barra-superior.md`](docs/12-barra-superior.md)
 - Calibración visual contra macOS Tahoe: [`docs/08-calibracion-visual.md`](docs/08-calibracion-visual.md) · herramienta: `tools/calibration/calibracion.html` · pendiente de Windows físico: [`docs/PENDIENTE-WINDOWS-FISICO.md`](docs/PENDIENTE-WINDOWS-FISICO.md)
