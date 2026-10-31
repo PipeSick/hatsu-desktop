@@ -52,6 +52,11 @@ Run 'Barra offscreen light/glass con resalte' $bar @('--render-png', "`"$OutDir\
 Run 'Barra --status (informativo)' $bar @('--status') 60 -Informational
 Run 'Barra selftest' $bar @('--selftest') 120
 Run 'Barra selftest-appbar (informativo)' $bar @('--selftest-appbar') 120 -Informational
+# Host (WinMac.exe) con módulos de mentira: instancia única, cierre ordenado, host muerto → hijos muertos, caídas, inicio automático, puertos. Es GATING (falla el job si algo falla).
+$hostOut = Join-Path $OutDir 'host-tests.txt'
+& pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Test-Host.ps1') -PublishDir $PublishDir -OutDir $OutDir *>&1 | Tee-Object -FilePath $hostOut | ForEach-Object { Write-Host $_ }
+$hostRes = if ($LASTEXITCODE -eq 0) { 'OK' } else { "salió con $LASTEXITCODE" }
+$rows += [pscustomobject]@{ Paso = 'Host: pruebas de ciclo de vida (Test-Host.ps1)'; Resultado = $hostRes; Detalle = ((Get-Content $hostOut -ErrorAction SilentlyContinue | Select-Object -Last 3) -join ' | ') }
 # Vista previa en el log: el sandbox de desarrollo no puede descargar artefactos, pero SÍ leer los logs del job.
 # Se emiten versiones reducidas (escala 0.75) de dos escenas en base64 dentro de grupos plegados. Los PNG completos (2x) están en el artefacto.
 foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark-open'; t = 'dark'; p = 'open' }, @{ n = 'light-preview'; t = 'light'; p = 'preview' }, @{ n = 'dark-preview'; t = 'dark'; p = 'preview' })) {

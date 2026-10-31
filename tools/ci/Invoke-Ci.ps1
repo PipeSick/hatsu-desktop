@@ -44,7 +44,13 @@ foreach ($d in @(
   @{ Name = 'Bar.Core';        Path = 'src/WinMac.Bar.Core/WinMac.Bar.Core.csproj';               Kind = 'lib';  Extra = @() },
   @{ Name = 'Bar.Core.Tests';  Path = 'src/WinMac.Bar.Core.Tests/WinMac.Bar.Core.Tests.csproj';   Kind = 'test'; Extra = @() },
   @{ Name = 'Bar.Win';         Path = 'src/WinMac.Bar.Win/WinMac.Bar.Win.csproj';                 Kind = 'lib';  Extra = @() },
-  @{ Name = 'Bar.App';         Path = 'src/WinMac.Bar.App/WinMac.Bar.App.csproj';                 Kind = 'app';  Extra = @() })) {
+  @{ Name = 'Bar.App';         Path = 'src/WinMac.Bar.App/WinMac.Bar.App.csproj';                 Kind = 'app';  Extra = @() },
+  @{ Name = 'Ipc';             Path = 'src/WinMac.Ipc/WinMac.Ipc.csproj';                         Kind = 'lib';  Extra = @() },
+  @{ Name = 'Ipc.Tests';       Path = 'src/WinMac.Ipc.Tests/WinMac.Ipc.Tests.csproj';             Kind = 'test'; Extra = @() },
+  @{ Name = 'Host.Core';       Path = 'src/WinMac.Host.Core/WinMac.Host.Core.csproj';             Kind = 'lib';  Extra = @() },
+  @{ Name = 'Host.Core.Tests'; Path = 'src/WinMac.Host.Core.Tests/WinMac.Host.Core.Tests.csproj'; Kind = 'test'; Extra = @() },
+  @{ Name = 'FakeModule';      Path = 'src/WinMac.FakeModule/WinMac.FakeModule.csproj';           Kind = 'app';  Extra = @() },
+  @{ Name = 'Host';            Path = 'src/WinMac.Host/WinMac.Host.csproj';                       Kind = 'app';  Extra = @() })) {
   if (Test-Path $d.Path) { $components += $d }
 }
 

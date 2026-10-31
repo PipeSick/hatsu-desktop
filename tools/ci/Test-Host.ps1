@@ -1,0 +1,121 @@
+<#
+  Pruebas AUTOMÁTICAS del host (WinMac.exe) en el runner de Windows, con módulos de mentira (WinMac.FakeModule). No usa Dock ni Barra reales, no registra AppBar
+  y solo toca el registro con un nombre de prueba (WinMacCiTest). Cada comprobación imprime PASS/FAIL; el script sale con código 1 si alguna falla.
+  Cubre los criterios B1–B8 y A6 de docs/14. Las comprobaciones con ventanas reales (AppBar, Dock en pantalla) son MANUALES (docs/15).
+#>
+param([string]$PublishDir = 'ci-publish', [string]$OutDir = 'smoke')
+$ErrorActionPreference = 'Continue'
+$PublishDir = (Resolve-Path $PublishDir).Path
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
+$hostExe = Join-Path $PublishDir 'Host/WinMac.exe'; $fakeExe = Join-Path $PublishDir 'FakeModule/WinMac.FakeModule.exe'
+$base = Join-Path ([IO.Path]::GetTempPath()) ("winmac-host-test-" + [Guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $base | Out-Null
+$script:fails = 0; $script:rows = @()
+
+function Check([string]$name, [bool]$ok, [string]$detail = '') {
+  $r = if ($ok) { 'PASS' } else { 'FAIL'; $script:fails++ }
+  Write-Host ("{0,-4} {1}  {2}" -f $r, $name, $detail); $script:rows += [pscustomobject]@{ Prueba = $name; Resultado = $r; Detalle = $detail }
+}
+function WaitFor([scriptblock]$cond, [int]$sec = 20) { $end = (Get-Date).AddSeconds($sec); while ((Get-Date) -lt $end) { if (& $cond) { return $true }; Start-Sleep -Milliseconds 100 }; return [bool](& $cond) }
+
+# Una «sala» de prueba: carpeta propia con winmac.json, host.log y los registros de los módulos de mentira.
+function NewRoom([string]$name, [string]$barMode = 'normal', [string]$dockMode = 'normal', [string]$barExe = $fakeExe) {
+  $d = Join-Path $base $name; New-Item -ItemType Directory -Force -Path $d | Out-Null
+  $cfg = @{ modules = @{
+      bar  = @{ enabled = $true; path = $barExe;  args = @('--id', 'bar',  '--mode', $barMode,  '--out', $d) }
+      dock = @{ enabled = $true; path = $fakeExe; args = @('--id', 'dock', '--mode', $dockMode, '--out', $d) }
+      notch = @{ enabled = $false } } }
+  $cfg | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
+  return [pscustomobject]@{ Dir = $d; Cfg = Join-Path $d 'winmac.json'; Log = Join-Path $d 'host.log' }
+}
+function HostArgs($room, [switch]$Tray) { $a = @('--fast', '--config', "`"$($room.Cfg)`"", '--log', "`"$($room.Log)`""); if (-not $Tray) { $a = @('--no-tray') + $a }; $a }
+function StartHost($room, [switch]$Tray) { $p = Start-Process -FilePath $hostExe -ArgumentList (HostArgs $room -Tray:$Tray) -PassThru -WindowStyle Hidden; $null = $p.Handle; $p }   # .Handle: sin él, ExitCode puede quedar vacío
+function LogHas($room, [string]$text) { (Test-Path $room.Log) -and (Select-String -Path $room.Log -SimpleMatch -Pattern $text -Quiet) }
+function ModLog($room, [string]$id) { $f = Join-Path $room.Dir "$id.log"; if (Test-Path $f) { Get-Content $f } else { @() } }
+function Starts($room, [string]$id) { @(ModLog $room $id | Where-Object { $_ -match ' started$' }).Count }
+function Pids($room, [string]$id) { @(ModLog $room $id | Where-Object { $_ -match ' started$' } | ForEach-Object { [int]($_ -split ' ')[1] }) }
+function AnyAlive([int[]]$pids) { foreach ($p in $pids) { if (Get-Process -Id $p -ErrorAction SilentlyContinue) { return $true } }; return $false }
+function Ports { (Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique) -join ',' }
+function Quit($room, $proc) { Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; if ($proc) { [void]$proc.WaitForExit(30000) } }
+function Cleanup { Get-Process -Name 'WinMac', 'WinMac.FakeModule' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300 }
+
+if (-not (Test-Path $hostExe) -or -not (Test-Path $fakeExe)) { Write-Host "::error title=Host::faltan WinMac.exe o WinMac.FakeModule.exe en $PublishDir"; exit 1 }
+Cleanup; $portsBefore = Ports
+
+# ── 1. Arranque normal: ambos módulos listos, la isla (desactivada) no se lanza; ningún puerto TCP nuevo (A6)
+$r1 = NewRoom 'normal'; $h1 = StartHost $r1
+$ok = WaitFor { (LogHas $r1 '[bar] Running') -and (LogHas $r1 '[dock] Running') } 30
+Check 'B2 arranque: Barra y Dock llegan a Running' $ok ("bar={0} dock={1}" -f (Starts $r1 'bar'), (Starts $r1 'dock'))
+Check 'B2 la isla desactivada no se lanza' ((ModLog $r1 'notch').Count -eq 0)
+Check 'B2 sin avisos de Job Object' (-not (LogHas $r1 'AVISO'))
+Check 'A6 el host no abre puertos TCP en escucha' ((Ports) -eq $portsBefore) ("antes=[$portsBefore] ahora=[$(Ports)]")
+
+# ── 2. Instancia única (B1)
+$h2 = StartHost $r1; $exited = $h2.WaitForExit(8000)
+Check 'B1 un segundo WinMac.exe sale solo y sin error' ($exited -and $h2.ExitCode -eq 0) ("salió={0} código={1}" -f $exited, $(if ($exited) { $h2.ExitCode } else { 'n/a' }))
+Check 'B1 no se duplicaron los módulos' ((Starts $r1 'bar') -eq 1 -and (Starts $r1 'dock') -eq 1)
+
+# ── 3. Cierre ordenado (B3): --quit → módulos cierran por su camino normal y no queda nada
+$pids = @((Pids $r1 'bar') + (Pids $r1 'dock'))
+Quit $r1 $h1
+Check 'B3 el host termina tras --quit' ($h1.HasExited -and $h1.ExitCode -eq 0)
+Check 'B3 los módulos cerraron por su camino normal (shutdown → bye)' ((ModLog $r1 'bar') -match ' bye$' -and (ModLog $r1 'dock') -match ' bye$')
+Check 'B3 no queda ningún proceso de módulo' (-not (AnyAlive $pids)) ("pids: $($pids -join ',')")
+
+# ── 4. Host muerto de golpe (B4): el Job Object se lleva a los hijos
+$r4 = NewRoom 'kill'; $h4 = StartHost $r4
+[void](WaitFor { (LogHas $r4 '[bar] Running') -and (LogHas $r4 '[dock] Running') } 30)
+$pids4 = @((Pids $r4 'bar') + (Pids $r4 'dock')); $alive = AnyAlive $pids4
+Stop-Process -Id $h4.Id -Force
+$gone = WaitFor { -not (AnyAlive $pids4) } 8
+Check 'B4 antes de matar el host, los módulos estaban vivos' $alive
+Check 'B4 al morir el host de golpe, los hijos desaparecen (Job Object)' $gone ("pids: $($pids4 -join ',')")
+Cleanup
+
+# ── 5. Un módulo que cae no afecta al otro, se reinicia y al final se abandona (B5)
+$r5 = NewRoom 'crash' 'crash' 'normal'; $h5 = StartHost $r5
+$failed = WaitFor { LogHas $r5 '[bar] Failed' } 60
+Check 'B5 la barra que cae una y otra vez llega a Failed (cortacircuito)' $failed ("arranques de bar: $(Starts $r5 'bar')")
+Check 'B5 se reintentó antes de rendirse' ((Starts $r5 'bar') -ge 5)
+Check 'B5 el Dock siguió funcionando sin reiniciarse' ((LogHas $r5 '[dock] Running') -and (Starts $r5 'dock') -eq 1)
+$n = Starts $r5 'bar'; Start-Sleep -Seconds 2; Check 'B5 no hay bucle de reinicios tras Failed' ((Starts $r5 'bar') -eq $n)
+Quit $r5 $h5; Cleanup
+
+# ── 6. Módulo sin ejecutable: Failed y el resto sigue (B2)
+$r6 = NewRoom 'missing' 'normal' 'normal' (Join-Path $base 'no-existe.exe'); $h6 = StartHost $r6
+$ok6 = WaitFor { (LogHas $r6 '[bar] Failed') -and (LogHas $r6 '[dock] Running') } 30
+Check 'B2 sin ejecutable: Barra Failed y Dock Running' $ok6
+Quit $r6 $h6; Cleanup
+
+# ── 7. Cierre voluntario con bye: no se reinicia
+$r7 = NewRoom 'voluntary' 'exit-clean' 'normal'; $h7 = StartHost $r7
+$stopped = WaitFor { LogHas $r7 '[bar] Stopped' } 30; Start-Sleep -Seconds 2
+Check 'B5 un cierre voluntario (bye + código 0) no se reinicia' ($stopped -and (Starts $r7 'bar') -eq 1) ("arranques: $(Starts $r7 'bar')")
+Quit $r7 $h7; Cleanup
+
+# ── 8. Inicio automático: UNA clave y nada más (B8)
+$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'; $name = 'WinMacCiTest'
+function RunNames { $k = Get-Item $runKey -ErrorAction SilentlyContinue; if ($k) { @($k.Property | Where-Object { $_ } | Sort-Object) } else { @() } }
+$namesBefore = RunNames
+Start-Process -FilePath $hostExe -ArgumentList @('--install-autostart', '--autostart-name', $name) -Wait -WindowStyle Hidden | Out-Null
+$val = (Get-ItemProperty $runKey -Name $name -ErrorAction SilentlyContinue).$name
+Check 'B8 --install-autostart crea una clave con --background' ($val -like '*WinMac.exe*--background*') ("valor: $val")
+$namesMid = RunNames
+Check 'B8 solo se añadió esa clave' (($namesMid.Count -eq $namesBefore.Count + 1) -and ($namesMid -contains $name))
+Start-Process -FilePath $hostExe -ArgumentList @('--remove-autostart', '--autostart-name', $name) -Wait -WindowStyle Hidden | Out-Null
+$namesAfter = RunNames
+Check 'B8 --remove-autostart la borra y deja el resto igual' (-not ($namesAfter -contains $name) -and (($namesAfter -join '|') -eq ($namesBefore -join '|')))
+
+# ── 9. Con bandeja (informativo): el host arranca y cierra aunque el runner no tenga escritorio
+$r9 = NewRoom 'tray'; $h9 = StartHost $r9 -Tray
+$up = WaitFor { (LogHas $r9 '[bar] Running') -and (LogHas $r9 '[dock] Running') } 30
+$trayMsg = if (LogHas $r9 'icono de bandeja creado') { 'icono creado' } elseif (LogHas $r9 'no se pudo crear el icono') { 'sin icono (entorno sin bandeja)' } else { 'sin mensaje' }
+Check 'M1 (info) con bandeja el host arranca y los módulos llegan a Running' $up $trayMsg
+Quit $r9 $h9; Check 'M2 (info) con bandeja el cierre termina limpio' ($h9.HasExited -and $h9.ExitCode -eq 0)
+Cleanup
+
+$md = "### Host: pruebas de ciclo de vida (módulos de mentira)`n`n| Prueba | Resultado | Detalle |`n|---|---|---|`n" + (($script:rows | ForEach-Object { "| $($_.Prueba) | $($_.Resultado) | $($_.Detalle) |" }) -join "`n")
+$md | Set-Content (Join-Path $OutDir 'host-tests.md') -Encoding UTF8
+if ($env:GITHUB_STEP_SUMMARY) { Add-Content $env:GITHUB_STEP_SUMMARY $md }
+try { Remove-Item -Recurse -Force $base -ErrorAction SilentlyContinue } catch { }
+if ($script:fails) { Write-Host "::error title=Host::$($script:fails) comprobación(es) fallaron"; exit 1 }
+Write-Host 'Host: todas las comprobaciones pasaron.'; exit 0
