@@ -12,20 +12,23 @@ public sealed record ModuleConfig
 }
 
 /// <summary>
-/// Configuración MÍNIMA del host (<c>winmac.json</c>), solo lectura en F1. La configuración central completa (y la migración de dock.json/bar.json) es F3.
-/// Carga tolerante: un archivo ausente o corrupto devuelve los valores de fábrica.
+/// Configuración central del host (<c>winmac.json</c>): módulos activados, inicio automático y, desde F3a, los ajustes de la Isla (<see cref="Notch"/>).
+/// Es la ÚNICA fuente de verdad de lo que contiene. dock.json y bar.json siguen aparte (no se migran aquí). Carga tolerante: un archivo ausente o corrupto devuelve los valores de fábrica.
 /// </summary>
 public sealed record HostConfig
 {
-    public int Version { get; init; } = 1;
+    public int Version { get; init; } = 2;
     public bool Autostart { get; init; } = false;
     public Dictionary<string, ModuleConfig> Modules { get; init; } = new()
     {
-        ["bar"] = new ModuleConfig(), ["dock"] = new ModuleConfig(), ["notch"] = new ModuleConfig { Enabled = false },   // NotchWin llega en F4; desactivado por defecto
+        ["bar"] = new ModuleConfig(), ["dock"] = new ModuleConfig(), ["notch"] = new ModuleConfig(),   // habilitada por defecto cuando viene incluida; si falta el ejecutable el host la marca «no instalada» y sigue
     };
 
+    /// <summary>Ajustes de la Isla. Null = aún no hay (se importan una vez de NotchWin o se usan los de fábrica).</summary>
+    public NotchSettings? Notch { get; init; }
+
     /// <summary>Orden de arranque y ejecutables de fábrica (junto a WinMac.exe).</summary>
-    public static readonly (string Id, string Exe)[] Known = [("bar", "WinMac.Bar.App.exe"), ("dock", "WinMac.Dock.App.exe"), ("notch", @"NotchWin\WinMac.Notch.exe")];
+    public static readonly (string Id, string Exe, bool Optional)[] Known = [("bar", "WinMac.Bar.App.exe", false), ("dock", "WinMac.Dock.App.exe", false), ("notch", @"NotchWin\NotchWin.App.exe", true)];
 
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNameCaseInsensitive = true, Converters = { new JsonStringEnumConverter() } };
 
@@ -36,19 +39,28 @@ public sealed record HostConfig
             if (!File.Exists(path)) return new HostConfig();
             var c = JsonSerializer.Deserialize<HostConfig>(File.ReadAllText(path), Json) ?? new HostConfig();
             var mods = new Dictionary<string, ModuleConfig>(new HostConfig().Modules); foreach (var (k, v) in c.Modules) mods[k.ToLowerInvariant()] = v;   // lo no indicado conserva el valor de fábrica
-            return c with { Modules = mods };
+            return c with { Modules = mods, Notch = c.Notch?.Sanitize() };
         }
         catch (Exception) { return new HostConfig(); }
     }
 
-    /// <summary>Módulos en orden de arranque con su ruta resuelta y si están habilitados.</summary>
-    public IEnumerable<(ModuleSpec Spec, bool Enabled)> Resolve(string baseDir)
+    /// <summary>Módulos en orden de arranque con su ruta resuelta, si están habilitados y si están disponibles (un módulo OPCIONAL sin ejecutable es «no instalado», no un fallo).</summary>
+    public IEnumerable<(ModuleSpec Spec, bool Enabled, bool Available)> Resolve(string baseDir, Func<string, bool>? exists = null)
     {
-        foreach (var (id, exe) in Known)
+        exists ??= File.Exists;
+        foreach (var (id, exe, optional) in Known)
         {
             Modules.TryGetValue(id, out var m); m ??= new ModuleConfig();
             string path = m.Path ?? System.IO.Path.Combine(baseDir, exe);
-            yield return (new ModuleSpec(id, path, (IReadOnlyList<string>?)m.Args ?? []), m.Enabled);
+            yield return (new ModuleSpec(id, path, (IReadOnlyList<string>?)m.Args ?? []), m.Enabled, !optional || exists(path));
         }
+    }
+
+    /// <summary>Guardado atómico (archivo temporal + reemplazo): un corte a mitad nunca deja el archivo a medias.</summary>
+    public static void Save(string path, HostConfig cfg)
+    {
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!);
+        string tmp = path + ".tmp"; File.WriteAllText(tmp, JsonSerializer.Serialize(cfg, Json));
+        if (File.Exists(path)) File.Replace(tmp, path, null); else File.Move(tmp, path);
     }
 }

@@ -1,6 +1,6 @@
 namespace WinMac.Host;
 
-public enum ModuleState { Disabled, Starting, Running, Stopping, Stopped, Crashed, Failed }
+public enum ModuleState { Disabled, Starting, Running, Stopping, Stopped, Crashed, Failed, NotInstalled }
 
 /// <summary>Qué lanzar. <see cref="Args"/> se añade antes de <c>--hosted --pipe &lt;nombre&gt;</c>, que pone el lanzador.</summary>
 public sealed record ModuleSpec(string Id, string ExePath, IReadOnlyList<string> Args);
@@ -30,6 +30,12 @@ public interface IHostBus
     event Action<string>? Bye;           // el módulo avisa de que su cierre es voluntario
     event Action<string>? Disconnected;
     bool Send(string module, string type);   // ping / shutdown
+    /// <summary>Estado retenido para los módulos suscritos (p. ej. los ajustes de la Isla).</summary>
+    void Publish(string topic, object data);
+    /// <summary>Orden puntual (no retenida) a los módulos suscritos.</summary>
+    void Emit(string topic, object? data = null);
+    /// <summary>Evento de un módulo hacia el host (topic + datos), p. ej. una petición de cambio de ajustes.</summary>
+    event Action<string, string, System.Text.Json.JsonElement?>? Event;
 }
 
 public interface IClock

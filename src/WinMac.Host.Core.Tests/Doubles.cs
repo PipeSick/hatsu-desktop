@@ -57,6 +57,11 @@ internal sealed class FakeLauncher : IProcessLauncher
 internal sealed class FakeBus : IHostBus
 {
     public event Action<string>? Ready; public event Action<string>? Pong; public event Action<string>? Bye; public event Action<string>? Disconnected;
+    public event Action<string, string, System.Text.Json.JsonElement?>? Event;
+    public readonly List<(string Topic, object Data)> Published = []; public readonly List<string> Emitted = [];
+    public void Publish(string topic, object data) { lock (Published) Published.Add((topic, data)); }
+    public void Emit(string topic, object? data = null) { lock (Emitted) Emitted.Add(topic); }
+    public void RaiseEvent(string m, string topic, string json) => Event?.Invoke(m, topic, System.Text.Json.JsonDocument.Parse(json).RootElement.Clone());
     public readonly List<(string Module, string Type)> Sent = []; public Func<string, string, bool>? OnSend;
     public bool Send(string module, string type) { lock (Sent) Sent.Add((module, type)); return OnSend?.Invoke(module, type) ?? true; }
     public void RaiseReady(string m) => Ready?.Invoke(m); public void RaisePong(string m) => Pong?.Invoke(m); public void RaiseBye(string m) => Bye?.Invoke(m); public void RaiseDisconnected(string m) => Disconnected?.Invoke(m);

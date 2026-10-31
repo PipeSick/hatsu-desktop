@@ -161,9 +161,9 @@ public class HostConfigTests
     private static string Tmp() => Path.Combine(Path.GetTempPath(), "winmac-host-" + Guid.NewGuid().ToString("N") + ".json");
 
     [Fact]
-    public void Defaults_start_bar_and_dock_and_keep_the_notch_off()
+    public void Defaults_start_every_module_including_the_notch_and_autostart_is_off()
     {
-        var c = new HostConfig(); Assert.True(c.Modules["bar"].Enabled && c.Modules["dock"].Enabled); Assert.False(c.Modules["notch"].Enabled); Assert.False(c.Autostart);
+        var c = new HostConfig(); Assert.True(c.Modules["bar"].Enabled && c.Modules["dock"].Enabled && c.Modules["notch"].Enabled); Assert.False(c.Autostart); Assert.Equal(2, c.Version);
     }
 
     [Fact]
@@ -186,7 +186,30 @@ public class HostConfigTests
         var c = new HostConfig { Modules = new HostConfig().Modules.ToDictionary(k => k.Key, v => v.Value) }; c.Modules["bar"] = new ModuleConfig { Path = "/otro/bar", Args = ["--x"] };
         var r = c.Resolve("/app").ToList();
         Assert.Equal(["bar", "dock", "notch"], r.Select(x => x.Spec.Id)); Assert.Equal("/otro/bar", r[0].Spec.ExePath); Assert.Equal(["--x"], r[0].Spec.Args);
-        Assert.EndsWith("WinMac.Dock.App.exe", r[1].Spec.ExePath); Assert.StartsWith("/app", r[1].Spec.ExePath); Assert.False(r[2].Enabled);
+        Assert.EndsWith("WinMac.Dock.App.exe", r[1].Spec.ExePath); Assert.StartsWith("/app", r[1].Spec.ExePath); Assert.True(r[2].Enabled);
+        Assert.EndsWith("NotchWin.App.exe", r[2].Spec.ExePath);
+    }
+
+    [Fact]
+    public void An_optional_module_without_its_executable_is_not_installed_but_the_required_ones_are_still_available()
+    {
+        var r = new HostConfig().Resolve("/app", exists: _ => false).ToList();
+        Assert.True(r[0].Available && r[1].Available);   // la Barra y el Dock se tratan como obligatorios: si faltan, es un fallo (Failed), no «no instalado»
+        Assert.False(r[2].Available);
+        Assert.True(new HostConfig().Resolve("/app", exists: _ => true).All(x => x.Available));
+    }
+
+    [Fact]
+    public void Save_is_atomic_roundtrips_and_leaves_no_temp_file()
+    {
+        var f = Tmp();
+        try
+        {
+            var c = new HostConfig { Notch = new NotchSettings { GlassLevel = 33, Position = "TopLeft" } };
+            HostConfig.Save(f, c); HostConfig.Save(f, c with { Autostart = true });   // crea y luego reemplaza
+            var l = HostConfig.Load(f); Assert.True(l.Autostart); Assert.Equal(33, l.Notch!.GlassLevel); Assert.Equal("TopLeft", l.Notch.Position); Assert.False(File.Exists(f + ".tmp"));
+        }
+        finally { try { File.Delete(f); } catch (IOException) { } }
     }
 }
 

@@ -11,7 +11,7 @@ public sealed class Supervisor
     {
         public readonly ModuleSpec Spec = spec; public ModuleState State = ModuleState.Stopped;
         public IModuleProcess? Proc; public volatile bool ReadySeen, ByeSeen; public DateTime LastPong;
-        public readonly CancellationTokenSource Stop = new(); public Task? Loop; public readonly List<DateTime> Crashes = [];
+        public CancellationTokenSource Stop = new(); public Task? Loop; public readonly List<DateTime> Crashes = [];
         public readonly TaskCompletionSource FirstLaunch = new(TaskCreationOptions.RunContinuationsAsynchronously);   // el primer intento de lanzamiento ya ocurrió (con éxito o no)
 
         public void Set(ModuleState s) { if (State == s) return; State = s; owner.Log($"[{Spec.Id}] {s}"); owner.StateChanged?.Invoke(Spec.Id, s); }
@@ -35,9 +35,9 @@ public sealed class Supervisor
     private void With(string id, Action<Runner> a) { Runner? r; lock (_runners) r = _runners.FirstOrDefault(x => x.Spec.Id == id); if (r is not null) a(r); }
 
     /// <summary>Alta de un módulo, en el orden de arranque. Un módulo deshabilitado queda en <see cref="ModuleState.Disabled"/> y nunca se lanza.</summary>
-    public void Add(ModuleSpec spec, bool enabled)
+    public void Add(ModuleSpec spec, bool enabled, bool available = true)
     {
-        var r = new Runner(this, spec); if (!enabled) r.State = ModuleState.Disabled;
+        var r = new Runner(this, spec); if (!available) r.State = ModuleState.NotInstalled; else if (!enabled) r.State = ModuleState.Disabled;
         lock (_runners) _runners.Add(r);
     }
 
@@ -48,7 +48,7 @@ public sealed class Supervisor
     public async Task StartAsync()
     {
         List<Runner> list; lock (_runners) list = [.. _runners];
-        foreach (var r in list.Where(r => r.State != ModuleState.Disabled))
+        foreach (var r in list.Where(r => r.State is not (ModuleState.Disabled or ModuleState.NotInstalled)))
         {
             r.Loop = Task.Run(() => RunAsync(r));
             await r.FirstLaunch.Task.ConfigureAwait(false);                                   // el orden de arranque es real: el siguiente no se lanza hasta que este ya existe
@@ -57,6 +57,33 @@ public sealed class Supervisor
     }
 
     private volatile bool _shuttingDown;
+    private readonly SemaphoreSlim _toggle = new(1, 1);   // activar/desactivar en vivo de uno en uno
+
+    /// <summary>
+    /// Activa o desactiva UN módulo en vivo, sin tocar a los demás ni al host. Desactivar lo cierra por su camino normal (shutdown → cierre cortés → último recurso) y lo deja en
+    /// <see cref="ModuleState.Disabled"/>; activar lo lanza de inmediato con el historial de caídas limpio. No hace nada con módulos no instalados ni durante el cierre del host.
+    /// </summary>
+    public async Task<bool> SetEnabledAsync(string id, bool enabled)
+    {
+        Runner? r; lock (_runners) r = _runners.FirstOrDefault(x => x.Spec.Id == id);
+        if (r is null || _shuttingDown || r.State == ModuleState.NotInstalled) return false;
+        await _toggle.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_shuttingDown) return false;
+            if (!enabled)
+            {
+                if (r.State == ModuleState.Disabled) return false;
+                Log($"[{id}] desactivado por el usuario");
+                await StopAsync(r).ConfigureAwait(false); r.Set(ModuleState.Disabled); return true;
+            }
+            if (r.State != ModuleState.Disabled) return false;
+            Log($"[{id}] activado por el usuario");
+            r.Stop = new CancellationTokenSource(); r.Crashes.Clear(); r.Proc = null; r.Set(ModuleState.Stopped);
+            r.Loop = Task.Run(() => RunAsync(r)); return true;
+        }
+        finally { _toggle.Release(); }
+    }
 
     /// <summary>Vuelve a lanzar un módulo que está detenido (cierre voluntario) o en <see cref="ModuleState.Failed"/> (cortacircuito o sin ejecutable), a petición del usuario.
     /// Reinicia el historial de caídas. No hace nada si el módulo está desactivado, ya está en marcha, o el host se está cerrando.</summary>
@@ -87,7 +114,7 @@ public sealed class Supervisor
 
     private async Task StopAsync(Runner r)
     {
-        if (r.State is ModuleState.Disabled) return;
+        if (r.State is ModuleState.Disabled or ModuleState.NotInstalled) return;
         r.Stop.Cancel();
         var proc = r.Proc;
         if (proc is not null && !proc.Exited.IsCompleted)
@@ -117,8 +144,8 @@ public sealed class Supervisor
 
     private async Task RunAsync(Runner r)
     {
-        int step = 0;
-        while (!r.Stop.IsCancellationRequested)
+        int step = 0; var stop = r.Stop;   // este bucle responde SOLO a su propia señal de parada (activar de nuevo crea otra)
+        while (!stop.IsCancellationRequested)
         {
             r.ReadySeen = false; r.ByeSeen = false;
             IModuleProcess proc;
@@ -127,7 +154,7 @@ public sealed class Supervisor
             r.FirstLaunch.TrySetResult();
             r.Set(ModuleState.Starting); var startedAt = _clock.UtcNow; r.LastPong = startedAt;
 
-            var outcome = await WatchAsync(r, proc, startedAt).ConfigureAwait(false);
+            var outcome = await WatchAsync(r, proc, startedAt, stop).ConfigureAwait(false);
             if (outcome == Outcome.Stop) return;
             int code = 0;
             if (outcome == Outcome.Exit) { code = await proc.Exited.ConfigureAwait(false); lock (_pids) _pids.Remove(proc.Id); }
@@ -141,21 +168,21 @@ public sealed class Supervisor
             if (now - startedAt >= _p.StableAfter) step = 0;
             var wait = TimeSpan.FromMilliseconds(Math.Min(_p.BackoffMax.TotalMilliseconds, _p.BackoffStart.TotalMilliseconds * Math.Pow(2, step++)));
             r.Set(ModuleState.Crashed); Log($"[{r.Spec.Id}] reinicio en {wait.TotalSeconds:0.##}s");
-            try { await _clock.Delay(wait, r.Stop.Token).ConfigureAwait(false); } catch (OperationCanceledException) { return; }
+            try { await _clock.Delay(wait, stop.Token).ConfigureAwait(false); } catch (OperationCanceledException) { return; }
         }
     }
 
-    private async Task<Outcome> WatchAsync(Runner r, IModuleProcess proc, DateTime startedAt)
+    private async Task<Outcome> WatchAsync(Runner r, IModuleProcess proc, DateTime startedAt, CancellationTokenSource stop)
     {
         while (true)
         {
-            using var tick = CancellationTokenSource.CreateLinkedTokenSource(r.Stop.Token);
+            using var tick = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
             var delay = _clock.Delay(_p.HeartbeatInterval, tick.Token);
-            var stopTask = Task.Delay(Timeout.Infinite, r.Stop.Token);
+            var stopTask = Task.Delay(Timeout.Infinite, stop.Token);
             var done = await Task.WhenAny(proc.Exited, delay, stopTask).ConfigureAwait(false);
             tick.Cancel(); try { await delay.ConfigureAwait(false); } catch (OperationCanceledException) { }
             if (done == proc.Exited) return Outcome.Exit;
-            if (r.Stop.IsCancellationRequested) return Outcome.Stop;
+            if (stop.IsCancellationRequested) return Outcome.Stop;
             var now = _clock.UtcNow;
             if (!r.ReadySeen) { if (now - startedAt > _p.ReadyTimeout) return Outcome.NeverReady; continue; }
             _bus.Send(r.Spec.Id, Ipc.MsgType.Ping);
