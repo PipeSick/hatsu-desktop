@@ -120,6 +120,7 @@ public sealed class DockHost : IDisposable
         CreateSurface();
         PlaceWindow(show: true);
         BuildBackdrop();
+        LogSizes("inicio");
     }
 
     private void PlaceWindow(bool show)
@@ -144,6 +145,18 @@ public sealed class DockHost : IDisposable
         _visual?.Dispose(); _target?.Dispose(); _dcomp?.Dispose(); _swap?.Dispose();
         CreateSurface();
         BuildBackdrop(); _force = true;
+        LogSizes("redimensionado");
+    }
+
+    /// <summary>Diagnóstico: ancho lógico del modelo, ventana real y búfer del swap chain (deben coincidir en píxeles).</summary>
+    private void LogSizes(string why)
+    {
+        try
+        {
+            Native.GetWindowRect(_hwnd, out var r); var d = _swap.Description1;
+            _log($"[dock] {why}: modelo={_ctl.WindowWidth:0.#}dip escala={_scale:0.##} esperado={_winWpx}x{_winHpx}px ventana={r.Right - r.Left}x{r.Bottom - r.Top}px búfer={d.Width}x{d.Height}px");
+        }
+        catch (Exception e) { _log("[dock] LogSizes falló: " + e.Message); }
     }
 
     // ------------------------------------------------------------------ gráficos
