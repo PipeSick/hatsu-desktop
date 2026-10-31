@@ -50,6 +50,9 @@ public sealed class IpcServer : IAsyncDisposable
     /// <summary>Publica un valor de ESTADO: se retiene y se envía a los suscriptores (y a los que se suscriban después).</summary>
     public void Publish(string topic, object data) => Distribute(Envelope.Of(MsgType.Pub, topic, data), exceptModule: null, retain: true);
 
+    /// <summary>Evento puntual (NO se retiene) para los módulos suscritos al tópico: órdenes del host como «abrir la ventana de ajustes». Un módulo que se conecte después no lo recibe.</summary>
+    public void Emit(string topic, object? data = null) => Distribute(Envelope.Of(MsgType.Evt, topic, data), exceptModule: null, retain: false);
+
     /// <summary>Mensaje de control a un módulo (ping, shutdown). Devuelve false si no está conectado.</summary>
     public bool Send(string module, string type)
     {

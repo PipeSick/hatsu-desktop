@@ -275,3 +275,20 @@ public class ModuleLinkTests
         finally { Environment.SetEnvironmentVariable(ModuleHostLink.TokenEnvVar, null); }
     }
 }
+
+public class EmitTests
+{
+    [Fact]
+    public async Task Emit_reaches_subscribers_now_but_is_not_retained_for_later_ones()
+    {
+        string pipe = T.Pipe(); await using var server = T.Server(pipe);
+        await using var a = T.Client(pipe, "a"); var got = new List<string>(); a.Subscribe("notch.cmd", d => { lock (got) got.Add(d?.GetProperty("cmd").GetString() ?? ""); });
+        Assert.True(await T.Until(() => a.IsConnected)); await Task.Delay(100);
+        server.Emit("notch.cmd", new { cmd = "open-local-settings" });
+        Assert.True(await T.Until(() => { lock (got) return got.Count == 1; })); Assert.Equal("open-local-settings", got[0]);
+
+        await using var b = T.Client(pipe, "b"); var late = 0; b.Subscribe("notch.cmd", _ => Interlocked.Increment(ref late));
+        Assert.True(await T.Until(() => b.IsConnected)); await Task.Delay(300);
+        Assert.Equal(0, late);   // un evento no se reenvía a quien llega después (a diferencia de Publish)
+    }
+}
