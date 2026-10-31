@@ -87,6 +87,8 @@ Orden elegido a propósito: lo central llega tras tener el módulo estable, para
 - Si el host cae, el notch sigue con los últimos ajustes recibidos y reintenta conectar.
 - Si ya hay un NotchWin suelto abierto cuando WinMac lanza el suyo, el nuevo avisa «salida voluntaria» y sale: queda «detenido» (no «caído»), y la bandeja ofrece «Abrir Isla» cuando se cierre el otro.
 
+- **La Isla y la Barra (orden de ventanas):** la Barra (AppBar «siempre encima») podía cubrir la Isla y quedarse con sus clics. En vez de pelear por el orden Z, la Isla publica el espacio que ocupa (`notch.rects`, retenido) y la Barra recorta su propia ventana ahí (`SetWindowRgn`); el host lo libera si la Isla se desconecta. Es independiente de quién esté encima. Pendiente de ver en Windows real.
+
 ### 7.4 Pruebas
 - WinMac (Linux, sin advertencias): Common 12 · Apps 25 · Dock 135 · Bar 23 · **Ipc 29** · **Host.Core 64** = **288**. Nuevas: valores y parches de `NotchSettings` (rangos, tipos, enums, pestañas, importación sin secretos), `ConfigService` (guardado, no-op, fallo de disco, conserva el resto del archivo), `HostController`, activar/desactivar en vivo y módulo no instalado, **procesos reales** (apagar/encender un módulo por la configuración) y **canal real** (ajustes de ida y vuelta, orden del host).
 - NotchWin (Linux): Core 74 de 76. Las 2 que fallan (`MusicPlayerLauncherTests.NamesAndSessionTokens` y `Feishin_FindsTheFirstExistingStandardLocation`) usan rutas de Windows y ya fallaban en Linux antes de estos cambios; no tocan lo nuevo. Nuevas: `CentralSettings`, `HostedSession` contra el servidor real, y el borrado de la clave del disco.
