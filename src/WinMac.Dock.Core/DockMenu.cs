@@ -2,7 +2,7 @@ using WinMac.Apps;
 
 namespace WinMac.Dock;
 
-public sealed record MenuEntry(string Text, DockAction? Action = null, bool Enabled = true, bool IsSeparator = false, bool IsHeader = false)
+public sealed record MenuEntry(string Text, DockAction? Action = null, bool Enabled = true, bool IsSeparator = false, bool IsHeader = false, bool Checked = false, IReadOnlyList<MenuEntry>? Children = null)
 {
     public static MenuEntry Separator => new("", null, false, true);
 }
@@ -17,7 +17,7 @@ public static class DockMenu
 
     public static string Truncate(string s, int max) => s.Length <= max ? s : s[..(max - 1)] + "…";
 
-    public static IReadOnlyList<MenuEntry> ForItem(DockItemModel it, int pinnedIndex = -1, int pinnedCount = 0)
+    public static IReadOnlyList<MenuEntry> ForItem(DockItemModel it, int pinnedIndex = -1, int pinnedCount = 0, DockConfig? cfg = null)
     {
         var m = new List<MenuEntry>();
         switch (it.Kind)
@@ -56,9 +56,37 @@ public static class DockMenu
                 }
                 break;
         }
+        if (cfg is not null) { if (m.Count > 0) m.Add(MenuEntry.Separator); m.Add(Settings(cfg)); }
         return m;
     }
 
-    /// <summary>Clic derecho sobre el fondo de la barra (no sobre un ícono): cierre normal del Dock.</summary>
-    public static IReadOnlyList<MenuEntry> ForBackground() => [new MenuEntry("Salir del Dock", new DockAction(DockActionKind.Quit))];
+    /// <summary>Clic derecho sobre el fondo de la barra (no sobre un ícono): ajustes y cierre normal del Dock.</summary>
+    public static IReadOnlyList<MenuEntry> ForBackground(DockConfig? cfg = null) =>
+        cfg is null ? [new MenuEntry("Salir del Dock", new DockAction(DockActionKind.Quit))]
+                    : [Settings(cfg), MenuEntry.Separator, new MenuEntry("Salir del Dock", new DockAction(DockActionKind.Quit))];
+
+    /// <summary>«Ajustes del Dock»: tamaño (presets), posición (izquierda/centro/derecha) y altura. Marca el valor actual.</summary>
+    public static MenuEntry Settings(DockConfig c)
+    {
+        var sizes = new List<MenuEntry>(); bool matched = false;
+        foreach (var (name, size) in DockSettings.Presets)
+        {
+            bool on = Math.Abs(c.IconSize - size) < 0.5; matched |= on;
+            sizes.Add(new MenuEntry($"{name} ({size:0})", new DockAction(DockActionKind.SetIconSize, Number: size), true, Checked: on));
+        }
+        if (!matched) sizes.Add(new MenuEntry($"Personalizado ({c.IconSize:0})", null, false, Checked: true));
+        var pos = new List<MenuEntry>
+        {
+            new("Izquierda", new DockAction(DockActionKind.SetAlignment, Number: (double)DockAlignment.Left), true, Checked: c.Alignment == DockAlignment.Left),
+            new("Centro", new DockAction(DockActionKind.SetAlignment, Number: (double)DockAlignment.Center), true, Checked: c.Alignment == DockAlignment.Center),
+            new("Derecha", new DockAction(DockActionKind.SetAlignment, Number: (double)DockAlignment.Right), true, Checked: c.Alignment == DockAlignment.Right),
+        };
+        var height = new List<MenuEntry>
+        {
+            new($"Subir ({DockSettings.NudgeStep:0} px)", new DockAction(DockActionKind.NudgeBottom, Number: DockSettings.NudgeStep), c.BottomOffset < DockSettings.MaxBottomOffset),
+            new($"Bajar ({DockSettings.NudgeStep:0} px)", new DockAction(DockActionKind.NudgeBottom, Number: -DockSettings.NudgeStep), c.BottomOffset > 0),
+            new("Altura normal", new DockAction(DockActionKind.ResetBottom), c.BottomOffset > 0),
+        };
+        return new MenuEntry("Ajustes del Dock", null, true, Children: [new("Tamaño", null, true, Children: sizes), new("Posición", null, true, Children: pos), new("Altura", null, true, Children: height)]);
+    }
 }

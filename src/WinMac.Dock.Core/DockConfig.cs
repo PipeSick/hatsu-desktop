@@ -21,6 +21,9 @@ public sealed record PinnedApp
     [JsonIgnore] public string StableId => ToIdentity()?.Id ?? Id ?? "";
 }
 
+/// <summary>Alineación horizontal del Dock en la pantalla. El Dock sigue siendo horizontal y mantiene su aspecto; solo cambia dónde se coloca.</summary>
+public enum DockAlignment { Left, Center, Right }
+
 public sealed record DockConfig
 {
     public int Version { get; init; } = 3;
@@ -37,6 +40,13 @@ public sealed record DockConfig
     /// <summary>Vista previa de las ventanas de una app al pasar el ratón sobre su ícono.</summary>
     public bool PreviewsEnabled { get; init; } = true;
     public double PreviewDelaySeconds { get; init; } = 0.35;
+    /// <summary>Lado del ícono en reposo (DIP). 60 = tamaño aprobado; el resto de medidas escalan en proporción (<see cref="DockMetrics.ForIconSize"/>). Rango 32–128.</summary>
+    public double IconSize { get; init; } = DockSettings.DefaultIconSize;
+    public DockAlignment Alignment { get; init; } = DockAlignment.Center;
+    /// <summary>Distancia (DIP) al borde lateral de la pantalla cuando la alineación es izquierda o derecha.</summary>
+    public double EdgeMargin { get; init; } = DockSettings.DefaultEdgeMargin;
+    /// <summary>Cuánto se sube el Dock sobre su posición normal (justo encima de la barra de tareas), en DIP. 0 = normal. Rango 0–400.</summary>
+    public double BottomOffset { get; init; } = 0;
     public string? DownloadsPath { get; init; }
     public GlassTier GlassTier { get; init; } = GlassTier.WallpaperBlur;
     public ThemeMode Theme { get; init; } = ThemeMode.System;

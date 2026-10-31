@@ -63,3 +63,11 @@ Una tabla `punto → OK/FALLO → observación` y, si hay fallo, las últimas l�
 5. Comprueba que la barra del Dock se ve y se comporta igual que antes (misma posición, tamaño y magnificación).
 6. Captura de miniaturas sueltas: `& $dock --thumb-test --out "$HOME\Desktop\thumbs"` guarda un PNG por ventana abierta. Si alguna sale negra o falla, anota qué app es.
 7. Para desactivarla: pon `"PreviewsEnabled": false` en `dock.json`.
+
+## 9. Tamaño y posición del Dock (nuevo)
+1. Clic derecho en el Dock (en un icono o en un hueco) → **Ajustes del Dock** → *Tamaño* → *Grande* y luego *Pequeño*: el Dock se redibuja a otro tamaño **con las mismas proporciones** (compáralo con el tamaño Mediano, que es el de siempre).
+2. *Posición* → *Izquierda*: la barra se pega al borde izquierdo (a ~16 px); *Derecha*: al derecho; *Centro*: vuelve a como estaba. Pasa el ratón por un icono con ventanas: la vista previa **no se sale de la pantalla**.
+3. *Altura* → *Subir* varias veces: el Dock sube sobre la barra de tareas; *Altura normal* lo devuelve.
+4. Comprueba con el Dock en cada posición: arrastrar iconos, el menú, la magnificación, la vista previa y el autoocultado.
+5. Cierra y abre el Dock (o `WinMac.exe`): **recuerda** tamaño y posición (`%APPDATA%\WinMac\dock.json`).
+6. Comandos: `WinMac.Dock.App.exe --set-size 72`, `--set-align right`, `--set-raise 24`, `--show-layout`; con el Dock abierto se aplican en ≤ 2 s.

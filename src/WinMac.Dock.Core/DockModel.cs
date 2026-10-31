@@ -20,7 +20,8 @@ public sealed record RunningApp(AppIdentity Identity, int Pid, IReadOnlyList<Win
     public string ExePath => Identity.ExePath ?? "";
 }
 
-public enum DockActionKind { None, Launch, Activate, Restore, Minimize, Open, ActivateWindow, CloseWindow, CloseApp, Pin, Unpin, MoveLeft, MoveRight, Quit }
+public enum DockActionKind { None, Launch, Activate, Restore, Minimize, Open, ActivateWindow, CloseWindow, CloseApp, Pin, Unpin, MoveLeft, MoveRight, Quit, SetIconSize, SetAlignment, NudgeBottom, ResetBottom }
 
 /// <summary>Orden que el núcleo pide al adaptador de Windows. El núcleo nunca ejecuta nada por sí mismo.</summary>
-public sealed record DockAction(DockActionKind Kind, string? ItemId = null, string? Path = null, long Hwnd = 0, AppIdentity? App = null);
+/// <param name="Number">Valor numérico de las acciones de ajustes: tamaño en DIP (<see cref="DockActionKind.SetIconSize"/>), alineación (<see cref="DockActionKind.SetAlignment"/>, el valor de <see cref="DockAlignment"/>) o incremento de altura en DIP (<see cref="DockActionKind.NudgeBottom"/>).</param>
+public sealed record DockAction(DockActionKind Kind, string? ItemId = null, string? Path = null, long Hwnd = 0, AppIdentity? App = null, double Number = 0);

@@ -65,11 +65,11 @@ public static class OffscreenRenderer
         return ctl.Step(1.0 / 60);
     }
 
-    public static string Render(string pngPath, DemoPose pose, GlassTier tier, DockTheme theme = DockTheme.Light, double scale = 1.0, bool software = true)
+    public static string Render(string pngPath, DemoPose pose, GlassTier tier, DockTheme theme = DockTheme.Light, double scale = 1.0, bool software = true, double iconSize = 60, DockAlignment alignment = DockAlignment.Center)
     {
-        var plain = new DockMetrics();   // la vista previa agranda la ventana; el resto de escenas conservan su tamaño de siempre
+        var plain = DockMetrics.ForIconSize(iconSize);   // la vista previa agranda la ventana; el resto de escenas conservan su tamaño de siempre
         var metrics = pose == DemoPose.Preview ? plain with { PreviewHeadroom = PreviewSpec.Headroom(plain), PreviewMaxWidth = PreviewSpec.MaxPanelWidth } : plain;
-        var cfg = new DockConfig { GlassTier = tier }; var style = GlassStyle.For(theme);
+        var cfg = new DockConfig { GlassTier = tier, IconSize = iconSize, Alignment = alignment }; var style = GlassStyle.For(theme);
         var view = BuildView(pose, metrics, cfg, out _);
 
         using var dev = new D2DDevice(software); dev.SetDpi(scale);

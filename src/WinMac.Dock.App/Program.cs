@@ -8,7 +8,8 @@
 //   WinMac.Dock.App --pin <ruta.exe|AUMID> [--title T]   ancla una app (Win32 por ruta; empaquetada por AUMID, p. ej. Microsoft.WindowsCalculator_8wekyb3d8bbwe!App)
 //   WinMac.Dock.App --unpin <id|ruta|AUMID> desancla una app
 //   WinMac.Dock.App --icon-test <ruta.exe|AUMID> [--out icono.png]   extrae el icono original con el mismo servicio que usa el dock y lo guarda como PNG
-//   WinMac.Dock.App --render-png f.png [--pose rest|hover|hidden|open|edge|preview] [--theme light|dark] [--tier tint|wallpaper] [--scale 1.5]
+//   WinMac.Dock.App --set-size 32..128 | --set-align left|center|right | --set-raise 0..400   cambia el tamaño y la posición (edita dock.json; un dock en marcha lo aplica en ≤ 2 s) · --show-layout muestra los valores
+//   WinMac.Dock.App --render-png f.png [--pose rest|hover|hidden|open|edge|preview] [--theme light|dark] [--tier tint|wallpaper] [--scale 1.5] [--size 60] [--align left|center|right]
 //                                           renderiza FUERA de pantalla (no abre ventana) con el renderizador real y guarda un PNG (para CI)
 //   WinMac.Dock.App --bench-offscreen f.json [--theme ..] [--tier ..] [--scale ..]
 //                                           mide el coste de dibujar (WARP en CI; NO es FPS real) y escribe un JSON con sus limitaciones
@@ -49,7 +50,9 @@ internal static class Program
             {
                 var pose = Arg(args, "--pose")?.ToLowerInvariant() switch { "hover" => DemoPose.Hover, "hidden" => DemoPose.Hidden, "open" => DemoPose.Open, "edge" => DemoPose.Edge, "preview" => DemoPose.Preview, _ => DemoPose.Rest };
                 double scale = double.TryParse(Arg(args, "--scale"), System.Globalization.CultureInfo.InvariantCulture, out var s) ? s : 1.0;
-                string info = OffscreenRenderer.Render(png, pose, tier ?? GlassTier.WallpaperBlur, SystemTheme.Resolve(themeArg ?? ThemeMode.Light), scale);
+                double size = double.TryParse(Arg(args, "--size"), System.Globalization.CultureInfo.InvariantCulture, out var isz) ? isz : 60;
+                var align = Arg(args, "--align")?.ToLowerInvariant() switch { "left" => DockAlignment.Left, "right" => DockAlignment.Right, _ => DockAlignment.Center };
+                string info = OffscreenRenderer.Render(png, pose, tier ?? GlassTier.WallpaperBlur, SystemTheme.Resolve(themeArg ?? ThemeMode.Light), scale, iconSize: size, alignment: align);
                 Log($"PNG escrito: {png} ({info})"); return 0;
             }
             if (Arg(args, "--bench-offscreen") is string json)
@@ -62,6 +65,7 @@ internal static class Program
             if (args.Contains("--list-pinned")) return ConfigCommand(args, null);
             if (Arg(args, "--pin") is string toPin) return ConfigCommand(args, ("pin", toPin));
             if (Arg(args, "--unpin") is string toUnpin) return ConfigCommand(args, ("unpin", toUnpin));
+            if (Arg(args, "--set-size") is not null || Arg(args, "--set-align") is not null || Arg(args, "--set-raise") is not null || args.Contains("--show-layout")) return LayoutCommand(args);
             if (Arg(args, "--icon-test") is string iconTarget) return IconTest(iconTarget, Arg(args, "--out"));
             if (args.Contains("--thumb-test")) return ThumbTest(Arg(args, "--out"));
             return RunDock(args, tier, themeArg);
@@ -77,8 +81,9 @@ internal static class Program
         var cfg = args.Contains("--no-config") ? DockDefaults.Create() : DockConfig.LoadOrDefault(cfgPath, DockDefaults.Create);
         if (tier is GlassTier t) cfg = cfg with { GlassTier = t };
         if (themeArg is ThemeMode tm) cfg = cfg with { Theme = tm };
+        cfg = DockSettings.Sanitize(cfg);
         if (!File.Exists(cfgPath) && !args.Contains("--no-config")) { try { cfg.Save(cfgPath); } catch (Exception e) { Log("No se pudo guardar la configuración: " + e.Message); } }
-        using var host = new DockHost(cfg, new DockMetrics(), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), args.Contains("--demo"), Log, args.Contains("--no-config") ? null : cfgPath);
+        using var host = new DockHost(cfg, DockMetrics.ForIconSize(cfg.IconSize), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), args.Contains("--demo"), Log, args.Contains("--no-config") ? null : cfgPath);
         // --hosted (lo pasa WinMac.exe): enlace con el host. Sin él, el dock funciona exactamente como siempre. Si el host cae, el dock sigue solo.
         var link = ModuleHostLink.FromArgs(args, "dock", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
         if (link is not null) { link.ShutdownRequested += host.RequestQuit; link.HealthCheck = () => host.Responsive; link.Start(); Log("Modo hosted: enlazado con WinMac.exe."); }
@@ -115,6 +120,21 @@ internal static class Program
             Log("Si el dock está en ejecución, recarga el archivo en unos segundos.");
         }
         foreach (var p in cfg.Pinned) Log($"  {p.StableId}  [{p.ToIdentity()?.Kind}]  {p.Title}");
+        return 0;
+    }
+
+    /// <summary>Cambia el tamaño o la posición del Dock editando dock.json (un Dock en marcha lo aplica en ≤ 2 s). Sin argumentos de cambio, solo muestra los valores.</summary>
+    private static int LayoutCommand(string[] args)
+    {
+        string path = Arg(args, "--config") ?? DockDefaults.ConfigPath; var cfg = DockSettings.Sanitize(DockConfig.LoadOrDefault(path, DockDefaults.Create)); var before = cfg;
+        if (Arg(args, "--set-size") is string sz) { if (double.TryParse(sz, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v)) cfg = DockSettings.WithIconSize(cfg, v); else { Log("--set-size espera un número (32 a 128)."); return 2; } }
+        if (Arg(args, "--set-align") is string al)
+        {
+            switch (al.ToLowerInvariant()) { case "left" or "izquierda": cfg = DockSettings.WithAlignment(cfg, DockAlignment.Left); break; case "center" or "centro": cfg = DockSettings.WithAlignment(cfg, DockAlignment.Center); break; case "right" or "derecha": cfg = DockSettings.WithAlignment(cfg, DockAlignment.Right); break; default: Log("--set-align espera left, center o right."); return 2; }
+        }
+        if (Arg(args, "--set-raise") is string rs) { if (double.TryParse(rs, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v)) cfg = cfg with { BottomOffset = DockSettings.ClampBottom(v) }; else { Log("--set-raise espera un número (0 a 400)."); return 2; } }
+        if (!ReferenceEquals(cfg, before) && cfg != before) { if (!cfg.TrySave(path)) { Log("No se pudo guardar la configuración."); return 1; } Log("Guardado. Si el dock está en ejecución, lo aplica en unos segundos."); }
+        Log($"Tamaño del icono: {cfg.IconSize:0} (32–128, normal 60) · alineación: {cfg.Alignment} · margen lateral: {cfg.EdgeMargin:0} · altura extra: {cfg.BottomOffset:0} (0–400)");
         return 0;
     }
 

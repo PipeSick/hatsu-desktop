@@ -34,6 +34,10 @@ foreach ($theme in 'light', 'dark') {
     Run "Dock offscreen $theme/$pose" $dock @('--render-png', "`"$OutDir\dock-$theme-$pose.png`"", '--pose', $pose, '--theme', $theme, '--scale', '2') 90
   }
 }
+# Tamaño y posición del Dock (mismo renderizador; proporciones escaladas, barra pegada a un lado)
+Run 'Dock offscreen tamaño pequeño (44)' $dock @('--render-png', "`"$OutDir\dock-light-size44.png`"", '--pose', 'hover', '--theme', 'light', '--scale', '2', '--size', '44') 90
+Run 'Dock offscreen tamaño grande (96)' $dock @('--render-png', "`"$OutDir\dock-light-size96.png`"", '--pose', 'hover', '--theme', 'light', '--scale', '2', '--size', '96') 90
+Run 'Dock offscreen alineado a la derecha' $dock @('--render-png', "`"$OutDir\dock-light-right.png`"", '--pose', 'rest', '--theme', 'light', '--scale', '2', '--align', 'right') 90
 Run 'Dock offscreen tint (sin fondo)' $dock @('--render-png', "`"$OutDir\dock-light-tint-hover.png`"", '--pose', 'hover', '--tier', 'tint', '--scale', '2') 90
 Run 'Dock bench offscreen (WARP; NO es FPS real)' $dock @('--bench-offscreen', "`"$OutDir\bench-offscreen-light.json`"", '--theme', 'light') 180
 Run 'Miniaturas de ventanas reales (--thumb-test, informativo)' $dock @('--thumb-test', '--out', "`"$OutDir\thumbs`"") 90 -Informational
@@ -59,9 +63,9 @@ $hostRes = if ($LASTEXITCODE -eq 0) { 'OK' } else { "salió con $LASTEXITCODE" }
 $rows += [pscustomobject]@{ Paso = 'Host: pruebas de ciclo de vida (Test-Host.ps1)'; Resultado = $hostRes; Detalle = ((Get-Content $hostOut -ErrorAction SilentlyContinue | Select-Object -Last 3) -join ' | ') }
 # Vista previa en el log: el sandbox de desarrollo no puede descargar artefactos, pero SÍ leer los logs del job.
 # Se emiten versiones reducidas (escala 0.75) de dos escenas en base64 dentro de grupos plegados. Los PNG completos (2x) están en el artefacto.
-foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark-open'; t = 'dark'; p = 'open' }, @{ n = 'light-preview'; t = 'light'; p = 'preview' }, @{ n = 'dark-preview'; t = 'dark'; p = 'preview' })) {
+foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark-open'; t = 'dark'; p = 'open' }, @{ n = 'light-preview'; t = 'light'; p = 'preview' }, @{ n = 'dark-preview'; t = 'dark'; p = 'preview' }, @{ n = 'light-size44'; t = 'light'; p = 'hover'; x = @('--size', '44') }, @{ n = 'light-size96'; t = 'light'; p = 'hover'; x = @('--size', '96') }, @{ n = 'light-right'; t = 'light'; p = 'rest'; x = @('--align', 'right') })) {
   $f = Join-Path $OutDir "preview-$($pv.n).png"
-  Run "Vista previa $($pv.n)" $dock @('--render-png', "`"$f`"", '--pose', $pv.p, '--theme', $pv.t, '--scale', '0.75') 90
+  Run "Vista previa $($pv.n)" $dock (@('--render-png', "`"$f`"", '--pose', $pv.p, '--theme', $pv.t, '--scale', '0.75') + @($pv.x)) 90
   if (Test-Path $f) {
     $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f))
     Write-Host "::group::PREVIEW_B64 $($pv.n) bytes=$((Get-Item $f).Length) b64len=$($b64.Length)"

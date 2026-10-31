@@ -21,7 +21,7 @@ public sealed class DockHost : IDisposable
     private const int WM_DESTROY = 2, WM_SETTINGCHANGE = 0x1A, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_NCHITTEST = 0x84, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_MOUSEMOVE = 0x200, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
 
-    private readonly DockController _ctl; private DockConfig _cfg; private readonly DockMetrics _m; private readonly GlassStyle _glass;
+    private DockController _ctl; private DockConfig _cfg; private DockMetrics _m; private readonly GlassStyle _glass;
     private readonly WindowTracker? _tracker; private readonly WindowActions? _actions; private readonly DockModelBuilder _builder;
     private readonly IIconSource _icons; private readonly AppIconSource? _appIcons; private readonly WindowThumbnails? _thumbs;
     private bool _pressPreview;
@@ -51,7 +51,7 @@ public sealed class DockHost : IDisposable
     {
         _cfg = cfg; _glass = glass; _demo = demo; _log = log; _proc = WndProcImpl; _cfgPath = demo ? null : configPath;
         // Vista previa de ventanas: la ventana crece hacia arriba y a los lados (zona transparente que deja pasar el ratón); la barra sigue igual y centrada.
-        _m = !demo && cfg.PreviewsEnabled ? m with { PreviewHeadroom = PreviewSpec.Headroom(m), PreviewMaxWidth = Math.Min(PreviewSpec.MaxPanelWidth, Math.Max(PreviewSpec.MinPanelW + 40, ScreenWidthDip() - 2 * m.ShadowMargin - 24)) } : m;
+        _m = Compose(m, cfg); _appliedLayout = DockSettings.LayoutKey(cfg);
         _ctl = new DockController(_m, cfg);
         _builder = new DockModelBuilder(cfg, DockDefaults.Title);
         if (demo) _icons = new NoIconSource();        // los íconos de demostración (letras) son solo para pruebas automatizadas y --demo
@@ -119,6 +119,31 @@ public sealed class DockHost : IDisposable
         if (hide != _suppressedHidden) { _suppressedHidden = hide; Native2.ShowWindow(_hwnd, hide ? 0 : 4 /* SW_SHOWNOACTIVATE */); }
     }
 
+    /// <summary>Añade a las métricas la holgura de la vista previa (la ventana crece hacia arriba y a los lados; la barra no cambia).</summary>
+    private DockMetrics Compose(DockMetrics m, DockConfig cfg) => !_demo && cfg.PreviewsEnabled ? m with { PreviewHeadroom = PreviewSpec.Headroom(m), PreviewMaxWidth = Math.Min(PreviewSpec.MaxPanelWidth, Math.Max(PreviewSpec.MinPanelW + 40, ScreenWidthDip() - 2 * m.ShadowMargin - 24)) } : m;
+
+    private (double, DockAlignment, double, double) _appliedLayout;
+
+    /// <summary>Aplica en vivo un cambio de tamaño, alineación o altura: el tamaño reconstruye controlador y painter con las métricas nuevas; lo demás solo recoloca la ventana.</summary>
+    private void ApplyLayoutChange()
+    {
+        var key = DockSettings.LayoutKey(_cfg); if (key == _appliedLayout) return;
+        bool sizeChanged = key.Item1 != _appliedLayout.Item1; _appliedLayout = key;
+        if (_hwnd == IntPtr.Zero) { _ctl.Config = _cfg; return; }
+        _pressed = -1; _pressDrag = false;
+        if (sizeChanged)
+        {
+            var items = _ctl.Items; _m = Compose(DockMetrics.ForIconSize(_cfg.IconSize), _cfg);
+            _ctl = NewController(); _ctl.SetItems(items);
+            var old = _painter; _painter = new DockPainter(_dev, _m, _glass, _icons, _thumbs); old.Dispose();
+        }
+        else _ctl.Config = _cfg;
+        ResizeWindow(); _view = _ctl.Step(0); _force = true;
+        _log($"[dock] ajustes aplicados: tamaño {_cfg.IconSize:0}, alineación {_cfg.Alignment}, altura +{_cfg.BottomOffset:0}");
+    }
+
+    private DockController NewController() { var c = new DockController(_m, _cfg); if (_thumbs is not null) c.ThumbAspect = _thumbs.Aspect; return c; }
+
     private void RefreshItems()
     {
         var running = _demo ? [] : _tracker!.Snapshot();
@@ -154,8 +179,8 @@ public sealed class DockHost : IDisposable
         Native.GetMonitorInfo(Native.MonitorFromPoint(pt, Native.MONITOR_DEFAULTTOPRIMARY), ref mi);
         _monitor = mi.rcMonitor;
         _winWpx = (int)Math.Ceiling(_ctl.WindowWidth * _scale); _winHpx = (int)Math.Ceiling(_ctl.WindowHeight * _scale);
-        _winLeftPx = mi.rcMonitor.Left + (mi.rcMonitor.Width - _winWpx) / 2;
-        _winTopPx = mi.rcWork.Bottom - _winHpx + (int)(4 * _scale); // justo sobre la barra de tareas; el margen de sombra queda parcialmente debajo
+        // Posición según la alineación y la altura elegidas (centro + altura normal = la de siempre: centrada justo sobre la barra de tareas).
+        (_winLeftPx, _winTopPx) = DockSettings.Place(new PxRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom), new PxRect(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom), _winWpx, _winHpx, _scale, _m, _cfg);
         Native2.SetWindowPos(_hwnd, new IntPtr(-1), _winLeftPx, _winTopPx, _winWpx, _winHpx, show ? 0x0010u | 0x0040u /* NOACTIVATE | SHOWWINDOW */ : 0x0010u);
     }
 
@@ -323,6 +348,10 @@ public sealed class DockHost : IDisposable
                 case DockActionKind.Unpin: if (a.App is not null) { _cfg = DockPinning.Unpin(_cfg, a.App.Id); OnConfigChanged(); } return;
                 case DockActionKind.MoveLeft: if (a.App is not null) { _cfg = DockPinning.MoveBy(_cfg, a.App.Id, -1); OnConfigChanged(); } return;
                 case DockActionKind.MoveRight: if (a.App is not null) { _cfg = DockPinning.MoveBy(_cfg, a.App.Id, +1); OnConfigChanged(); } return;
+                case DockActionKind.SetIconSize: _cfg = DockSettings.WithIconSize(_cfg, a.Number); OnConfigChanged(); return;
+                case DockActionKind.SetAlignment: _cfg = DockSettings.WithAlignment(_cfg, (DockAlignment)(int)a.Number); OnConfigChanged(); return;
+                case DockActionKind.NudgeBottom: _cfg = DockSettings.NudgeBottom(_cfg, a.Number); OnConfigChanged(); return;
+                case DockActionKind.ResetBottom: _cfg = DockSettings.ResetBottom(_cfg); OnConfigChanged(); return;
                 case DockActionKind.Launch:
                     if (a.ItemId is not null && !_launch.TryBegin(a.ItemId)) return;   // evita duplicados por clics repetidos mientras arranca
                     break;
@@ -334,7 +363,7 @@ public sealed class DockHost : IDisposable
 
     private void OnConfigChanged()
     {
-        _builder.Config = _cfg; RefreshItems(); _saveDue = DateTime.UtcNow.AddMilliseconds(400);   // guardado con retardo: agrupa varios cambios seguidos
+        _builder.Config = _cfg; ApplyLayoutChange(); RefreshItems(); _saveDue = DateTime.UtcNow.AddMilliseconds(400);   // guardado con retardo: agrupa varios cambios seguidos
     }
 
     /// <summary>Tareas periódicas baratas: señal de cierre, iconos nuevos, guardado diferido y recarga si la configuración cambió desde fuera (p. ej. --pin).</summary>
@@ -355,33 +384,41 @@ public sealed class DockHost : IDisposable
             try
             {
                 var stamp = File.Exists(_cfgPath) ? File.GetLastWriteTimeUtc(_cfgPath) : DateTime.MinValue;
-                if (stamp != _cfgStamp && stamp != DateTime.MinValue) { _cfgStamp = stamp; _cfg = DockConfig.LoadOrDefault(_cfgPath, () => _cfg); _builder.Config = _cfg; RefreshItems(); _log("Configuración recargada desde el archivo."); }
+                if (stamp != _cfgStamp && stamp != DateTime.MinValue) { _cfgStamp = stamp; _cfg = DockSettings.Sanitize(DockConfig.LoadOrDefault(_cfgPath, () => _cfg)); _builder.Config = _cfg; ApplyLayoutChange(); RefreshItems(); _log("Configuración recargada desde el archivo."); }
             }
             catch (Exception) { }
         }
     }
 
-    /// <summary>Menú contextual NATIVO de Windows (accesible, con el estilo del sistema). Devuelve la acción elegida o null.</summary>
+    /// <summary>Menú contextual NATIVO de Windows (accesible, con el estilo del sistema), con submenús y marcas de selección. Devuelve la acción elegida o null.</summary>
     private DockAction? ShowMenu(IReadOnlyList<MenuEntry> entries)
     {
-        IntPtr menu = Native2.CreatePopupMenu(); if (menu == IntPtr.Zero) return null;
+        var actions = new List<DockAction?>();   // el id de cada comando del menú es su posición + 1
+        IntPtr Build(IReadOnlyList<MenuEntry> list)
+        {
+            IntPtr hm = Native2.CreatePopupMenu();
+            foreach (var e in list)
+            {
+                if (e.IsSeparator) { Native2.AppendMenuW(hm, 0x800 /* MF_SEPARATOR */, UIntPtr.Zero, null); continue; }
+                string text = e.Text.Replace("&", "&&"); uint off = e.Enabled && !e.IsHeader ? 0u : 0x3u /* GRAYED|DISABLED */;
+                if (e.Children is { Count: > 0 } kids) { IntPtr sub = Build(kids); Native2.AppendMenuW(hm, 0x10 /* MF_POPUP */ | off, (UIntPtr)(nuint)sub, text); }
+                else { actions.Add(e.Action); Native2.AppendMenuW(hm, off | (e.Checked ? 0x8u /* MF_CHECKED */ : 0u), (UIntPtr)(uint)actions.Count, text); }
+            }
+            return hm;
+        }
+        IntPtr menu = IntPtr.Zero;
         try
         {
-            for (int i = 0; i < entries.Count; i++)
-            {
-                var e = entries[i];
-                if (e.IsSeparator) Native2.AppendMenuW(menu, 0x800 /* MF_SEPARATOR */, UIntPtr.Zero, null);
-                else Native2.AppendMenuW(menu, (e.Enabled && !e.IsHeader ? 0u : 0x3u /* GRAYED|DISABLED */), (UIntPtr)(uint)(i + 1), e.Text.Replace("&", "&&"));
-            }
+            menu = Build(entries); if (menu == IntPtr.Zero) return null;
             Native.GetCursorPos(out var p);
             Native.SetForegroundWindow(_hwnd);   // requisito documentado de TrackPopupMenu: sin esto el menú no se cierra al pulsar fuera
             _modal = true;
             int cmd = Native2.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x20 | 0x4 | 0x2 /* RETURNCMD|NONOTIFY|BOTTOMALIGN|CENTERALIGN|RIGHTBUTTON */, p.X, p.Y, _hwnd, IntPtr.Zero);
             Native.PostMessage(_hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
-            return cmd > 0 && cmd <= entries.Count ? entries[cmd - 1].Action : null;
+            return cmd > 0 && cmd <= actions.Count ? actions[cmd - 1] : null;
         }
         catch (Exception e) { _log("Menú contextual falló: " + e.Message); return null; }
-        finally { _modal = false; Native2.DestroyMenu(menu); }
+        finally { _modal = false; if (menu != IntPtr.Zero) Native2.DestroyMenu(menu); }   // DestroyMenu destruye también los submenús
     }
 
     /// <summary>Solo la barra (y los íconos ampliados) capturan el ratón; el resto de la ventana, transparente, lo deja pasar a las apps de abajo.</summary>

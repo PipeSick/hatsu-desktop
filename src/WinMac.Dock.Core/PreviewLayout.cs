@@ -33,7 +33,7 @@ public static class PreviewSpec
 
     /// <param name="aspects">Proporción ancho/alto de cada ventana (≤ 0 → por defecto).</param>
     /// <param name="anchorX">Centro X del ícono; <paramref name="iconTopY"/>: borde superior del ícono (coordenadas de la ventana).</param>
-    public static PreviewFrame Compute(IReadOnlyList<double> aspects, double anchorX, double iconTopY, double windowWidth, double maxPanelWidth)
+    public static PreviewFrame Compute(IReadOnlyList<double> aspects, double anchorX, double iconTopY, double windowWidth, double maxPanelWidth, double? minX = null, double? maxRight = null)
     {
         int n = Math.Max(1, aspects.Count);
         var tw = new double[n]; var th = new double[n];
@@ -47,7 +47,8 @@ public static class PreviewSpec
         double content = tw.Sum() + (n - 1) * CardGap, avail = Math.Max(MinPanelW, maxPanelWidth) - 2 * Pad;
         if (content > avail) { double k = (avail - (n - 1) * CardGap) / tw.Sum(); for (int i = 0; i < n; i++) { tw[i] *= k; th[i] *= k; } content = avail; }
         double rowH = th.Max(), pw = Math.Max(MinPanelW, content + 2 * Pad), ph = Pad + HeaderH + HeaderGap + PillH + PillGap + rowH + Pad;
-        double bottom = iconTopY - AnchorGap - TailH, px = Math.Clamp(anchorX - pw / 2, Margin, Math.Max(Margin, windowWidth - Margin - pw)), py = bottom - ph;
+        double lo = Math.Max(Margin, minX ?? Margin), hi = Math.Min(windowWidth - Margin, maxRight ?? double.MaxValue);   // el panel no debe salirse de la pantalla cuando el Dock va pegado a un lado
+        double bottom = iconTopY - AnchorGap - TailH, px = Math.Clamp(anchorX - pw / 2, lo, Math.Max(lo, hi - pw)), py = bottom - ph;
         var panel = new PRect(px, py, pw, ph);
         var header = new PRect(px + Pad, py + Pad, pw - 2 * Pad, HeaderH);
         double x = px + (pw - content) / 2, yPill = py + Pad + HeaderH + HeaderGap, yThumb = yPill + PillH + PillGap;

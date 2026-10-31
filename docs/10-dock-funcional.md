@@ -51,3 +51,12 @@ No modifica archivos del sistema, no reemplaza el Explorador, no oculta la barra
 - **Limitación conocida:** es una instantánea, no vídeo; apps con contenido protegido o aceleración especial pueden salir negras (se muestra el icono). Medidas del panel sin calibrar.
 - Pruebas: geometría (centrado, bordes, reducción, proporciones raras, holgura en la ventana), comportamiento (retardo, cambio, salida, clic, bloqueo tras clic, config, arrastre), arrastre de temporales y orden en memoria. CI: escena `--pose preview` con ventanas sintéticas (claro/oscuro), `--thumb-test` y una sección del selftest.
 - CLI nueva: `--thumb-test [--out carpeta]` captura las ventanas abiertas con el mismo servicio y las guarda como PNG.
+
+## Iteración 4: tamaño y posición ajustables
+Sin tocar el aspecto aprobado: **el tamaño escala todas las proporciones** (barra, huecos, radio, separadores, indicador, sombra, magnificación y salto) a partir del lado del icono, y **la posición solo mueve la ventana**. A 60 (el valor por defecto) el resultado es idéntico al de siempre (hay una prueba que lo comprueba).
+- **Tamaño** (`IconSize`, 32–128, por defecto 60): clic derecho en el Dock → *Ajustes del Dock* → *Tamaño* (Pequeño 48 · Mediano 60 · Grande 80 · Muy grande 96) o un valor exacto: `WinMac.Dock.App --set-size 72`.
+- **Posición** (`Alignment`: izquierda / centro / derecha; `EdgeMargin`, 16 por defecto): *Ajustes del Dock* → *Posición*, o `--set-align left|center|right`. Se alinea la **barra** al margen del borde (no la ventana, más ancha por la vista previa); la vista previa de ventanas no se sale de la pantalla.
+- **Altura** (`BottomOffset`, 0–400 DIP sobre la posición normal, justo encima de la barra de tareas): *Ajustes del Dock* → *Altura* (Subir/Bajar 8 px, Altura normal), o `--set-raise 24`. Nunca se sale por arriba de la pantalla.
+- Se aplica **en vivo** (menú) y también si editas `dock.json` o usas los comandos con el Dock abierto (lo recarga en ≤ 2 s). `--show-layout` muestra los valores actuales.
+- **Fuera de alcance:** el Dock vertical en los bordes izquierdo/derecho (diseño nuevo, requeriría tu aprobación) y arrastrarlo con el ratón.
+- Limitaciones: monitor principal solamente; al cambiar el tamaño en vivo se reinician las animaciones del Dock (el resto se conserva); pruebas de colocación con la barra de tareas arriba o a los lados sin hacer.

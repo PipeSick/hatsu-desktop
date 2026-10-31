@@ -32,7 +32,19 @@ public sealed record DockMetrics
     public double LabelHeight { get; init; } = 28;  // etiqueta con el nombre sobre el ícono bajo el cursor
     public double LabelGap { get; init; } = 10;
 
+    /// <summary>
+    /// Métricas para un tamaño de ícono dado: BaseSize y todo lo que depende de él ya escalan solo (son proporciones); aquí se escalan además las dos medidas ABSOLUTAS
+    /// que dependen del tamaño (alcance de la magnificación y salto), para que el Dock se vea igual de proporcionado a cualquier tamaño. Con 60 = idéntico al aprobado.
+    /// </summary>
+    public static DockMetrics ForIconSize(double size)
+    {
+        var d = new DockMetrics(); size = DockSettings.ClampIconSize(size); double k = size / d.BaseSize;
+        return d with { BaseSize = size, Radius = d.Radius * k, BounceHeight = d.BounceHeight * k };
+    }
+
     // ── Derivados en DIP ──
+    /// <summary>Distancia desde el borde de la ventana hasta la barra (margen de sombra + holgura); es el hueco simétrico que usa <see cref="DockLayout.WindowWidth"/>.</summary>
+    public double BarInset => ShadowMargin + 4;
     public double Gap => BaseSize * GapRatio;
     public double PadX => BaseSize * PadXRatio;
     public double PadTop => BaseSize * PadTopRatio;

@@ -33,7 +33,10 @@ public sealed class PreviewController
         double barBottom = v.WindowHeight - _m.ShadowMargin, iconTop = barBottom - _m.PadBottom - _m.BaseSize * (_cfg.MagnificationEnabled ? _m.MaxScale : 1);
         var asp = new List<double>(count); foreach (var w in it.Model.Windows!.Take(count)) asp.Add(Aspect?.Invoke(w.Hwnd) ?? 0);
         double cx = it.Index < restCenters.Count ? restCenters[it.Index] : it.X + it.Size / 2;
-        return PreviewSpec.Compute(asp, cx, iconTop, v.WindowWidth, Math.Min(PreviewSpec.MaxPanelWidth, _m.PreviewMaxWidth > 0 ? _m.PreviewMaxWidth : PreviewSpec.MaxPanelWidth));
+        // Con el Dock pegado a un lado, el borde de la pantalla queda dentro de la ventana (la ventana se desplaza BarInset − EdgeMargin): el panel respeta ese borde.
+        double screenEdge = _m.BarInset - _cfg.EdgeMargin;
+        double? minX = _cfg.Alignment == DockAlignment.Left ? screenEdge + PreviewSpec.Margin : null, maxRight = _cfg.Alignment == DockAlignment.Right ? v.WindowWidth - screenEdge - PreviewSpec.Margin : null;
+        return PreviewSpec.Compute(asp, cx, iconTop, v.WindowWidth, Math.Min(PreviewSpec.MaxPanelWidth, _m.PreviewMaxWidth > 0 ? _m.PreviewMaxWidth : PreviewSpec.MaxPanelWidth), minX, maxRight);
     }
 
     /// <summary>Zona que mantiene viva la vista previa: el panel (con margen) y el pasillo entre el panel y el ícono.</summary>

@@ -16,7 +16,7 @@ public sealed record DockView(
 /// </summary>
 public sealed class DockController
 {
-    private readonly DockMetrics _m; private readonly DockConfig _cfg; private readonly DockAnimator _anim;
+    private readonly DockMetrics _m; private DockConfig _cfg; private readonly DockAnimator _anim;
     private IReadOnlyList<DockItemModel> _items = [];
     private PointerSample? _pointer; private bool _edgeHot, _suppressed;
     private double _outside, _edge;
@@ -36,6 +36,17 @@ public sealed class DockController
     /// <summary>Clic sobre una tarjeta de la vista previa (activa esa ventana). Null si el clic no fue sobre una tarjeta.</summary>
     public DockAction? PreviewClick() { var a = _preview.Click(Preview); return a; }
     public bool PreviewContains(double x, double y) => Preview is { } p && (p.Frame.Panel.Inflate(2).Contains(x, y));
+
+    /// <summary>Configuración en vivo (alineación, autoocultado, magnificación…). El tamaño NO se aplica aquí: cambia las métricas y exige un controlador nuevo.</summary>
+    public DockConfig Config { get => _cfg; set { _cfg = value; _preview.Config = value; } }
+
+    /// <summary>X (en la ventana) del borde izquierdo de una barra del ancho dado, según la alineación: centro = centrada (como siempre); izquierda/derecha = pegada a su lado de la ventana.</summary>
+    private double BarLeftFor(double barWidth) => _cfg.Alignment switch
+    {
+        DockAlignment.Left => _m.BarInset,
+        DockAlignment.Right => _windowWidth - _m.BarInset - barWidth,
+        _ => (_windowWidth - barWidth) / 2,
+    };
 
     public DockController(DockMetrics m, DockConfig cfg) { _m = m; _cfg = cfg; _anim = new DockAnimator(m); _preview = new PreviewController(m, cfg); }
 
@@ -73,7 +84,7 @@ public sealed class DockController
             while (ge < rest.Count && rest[ge] is { Kind: DockItemKind.App, Pinned: false }) ge++;
         }
         else { ge = 0; while (ge < rest.Count && rest[ge] is { Kind: DockItemKind.App, Pinned: true }) ge++; }
-        var frame = DockLayout.Compute(_m, rest, null); double left = (_windowWidth - frame.BarWidth) / 2;
+        var frame = DockLayout.Compute(_m, rest, null); double left = BarLeftFor(frame.BarWidth);
         int target = gs; for (int i = gs; i < ge; i++) if (left + frame.Items[i].X + frame.Items[i].Size / 2 < pointerX) target = i + 1;
         var order = new List<DockItemModel>(rest); order.Insert(target, dragged);
         if (!order.Select(x => x.Id).SequenceEqual(_items.Select(x => x.Id))) _items = order;
@@ -96,10 +107,10 @@ public sealed class DockController
     /// <summary>Menú contextual del ítem (lógica pura; el host lo muestra y ejecuta la acción elegida).</summary>
     public IReadOnlyList<MenuEntry> MenuFor(int index)
     {
-        if ((uint)index >= (uint)_items.Count || _items[index].Kind == DockItemKind.Separator) return DockMenu.ForBackground();
+        if ((uint)index >= (uint)_items.Count || _items[index].Kind == DockItemKind.Separator) return DockMenu.ForBackground(_cfg);
         int pinnedCount = _items.Count(i => i is { Kind: DockItemKind.App, Pinned: true });
         int pinnedIndex = _items[index].Pinned ? _items.Take(index).Count(i => i is { Kind: DockItemKind.App, Pinned: true }) : -1;
-        return DockMenu.ForItem(_items[index], pinnedIndex, pinnedCount);
+        return DockMenu.ForItem(_items[index], pinnedIndex, pinnedCount, _cfg);
     }
 
     public void SetPointer(PointerSample? p) => _pointer = p;
@@ -116,9 +127,9 @@ public sealed class DockController
     public DockView Step(double dt)
     {
         double rest = DockLayout.RestWidth(_m, _items);
-        double restLeft = (_windowWidth - rest) / 2;
+        double restLeft = BarLeftFor(rest);
         var cur = DockLayout.Compute(_m, _items, _anim.Scales(_items));
-        double barLeft = (_windowWidth - cur.BarWidth) / 2;
+        double barLeft = BarLeftFor(cur.BarWidth);
         bool inZone = _pointer is PointerSample p0 && !_hiddenTarget && InZone(p0, barLeft, cur.BarWidth);
 
         // Magnificación: el objetivo se calcula en coordenadas de reposo; los resortes suavizan.
@@ -146,7 +157,7 @@ public sealed class DockController
         _anim.Step(dt);
 
         var frame = DockLayout.Compute(_m, _items, _anim.Scales(_items));
-        double left = (_windowWidth - frame.BarWidth) / 2;
+        double left = BarLeftFor(frame.BarWidth);
         var views = new ItemView[_items.Count]; int dragIndex = -1;
         for (int i = 0; i < _items.Count; i++)
         {
@@ -159,7 +170,7 @@ public sealed class DockController
         }
         int hover = inZone && _pointer is PointerSample pp ? DockLayout.HitTestX(frame, _items, pp.X - left) : -1;
         var baseView = new DockView(views, _windowWidth, _m.WindowHeight, left, frame.BarWidth, _m.BarHeight, _anim.HideT, hover, false, _suppressed, dragIndex);
-        var restFrame = DockLayout.Compute(_m, _items, null); double restL = (_windowWidth - restFrame.BarWidth) / 2;
+        var restFrame = DockLayout.Compute(_m, _items, null); double restL = BarLeftFor(restFrame.BarWidth);
         Preview = _preview.Step(dt, baseView, _pointer, _dragId is not null, restFrame.Items.Select(f => restL + f.X + f.Size / 2).ToArray());
         bool needs = !_anim.IsSettled || inZone || (_cfg.AutoHide && !_hiddenTarget) || _dragId is not null || Preview is not null || _preview.IsActive;
         return baseView with { NeedsFrames = needs, Preview = Preview };
