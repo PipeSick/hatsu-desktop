@@ -279,6 +279,24 @@ public class ModuleLinkTests
     }
 
     [Fact]
+    public async Task A_hosted_module_can_publish_retained_state_that_another_module_receives()
+    {
+        var pipe = T.Pipe(); await using var server = new IpcServer(new ServerOptions(pipe, "secreto")); server.Start();
+        Environment.SetEnvironmentVariable(ModuleHostLink.TokenEnvVar, "secreto");
+        try
+        {
+            var notch = ModuleHostLink.FromArgs(["--hosted", "--pipe", pipe], "notch", "1")!; notch.Start();
+            Assert.True(await T.Until(() => notch.IsConnected)); notch.Publish("notch.rects", new { rects = new[] { new { x = 10, y = 0, w = 300, h = 40 } } });
+            await T.Until(() => false, 300);   // deja que llegue al servidor antes de que se conecte el segundo módulo
+            await using var bar = T.Client(pipe, "bar", "secreto"); var got = new TaskCompletionSource<int>();
+            bar.Subscribe("notch.rects", d => got.TrySetResult(d!.Value.GetProperty("rects")[0].GetProperty("w").GetInt32()));
+            Assert.Equal(300, await got.Task.WaitAsync(TimeSpan.FromSeconds(5)));   // la Barra recibe el último valor aunque se conectó después
+            await notch.DisposeAsync();
+        }
+        finally { Environment.SetEnvironmentVariable(ModuleHostLink.TokenEnvVar, null); }
+    }
+
+    [Fact]
     public async Task A_hosted_module_announces_ready_and_exits_on_shutdown()
     {
         var pipe = T.Pipe(); await using var server = new IpcServer(new ServerOptions(pipe, "secreto")); server.Start(); var ready = new TaskCompletionSource<string>();

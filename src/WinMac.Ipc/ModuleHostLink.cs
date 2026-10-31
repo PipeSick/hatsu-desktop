@@ -32,6 +32,9 @@ public sealed class ModuleHostLink : IAsyncDisposable
     /// <summary>Evento puntual hacia el host (p. ej. una petición de cambio de ajustes); no se retiene.</summary>
     public void Event(string topic, object? data = null) => _client.Event(topic, data);
 
+    /// <summary>Publica un valor de ESTADO del módulo (se retiene en el host y llega a los demás módulos suscritos, también tras una reconexión). Ej.: el espacio que ocupa la Isla.</summary>
+    public void Publish(string topic, object data) => _client.Publish(topic, data);
+
     public void Start() => _client.Start();
     public Task ByeAsync(TimeSpan timeout) => _client.SayByeAsync(timeout);
     public ValueTask DisposeAsync() => _client.DisposeAsync();
