@@ -49,3 +49,10 @@ Opciones (a decidir con el usuario cuando su app esté lista):
 2. **Ranura central en la barra**: la barra expone un punto de extensión (p. ej. tubería con nombre) donde la isla le pide ancho/alto y la barra le cede el centro; sirve si la isla debe crecer y empujar los indicadores.
 3. **Un solo proceso/librería**: la isla como módulo dentro de WinMac; mayor integración, pero acopla ambos proyectos.
 Datos que faltan: tecnología de esa app (lenguaje, UI), si reserva espacio de pantalla, si debe recibir eventos de la barra (reloj, app activa, volumen) o solo dibujarse encima.
+
+### Hallazgos tras revisar `PipeSick/notch-win` (MIT, WinUI 3; versión temprana, sin probar en pantalla real)
+- Su ventana es **siempre visible (`IsAlwaysOnTop`)**, `WS_EX_NOACTIVATE`/`TOOLWINDOW`, del tamaño exacto de la píldora, pegada al borde físico superior (`OuterBounds`, **no** `WorkArea`) y **sin AppBar**: su propio código comenta que debe abrazar el borde «aunque otra app-bar reserve espacio allí».
+- Eso encaja con la **opción 1 (procesos separados)**: la barra reserva el espacio (AppBar) y la isla se dibuja encima del centro, sin pelear por el área de trabajo. **Recomendada.**
+- Puntos a vigilar cuando se prueben juntas en Windows: (a) **orden Z**: ambas son «topmost»; la isla debe quedar por encima de la barra (la barra solo se reordena con `ABN_FULLSCREENAPP`; si hace falta, la isla reafirma su posición al expandirse); (b) la isla **colapsada** debe caber en el hueco central (30 % ≈ 576 px en 1920); al expandirse cubre la barra en el centro, como la isla de macOS; (c) la posición `TopLeft/TopRight` de la isla taparía elementos de la barra: se recomienda dejarla en el centro; (d) un notch por monitor frente a la barra solo en el principal (limitación conocida de la barra).
+- Licencias compatibles (MIT/Apache-2.0). Distinta toolchain (la isla exige MSBuild/Visual Studio; WinMac usa `dotnet`): no se mezclan en una misma solución por ahora.
+- Pendiente si se quiere más integración (opción 2): un contrato mínimo (p. ej. tubería con nombre) para que la barra le diga a la isla su ancho útil central y la app activa; no hace falta para la v1.
