@@ -45,20 +45,31 @@ public sealed class IconCache
     public IconBitmap? GetDisk(string key, string stamp)
     {
         if (_dir is null) return null; string path = DiskPath(key);
+        IconBitmap? bmp = null; bool bad = false;
         try
         {
             if (!File.Exists(path)) return null;
-            using var fs = File.OpenRead(path); using var br = new BinaryReader(fs);
-            if (br.ReadInt32() != 0x31494D57 /* "WMI1" */) { TryDelete(path); return null; }
-            string st = br.ReadString(); int w = br.ReadInt32(), h = br.ReadInt32();
-            if (st != stamp || w < 1 || h < 1 || w > IconValidator.MaxSide || h > IconValidator.MaxSide) { TryDelete(path); return null; }
-            var px = new byte[w * h * 4];
-            using (var z = new ZLibStream(fs, CompressionMode.Decompress)) { int got = 0; while (got < px.Length) { int n = z.Read(px, got, px.Length - got); if (n <= 0) break; got += n; } if (got != px.Length) { TryDelete(path); return null; } }
-            var bmp = new IconBitmap(w, h, px);
-            if (!IconValidator.IsValid(bmp)) { TryDelete(path); return null; }
-            return bmp;
+            using (var fs = File.OpenRead(path))
+            using (var br = new BinaryReader(fs))
+            {
+                if (br.ReadInt32() != 0x31494D57 /* "WMI1" */) bad = true;
+                else
+                {
+                    string st = br.ReadString(); int w = br.ReadInt32(), h = br.ReadInt32();
+                    if (st != stamp || w < 1 || h < 1 || w > IconValidator.MaxSide || h > IconValidator.MaxSide) bad = true;
+                    else
+                    {
+                        var px = new byte[w * h * 4]; int got = 0;
+                        using (var z = new ZLibStream(fs, CompressionMode.Decompress)) { while (got < px.Length) { int n = z.Read(px, got, px.Length - got); if (n <= 0) break; got += n; } }
+                        var candidate = got == px.Length ? new IconBitmap(w, h, px) : null;
+                        if (candidate is not null && IconValidator.IsValid(candidate)) bmp = candidate; else bad = true;
+                    }
+                }
+            }
         }
-        catch (Exception) { TryDelete(path); return null; }
+        catch (Exception) { bad = true; }
+        if (bad) TryDelete(path);   // fuera del using: en Windows no se puede borrar un archivo con el manejador abierto
+        return bmp;
     }
 
     public void PutDisk(string key, string stamp, IconBitmap bmp)
