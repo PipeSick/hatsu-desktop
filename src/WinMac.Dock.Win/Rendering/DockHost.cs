@@ -139,8 +139,11 @@ public sealed class DockHost : IDisposable
         _blurred?.Dispose(); _blurred = null; _painter.SetBackdrop(null);
         _bmp?.Dispose(); _bmp = null; _dev.Context.Target = null;
         PlaceWindow(show: false);
-        _swap.ResizeBuffers(0, (uint)_winWpx, (uint)_winHpx, Format.Unknown, SwapChainFlags.None);
-        BindTarget(); BuildBackdrop(); _force = true;
+        // Se recrea la superficie completa en vez de ResizeBuffers: su resultado no se comprobaba y, si fallaba, el búfer conservaba el ancho
+        // anterior y la barra quedaba recortada por la derecha cuando cambiaba el número de apps.
+        _visual?.Dispose(); _target?.Dispose(); _dcomp?.Dispose(); _swap?.Dispose();
+        CreateSurface();
+        BuildBackdrop(); _force = true;
     }
 
     // ------------------------------------------------------------------ gráficos
