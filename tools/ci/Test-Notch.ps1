@@ -27,7 +27,9 @@ Check 'Pruebas de NotchWin.Core en Windows (76)' ($m.Success -and $m.Groups[1].V
 if (-not $m.Success -or $m.Groups[1].Value -ne '0') { ($t -split "`n" | Select-String -Pattern 'Failed |error' | Select-Object -First 15) | ForEach-Object { Write-Host "  $_" } }
 
 # ── 2. Salida de Build-Local.ps1 (se ejecuta antes, en el workflow)
-foreach ($f in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'NotchWin\NotchWin.App.exe', 'NotchWin\NotchWin.App.pri') { Check "Build-Local dejó $f" (Test-Path (Join-Path $DistDir $f)) }
+foreach ($f in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'NotchWin\NotchWin.App.exe') { Check "Build-Local dejó $f" (Test-Path (Join-Path $DistDir $f)) }
+$pri = @(Get-ChildItem (Join-Path $DistDir 'NotchWin') -Filter '*.pri' -ErrorAction SilentlyContinue)   # el nombre del .pri lo decide el SDK (no es necesariamente NotchWin.App.pri)
+Check 'Build-Local dejó el recurso .pri de NotchWin (WinUI 3 sin empaquetar)' ($pri.Count -gt 0) (($pri | ForEach-Object Name) -join ', ')
 Check 'NotchWin publicado autocontenido (trae el runtime de Windows App SDK)' ((Get-ChildItem (Join-Path $DistDir 'NotchWin') -Filter 'Microsoft.WindowsAppRuntime*.dll' -ErrorAction SilentlyContinue).Count -gt 0)
 $hostExe = Join-Path $DistDir 'WinMac.exe'
 
