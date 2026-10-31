@@ -3,6 +3,13 @@
 Estado: **procedimiento y herramientas listos; sin capturas de referencia todavía.** Nada del renderizador ni de `DockMetrics`/`GlassStyle` se ha modificado.
 Decisión del usuario: **no se ajusta nada de forma arbitraria**; primero se miden referencias reales de un Mac con macOS Tahoe y se prepara **una única iteración de calibración**.
 
+## 0. Procedimiento simplificado de la primera iteración (decisión del usuario)
+La primera iteración usa **tres capturas**, no 25: **(1) Dock en reposo, (2) Dock con magnificación, (3) Dock con la etiqueta visible**. Los fondos de calibración (§3) quedan disponibles para una evaluación posterior (necesarios para separar saturación, tinte y desenfoque).
+- Las capturas pueden ser **recortes del Dock**: no se asume resolución de pantalla ni escala Retina; se miden **razones respecto al ancho del ícono** (independientes de la escala) y se tratan los píxeles absolutos como informativos.
+- Cada medida se clasifica como **directa**, **estimación** o **pendiente de confirmar** (ver docs/09 para el primer análisis).
+- Se recomienda indicar al enviarlas: apariencia (clara/oscura) y si la ampliación estaba activada.
+- Para medidas reproducibles: `tools/calibration/test/aplicar_puntos.mjs`, `valores_codigo.py` y `tabla_comparativa.py`.
+
 ## 1. Qué se mide y con qué grado de certeza
 Dos categorías, que se mantienen separadas en todos los informes:
 
