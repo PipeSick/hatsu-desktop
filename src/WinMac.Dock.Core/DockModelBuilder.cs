@@ -44,7 +44,7 @@ public sealed class DockModelBuilder
         }
 
         var recents = cfg.ShowRecents
-            ? _firstSeen.Where(k => !consumed.Contains(k)).Take(Math.Max(0, cfg.MaxRecents)).Select(k => groups.First(g => g.Identity.Id == k)).ToList()
+            ? _firstSeen.Where(k => !consumed.Contains(k)).Take(cfg.MaxRecents <= 0 ? int.MaxValue : cfg.MaxRecents).Select(k => groups.First(g => g.Identity.Id == k)).ToList()
             : [];
         if (recents.Count > 0)
         {

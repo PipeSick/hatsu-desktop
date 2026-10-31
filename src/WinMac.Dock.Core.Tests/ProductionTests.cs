@@ -17,7 +17,7 @@ public class PinnedConfigTests
         var p = AppIdentity.FromAumid("Vendor.App_1!App", "Mi app", @"C:\pkg\app.exe");
         var c = DockPinning.SetIconOverride(DockPinning.Pin(new DockConfig(), p), p.Id, @"C:\iconos\mi.png");
         var d = DockConfig.FromJson(c.ToJson()); var q = d.Pinned.Single();
-        Assert.Equal("Vendor.App_1!App", q.Aumid); Assert.Equal(@"C:\iconos\mi.png", q.IconOverride); Assert.Equal(AppKind.Packaged, q.ToIdentity()!.Kind); Assert.Equal(2, d.Version);
+        Assert.Equal("Vendor.App_1!App", q.Aumid); Assert.Equal(@"C:\iconos\mi.png", q.IconOverride); Assert.Equal(AppKind.Packaged, q.ToIdentity()!.Kind); Assert.Equal(3, d.Version);
     }
 
     [Fact]
@@ -108,6 +108,23 @@ public class BuilderIdentityTests
         var items = new DockModelBuilder(cfg).Build([Run(a), Run(b), Run(b)]);
         Assert.Equal(2, items.Count(i => i.Kind == DockItemKind.App)); var rec = items.Single(i => i.Kind == DockItemKind.App && !i.Pinned); Assert.Equal(2, rec.WindowCount);   // dos procesos de B = un ítem
         Assert.Equal(b.Id, rec.Identity!.Id);
+    }
+
+    [Fact]
+    public void By_default_every_open_unpinned_app_is_shown()
+    {
+        var apps = Enumerable.Range(0, 8).Select(i => AppIdentity.FromExe($@"C:\apps\app{i}.exe")).ToList();
+        var items = new DockModelBuilder(new DockConfig()).Build(apps.Select(a => Run(a)).ToList());
+        Assert.Equal(8, items.Count(i => i.Kind == DockItemKind.App && !i.Pinned));
+    }
+
+    [Fact]
+    public void Old_config_with_the_former_default_cap_is_migrated_but_custom_caps_are_kept()
+    {
+        Assert.Equal(0, DockConfig.FromJson("{\"Version\":2,\"MaxRecents\":3}").MaxRecents);
+        Assert.Equal(5, DockConfig.FromJson("{\"Version\":2,\"MaxRecents\":5}").MaxRecents);
+        Assert.Equal(3, DockConfig.FromJson("{\"Version\":3,\"MaxRecents\":3}").MaxRecents);   // v3: el 3 ya es una elección explícita
+        Assert.Equal(0, DockConfig.FromJson("{\"Pinned\":[]}").MaxRecents);                     // sin versión = antigua v1
     }
 
     [Fact]
