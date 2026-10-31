@@ -13,6 +13,16 @@ $script:fails = 0; $script:rows = @()
 function Check([string]$name, [bool]$ok, [string]$detail = '') { $r = if ($ok) { 'PASS' } else { 'FAIL'; $script:fails++ }; Write-Host ("{0,-4} {1}  {2}" -f $r, $name, $detail); $script:rows += [pscustomobject]@{ Prueba = $name; Resultado = $r; Detalle = $detail } }
 function Info([string]$name, [bool]$ok, [string]$detail = '') { $r = if ($ok) { 'PASS (info)' } else { 'INFO' }; Write-Host ("{0,-11} {1}  {2}" -f $r, $name, $detail); $script:rows += [pscustomobject]@{ Prueba = $name; Resultado = $r; Detalle = $detail } }
 function WaitFor([scriptblock]$cond, [int]$sec = 20) { $end = (Get-Date).AddSeconds($sec); while ((Get-Date) -lt $end) { if (& $cond) { return $true }; Start-Sleep -Milliseconds 200 }; return [bool](& $cond) }
+Add-Type @"
+using System; using System.Runtime.InteropServices;
+public static class BarRgn {
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);
+  [DllImport("user32.dll")] static extern int GetWindowRgnBox(IntPtr h, out RC r);
+  public struct RC { public int L, T, R, B; }
+  /// 0 = la barra no existe o su ventana está completa (sin región); 1 = NULLREGION; 2 = región simple; 3 = región compleja (con huecos)
+  public static int Kind() { var h = FindWindow("WinMacBar", null); if (h == IntPtr.Zero) return -1; RC r; int k = GetWindowRgnBox(h, out r); return k; }
+}
+"@
 function Cleanup { Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 400 }
 function Alive { @(Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App' -ErrorAction SilentlyContinue).Count }
 function LogHas($log, [string]$t) { (Test-Path $log) -and (Select-String -Path $log -SimpleMatch -Pattern $t -Quiet) }
@@ -53,6 +63,16 @@ Check 'Barra y Dock REALES llegan a Running con la Isla habilitada' $up
 $notchRunning = WaitFor { LogHas $r.Log '[notch] Running' } 40
 Info 'NotchWin REAL (WinUI 3) llega a Running bajo el host y se enlaza' $notchRunning ("estados: " + ((Select-String -Path $r.Log -Pattern '\[notch\]' -ErrorAction SilentlyContinue | ForEach-Object { $_.Line -replace '^\S+ \S+ ', '' } | Select-Object -First 8) -join ' | '))
 if ($notchRunning) { Info 'NotchWin REAL sigue vivo tras unos segundos' (WaitFor { (Get-Process -Name 'NotchWin.App' -ErrorAction SilentlyContinue).Count -ge 1 } 5) }
+if ($notchRunning) {
+  # La Barra recorta su ventana donde la Isla ocupa espacio (sin depender del orden Z); informativo porque depende de que el runner tenga monitor (si no, la Isla no tiene huella).
+  $cut = WaitFor { [BarRgn]::Kind() -ge 2 } 15
+  Info 'La Barra REAL recorta su ventana en el espacio de la Isla (región de ventana con hueco)' $cut ("tipo de región: $([BarRgn]::Kind()) (3 = con huecos)")
+  if ($cut) {
+    Get-Process -Name 'NotchWin.App' -ErrorAction SilentlyContinue | Stop-Process -Force   # la Isla «se pierde»
+    $freed = WaitFor { [BarRgn]::Kind() -le 0 } 4
+    Info 'Al perder la Isla, la Barra recupera su ventana completa (el host libera el espacio)' $freed ("tipo de región: $([BarRgn]::Kind()) (0 = completa)")
+  }
+}
 Check 'Aunque la Isla falle o se reinicie, la Barra y el Dock no se reinician' ((Select-String -Path $r.Log -Pattern '\[(bar|dock)\] (Crashed|Failed)' -ErrorAction SilentlyContinue).Count -eq 0)
 QuitHost $r
 Check 'Cierre ordenado: el host termina' $r.Proc.HasExited
