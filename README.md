@@ -10,3 +10,4 @@ Estado: **Fase 1** (validación de tecnologías). No hay producto utilizable tod
 - Fidelidad visual: [`docs/02-fidelidad.md`](docs/02-fidelidad.md) · Criterios de aceptación: [`docs/03-criterios-aceptacion.md`](docs/03-criterios-aceptacion.md)
 - Dock (iteración 1, provisional): [`docs/06-dock-iteracion-1.md`](docs/06-dock-iteracion-1.md) · ADR provisional: [`docs/04-adr-001-provisional.md`](docs/04-adr-001-provisional.md) · Liquid Glass: [`docs/05-liquid-glass.md`](docs/05-liquid-glass.md)
 - CI: `.github/workflows/ci.yml` (informe, pruebas y artefactos temporales; **no publica versiones**)
+- Calibración visual contra macOS Tahoe: [`docs/08-calibracion-visual.md`](docs/08-calibracion-visual.md) · herramienta: `tools/calibration/calibracion.html` · pendiente de Windows físico: [`docs/PENDIENTE-WINDOWS-FISICO.md`](docs/PENDIENTE-WINDOWS-FISICO.md)

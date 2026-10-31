@@ -1,6 +1,8 @@
 # ADR-001 (PROVISIONAL) — Tecnología del host del Dock
 
-Estado: **PROVISIONAL y REVERSIBLE. No es una decisión definitiva.** Se confirmará o revertirá con las mediciones reales (docs/03-criterios-aceptacion.md).
+Estado: **PROVISIONAL y REVERSIBLE. No es una decisión definitiva.**
+> **2026-10-31 — el usuario aprueba provisionalmente** Win32 + DirectComposition + D3D11/Direct2D como base técnica del Dock tras revisar el run 41128436257 (compilación, 46 pruebas, selftest, PNG y bench en WARP). Eso **no** la hace definitiva ni cierra la Fase 2. Limitación abierta: el prototipo S3/WinUI 3 no arranca en el runner (docs/PENDIENTE-WINDOWS-FISICO.md, L1); se revisará antes de desarrollar componentes que dependan de WinUI.
+ Se confirmará o revertirá con las mediciones reales (docs/03-criterios-aceptacion.md).
 Fecha: 2026-10-30.
 
 ## Decisión provisional

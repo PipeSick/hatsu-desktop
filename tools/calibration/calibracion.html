@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WinMac · Calibración visual del Dock</title>
+<style>
+  :root { --bg:#16171a; --panel:#1f2126; --line:#33363d; --txt:#e8e9ec; --dim:#9a9fa9; --acc:#6aa6ff; --ok:#6fd48c; --est:#f0b45a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }
+  header { padding:10px 16px; border-bottom:1px solid var(--line); display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  nav button { background:none; color:var(--dim); border:0; padding:6px 12px; cursor:pointer; font:inherit; border-bottom:2px solid transparent; }
+  nav button.on { color:var(--txt); border-color:var(--acc); }
+  main { padding:12px 16px; }
+  .tab { display:none; } .tab.on { display:block; }
+  button.b, select, input[type=number], input[type=text] { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:5px 9px; font:inherit; }
+  button.b { cursor:pointer; } button.b:hover { border-color:var(--acc); }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+  .note { color:var(--dim); font-size:12.5px; max-width:900px; }
+  .priv { background:#2a2417; border:1px solid #5b4a1e; color:#f0d9a0; padding:8px 12px; border-radius:6px; max-width:900px; font-size:13px; }
+  #measure { display:grid; grid-template-columns: 360px 1fr; gap:12px; }
+  #steps { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px; max-height:78vh; overflow:auto; }
+  .grp { font-weight:600; margin:10px 4px 4px; color:var(--acc); }
+  .step { padding:6px 8px; border-radius:6px; cursor:pointer; border:1px solid transparent; }
+  .step:hover { border-color:var(--line); } .step.cur { border-color:var(--acc); background:#232a38; }
+  .step .t { display:flex; justify-content:space-between; gap:8px; }
+  .badge { font-size:11px; padding:1px 6px; border-radius:10px; border:1px solid; white-space:nowrap; }
+  .badge.obs { color:var(--ok); border-color:var(--ok); } .badge.est { color:var(--est); border-color:var(--est); }
+  .step .v { color:var(--dim); font-size:12.5px; } .step .v b { color:var(--txt); }
+  .step .h { color:var(--dim); font-size:12px; margin-top:2px; }
+  #viewwrap { position:relative; background:#0c0d0f; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  canvas#view { display:block; width:100%; height:72vh; cursor:crosshair; }
+  #hud { position:absolute; left:8px; bottom:8px; background:#000a; padding:4px 8px; border-radius:6px; font:12px ui-monospace,Menlo,monospace; pointer-events:none; }
+  table { border-collapse:collapse; width:100%; max-width:1100px; } th,td { border-bottom:1px solid var(--line); padding:5px 8px; text-align:left; font-size:13px; }
+  th { color:var(--dim); font-weight:500; } td.n { text-align:right; font-variant-numeric:tabular-nums; }
+  .pos { color:#ff8e8e; } .neg { color:#8ec8ff; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:8px; max-width:1100px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .card small { color:var(--dim); display:block; }
+  #err { color:#ff8e8e; }
+</style>
+</head>
+<body>
+<header>
+  <h1>WinMac · Calibración visual del Dock</h1>
+  <nav>
+    <button data-tab="fondos" class="on">1 · Fondos de calibración</button>
+    <button data-tab="medir">2 · Medir captura</button>
+    <button data-tab="comparar">3 · Comparar</button>
+  </nav>
+  <span class="note">Todo se ejecuta en tu navegador, sin subir nada. Las capturas de macOS son de uso privado: no las pongas en el repositorio.</span>
+</header>
+<main>
+
+<section id="fondos" class="tab on">
+  <p class="priv"><b>Privacidad.</b> Las capturas de tu Mac y los JSON de medidas derivados se guardan solo en tu equipo (carpeta <code>calibration/private/</code>, ignorada por git). Aquí solo se generan imágenes de colores y rejillas propias.</p>
+  <p class="note">Genera fondos de pantalla de calibración al <b>tamaño nativo en píxeles</b> de tu pantalla (Ajustes del Sistema → Pantallas; en un Mac Retina es el doble de los «puntos» de la resolución predeterminada). Ponlos como fondo de escritorio (modo «Rellenar», sin fondo dinámico ni rotación) antes de capturar. Procedimiento completo: <code>docs/08-calibracion-visual.md</code>.</p>
+  <div class="row">
+    Ancho px <input id="fw" type="number" value="3024" min="200" style="width:90px"> Alto px <input id="fh" type="number" value="1964" min="200" style="width:90px">
+    <span class="note">Ejemplos habituales: 3024×1964, 3456×2234, 2880×1800, 5120×2880. Si dudas, usa «Capturar pantalla» y mira el tamaño del PNG.</span>
+  </div>
+  <div class="row" id="fondoBtns"></div>
+</section>
+
+<section id="medir" class="tab">
+  <div class="row">
+    <input id="file" type="file" accept="image/png,image/jpeg">
+    Origen <select id="src"><option value="mac">Mac (macOS Tahoe)</option><option value="winmac">WinMac (PNG del CI)</option></select>
+    Escena <input id="scene" type="text" placeholder="p. ej. reposo-claro" style="width:170px">
+    Píxeles por punto <input id="ppp" type="number" value="2" step="0.25" min="0.25" style="width:80px" title="Mac Retina: 2. PNG del CI a 2×: 2. Vistas previas del CI (0,75×): 0.75">
+    <button class="b" id="zin">+</button><button class="b" id="zout">−</button><button class="b" id="z1">1×</button><button class="b" id="zfit">Ajustar</button>
+    <button class="b" id="undo">Deshacer punto</button><button class="b" id="clear">Borrar medida</button>
+    <button class="b" id="export">Exportar JSON</button><label class="b" style="cursor:pointer">Importar JSON<input id="import" type="file" accept=".json" hidden></label>
+  </div>
+  <div class="note">Clic: añade un punto (se ajusta al píxel). Arrastrar: mueve la imagen. Rueda: zoom. Flechas: mueven el último punto 1 px. Retroceso: deshacer. Mide siempre sobre el borde <i>visible</i>. <span id="err"></span></div>
+  <div id="measure">
+    <div id="steps"></div>
+    <div id="viewwrap"><canvas id="view"></canvas><div id="hud">—</div></div>
+  </div>
+</section>
+
+<section id="comparar" class="tab">
+  <p class="note">Carga el JSON de una medición de <b>Mac</b> y el de <b>WinMac</b> (misma escena, p. ej. «reposo-claro»). La columna «Código» muestra el valor actual (provisional) de <code>DockMetrics</code>/<code>GlassStyle</code>. No cambia nada: solo informa las diferencias.</p>
+  <div class="row">Mac <input id="cmpA" type="file" accept=".json"> WinMac <input id="cmpB" type="file" accept=".json"></div>
+  <div id="cmpOut"></div>
+</section>
+</main>
+
+<script>
+'use strict';
+// ───────────────────────────────────────────── Definición de medidas
+// kind: 'obs' = observable directamente en píxeles; 'est' = solo estimable (modelo/ajuste/criterio visual).
+// type: distx | disty | dist | circle | points | profile | colors
+const CODE = { // valores actuales provisionales del código (DockMetrics / GlassStyle claro)
+  icon_size_rest:60, icon_size_rest_h:60, icon_gap_rest:6, bar_height:82, bar_pad_left:10, bar_pad_right:10, bar_pad_top:8, bar_pad_bottom:14,
+  bar_corner_radius:26, indicator_diameter:4, indicator_below_icon:6.5, separator_gap_left:10, separator_gap_right:10, separator_height:49.2,
+  hover_icon_size_center:102, hover_icon_rise:42, label_height:28, label_gap_to_icon:10, shadow_offset_y:10, shadow_blur:16, blur_sigma:22,
+  tint_alpha:0.2, saturation:1.7
+};
+const STEPS = [
+ {g:'Geometría en reposo (escena «reposo»)'},
+ {id:'icon_size_rest',   t:'distx', n:2, kind:'obs', map:'BaseSize', label:'Ancho visible de un ícono', help:'Borde izquierdo → borde derecho del ícono (la forma visible, sin sombra).'},
+ {id:'icon_size_rest_h', t:'disty', n:2, kind:'obs', map:'BaseSize', label:'Alto visible de un ícono', help:'Borde superior → borde inferior.'},
+ {id:'icon_gap_rest',    t:'distx', n:2, kind:'obs', map:'Gap', label:'Separación entre dos íconos', help:'Borde derecho del 1.º → borde izquierdo del 2.º (repite con 2-3 pares y promedia).'},
+ {id:'bar_width_total',  t:'distx', n:2, kind:'obs', map:'(derivado)', label:'Ancho total de la barra', help:'Borde izquierdo → borde derecho del vidrio.'},
+ {id:'bar_height',       t:'disty', n:2, kind:'obs', map:'BarHeight', label:'Altura de la barra', help:'Borde superior del vidrio → borde inferior (en un tramo sin íconos delante).'},
+ {id:'bar_pad_left',     t:'distx', n:2, kind:'obs', map:'PadX', label:'Margen interno izquierdo', help:'Borde izquierdo de la barra → borde izquierdo del primer ícono.'},
+ {id:'bar_pad_right',    t:'distx', n:2, kind:'obs', map:'PadX', label:'Margen interno derecho', help:'Borde derecho del último ícono → borde derecho de la barra.'},
+ {id:'bar_pad_top',      t:'disty', n:2, kind:'obs', map:'PadTop', label:'Margen interno superior', help:'Borde superior de la barra → borde superior de un ícono.'},
+ {id:'bar_pad_bottom',   t:'disty', n:2, kind:'obs', map:'PadBottom', label:'Margen interno inferior', help:'Borde inferior del ícono → borde inferior de la barra.'},
+ {id:'bar_corner_radius',t:'circle',n:5, kind:'obs', map:'BarRadius', label:'Radio de la esquina de la barra', help:'≥5 puntos sobre el arco de una esquina (borde exterior). Se ajusta un círculo; si la curva no es circular (esquina continua) el valor es una aproximación.'},
+ {id:'bar_bottom_margin',t:'disty', n:2, kind:'obs', map:'(colocación)', label:'Distancia de la barra al borde inferior de la pantalla', help:'Requiere captura de pantalla completa. Borde inferior del vidrio → borde inferior de la imagen.'},
+ {g:'Indicadores y separador (escena «reposo»)'},
+ {id:'indicator_diameter',     t:'distx', n:2, kind:'obs', map:'DotSize', label:'Diámetro del indicador de app abierta', help:'Ancho del punto (haz zoom 16×).'},
+ {id:'indicator_below_icon',   t:'disty', n:2, kind:'obs', map:'PadBottom', label:'Borde inferior del ícono → centro del punto', help:''},
+ {id:'indicator_above_bar_bottom', t:'disty', n:2, kind:'obs', map:'PadBottom', label:'Centro del punto → borde inferior de la barra', help:''},
+ {id:'separator_gap_left',  t:'distx', n:2, kind:'obs', map:'SeparatorGap', label:'Último ícono → separador', help:'Borde derecho del último ícono antes del separador → línea del separador.'},
+ {id:'separator_gap_right', t:'distx', n:2, kind:'obs', map:'SeparatorGap', label:'Separador → siguiente ícono', help:''},
+ {id:'separator_height',    t:'disty', n:2, kind:'obs', map:'(render)', label:'Altura de la línea del separador', help:''},
+ {id:'icon_centers', t:'points', n:0, kind:'obs', map:'(layout)', label:'Centros X de los íconos (de izquierda a derecha)', help:'Un clic en el centro de cada ícono visible. Hazlo igual en «reposo» y en «hover»: la diferencia es el desplazamiento de los vecinos.'},
+ {g:'Magnificación (escena «hover-N»: puntero en el centro del ícono N)'},
+ {id:'hover_icon_size_center', t:'distx', n:2, kind:'obs', map:'BaseSize×MaxScale', label:'Ancho del ícono bajo el puntero', help:'MaxScale = este valor / icon_size_rest.'},
+ {id:'hover_neighbor_p1', t:'distx', n:2, kind:'obs', map:'Radius (curva)', label:'Ancho del vecino +1 (derecha)', help:''},
+ {id:'hover_neighbor_p2', t:'distx', n:2, kind:'obs', map:'Radius (curva)', label:'Ancho del vecino +2', help:''},
+ {id:'hover_neighbor_p3', t:'distx', n:2, kind:'obs', map:'Radius (curva)', label:'Ancho del vecino +3', help:''},
+ {id:'hover_neighbor_m1', t:'distx', n:2, kind:'obs', map:'Radius (curva)', label:'Ancho del vecino −1 (izquierda)', help:''},
+ {id:'hover_neighbor_m2', t:'distx', n:2, kind:'obs', map:'Radius (curva)', label:'Ancho del vecino −2', help:''},
+ {id:'hover_neighbor_m3', t:'distx', n:2, kind:'obs', map:'Radius (curva)', label:'Ancho del vecino −3', help:''},
+ {id:'hover_icon_rise',   t:'disty', n:2, kind:'obs', map:'(altura de ventana)', label:'Cuánto sobresale el ícono central por encima de la barra', help:'Borde superior de la barra → borde superior del ícono bajo el puntero.'},
+ {id:'hover_icon_bottom_gap', t:'disty', n:2, kind:'obs', map:'PadBottom', label:'Borde inferior del ícono ampliado → borde inferior de la barra', help:'Compara con bar_pad_bottom en reposo: ¿el ícono crece hacia arriba o también se hunde?'},
+ {id:'hover_bar_height',  t:'disty', n:2, kind:'obs', map:'BarHeight', label:'Altura de la barra durante la ampliación', help:''},
+ {id:'hover_bar_width_total', t:'distx', n:2, kind:'obs', map:'(derivado)', label:'Ancho total de la barra durante la ampliación', help:''},
+ {g:'Etiqueta (escena «hover-N», con la etiqueta visible)'},
+ {id:'label_height', t:'disty', n:2, kind:'obs', map:'LabelHeight', label:'Alto de la etiqueta', help:''},
+ {id:'label_width',  t:'distx', n:2, kind:'obs', map:'(texto + padding)', label:'Ancho de la etiqueta', help:''},
+ {id:'label_text_width', t:'distx', n:2, kind:'obs', map:'(padding)', label:'Ancho del texto', help:'Padding horizontal = (label_width − text_width)/2.'},
+ {id:'label_cap_height', t:'disty', n:2, kind:'est', map:'tamaño de fuente', label:'Altura de una mayúscula', help:'Tamaño de fuente ≈ altura de mayúscula / 0,70 (estimación: depende de la tipografía).'},
+ {id:'label_gap_to_icon', t:'disty', n:2, kind:'obs', map:'LabelGap', label:'Borde inferior de la etiqueta → borde superior del ícono', help:''},
+ {id:'label_corner_radius', t:'circle', n:5, kind:'obs', map:'(render)', label:'Radio de la esquina de la etiqueta', help:'≥5 puntos del arco.'},
+ {id:'label_align', t:'points', n:4, kind:'obs', map:'(colocación)', label:'Alineación etiqueta/ícono', help:'4 clics: etiqueta izq., etiqueta der., ícono izq., ícono der. Se calcula el desfase entre centros.'},
+ {id:'label_colors', t:'colors', n:2, kind:'est', map:'(render)', label:'Colores: fondo de la etiqueta y texto', help:'2 clics (fondo, texto). El alfa del fondo solo se estima comparando sobre fondos distintos.'},
+ {g:'Material y bordes (escenas sobre fondos de calibración)'},
+ {id:'glass_sample', t:'colors', n:2, kind:'est', map:'GlassStyle (tinte/saturación)', label:'Muestra de vidrio: 1) fondo justo fuera, 2) interior del vidrio', help:'Repite en las escenas fondo-blanco, negro, gris50, rojo, verde y azul. El ajuste lineal (out = a·fondo + b) estima tinte y saturación: se hace con ajustar.py.'},
+ {id:'border_profile_top', t:'profile', n:2, kind:'est', map:'RimTop/Inner', label:'Perfil del borde superior', help:'Línea vertical corta: 6 pt por fuera → 6 pt por dentro del borde superior, entre íconos. Sobre fondo negro y sobre blanco. Con ≥2× de resolución se ve el grosor real.'},
+ {id:'border_profile_bottom', t:'profile', n:2, kind:'est', map:'RimBottom', label:'Perfil del borde inferior', help:'Igual, en el borde inferior.'},
+ {id:'shadow_profile_below', t:'profile', n:2, kind:'est', map:'ShadowOffsetY/Blur/Alpha', label:'Perfil de la sombra bajo la barra (fondo blanco)', help:'Línea vertical desde el borde inferior de la barra hacia abajo ~60 pt (si hay espacio). Se pierde si la barra está pegada al borde inferior: usa la separación del Dock con la pantalla.'},
+ {id:'shadow_profile_side', t:'profile', n:2, kind:'est', map:'ShadowBlur', label:'Perfil de la sombra a un costado (fondo blanco)', help:'Línea horizontal desde el borde lateral de la barra hacia fuera ~60 pt, a media altura de la barra.'},
+ {id:'blur_edge_profile', t:'profile', n:2, kind:'est', map:'BlurSigma', label:'Transición de desenfoque (fondo mitad blanco/mitad negro)', help:'Línea que cruza el límite blanco/negro a través del vidrio, por un tramo sin íconos (o entre íconos). σ ≈ ancho 10–90 % / 2,56. Poco fiable con barras estrechas.'},
+ {id:'refraction_grid_points', t:'points', n:0, kind:'est', map:'(refracción: pendiente)', label:'Cruces de la rejilla dentro del vidrio', help:'Con el fondo «rejilla»: clic en los cruces de líneas visibles a través del vidrio cerca de un borde y en el centro; se compara con la rejilla exterior. Medida cualitativa del «lente».'}
+];
+const STEPMAP = Object.fromEntries(STEPS.filter(s => s.id).map(s => [s.id, s]));
+
+// ───────────────────────────────────────────── Estado
+const S = { img:null, w:0, h:0, zoom:1, px:0, py:0, ppp:2, cur:'icon_size_rest', data:{}, imgData:null, name:'' };
+const $ = id => document.getElementById(id);
+const cv = $('view'), ctx = cv.getContext('2d');
+
+// ───────────────────────────────────────────── Matemática (probada en autotest)
+function fitCircle(pts) { // ajuste algebraico (Kåsa) por mínimos cuadrados
+  const n = pts.length; if (n < 3) return null;
+  let sx=0, sy=0, sxx=0, syy=0, sxy=0, sz=0, sxz=0, syz=0;
+  for (const [x,y] of pts) { const z = x*x + y*y; sx+=x; sy+=y; sxx+=x*x; syy+=y*y; sxy+=x*y; sz+=z; sxz+=x*z; syz+=y*z; }
+  const A = [[sxx,sxy,sx],[sxy,syy,sy],[sx,sy,n]], b = [sxz,syz,sz];
+  const sol = solve3(A,b); if (!sol) return null;
+  const cx = sol[0]/2, cy = sol[1]/2, r = Math.sqrt(Math.max(0, sol[2] + cx*cx + cy*cy));
+  const rms = Math.sqrt(pts.reduce((a,[x,y]) => a + (Math.hypot(x-cx,y-cy)-r)**2, 0)/n);
+  return { cx, cy, r, rms };
+}
+function solve3(A,b) {
+  const M = A.map((r,i) => [...r, b[i]]);
+  for (let i=0;i<3;i++) { let p=i; for (let r=i+1;r<3;r++) if (Math.abs(M[r][i])>Math.abs(M[p][i])) p=r;
+    if (Math.abs(M[p][i])<1e-12) return null; [M[i],M[p]]=[M[p],M[i]];
+    for (let r=0;r<3;r++) if (r!==i) { const f=M[r][i]/M[i][i]; for (let c=i;c<4;c++) M[r][c]-=f*M[i][c]; } }
+  return [M[0][3]/M[0][0], M[1][3]/M[1][1], M[2][3]/M[2][2]];
+}
+function lum(r,g,b) { return 0.2126*r + 0.7152*g + 0.0722*b; }
+
+// ───────────────────────────────────────────── Cálculo de cada medida
+function compute(step, d) {
+  const P = d.points || [], k = 1/S.ppp;
+  if (step.t==='distx' && P.length>=2) return { value: Math.abs(P[1][0]-P[0][0])*k, unit:'pt' };
+  if (step.t==='disty' && P.length>=2) return { value: Math.abs(P[1][1]-P[0][1])*k, unit:'pt' };
+  if (step.t==='dist'  && P.length>=2) return { value: Math.hypot(P[1][0]-P[0][0],P[1][1]-P[0][1])*k, unit:'pt' };
+  if (step.t==='circle' && P.length>=3) { const c = fitCircle(P); return c ? { value: c.r*k, unit:'pt', rms: c.rms*k } : null; }
+  if (step.id==='label_align' && P.length>=4) { const lc=(P[0][0]+P[1][0])/2, ic=(P[2][0]+P[3][0])/2; return { value:(lc-ic)*k, unit:'pt', note:'desfase del centro de la etiqueta respecto al ícono (+ = a la derecha)' }; }
+  if (step.t==='points' && P.length) return { value: P.map(p=>+(p[0]*k).toFixed(2)), unit:'pt (x)' };
+  if (step.t==='profile' && d.samples) return { value: d.samples.map(s=>+s.lum.toFixed(1)), unit:'luminancia 0-255', length_pt:(d.lenPx*k) };
+  if (step.t==='colors' && d.colors) return { value: d.colors.map(c=>c.rgb), unit:'rgb' };
+  return null;
+}
+function needed(step) { return step.t==='circle' ? Math.max(3, step.n) : step.t==='points' ? (step.n||1) : step.t==='colors' ? step.n : 2; }
+
+// ───────────────────────────────────────────── Muestreo de píxeles
+function px(x,y) { // promedio 3×3 centrado en el píxel
+  if (!S.imgData) return [0,0,0];
+  let r=0,g=0,b=0,n=0;
+  for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+    const xx=Math.min(S.w-1,Math.max(0,Math.floor(x)+dx)), yy=Math.min(S.h-1,Math.max(0,Math.floor(y)+dy)), i=(yy*S.w+xx)*4;
+    r+=S.imgData.data[i]; g+=S.imgData.data[i+1]; b+=S.imgData.data[i+2]; n++; }
+  return [Math.round(r/n),Math.round(g/n),Math.round(b/n)];
+}
+function pxExact(x,y) { const xx=Math.min(S.w-1,Math.max(0,Math.floor(x))), yy=Math.min(S.h-1,Math.max(0,Math.floor(y))), i=(yy*S.w+xx)*4; return [S.imgData.data[i],S.imgData.data[i+1],S.imgData.data[i+2]]; }
+
+function refresh(stepId) {
+  const step = STEPMAP[stepId], d = S.data[stepId]; if (!d) return;
+  if (step.t==='profile' && d.points && d.points.length>=2) {
+    const [a,b] = d.points, len = Math.hypot(b[0]-a[0], b[1]-a[1]), N = Math.max(8, Math.round(len)); // 1 muestra/píxel
+    d.lenPx = len; d.samples = [];
+    for (let i=0;i<N;i++) { const t=(i+0.5)/N, x=a[0]+(b[0]-a[0])*t, y=a[1]+(b[1]-a[1])*t, c=pxExact(x,y); d.samples.push({ rgb:c, lum:lum(...c) }); }
+  }
+  if (step.t==='colors') d.colors = (d.points||[]).map(p => ({ x:p[0], y:p[1], rgb:px(p[0],p[1]) }));
+  const r = compute(step, d); if (r && (step.t!=='circle' || d.points.length>=3)) d.result = r; else delete d.result;
+}
+
+// ───────────────────────────────────────────── UI: lista de medidas
+function fmt(r) {
+  if (!r) return '—'; const v = r.value;
+  if (typeof v === 'number') return `<b>${v.toFixed(2)}</b> ${r.unit}${r.rms!==undefined ? ` (ajuste ±${r.rms.toFixed(2)})` : ''}`;
+  if (Array.isArray(v) && v.length && Array.isArray(v[0])) return v.map(c=>`rgb(${c.join(',')})`).join(' · ');
+  return `${v.length} valores`;
+}
+function renderSteps() {
+  const box = $('steps'); box.innerHTML = '';
+  for (const s of STEPS) {
+    if (s.g) { const g = document.createElement('div'); g.className='grp'; g.textContent=s.g; box.appendChild(g); continue; }
+    const d = S.data[s.id], n = d && d.points ? d.points.length : 0;
+    const el = document.createElement('div'); el.className = 'step' + (S.cur===s.id?' cur':''); el.dataset.id = s.id;
+    el.innerHTML = `<div class="t"><span>${s.label}</span><span class="badge ${s.kind}">${s.kind==='obs'?'observable':'estimable'}</span></div>
+      <div class="v">${n}/${needed(s)||'≥1'} puntos · ${fmt(d && d.result)} <span style="opacity:.6">→ ${s.map}</span></div>${S.cur===s.id && s.help ? `<div class="h">${s.help}</div>`:''}`;
+    el.onclick = () => { S.cur = s.id; renderSteps(); draw(); };
+    box.appendChild(el);
+  }
+}
+
+// ───────────────────────────────────────────── Dibujo
+function resize() { const r = cv.getBoundingClientRect(); cv.width = Math.max(300, r.width|0); cv.height = Math.max(200, r.height|0); draw(); }
+function draw() {
+  ctx.fillStyle = '#0c0d0f'; ctx.fillRect(0,0,cv.width,cv.height);
+  if (!S.img) { ctx.fillStyle='#777'; ctx.font='14px system-ui'; ctx.fillText('Carga una captura (PNG) para medir.', 20, 30); return; }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(S.img, S.px, S.py, S.w*S.zoom, S.h*S.zoom);
+  const toS = (x,y) => [S.px + x*S.zoom, S.py + y*S.zoom];
+  for (const [id,d] of Object.entries(S.data)) {
+    const cur = id===S.cur, P = d.points || []; if (!P.length) continue;
+    ctx.strokeStyle = cur ? '#ffd24a' : '#ffd24a55'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 1;
+    ctx.beginPath(); P.forEach((p,i) => { const [x,y]=toS(p[0],p[1]); i? ctx.lineTo(x,y):ctx.moveTo(x,y); });
+    if (STEPMAP[id].t!=='points' && STEPMAP[id].t!=='colors') ctx.stroke();
+    P.forEach(p => { const [x,y]=toS(p[0],p[1]); ctx.fillRect(x-2,y-2,5,5); });
+    if (cur && STEPMAP[id].t==='circle' && P.length>=3) { const c=fitCircle(P); if (c) { const [cx,cy]=toS(c.cx,c.cy); ctx.strokeStyle='#6aa6ff'; ctx.beginPath(); ctx.arc(cx,cy,c.r*S.zoom,0,7); ctx.stroke(); } }
+  }
+}
+function hud(e) {
+  if (!S.img) return; const r = cv.getBoundingClientRect(), x=(e.clientX-r.left-S.px)/S.zoom, y=(e.clientY-r.top-S.py)/S.zoom;
+  if (x<0||y<0||x>=S.w||y>=S.h) { $('hud').textContent='—'; return; }
+  const c = pxExact(x,y); $('hud').textContent = `px (${x|0}, ${y|0}) · pt (${(x/S.ppp).toFixed(1)}, ${(y/S.ppp).toFixed(1)}) · rgb(${c.join(',')}) · zoom ${S.zoom.toFixed(1)}×`;
+}
+
+// ───────────────────────────────────────────── Interacción
+let drag = null;
+cv.addEventListener('mousedown', e => { drag = { x:e.clientX, y:e.clientY, px:S.px, py:S.py, moved:false }; });
+window.addEventListener('mousemove', e => {
+  if (drag) { const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if (Math.abs(dx)+Math.abs(dy)>4) drag.moved=true; if (drag.moved) { S.px=drag.px+dx; S.py=drag.py+dy; draw(); } }
+  if (e.target===cv) hud(e);
+});
+window.addEventListener('mouseup', e => {
+  if (!drag) return; const was = drag; drag = null; if (was.moved || e.target!==cv || !S.img) return;
+  const r = cv.getBoundingClientRect(); addPoint(Math.floor((e.clientX-r.left-S.px)/S.zoom)+0.5, Math.floor((e.clientY-r.top-S.py)/S.zoom)+0.5);
+});
+cv.addEventListener('wheel', e => { e.preventDefault(); const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top, f=e.deltaY<0?1.25:0.8; zoomAt(mx,my,f); }, { passive:false });
+function zoomAt(mx,my,f) { const nz=Math.min(64,Math.max(0.1,S.zoom*f)), k=nz/S.zoom; S.px=mx-(mx-S.px)*k; S.py=my-(my-S.py)*k; S.zoom=nz; draw(); }
+function addPoint(x,y) {
+  const step = STEPMAP[S.cur]; if (!step) return; const d = S.data[S.cur] || (S.data[S.cur] = { points:[] });
+  const maxN = (step.t==='points' && !step.n) ? 1e9 : step.t==='circle' ? 12 : step.t==='colors' ? step.n : (step.n||2);
+  if (d.points.length >= maxN) d.points.shift();
+  d.points.push([x,y]); refresh(S.cur); renderSteps(); draw();
+}
+window.addEventListener('keydown', e => {
+  if ($('medir').classList.contains('on') === false || /INPUT|SELECT/.test(document.activeElement.tagName)) return;
+  const d = S.data[S.cur]; if (!d || !d.points.length) return;
+  if (e.key==='Backspace') { d.points.pop(); refresh(S.cur); renderSteps(); draw(); e.preventDefault(); return; }
+  const m = { ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1] }[e.key]; if (!m) return;
+  const p = d.points[d.points.length-1]; p[0]+=m[0]; p[1]+=m[1]; refresh(S.cur); renderSteps(); draw(); e.preventDefault();
+});
+$('undo').onclick = () => { const d=S.data[S.cur]; if (d&&d.points.length) { d.points.pop(); refresh(S.cur); renderSteps(); draw(); } };
+$('clear').onclick = () => { delete S.data[S.cur]; renderSteps(); draw(); };
+$('zin').onclick = () => zoomAt(cv.width/2, cv.height/2, 1.5); $('zout').onclick = () => zoomAt(cv.width/2, cv.height/2, 1/1.5);
+$('z1').onclick = () => { S.zoom=1; draw(); };
+$('zfit').onclick = fit;
+function fit() { if (!S.img) return; S.zoom = Math.min(cv.width/S.w, cv.height/S.h); S.px=(cv.width-S.w*S.zoom)/2; S.py=(cv.height-S.h*S.zoom)/2; draw(); }
+$('ppp').onchange = () => { S.ppp = +$('ppp').value || 2; for (const id of Object.keys(S.data)) refresh(id); renderSteps(); };
+$('file').onchange = e => {
+  const f = e.target.files[0]; if (!f) return; S.name = f.name; const url = URL.createObjectURL(f), img = new Image();
+  img.onload = () => {
+    S.img = img; S.w = img.naturalWidth; S.h = img.naturalHeight;
+    const c = document.createElement('canvas'); c.width=S.w; c.height=S.h; const g=c.getContext('2d',{willReadFrequently:true}); g.drawImage(img,0,0); S.imgData = g.getImageData(0,0,S.w,S.h);
+    for (const id of Object.keys(S.data)) refresh(id); fit(); renderSteps(); $('err').textContent = '';
+  };
+  img.onerror = () => { $('err').textContent = 'No se pudo leer la imagen.'; }; img.src = url;
+};
+$('export').onclick = () => {
+  const out = { schema:'winmac-calibracion/1', meta:{ source:$('src').value, scene:$('scene').value, pxPerPt:S.ppp, file:S.name, imagePx:[S.w,S.h], created:new Date().toISOString() }, measurements:{} };
+  for (const [id,d] of Object.entries(S.data)) { if (!d.result) continue; const s=STEPMAP[id]; out.measurements[id] = { kind:s.kind==='obs'?'observable':'estimable', mapsTo:s.map, ...d.result, points_px:d.points, ...(d.colors?{colors:d.colors}:{}), ...(d.samples?{samples:d.samples.map(x=>({rgb:x.rgb}))}:{}) }; }
+  const blob = new Blob([JSON.stringify(out,null,1)], { type:'application/json' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `medidas-${out.meta.source}-${out.meta.scene||'escena'}.json`; a.click();
+};
+$('import').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return; try {
+    const j = JSON.parse(await f.text()); $('src').value = j.meta.source||'mac'; $('scene').value = j.meta.scene||''; $('ppp').value = S.ppp = j.meta.pxPerPt||2;
+    for (const [id,m] of Object.entries(j.measurements||{})) if (STEPMAP[id]) S.data[id] = { points:m.points_px||[] };
+    if (S.img) for (const id of Object.keys(S.data)) refresh(id); renderSteps(); draw();
+    $('err').textContent = 'Importado. Carga la misma captura para recalcular perfiles y colores.';
+  } catch (err) { $('err').textContent = 'JSON inválido: ' + err.message; }
+};
+
+// ───────────────────────────────────────────── Pestaña Fondos
+const FONDOS = [
+  ['blanco', 'Blanco puro', (c,w,h) => { c.fillStyle='#fff'; c.fillRect(0,0,w,h); }],
+  ['negro', 'Negro puro', (c,w,h) => { c.fillStyle='#000'; c.fillRect(0,0,w,h); }],
+  ['gris50', 'Gris 50 %', (c,w,h) => { c.fillStyle='#808080'; c.fillRect(0,0,w,h); }],
+  ['rojo', 'Rojo (255,0,0)', (c,w,h) => { c.fillStyle='#f00'; c.fillRect(0,0,w,h); }],
+  ['verde', 'Verde (0,255,0)', (c,w,h) => { c.fillStyle='#0f0'; c.fillRect(0,0,w,h); }],
+  ['azul', 'Azul (0,0,255)', (c,w,h) => { c.fillStyle='#00f'; c.fillRect(0,0,w,h); }],
+  ['mitad-bn-vertical', 'Mitad blanca | negra (vertical)', (c,w,h) => { c.fillStyle='#fff'; c.fillRect(0,0,w/2,h); c.fillStyle='#000'; c.fillRect(w/2,0,w/2,h); }],
+  ['mitad-bn-horizontal', 'Mitad blanca / negra (horizontal)', (c,w,h) => { c.fillStyle='#fff'; c.fillRect(0,0,w,h/2); c.fillStyle='#000'; c.fillRect(0,h/2,w,h/2); }],
+  ['rejilla', 'Rejilla (líneas de 1 px cada 50 px, gris sobre blanco)', (c,w,h) => { c.fillStyle='#fff'; c.fillRect(0,0,w,h); c.fillStyle='#000'; for (let x=0;x<w;x+=50) c.fillRect(x,0,1,h); for (let y=0;y<h;y+=50) c.fillRect(0,y,w,1); c.fillStyle='#e00'; for (let x=0;x<w;x+=250) c.fillRect(x,0,2,h); for (let y=0;y<h;y+=250) c.fillRect(0,y,w,2); }],
+  ['degradado-horizontal', 'Degradado negro → blanco', (c,w,h) => { const g=c.createLinearGradient(0,0,w,0); g.addColorStop(0,'#000'); g.addColorStop(1,'#fff'); c.fillStyle=g; c.fillRect(0,0,w,h); }],
+  ['barras-color', 'Barras de color', (c,w,h) => { const cols=['#fff','#ff0','#0ff','#0f0','#f0f','#f00','#00f','#000']; cols.forEach((k,i)=>{ c.fillStyle=k; c.fillRect(i*w/8,0,w/8+1,h); }); }],
+];
+for (const [id,label,fn] of FONDOS) {
+  const b = document.createElement('button'); b.className='b'; b.textContent = '⬇ ' + label;
+  b.onclick = () => { const w=+$('fw').value, h=+$('fh').value, c=document.createElement('canvas'); c.width=w; c.height=h; fn(c.getContext('2d'),w,h);
+    c.toBlob(bl => { const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download=`calib-${id}-${w}x${h}.png`; a.click(); }, 'image/png'); };
+  $('fondoBtns').appendChild(b);
+}
+
+// ───────────────────────────────────────────── Pestaña Comparar
+function summarize(m) { if (!m) return null; const v = m.value; if (typeof v==='number') return v; if (Array.isArray(v) && v.length && Array.isArray(v[0])) return v.map(c=>c.join(',')).join(' | '); return v; }
+async function compare() {
+  const fa = $('cmpA').files[0], fb = $('cmpB').files[0]; if (!fa && !fb) return;
+  const A = fa ? JSON.parse(await fa.text()) : null, B = fb ? JSON.parse(await fb.text()) : null;
+  const ids = STEPS.filter(s=>s.id && ((A&&A.measurements[s.id])||(B&&B.measurements[s.id])||CODE[s.id]!==undefined));
+  let h = `<table><tr><th>Medida</th><th>Tipo</th><th>Mac</th><th>WinMac (captura)</th><th>Código</th><th>Δ WinMac − Mac</th><th>Δ Código − Mac</th><th>Mapea a</th></tr>`;
+  for (const s of ids) {
+    const a = A && summarize(A.measurements[s.id]), b = B && summarize(B.measurements[s.id]), c = CODE[s.id];
+    const num = x => typeof x==='number', f = x => num(x) ? x.toFixed(2) : (x===undefined||x===null?'—':`<small>${String(x).slice(0,60)}</small>`);
+    const dl = (u,v) => num(u)&&num(v) ? (()=>{ const d=u-v; return `<span class="${d>0?'pos':'neg'}">${d>0?'+':''}${d.toFixed(2)}</span>`; })() : '—';
+    h += `<tr><td>${s.label}</td><td><span class="badge ${s.kind}">${s.kind==='obs'?'observable':'estimable'}</span></td><td class="n">${f(a)}</td><td class="n">${f(b)}</td><td class="n">${f(c)}</td><td class="n">${dl(b,a)}</td><td class="n">${dl(c,a)}</td><td>${s.map}</td></tr>`;
+  }
+  // Desplazamiento de vecinos (necesita icon_centers en «reposo» y en «hover»)
+  h += '</table>';
+  const ca = A && A.measurements.icon_centers, cb = B && B.measurements.icon_centers;
+  $('cmpOut').innerHTML = h + ((ca||cb) ? '<p class="note">Para el desplazamiento de los vecinos, exporta <code>icon_centers</code> en «reposo» y en «hover» de la misma fuente y usa <code>ajustar.py desplazamiento reposo.json hover.json</code>.</p>' : '');
+}
+$('cmpA').onchange = compare; $('cmpB').onchange = compare;
+
+// ───────────────────────────────────────────── Pestañas e inicio
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => { document.querySelectorAll('nav button,.tab').forEach(x=>x.classList.remove('on')); b.classList.add('on'); $(b.dataset.tab).classList.add('on'); if (b.dataset.tab==='medir') resize(); });
+window.addEventListener('resize', resize);
+window.__cal = { fitCircle, compute, STEPS, S, addPoint, refresh }; // para el autotest
+renderSteps(); resize();
+</script>
+</body>
+</html>
