@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Lógica pura de la barra superior: sin dependencias de Windows ni de render. Se prueba también en Linux. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinMac.Bar</RootNamespace>
+  </PropertyGroup>
+</Project>

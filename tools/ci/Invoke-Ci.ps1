@@ -40,7 +40,11 @@ foreach ($d in @(
   @{ Name = 'Dock.Core.Tests'; Path = 'src/WinMac.Dock.Core.Tests/WinMac.Dock.Core.Tests.csproj'; Kind = 'test'; Extra = @() },
   @{ Name = 'Dock.Win';        Path = 'src/WinMac.Dock.Win/WinMac.Dock.Win.csproj';               Kind = 'lib';  Extra = @() },
   @{ Name = 'Dock.Win.Tests';  Path = 'src/WinMac.Dock.Win.Tests/WinMac.Dock.Win.Tests.csproj';   Kind = 'test'; Extra = @() },
-  @{ Name = 'Dock.App';        Path = 'src/WinMac.Dock.App/WinMac.Dock.App.csproj';               Kind = 'app';  Extra = @() })) {
+  @{ Name = 'Dock.App';        Path = 'src/WinMac.Dock.App/WinMac.Dock.App.csproj';               Kind = 'app';  Extra = @() },
+  @{ Name = 'Bar.Core';        Path = 'src/WinMac.Bar.Core/WinMac.Bar.Core.csproj';               Kind = 'lib';  Extra = @() },
+  @{ Name = 'Bar.Core.Tests';  Path = 'src/WinMac.Bar.Core.Tests/WinMac.Bar.Core.Tests.csproj';   Kind = 'test'; Extra = @() },
+  @{ Name = 'Bar.Win';         Path = 'src/WinMac.Bar.Win/WinMac.Bar.Win.csproj';                 Kind = 'lib';  Extra = @() },
+  @{ Name = 'Bar.App';         Path = 'src/WinMac.Bar.App/WinMac.Bar.App.csproj';                 Kind = 'app';  Extra = @() })) {
   if (Test-Path $d.Path) { $components += $d }
 }
 

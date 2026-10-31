@@ -53,3 +53,21 @@ Código compilado y probado en lógica pura; **sin ejecutar en Windows**. Orden 
 | V10 | Pantalla completa/juego: el Dock se aparta; `--quit` lo cierra |
 | V11 | Editar `dock.json` a mano: recarga en ≤2 s; JSON inválido no rompe el Dock |
 | V12 | Sin permisos de administrador; Explorador y barra de tareas intactos |
+
+## Barra superior (docs/12) — validación manual pendiente
+Compilada y con 23 pruebas de lógica pura; **sin ejecutar en Windows**. Orden sugerido (`$bar` = `WinMac.Bar.App.exe`):
+| # | Qué probar |
+|---|---|
+| B1 | `& $bar --status` (batería, volumen y red leídos) y `& $bar --selftest` (no registra AppBar) |
+| B2 | `& $bar --no-reserve`: aparece arriba, superpuesta; reloj correcto y avanza al cambiar el minuto |
+| B3 | `& $bar` (con AppBar): una ventana maximizada queda DEBAJO de la barra; el Dock sigue en su sitio |
+| B4 | `& $bar --quit` y «Salir de la barra superior» (clic derecho): las ventanas recuperan todo el espacio |
+| B5 | Nombre de la app activa: cambia al pasar de una app a otra (Win32 y una app empaquetada); «Escritorio» sobre el escritorio |
+| B6 | Batería (portátil): nivel, cargando (verde, rayo), ≤ 20 % (rojo); en sobremesa no aparece |
+| B7 | Volumen: sube/baja/silencio en vivo (≤ 0,5 s); red: Wi-Fi, cable, sin conexión |
+| B8 | Clic en red/volumen/batería/reloj abre su página de Configuración; el menú «W» ofrece Reservar espacio y Salir |
+| B9 | Vídeo/juego a pantalla completa: la barra se aparta; al salir vuelve |
+| B10 | Tema claro/oscuro de Windows: el texto cambia solo (≤ 5 s); `"Background": "Transparent"` en `bar.json` |
+| B11 | Varias pantallas / DPI ≠ 100 %: solo se cubre la principal; anotar cualquier desajuste |
+| B12 | Convivencia con la app tipo «notch» del usuario (quién reserva el espacio superior) |
+Limitaciones conocidas: sin intensidad de señal Wi-Fi, sin Bluetooth, sin menús de la app activa, sin iconos de bandeja de terceros, solo el monitor principal; aspecto provisional (sin referencia del Mac).

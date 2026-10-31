@@ -43,11 +43,30 @@ foreach ($app in @('%WINDIR%\explorer.exe', '%WINDIR%\notepad.exe', '%WINDIR%\Sy
   $exp = [Environment]::ExpandEnvironmentVariables($app); $leaf = [IO.Path]::GetFileNameWithoutExtension($exp)
   Run "Icono real $leaf" $dock @('--icon-test', "`"$exp`"", '--out', "`"$OutDir\icon-$leaf.png`"") 60 -Informational
 }
+# Barra superior: PNG fuera de pantalla (datos ficticios), lecturas reales del sistema (informativo) y selftest. El AppBar solo se registra en --selftest-appbar (efímero en el runner).
+$bar = "$PublishDir/Bar.App/WinMac.Bar.App.exe"
+foreach ($theme in 'light', 'dark') { foreach ($bg in 'glass', 'transparent') {
+  Run "Barra offscreen $theme/$bg" $bar @('--render-png', "`"$OutDir\bar-$theme-$bg.png`"", '--theme', $theme, '--bg', $bg, '--scale', '2') 90
+} }
+Run 'Barra offscreen light/glass con resalte' $bar @('--render-png', "`"$OutDir\bar-light-glass-hover.png`"", '--theme', 'light', '--bg', 'glass', '--scale', '2', '--hover', '4') 90
+Run 'Barra --status (informativo)' $bar @('--status') 60 -Informational
+Run 'Barra selftest' $bar @('--selftest') 120
+Run 'Barra selftest-appbar (informativo)' $bar @('--selftest-appbar') 120 -Informational
 # Vista previa en el log: el sandbox de desarrollo no puede descargar artefactos, pero SÍ leer los logs del job.
 # Se emiten versiones reducidas (escala 0.75) de dos escenas en base64 dentro de grupos plegados. Los PNG completos (2x) están en el artefacto.
 foreach ($pv in @(@{ n = 'light-hover'; t = 'light'; p = 'hover' }, @{ n = 'dark-open'; t = 'dark'; p = 'open' }, @{ n = 'light-preview'; t = 'light'; p = 'preview' }, @{ n = 'dark-preview'; t = 'dark'; p = 'preview' })) {
   $f = Join-Path $OutDir "preview-$($pv.n).png"
   Run "Vista previa $($pv.n)" $dock @('--render-png', "`"$f`"", '--pose', $pv.p, '--theme', $pv.t, '--scale', '0.75') 90
+  if (Test-Path $f) {
+    $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f))
+    Write-Host "::group::PREVIEW_B64 $($pv.n) bytes=$((Get-Item $f).Length) b64len=$($b64.Length)"
+    for ($i = 0; $i -lt $b64.Length; $i += 3000) { Write-Host ("PVB64|" + $b64.Substring($i, [Math]::Min(3000, $b64.Length - $i))) }
+    Write-Host "::endgroup::"
+  }
+}
+foreach ($pv in @(@{ n = 'bar-light-glass'; t = 'light'; b = 'glass' }, @{ n = 'bar-dark-glass'; t = 'dark'; b = 'glass' }, @{ n = 'bar-dark-transparent'; t = 'dark'; b = 'transparent' })) {
+  $f = Join-Path $OutDir "preview-$($pv.n).png"
+  Run "Vista previa $($pv.n)" $bar @('--render-png', "`"$f`"", '--theme', $pv.t, '--bg', $pv.b, '--scale', '1') 90
   if (Test-Path $f) {
     $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f))
     Write-Host "::group::PREVIEW_B64 $($pv.n) bytes=$((Get-Item $f).Length) b64len=$($b64.Length)"
