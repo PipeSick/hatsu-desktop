@@ -61,7 +61,13 @@ public sealed class HostController
     public HostController(ConfigService cfg, Supervisor sup, IHostBus bus, Action<string>? log = null)
     {
         _cfg = cfg; _sup = sup; _bus = bus; _log = log ?? (_ => { });
-        _bus.Event += OnEvent; _cfg.Changed += OnChanged;
+        _bus.Event += OnEvent; _cfg.Changed += OnChanged; _bus.Disconnected += OnDisconnected;
+    }
+
+    /// <summary>Si la Isla se va (cierre, caída, desactivación), el espacio que tenía reservado en la Barra no puede quedarse retenido: se publica vacío.</summary>
+    private void OnDisconnected(string module)
+    {
+        if (module == "notch") _bus.Publish(NotchSettings.RectsTopic, new { rects = Array.Empty<object>() });
     }
 
     /// <summary>Publica el estado inicial (el módulo lo recibe al suscribirse, aunque se conecte más tarde).</summary>

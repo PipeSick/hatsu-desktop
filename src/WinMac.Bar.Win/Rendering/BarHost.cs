@@ -19,7 +19,7 @@ namespace WinMac.Bar.Win.Rendering;
 /// </summary>
 public sealed class BarHost : IDisposable
 {
-    private const int WM_DESTROY = 2, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_MOUSEMOVE = 0x200, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12, WM_APP_BAR = 0x8001;
+    private const int WM_DESTROY = 2, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_MOUSEMOVE = 0x200, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12, WM_APP_BAR = 0x8001, WM_APP_YIELD = 0x8002;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
     public const string QuitEventName = @"Local\WinMac.Bar.Quit";
 
@@ -36,6 +36,33 @@ public sealed class BarHost : IDisposable
     private double? _px, _py;
 
     public string Diagnostics { get; private set; } = "";
+
+    private readonly object _yieldLock = new(); private IReadOnlyList<PxRect> _holes = [];
+
+    /// <summary>
+    /// Espacio de pantalla que otra ventana «siempre encima» (la Isla) necesita libre: la barra recorta su ventana para no cubrirlo ni quedarse con sus clics, sin depender del orden Z.
+    /// Lista vacía = ventana completa. Seguro desde cualquier hilo (se aplica en el hilo de la barra).
+    /// </summary>
+    public void SetYield(IReadOnlyList<PxRect> holes)
+    {
+        lock (_yieldLock) _holes = holes;
+        var h = _hwnd; if (h != IntPtr.Zero) BarNative.PostMessage(h, WM_APP_YIELD, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    private void ApplyYield()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        IReadOnlyList<PxRect> holes; lock (_yieldLock) holes = _holes;
+        var win = new PxRect(_winLeftPx, _winTopPx, _winWpx, _winHpx);
+        if (!YieldRegions.Touches(win, holes)) { BarNative.SetWindowRgn(_hwnd, IntPtr.Zero, true); return; }   // nada que ceder: ventana completa
+        var rgn = BarNative.CreateRectRgn(0, 0, 0, 0);
+        foreach (var p in YieldRegions.Visible(win, holes))
+        {
+            var piece = BarNative.CreateRectRgn(p.X - win.X, p.Y - win.Y, p.Right - win.X, p.Bottom - win.Y);
+            BarNative.CombineRgn(rgn, rgn, piece, 2 /* RGN_OR */); BarNative.DeleteObject(piece);
+        }
+        if (BarNative.SetWindowRgn(_hwnd, rgn, true) == 0) BarNative.DeleteObject(rgn);   // si falla, la región sigue siendo nuestra
+    }
 
     /// <summary>Pide el cierre normal de la barra (lo usa el host de WinMac vía <c>--hosted</c>). Seguro desde otro hilo.</summary>
     public void RequestQuit() => _quitting = true;
@@ -108,7 +135,7 @@ public sealed class BarHost : IDisposable
         Metrics(); _winLeftPx = _monitor.Left; _winTopPx = _monitor.Top;
         if (_cfg.ReserveSpace) AppBarSetPos(); else AppBarRemove();
         BarNative.SetWindowPos(_hwnd, new IntPtr(-1), _winLeftPx, _winTopPx, _winWpx, _winHpx, 0x0010u | 0x0040u | (_zOrdered ? 0x0004u /* NOZORDER */ : 0u) /* NOACTIVATE | SHOWWINDOW [| NOZORDER] */);
-        _zOrdered = true;
+        _zOrdered = true; ApplyYield();   // la ventana se movió o cambió de tamaño: volver a recortar
     }
 
     private void AppBarSetPos()
@@ -230,6 +257,7 @@ public sealed class BarHost : IDisposable
             case WM_MOUSEMOVE: { double x = (short)((long)l & 0xFFFF) / _scale, y = (short)(((long)l >> 16) & 0xFFFF) / _scale; _px = x; _py = y; _ctl.SetPointer(x, y); return IntPtr.Zero; }
             case WM_LBUTTONUP: { double x = (short)((long)l & 0xFFFF) / _scale; Execute(_ctl.OnClick(x), _ctl.ItemAt(x)); _force = true; return IntPtr.Zero; }
             case WM_RBUTTONUP: { Execute(new BarAction(BarActionKind.ShowMenu), null); _force = true; return IntPtr.Zero; }
+            case WM_APP_YIELD: ApplyYield(); return IntPtr.Zero;
             case WM_APP_BAR:
                 if ((long)w == BarNative.ABN_POSCHANGED && _registered) { PlaceWindow(); _force = true; }
                 else if ((long)w == BarNative.ABN_FULLSCREENAPP) BarNative.SetWindowPos(_hwnd, (long)l != 0 ? new IntPtr(1) /* HWND_BOTTOM */ : new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE|NOMOVE|NOACTIVATE */);

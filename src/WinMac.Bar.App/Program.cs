@@ -63,7 +63,7 @@ internal static class Program
         using var host = new BarHost(cfg, cfgPath, Log);
         // --hosted (lo pasa WinMac.exe): enlace con el host. Sin él, la barra funciona exactamente como siempre. Si el host cae, la barra sigue sola.
         var link = ModuleHostLink.FromArgs(args, "bar", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
-        if (link is not null) { link.ShutdownRequested += host.RequestQuit; link.HealthCheck = () => host.Responsive; link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
+        if (link is not null) { link.ShutdownRequested += host.RequestQuit; link.HealthCheck = () => host.Responsive; link.Subscribe(YieldRegions.Topic, d => host.SetYield(YieldRegions.Parse(d))); link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
         Log("Barra superior iniciada. Cierra con «WinMac.Bar.App --quit» o desde su menú (clic derecho).");
         int rc = host.Run(); Log("Barra superior cerrada. " + host.Report());
         if (link is not null) { if (rc == 0) link.ByeAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult(); link.DisposeAsync().AsTask().GetAwaiter().GetResult(); }   // «bye» = cierre voluntario: el host no nos reinicia

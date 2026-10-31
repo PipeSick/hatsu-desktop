@@ -185,6 +185,19 @@ public class HostControllerTests
     }
 
     [Fact]
+    public void When_the_notch_disconnects_the_space_it_held_in_the_bar_is_released()
+    {
+        var (f, _, h, file) = Make();
+        try
+        {
+            f.Bus.RaiseDisconnected("dock"); lock (f.Bus.Published) Assert.DoesNotContain(f.Bus.Published, p => p.Topic == NotchSettings.RectsTopic);   // otro módulo no afecta
+            f.Bus.RaiseDisconnected("notch");
+            lock (f.Bus.Published) { var last = f.Bus.Published.Last(p => p.Topic == NotchSettings.RectsTopic); Assert.Equal("{\"rects\":[]}", System.Text.Json.JsonSerializer.Serialize(last.Data)); }
+        }
+        finally { File.Delete(file); }
+    }
+
+    [Fact]
     public async Task OpenNotchLocalSettings_emits_a_non_retained_command_to_the_module()
     {
         var (f, _, h, file) = Make(); try { h.OpenNotchLocalSettings(); lock (f.Bus.Emitted) Assert.Equal([NotchSettings.CommandTopic], f.Bus.Emitted); } finally { File.Delete(file); }

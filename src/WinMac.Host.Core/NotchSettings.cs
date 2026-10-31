@@ -13,7 +13,7 @@ public sealed record NotchSection(string Id, bool Enabled);
 /// </summary>
 public sealed record NotchSettings
 {
-    public const string Topic = "config.notch", SetTopic = "config.notch.set", CommandTopic = "notch.cmd";
+    public const string Topic = "config.notch", SetTopic = "config.notch.set", CommandTopic = "notch.cmd", RectsTopic = "notch.rects";   // RectsTopic: espacio que ocupa la Isla (lo publica ella; lo lee la Barra)
 
     public static readonly string[] Positions = ["TopCenter", "TopLeft", "TopRight"];
     public static readonly string[] Players = ["Spotify", "Feishin", "Custom"];

@@ -174,3 +174,82 @@ public class ConfigTests
         finally { try { File.Delete(f); } catch (Exception) { } }
     }
 }
+
+public class YieldRegionsTests
+{
+    private static readonly PxRect Bar = new(0, 0, 2560, 30);
+    private static long Area(IEnumerable<PxRect> r) => r.Sum(x => x.Area);
+    private static System.Text.Json.JsonElement? J(string json) => System.Text.Json.JsonDocument.Parse(json).RootElement.Clone();
+
+    [Fact]
+    public void Without_holes_the_whole_bar_stays()
+    {
+        Assert.Equal([Bar], YieldRegions.Visible(Bar, [])); Assert.False(YieldRegions.Touches(Bar, []));
+    }
+
+    [Fact]
+    public void A_hole_in_the_middle_leaves_exactly_the_rest_and_the_pieces_never_overlap()
+    {
+        var island = new PxRect(1020, 0, 520, 30);   // la Isla expandida cubre toda la altura de la barra
+        var v = YieldRegions.Visible(Bar, [island]);
+        Assert.Equal(Bar.Area - island.Area, Area(v));
+        Assert.All(v, p => Assert.False(Overlaps(p, island)));
+        for (int i = 0; i < v.Count; i++) for (int j = i + 1; j < v.Count; j++) Assert.False(Overlaps(v[i], v[j]));
+        Assert.True(YieldRegions.Touches(Bar, [island]));
+    }
+
+    [Fact]
+    public void A_pill_shorter_than_the_bar_leaves_the_strip_below_it_and_both_sides()
+    {
+        var pill = new PxRect(1100, 0, 360, 20);
+        var v = YieldRegions.Visible(Bar, [pill]);
+        Assert.Equal(Bar.Area - pill.Area, Area(v));
+        Assert.Contains(v, p => p.X <= 1100 && p.Right >= 1460 && p.Y <= 20 && p.Bottom >= 30);   // la franja bajo la píldora sigue siendo barra
+    }
+
+    [Fact]
+    public void A_hole_taller_than_the_bar_only_removes_the_part_that_overlaps_it()
+    {
+        var island = new PxRect(1000, 0, 560, 220);   // expandida: muy por debajo de la barra
+        Assert.Equal(Bar.Area - 560L * 30, Area(YieldRegions.Visible(Bar, [island])));
+    }
+
+    [Fact]
+    public void Holes_outside_the_bar_or_empty_change_nothing_and_a_covering_hole_removes_everything()
+    {
+        Assert.Equal([Bar], YieldRegions.Visible(Bar, [new PxRect(100, 50, 200, 100), new PxRect(0, 0, 0, 0)]));
+        Assert.False(YieldRegions.Touches(Bar, [new PxRect(100, 50, 200, 100)]));
+        Assert.Empty(YieldRegions.Visible(Bar, [new PxRect(-10, -10, 3000, 100)]));
+    }
+
+    [Fact]
+    public void Two_holes_are_both_removed()
+    {
+        var a = new PxRect(200, 0, 100, 30); var b = new PxRect(1000, 0, 520, 30);
+        Assert.Equal(Bar.Area - a.Area - b.Area, Area(YieldRegions.Visible(Bar, [a, b])));
+    }
+
+    [Fact]
+    public void Overlapping_holes_are_not_subtracted_twice()
+    {
+        var a = new PxRect(1000, 0, 400, 30); var b = new PxRect(1200, 0, 400, 30);   // se solapan 200
+        Assert.Equal(Bar.Area - 600L * 30, Area(YieldRegions.Visible(Bar, [a, b])));
+    }
+
+    [Fact]
+    public void Parse_reads_valid_rects_and_ignores_garbage()
+    {
+        var r = YieldRegions.Parse(J("{\"rects\":[{\"x\":10,\"y\":0,\"w\":300,\"h\":40},{\"x\":1,\"y\":2,\"w\":0,\"h\":5},{\"x\":\"a\"},7]}"));
+        Assert.Equal([new PxRect(10, 0, 300, 40)], r);
+        Assert.Empty(YieldRegions.Parse(J("{\"rects\":[]}"))); Assert.Empty(YieldRegions.Parse(J("[1]"))); Assert.Empty(YieldRegions.Parse(J("{\"otra\":1}"))); Assert.Empty(YieldRegions.Parse(null));
+    }
+
+    [Fact]
+    public void Parse_caps_the_number_of_rects()
+    {
+        var many = string.Join(",", Enumerable.Range(0, 50).Select(i => $"{{\"x\":{i},\"y\":0,\"w\":5,\"h\":5}}"));
+        Assert.Equal(YieldRegions.MaxRects, YieldRegions.Parse(J("{\"rects\":[" + many + "]}")).Count);
+    }
+
+    private static bool Overlaps(PxRect a, PxRect b) => Math.Max(a.X, b.X) < Math.Min(a.Right, b.Right) && Math.Max(a.Y, b.Y) < Math.Min(a.Bottom, b.Bottom);
+}
