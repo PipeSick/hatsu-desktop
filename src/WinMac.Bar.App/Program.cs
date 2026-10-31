@@ -14,6 +14,7 @@ using WinMac.Bar;
 using WinMac.Bar.Win.Offscreen;
 using WinMac.Bar.Win.Rendering;
 using WinMac.Bar.Win.Shell;
+using WinMac.Ipc;
 
 internal static class Program
 {
@@ -54,12 +55,19 @@ internal static class Program
 
     private static int RunBar(string[] args)
     {
+        using var mutex = new Mutex(true, "WinMac.Bar.SingleInstance", out bool first);   // dos barras reservarían dos veces el borde superior
+        if (!first) { Log("Ya hay una barra superior en ejecución."); return 0; }
         string? cfgPath = args.Contains("--no-config") ? null : Arg(args, "--config") ?? ConfigPath;
         var cfg = cfgPath is null ? new BarConfig() : BarConfig.LoadOrDefault(cfgPath);
         if (args.Contains("--no-reserve")) cfg = cfg with { ReserveSpace = false };
         using var host = new BarHost(cfg, cfgPath, Log);
+        // --hosted (lo pasa WinMac.exe): enlace con el host. Sin él, la barra funciona exactamente como siempre. Si el host cae, la barra sigue sola.
+        var link = ModuleHostLink.FromArgs(args, "bar", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
+        if (link is not null) { link.ShutdownRequested += host.RequestQuit; link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
         Log("Barra superior iniciada. Cierra con «WinMac.Bar.App --quit» o desde su menú (clic derecho).");
-        int rc = host.Run(); Log("Barra superior cerrada. " + host.Report()); return rc;
+        int rc = host.Run(); Log("Barra superior cerrada. " + host.Report());
+        if (link is not null) { if (rc == 0) link.ByeAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult(); link.DisposeAsync().AsTask().GetAwaiter().GetResult(); }   // «bye» = cierre voluntario: el host no nos reinicia
+        return rc;
     }
 
     private static int Quit()

@@ -22,6 +22,7 @@ using WinMac.Dock.Imaging;
 using WinMac.Dock.Win.Offscreen;
 using WinMac.Dock.Win.Rendering;
 using WinMac.Dock.Win.Shell;
+using WinMac.Ipc;
 
 internal static class Program
 {
@@ -78,9 +79,13 @@ internal static class Program
         if (themeArg is ThemeMode tm) cfg = cfg with { Theme = tm };
         if (!File.Exists(cfgPath) && !args.Contains("--no-config")) { try { cfg.Save(cfgPath); } catch (Exception e) { Log("No se pudo guardar la configuración: " + e.Message); } }
         using var host = new DockHost(cfg, new DockMetrics(), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), args.Contains("--demo"), Log, args.Contains("--no-config") ? null : cfgPath);
+        // --hosted (lo pasa WinMac.exe): enlace con el host. Sin él, el dock funciona exactamente como siempre. Si el host cae, el dock sigue solo.
+        var link = ModuleHostLink.FromArgs(args, "dock", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
+        if (link is not null) { link.ShutdownRequested += host.RequestQuit; link.Start(); Log("Modo hosted: enlazado con WinMac.exe."); }
         Log("Iniciando dock…");
         int rc = host.Run();
         Log("Dock terminado. " + host.Report());
+        if (link is not null) { if (rc == 0) link.ByeAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult(); link.DisposeAsync().AsTask().GetAwaiter().GetResult(); }   // «bye» = cierre voluntario: el host no nos reinicia
         return rc;
     }
 

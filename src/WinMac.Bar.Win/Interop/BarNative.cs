@@ -38,6 +38,7 @@ internal static class BarNative
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT p, uint flags);
     [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr hMon, ref MONITORINFO mi);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern uint RegisterWindowMessageW(string name);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern IntPtr CreatePopupMenu();

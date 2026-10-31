@@ -238,6 +238,18 @@ public class ModuleLinkTests
     }
 
     [Fact]
+    public void The_token_is_removed_from_the_environment_so_child_processes_never_inherit_it()
+    {
+        Environment.SetEnvironmentVariable(ModuleHostLink.TokenEnvVar, "secreto");
+        try
+        {
+            var link = ModuleHostLink.FromArgs(["--hosted", "--pipe", T.Pipe()], "dock", "1"); Assert.NotNull(link);
+            Assert.Null(Environment.GetEnvironmentVariable(ModuleHostLink.TokenEnvVar));
+        }
+        finally { Environment.SetEnvironmentVariable(ModuleHostLink.TokenEnvVar, null); }
+    }
+
+    [Fact]
     public async Task A_hosted_module_announces_ready_and_exits_on_shutdown()
     {
         var pipe = T.Pipe(); await using var server = new IpcServer(new ServerOptions(pipe, "secreto")); server.Start(); var ready = new TaskCompletionSource<string>();

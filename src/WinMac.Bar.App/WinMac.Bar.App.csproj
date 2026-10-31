@@ -6,5 +6,8 @@
     <AssemblyName>WinMac.Bar.App</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\WinMac.Bar.Win\WinMac.Bar.Win.csproj" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinMac.Bar.Win\WinMac.Bar.Win.csproj" />
+    <ProjectReference Include="..\WinMac.Ipc\WinMac.Ipc.csproj" />
+  </ItemGroup>
 </Project>

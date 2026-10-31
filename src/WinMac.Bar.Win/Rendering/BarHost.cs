@@ -30,12 +30,15 @@ public sealed class BarHost : IDisposable
     private D2DDevice _dev = null!; private IDXGISwapChain1 _swap = null!; private ID2D1Bitmap1? _bmp, _blurred;
     private IDCompositionDevice _dcomp = null!; private IDCompositionTarget _target = null!; private IDCompositionVisual _visual = null!;
     private BarPainter _painter = null!; private readonly WallpaperSource _wall = new(); private BarView _view = null!;
-    private bool _force = true, _quitting, _registered, _hiddenForFullscreen; private BarTheme _theme;
+    private bool _force = true, _registered, _hiddenForFullscreen; private volatile bool _quitting; private uint _taskbarCreated; private BarTheme _theme;
     private DateTime _lastFs = DateTime.MinValue, _lastBattery = DateTime.MinValue, _lastVolume = DateTime.MinValue, _lastNetwork = DateTime.MinValue, _lastTheme = DateTime.MinValue, _nextClock = DateTime.MinValue;
     private BatteryInfo _battery = BatteryInfo.None; private VolumeInfo _volume = VolumeInfo.None; private NetworkInfo _network = NetworkInfo.Unknown;
     private double? _px, _py;
 
     public string Diagnostics { get; private set; } = "";
+
+    /// <summary>Pide el cierre normal de la barra (lo usa el host de WinMac vía <c>--hosted</c>). Seguro desde otro hilo.</summary>
+    public void RequestQuit() => _quitting = true;
     /// <summary>true = registrar el AppBar. Se puede cambiar en marcha desde el menú.</summary>
     public bool Reserved => _registered;
 
@@ -72,6 +75,7 @@ public sealed class BarHost : IDisposable
         BarNative.RegisterClassEx(ref cls);
         _hwnd = BarNative.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "WinMacBar", "WinMac Barra superior", WS_POPUP, 0, 0, 100, 30, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
+        _taskbarCreated = BarNative.RegisterWindowMessageW("TaskbarCreated");   // Explorer se reinició: hay que volver a registrar el AppBar
         _dev = new D2DDevice(); Diagnostics = _dev.Description;
         _scale = BarNative.GetDpiForWindow(_hwnd) / 96.0; _dev.SetDpi(_scale);
         _theme = ResolveTheme(); _painter = new BarPainter(_dev, _m) { Theme = _theme, Background = _cfg.Background };
@@ -207,6 +211,11 @@ public sealed class BarHost : IDisposable
     // ------------------------------------------------------------------ mensajes
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
     {
+        if (_taskbarCreated != 0 && msg == _taskbarCreated)
+        {
+            _log("[bar] Explorer se reinició (TaskbarCreated): se vuelve a registrar el AppBar.");
+            _registered = false; if (_cfg.ReserveSpace) PlaceWindow(); _force = true; return IntPtr.Zero;
+        }
         switch ((int)msg)
         {
             case WM_MOUSEACTIVATE: return (IntPtr)3;   // MA_NOACTIVATE: un clic en la barra no roba el foco a la app activa

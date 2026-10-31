@@ -26,7 +26,7 @@ public sealed class DockHost : IDisposable
     private readonly IIconSource _icons; private readonly AppIconSource? _appIcons; private readonly WindowThumbnails? _thumbs;
     private bool _pressPreview;
     private readonly string? _cfgPath; private readonly LaunchGuard _launch = new(); private readonly EventWaitHandle? _quit;
-    private DateTime? _saveDue; private DateTime _cfgStamp = DateTime.MinValue, _lastCfgCheck = DateTime.MinValue; private bool _quitting;
+    private DateTime? _saveDue; private DateTime _cfgStamp = DateTime.MinValue, _lastCfgCheck = DateTime.MinValue; private volatile bool _quitting;
     private int _pressed = -1; private System.Drawing.Point _pressPx; private bool _pressDrag;
     private readonly Action<string> _log; private readonly bool _demo;
     private readonly WndProc _proc;
@@ -38,6 +38,9 @@ public sealed class DockHost : IDisposable
     private DateTime _lastFs = DateTime.MinValue;
 
     public string Diagnostics { get; private set; } = "";
+
+    /// <summary>Pide el cierre normal del dock (lo usa el host de WinMac vía <c>--hosted</c>). Seguro desde otro hilo: el bucle lo atiende en ≤ 50 ms.</summary>
+    public void RequestQuit() => _quitting = true;
 
     /// <param name="configPath">Si se indica, las apps ancladas y su orden se guardan aquí (escritura atómica, con retardo) y se recargan si el archivo cambia desde fuera.</param>
     public DockHost(DockConfig cfg, DockMetrics m, GlassStyle glass, bool demo, Action<string> log, string? configPath = null)

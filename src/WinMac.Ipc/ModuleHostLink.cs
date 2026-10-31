@@ -20,6 +20,7 @@ public sealed class ModuleHostLink : IAsyncDisposable
     {
         if (!args.Contains("--hosted")) return null;
         int i = Array.IndexOf(args, "--pipe"); string? token = Environment.GetEnvironmentVariable(TokenEnvVar);
+        Environment.SetEnvironmentVariable(TokenEnvVar, null);   // el token no debe heredarse: las apps que lance este módulo (p. ej. el Dock) no deben recibirlo
         if (i < 0 || i + 1 >= args.Length || string.IsNullOrEmpty(token)) return null;
         return new ModuleHostLink(new IpcClient(new ClientOptions(args[i + 1], token, module) { ModuleVersion = version }), module);
     }

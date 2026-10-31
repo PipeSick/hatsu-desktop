@@ -36,7 +36,7 @@ function Pids($room, [string]$id) { @(ModLog $room $id | Where-Object { $_ -matc
 function AnyAlive([int[]]$pids) { foreach ($p in $pids) { if (Get-Process -Id $p -ErrorAction SilentlyContinue) { return $true } }; return $false }
 function Ports { (Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique) -join ',' }
 function Quit($room, $proc) { Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; if ($proc) { [void]$proc.WaitForExit(30000) } }
-function Cleanup { Get-Process -Name 'WinMac', 'WinMac.FakeModule' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300 }
+function Cleanup { Get-Process -Name 'WinMac', 'WinMac.FakeModule', 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300 }
 
 if (-not (Test-Path $hostExe) -or -not (Test-Path $fakeExe)) { Write-Host "::error title=Host::faltan WinMac.exe o WinMac.FakeModule.exe en $PublishDir"; exit 1 }
 Cleanup; $portsBefore = Ports
@@ -112,6 +112,31 @@ $trayMsg = if (LogHas $r9 'icono de bandeja creado') { 'icono creado' } elseif (
 Check 'M1 (info) con bandeja el host arranca y los módulos llegan a Running' $up $trayMsg
 Quit $r9 $h9; Check 'M2 (info) con bandeja el cierre termina limpio' ($h9.HasExited -and $h9.ExitCode -eq 0)
 Cleanup
+
+# ── 10–11. Barra y Dock REALES bajo el host (--hosted): conectan, llegan a Running, se cierran en orden y mueren con el host
+$barExe = Join-Path $PublishDir 'Bar.App/WinMac.Bar.App.exe'; $dockExe = Join-Path $PublishDir 'Dock.App/WinMac.Dock.App.exe'
+function NewRealRoom([string]$name) {
+  $d = Join-Path $base $name; New-Item -ItemType Directory -Force -Path $d | Out-Null
+  @{ modules = @{ bar = @{ enabled = $true; path = $barExe; args = @('--no-config', '--no-reserve') }; dock = @{ enabled = $true; path = $dockExe; args = @('--no-config') }; notch = @{ enabled = $false } } } |
+    ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
+  [pscustomobject]@{ Dir = $d; Cfg = Join-Path $d 'winmac.json'; Log = Join-Path $d 'host.log' }
+}
+function RealPids { @(Get-Process -Name 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }) }
+if ((Test-Path $barExe) -and (Test-Path $dockExe)) {
+  $rr = NewRealRoom 'real-quit'; $hr = StartHost $rr
+  $up = WaitFor { (LogHas $rr '[bar] Running') -and (LogHas $rr '[dock] Running') } 45
+  $realPids = RealPids
+  Check 'B9 Barra y Dock REALES bajo el host llegan a Running (--hosted)' ($up -and $realPids.Count -eq 2) ("procesos: $($realPids -join ',')")
+  Quit $rr $hr
+  Check 'B9 al cerrar, Barra y Dock reales terminan por su camino normal (Stopped, sin Crashed)' ((LogHas $rr '[bar] Stopped') -and (LogHas $rr '[dock] Stopped') -and -not (LogHas $rr 'Crashed') -and -not (LogHas $rr 'Failed'))
+  Check 'B9 no queda ningún proceso real de Barra/Dock' (WaitFor { (RealPids).Count -eq 0 } 8)
+  Cleanup
+  $rk = NewRealRoom 'real-kill'; $hk = StartHost $rk
+  [void](WaitFor { (LogHas $rk '[bar] Running') -and (LogHas $rk '[dock] Running') } 45); $kp = RealPids
+  Stop-Process -Id $hk.Id -Force
+  Check 'B4 con módulos REALES: al morir el host de golpe, Barra y Dock desaparecen (Job Object)' ($kp.Count -eq 2 -and (WaitFor { (RealPids).Count -eq 0 } 10)) ("procesos antes: $($kp -join ',')")
+  Cleanup
+} else { Check 'B9 (omitido) faltan Bar.App/Dock.App publicados' $false }
 
 $md = "### Host: pruebas de ciclo de vida (módulos de mentira)`n`n| Prueba | Resultado | Detalle |`n|---|---|---|`n" + (($script:rows | ForEach-Object { "| $($_.Prueba) | $($_.Resultado) | $($_.Detalle) |" }) -join "`n")
 $md | Set-Content (Join-Path $OutDir 'host-tests.md') -Encoding UTF8
