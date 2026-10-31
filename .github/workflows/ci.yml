@@ -116,6 +116,39 @@ jobs:
         shell: pwsh
         run: ./tools/ci/Write-Summary.ps1 -SmokeDir smoke -SmokeUrl "${{ steps.up_smoke.outputs.artifact-url }}" -SheetUrl "${{ steps.up_sheet.outputs.artifact-url }}" -BinUrl "${{ needs.windows-build.outputs.bin_url }}" -Sha "${{ github.sha }}"
 
+  windows-integracion:
+    name: Windows · integración con NotchWin (Build-Local, WinUI 3, arranque bajo el host)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Clonar NotchWin en ruta corta, con el submódulo, en el commit fijado (tools/notch-pin.txt)
+        shell: pwsh
+        run: |
+          $sha = (Get-Content tools/notch-pin.txt | Where-Object { $_ -and -not $_.StartsWith('#') } | Select-Object -First 1).Trim()
+          git clone --no-checkout https://github.com/PipeSick/notch-win C:\nw
+          git -C C:\nw fetch origin $sha
+          git -C C:\nw checkout --detach $sha
+          git -C C:\nw submodule update --init
+          git -C C:\nw submodule status
+      - name: Build-Local.ps1 (host, Barra, Dock y NotchWin en dist/WinMac)
+        shell: pwsh
+        run: ./tools/Build-Local.ps1 -NotchPath C:\nw
+      - name: Pruebas de NotchWin, arranque real bajo el host y cierre ordenado
+        shell: pwsh
+        run: ./tools/ci/Test-Notch.ps1 -DistDir dist/WinMac -NotchPath C:\nw -OutDir notch-out
+      - name: Subir resultados de la integración
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integracion-notchwin-${{ github.sha }}
+          path: notch-out
+          retention-days: 14
+          if-no-files-found: warn
+
   linux-cross:
     name: Linux · compilación cruzada y pruebas de lógica pura (informativo)
     runs-on: ubuntu-latest
