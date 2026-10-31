@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- SOLO PARA PRUEBAS: módulo de mentira que habla con el host por el canal real y puede simular caídas, bloqueos y cierres. Nunca se distribuye. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinMac.FakeModule</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\WinMac.Ipc\WinMac.Ipc.csproj" /></ItemGroup>
+</Project>
