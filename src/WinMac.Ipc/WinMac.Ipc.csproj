@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Canal local entre el host de WinMac y sus módulos: Named Pipe del usuario actual, tramas JSON versionadas. Multiplataforma para poder probarlo en Linux. Sin dependencias. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinMac.Ipc</RootNamespace>
+  </PropertyGroup>
+</Project>
