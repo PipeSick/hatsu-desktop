@@ -364,7 +364,7 @@ public class ThemeTests
         var l = GlassStyle.For(DockTheme.Light); var d = GlassStyle.For(DockTheme.Dark);
         Assert.Equal(DockTheme.Light, l.Theme); Assert.Equal(DockTheme.Dark, d.Theme);
         Assert.True(d.TintR + d.TintG + d.TintB < l.TintR + l.TintG + l.TintB);
-        Assert.True(d.TintAlpha > l.TintAlpha); Assert.True(d.ShadowAlpha > l.ShadowAlpha); Assert.True(d.RimTopAlpha < l.RimTopAlpha);
+        Assert.True(d.TintAlpha > l.TintAlpha); Assert.True(d.ShadowAlpha > l.ShadowAlpha); Assert.True(d.RimTopAlpha <= l.RimTopAlpha);
     }
 
     [Fact]
@@ -384,5 +384,77 @@ public class ThemeTests
         var c = new DockController(new DockMetrics(), new DockConfig()); c.SetItems(items);
         for (int i = 0; i < 120; i++) c.Step(1.0 / 60);
         Assert.True(c.Step(0).BarWidth + 2 * c.Metrics.ShadowMargin <= c.WindowWidth);
+    }
+}
+
+/// <summary>Valores medidos en la referencia real 1 (macOS Tahoe, docs/09). Si alguien cambia las proporciones, estas pruebas obligan a justificarlo con nuevas medidas.</summary>
+public class CalibrationTests
+{
+    private static readonly DockMetrics M = new();
+    private const double Icon = 87;   // ancho visible del ícono en la captura (px); toda la geometría se compara como razón
+
+    [Theory]
+    [InlineData(30, "gap")] [InlineData(29.5, "padx")] [InlineData(29, "padtop")] [InlineData(28, "padbottom")]
+    [InlineData(145, "bar")] [InlineData(43.2, "radius")] [InlineData(43, "sepleft")] [InlineData(40, "sepright")] [InlineData(7, "dot")] [InlineData(18.9, "dotcenter")]
+    public void Proportions_match_the_measured_reference_within_3_percent(double measuredPx, string what)
+    {
+        double ratio = measuredPx / Icon;
+        double mine = what switch
+        {
+            "gap" => M.Gap / M.BaseSize, "padx" => M.PadX / M.BaseSize, "padtop" => M.PadTop / M.BaseSize, "padbottom" => M.PadBottom / M.BaseSize,
+            "bar" => M.BarHeight / M.BaseSize, "radius" => M.BarRadius / M.BaseSize, "sepleft" => M.SeparatorLeft / M.BaseSize, "sepright" => M.SeparatorRight / M.BaseSize,
+            "dot" => M.DotSize / M.BaseSize, "dotcenter" => M.DotCenterBelowIcon / M.BaseSize, _ => throw new ArgumentOutOfRangeException(what),
+        };
+        Assert.InRange(mine / ratio, 0.97, 1.03);
+    }
+
+    [Fact]
+    public void Proportions_scale_with_the_icon_size()
+    {
+        var big = new DockMetrics { BaseSize = 120 };
+        Assert.Equal(M.BarHeight * 2, big.BarHeight, 6); Assert.Equal(M.Gap * 2, big.Gap, 6); Assert.Equal(M.BarRadius * 2, big.BarRadius, 6);
+    }
+
+    [Fact]
+    public void Separator_spacing_follows_the_measured_left_and_right_gaps()
+    {
+        var items = new List<DockItemModel> { new("a", DockItemKind.App, "A", "a"), new("s", DockItemKind.Separator, "", null), new("b", DockItemKind.App, "B", "b") };
+        var f = DockLayout.Compute(M, items, null);
+        double aRight = f.Items[0].X + f.Items[0].Size, line = f.Items[1].X, bLeft = f.Items[2].X;
+        Assert.Equal(M.SeparatorLeft, line - aRight, 6);
+        Assert.Equal(M.SeparatorRight, bLeft - (line + M.SeparatorLine), 6);
+        var c = DockLayout.RestCenters(M, items);
+        Assert.Equal(f.Items[2].X + M.BaseSize / 2, c[2], 6);
+    }
+
+    [Fact]
+    public void Icon_is_about_60_percent_of_the_bar_height_like_the_reference()
+        => Assert.InRange(M.BaseSize / M.BarHeight, 0.58, 0.62);
+
+    [Fact]
+    public void Shadow_layers_do_not_stack_beyond_the_requested_edge_opacity()
+    {
+        foreach (var peak in new[] { 0.02, 0.06, 0.08, 0.3 })
+        {
+            var a = ShadowMath.LayerAlphas(12, peak);
+            Assert.All(a, x => Assert.InRange(x, 0, 1));
+            Assert.Equal(ShadowMath.Target(0.5 / 12, peak), ShadowMath.Cumulative(a, 1), 6);   // junto al borde: ≈ peak, no la suma de capas
+            Assert.True(ShadowMath.Cumulative(a, 1) <= peak + 1e-9);
+            for (int k = 2; k <= 12; k++) Assert.True(ShadowMath.Cumulative(a, k) <= ShadowMath.Cumulative(a, k - 1) + 1e-9);   // decae hacia fuera
+            Assert.True(ShadowMath.Cumulative(a, 12) < 0.05 * peak + 1e-6);
+        }
+    }
+
+    [Fact]
+    public void Default_shadow_is_far_below_the_previous_51_percent()
+        => Assert.True(ShadowMath.Cumulative(ShadowMath.LayerAlphas(12, new GlassStyle().ShadowAlpha), 1) < 0.07);
+
+    [Fact]
+    public void Calibrated_material_has_no_saturation_boost_and_no_inner_rim()
+    {
+        foreach (var t in new[] { DockTheme.Light, DockTheme.Dark })
+        { var g = GlassStyle.For(t); Assert.Equal(1.0, g.Saturation); Assert.Equal(0.0, g.InnerRimAlpha); Assert.InRange(g.RimTopAlpha, 0.2, 0.4); }
+        var d = GlassStyle.For(DockTheme.Dark);   // k = 1 − α ≈ 0,6 y término aditivo ≈ 31 (medido)
+        Assert.InRange(1 - d.TintAlpha, 0.55, 0.65); Assert.InRange(255 * d.TintAlpha * d.TintR, 25, 38);
     }
 }

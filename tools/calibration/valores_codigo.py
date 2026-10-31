@@ -3,8 +3,16 @@
 No modifica nada. Uso: python3 valores_codigo.py [--json]"""
 import re, json, os, sys, math
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+REV = None
+for i, a in enumerate(sys.argv):
+    if a == '--rev' and i + 1 < len(sys.argv): REV = sys.argv[i + 1]
+def read(path):
+    if REV:
+        import subprocess
+        return subprocess.run(['git', 'show', f'{REV}:{path}'], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    return open(os.path.join(ROOT, path), encoding='utf-8').read()
 def props(path, record):
-    txt = open(os.path.join(ROOT, path), encoding='utf-8').read()
+    txt = read(path)
     body = txt[txt.index(record):]
     out = {}
     for name, val in re.findall(r'public double (\w+) \{ get; init; \} = ([0-9.]+);', body):

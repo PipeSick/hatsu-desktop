@@ -73,9 +73,53 @@ Lectura (razones respecto al ícono; el ícono de macOS se toma como 1,00):
 - **Íconos de las apps**: los de WinMac son de demostración; el arte no se calibra con capturas y no se copia nada de Apple.
 - Tiempos de animación, refracción, iluminación dinámica y distancia del Dock al borde de la pantalla (el recorte la oculta).
 
-## 6. Cambios que prepararía en la única iteración (sin ejecutarlos ahora)
-1. Parametrizar la geometría **por tamaño de ícono** con las razones medidas (hueco ≈ 0,345, márgenes ≈ 0,33, barra ≈ 1,67, radio ≈ 0,30 × barra, separador ≈ 0,48/0,46 + línea de 2 px al 74 %, indicador 0,08 con centro a 0,22 bajo el ícono).
-2. Rehacer la sombra (que no apile opacidades) con oscurecimiento lateral ≲ 5 %.
-3. Borde: filete de ≈ 2 px con α ≈ 0,3 arriba, contorno oscuro fino en los lados; quitar el filo interior actual.
-4. Material: tinte gris medio-oscuro (c ≈ 30, α ≈ 0,4) y saturación 1,0 provisional, **a confirmar** con los fondos sólidos.
-5. Probar con pruebas unitarias las razones y volver a medir los PNG de WinMac con la misma herramienta.
+## 6. Iteración de calibración aplicada (solo lo cubierto por la referencia 1)
+Alcance fijado por el usuario: **geometría, separadores, indicadores, bordes, sombras y material**. **No** se tocó la curva de magnificación (`MaxScale`, `Radius`, forma coseno) ni la etiqueta (esperan las capturas 2 y 3), ni se introdujo captura continua ni refracción, ni se copiaron recursos de Apple.
+
+| Parámetro (÷ ícono salvo indicación) | macOS (medido) | WinMac antes | WinMac después | Desvío vs macOS |
+|---|---|---|---|---|
+| Separación entre íconos | 0.345 | 0.100 | 0.345 | 71 % → 0 % |
+| Margen lateral | 0.339 | 0.167 | 0.339 | 51 % → 0 % |
+| Margen superior | 0.333 | 0.133 | 0.333 | 60 % → 0 % |
+| Margen inferior | 0.322 | 0.233 | 0.322 | 27 % → 0 % |
+| Altura de la barra | 1.667 | 1.367 | 1.655 | 18 % → 1 % |
+| Radio de esquina (÷ barra) | 0.298 | 0.317 | 0.298 | 7 % → 0 % |
+| Indicador: diámetro | 0.080 | 0.067 | 0.080 | 17 % → 1 % |
+| Indicador: centro bajo el ícono | 0.217 | 0.108 | 0.217 | 50 % → 0 % |
+| Separador: espacio a la izquierda | 0.494 | 0.267 | 0.494 | 46 % → 0 % |
+| Separador: espacio a la derecha | 0.460 | 0.183 | 0.460 | 60 % → 0 % |
+| Separador: altura (÷ barra) | 0.745 | 0.600 | 0.745 | 19 % → 0 % |
+| Separador: grosor | 0.023 | 0.017 | 0.023 | 28 % → 0 % |
+| Ícono ÷ altura de la barra | 0.600 | 0.732 | 0.604 | 22 % → 1 % |
+
+| Material / bordes / sombra | macOS (estimado) | Antes | Después claro | Después oscuro |
+|---|---|---|---|---|
+| Ganancia k (interior÷exterior) | 0,59–0,62 | 0.59 | 0.71 | 0.60 |
+| Término aditivo c (0–255) | ≈ 31 | 106 | 73 | 31 |
+| Realce de saturación | ≈ 1,0 (inconcluso) | 1.7 | 1 | 1 |
+| Filete superior (α blanco) | 0,26–0,36 | 0.8 | 0.32 | 0.32 |
+| Contorno oscuro en los costados (α negro) | ≈ 0,1–0,25 (equiv.) | 0 | 0.2 | 0.2 |
+| Sombra: opacidad junto al borde lateral | ≤ 0,02–0,06 (cota) | 0.51 | 0.060 | 0.080 |
+
+**Cómo leer la primera tabla:** los parámetros se *fijaron* a las razones medidas, así que el «0 %» **es una consecuencia de haberlos igualado, no una validación**. La comprobación real es medir los PNG/capturas de WinMac con la misma herramienta (`aplicar_puntos.mjs` + `calibracion.html`); pendiente.
+**Cómo leer la segunda:** la «Después oscuro» reproduce k≈0,60 y c≈31 medidos **suponiendo que la captura era apariencia oscura (PENDIENTE de confirmar)**. El preset claro conserva su material anterior (solo cambian saturación, borde y sombra) porque no hay referencia clara; sigue siendo más lechoso que la referencia.
+
+### Cambios (código)
+| Área | Cambio | Clase de evidencia |
+|---|---|---|
+| `DockMetrics` | La geometría pasa a **proporciones del ícono** (`GapRatio`, `PadXRatio`, `PadTopRatio`, `PadBottomRatio`, `BarRadiusOfBarHeight`, `SeparatorLeft/Right/LineRatio`, `SeparatorHeightOfBarHeight`, `DotRatio`, `DotCenterBelowIconRatio`); los valores absolutos son derivados. `BaseSize` (60) sigue siendo preferencia del usuario | medida directa (±1 px) |
+| `DockLayout` | El separador se coloca con sus espacios izquierdo/derecho medidos y grosor propio; `ItemFrame.X` del separador = borde izquierdo de la línea | medida directa |
+| `DockPainter` | Separador como rectángulo de 2 px al 74 % de la barra; indicador a 0,22 × ícono bajo el ícono; **ícono de reemplazo = mosaico a sangre completa** (se elimina la placa blanca gruesa); contorno del ícono α 0,30; corregido el gradiente del mosaico (estaba en coordenadas equivocadas) | medida directa / criterio de usuario |
+| Sombra (`ShadowMath`) | Capas con **opacidad acumulada controlada** (ya no 51 %): claro 0,06, oscuro 0,08; alcance 19 px, desfase 4 px (**el desfase vertical no es medible**: el recorte deja 9 px bajo la barra) | estimación (cota superior); defecto del apilado: alta confianza |
+| Bordes | Se elimina el filo interior; filete claro de 1,25 DIP solo arriba/abajo (α 0,32 / 0,26) y contorno oscuro fino (α 0,20) en todo el perímetro; resplandor interior limitado al 10 % superior | estimación, media |
+| Material | Saturación 1,7 → **1,0** (ambos temas); preset oscuro: tinte gris 0,31 con α 0,40 | saturación inconclusa (baja confianza); k y c: estimación media |
+
+### Pruebas
+62 pruebas unitarias de `Dock.Core` (16 nuevas en `CalibrationTests`): fijan las razones medidas con ±3 %, el escalado con el tamaño del ícono, el espaciado del separador, la no-acumulación de la sombra y las condiciones del material. Si alguien cambia estas proporciones, las pruebas obligan a justificarlo con nuevas medidas. **No hay prueba visual automática**: el aspecto real se ve en la ventana o en los PNG del CI.
+
+### Pendiente tras esta iteración
+1. Medir los PNG nuevos de WinMac con la misma herramienta (verificación real, no tautológica).
+2. Confirmar apariencia clara/oscura de la referencia y fondos sólidos para fijar saturación y tinte.
+3. Segunda y tercera captura: magnificación y etiqueta. Nota: `Radius` (150 DIP) es absoluto, y con el paso mayor entre íconos (≈ 81 DIP) la ampliación alcanza a menos vecinos que antes; es un efecto de la nueva geometría, pendiente de calibrar con la captura 2.
+4. Íconos propios de apps (los de demostración siguen siendo genéricos).
+5. Desfase vertical y alcance reales de la sombra inferior (requiere captura con más margen bajo el Dock).

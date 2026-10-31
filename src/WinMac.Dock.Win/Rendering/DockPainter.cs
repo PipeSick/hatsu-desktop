@@ -84,13 +84,13 @@ public sealed class DockPainter : IDisposable
 
     private void DrawBarShadow(RawRectF bar)
     {
-        // Gaussiana aproximada con capas concéntricas (sin efectos de D2D: barato y válido en cualquier GPU/WARP).
-        int n = 14; float spread = (float)_g.ShadowBlur * 1.6f, dy = (float)_g.ShadowOffsetY;
+        // Capas concéntricas con opacidad ACUMULADA controlada (ShadowMath): la opacidad total junto al borde es ShadowAlpha, no la suma de las capas.
+        const int n = 12; float spread = (float)_g.ShadowBlur * 1.6f, dy = (float)_g.ShadowOffsetY;
+        var alphas = ShadowMath.LayerAlphas(n, _g.ShadowAlpha);
         for (int i = n; i >= 1; i--)
         {
-            float t = i / (float)n, g = spread * t;
-            float a = (float)_g.ShadowAlpha * (1f - t) * (1f - t) * 0.5f + 0.004f;
-            Solid(0, 0, 0, a);
+            float g = spread * i / n;
+            Solid(0, 0, 0, (float)alphas[i - 1]);
             _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(bar.Left - g, bar.Top - g + dy, bar.Right + g, bar.Bottom + g + dy), RadiusX = (float)_m.BarRadius + g, RadiusY = (float)_m.BarRadius + g }, _solid);
         }
     }
@@ -105,13 +105,13 @@ public sealed class DockPainter : IDisposable
         }
         else { if (_g.Theme == DockTheme.Dark) Solid(0.16f, 0.17f, 0.21f, 0.70f); else Solid(0.80f, 0.84f, 0.90f, 0.55f); _ctx.FillRoundedRectangle(rr, _solid); }
 
-        // 2) Tinte claro (vidrio «lechoso»), más denso abajo.
+        // 2) Tinte (color y opacidad calibrados; ver GlassStyle).
         using (var tint = Grad(new Vector2(0, bar.Top), new Vector2(0, bar.Bottom),
-            (0f, new Color4((float)_g.TintR, (float)_g.TintG, (float)_g.TintB, (float)(_g.TintAlpha + _g.Brightness))), (1f, new Color4((float)_g.TintR, (float)_g.TintG, (float)_g.TintB, (float)(_g.TintAlpha * 0.8)))))
+            (0f, new Color4((float)_g.TintR, (float)_g.TintG, (float)_g.TintB, (float)(_g.TintAlpha + _g.Brightness))), (1f, new Color4((float)_g.TintR, (float)_g.TintG, (float)_g.TintB, (float)(_g.TintAlpha * _g.TintBottomFactor)))))
             _ctx.FillRoundedRectangle(rr, tint);
 
-        // 3) Brillo suave en la mitad superior (reflejo).
-        float mid = bar.Top + (bar.Bottom - bar.Top) * 0.55f;
+        // 3) Resplandor interior solo junto al borde superior (macOS: decae en ≈ 6–8 px).
+        float mid = bar.Top + (bar.Bottom - bar.Top) * (float)_g.SheenFraction;
         using (var sheen = Grad(new Vector2(0, bar.Top), new Vector2(0, mid), (0f, new Color4(1, 1, 1, (float)_g.TopSheenAlpha)), (1f, new Color4(1, 1, 1, 0))))
         {
             _ctx.PushAxisAlignedClip(new RawRectF(bar.Left, bar.Top, bar.Right, mid), AntialiasMode.PerPrimitive);
@@ -119,20 +119,30 @@ public sealed class DockPainter : IDisposable
             _ctx.PopAxisAlignedClip();
         }
 
-        // 4) Borde especular exterior (arriba brillante, abajo tenue) + filo interior.
-        using (var rim = Grad(new Vector2(0, bar.Top), new Vector2(0, bar.Bottom), (0f, new Color4(1, 1, 1, (float)_g.RimTopAlpha)), (0.5f, new Color4(1, 1, 1, 0.28f)), (1f, new Color4(1, 1, 1, (float)_g.RimBottomAlpha))))
-            _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(bar.Left + .5f, bar.Top + .5f, bar.Right - .5f, bar.Bottom - .5f), RadiusX = (float)_m.BarRadius - .5f, RadiusY = (float)_m.BarRadius - .5f }, rim, 1f);
-        using (var inner = Grad(new Vector2(0, bar.Top), new Vector2(0, bar.Bottom), (0f, new Color4(1, 1, 1, 0)), (1f, new Color4(1, 1, 1, (float)_g.InnerRimAlpha))))
-            _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(bar.Left + 1.5f, bar.Top + 1.5f, bar.Right - 1.5f, bar.Bottom - 1.5f), RadiusX = (float)_m.BarRadius - 1.5f, RadiusY = (float)_m.BarRadius - 1.5f }, inner, 1f);
+        // 4) Bordes: contorno oscuro fino en todo el perímetro (visible en los costados) + filete claro solo arriba y abajo (nulo a media altura).
+        float rw = (float)_g.RimWidth, hw = rw / 2f; var rad = (float)_m.BarRadius - hw;
+        if (_g.SideContourAlpha > 0)
+        {
+            Solid(0, 0, 0, (float)_g.SideContourAlpha);
+            _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(bar.Left + .5f, bar.Top + .5f, bar.Right - .5f, bar.Bottom - .5f), RadiusX = (float)_m.BarRadius - .5f, RadiusY = (float)_m.BarRadius - .5f }, _solid, 1f);
+        }
+        using (var rim = Grad(new Vector2(0, bar.Top), new Vector2(0, bar.Bottom),
+            (0f, new Color4(1, 1, 1, (float)_g.RimTopAlpha)), (0.15f, new Color4(1, 1, 1, (float)_g.RimTopAlpha * 0.3f)), (0.5f, new Color4(1, 1, 1, 0)),
+            (0.85f, new Color4(1, 1, 1, (float)_g.RimBottomAlpha * 0.3f)), (1f, new Color4(1, 1, 1, (float)_g.RimBottomAlpha))))
+            _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(bar.Left + hw, bar.Top + hw, bar.Right - hw, bar.Bottom - hw), RadiusX = rad, RadiusY = rad }, rim, rw);
+        if (_g.InnerRimAlpha > 0)
+            using (var inner = Grad(new Vector2(0, bar.Top), new Vector2(0, bar.Bottom), (0f, new Color4(1, 1, 1, 0)), (1f, new Color4(1, 1, 1, (float)_g.InnerRimAlpha))))
+                _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(bar.Left + 1.5f, bar.Top + 1.5f, bar.Right - 1.5f, bar.Bottom - 1.5f), RadiusX = (float)_m.BarRadius - 1.5f, RadiusY = (float)_m.BarRadius - 1.5f }, inner, 1f);
     }
 
     private void DrawSeparators(DockView v, float barTop, float barH)
     {
+        float lineW = (float)_m.SeparatorLine, h = (float)_m.SeparatorHeight, y0 = barTop + (barH - h) / 2f;
         foreach (var it in v.Items)
         {
             if (it.Model.Kind != DockItemKind.Separator) continue;
             Solid((float)_g.MarkR, (float)_g.MarkG, (float)_g.MarkB, (float)_g.SeparatorAlpha);
-            _ctx.DrawLine(new Vector2((float)it.X, barTop + barH * .2f), new Vector2((float)it.X, barTop + barH * .8f), _solid, 1f);
+            _ctx.FillRectangle(new RawRectF((float)it.X, y0, (float)it.X + lineW, y0 + h), _solid);
         }
     }
 
@@ -146,9 +156,14 @@ public sealed class DockPainter : IDisposable
         _ctx.FillEllipse(new Ellipse(new Vector2(x + s / 2, y + s * 0.97f), s * 0.42f, s * 0.06f), _solid);
 
         var oldT = _ctx.Transform;
-        _ctx.Transform = Matrix3x2.CreateScale(s, s) * Matrix3x2.CreateTranslation(x, y) * oldT;
-        DrawPlate(it.Model);
-        _ctx.Transform = oldT;
+        // Los íconos de demostración/reemplazo (letra) son un mosaico a sangre completa, como un ícono de app; la placa clara solo se usa bajo íconos reales (planos y con transparencia).
+        bool fullBleed = it.Model.Kind == DockItemKind.App && IconFor(it.Model) is null;
+        if (!fullBleed)
+        {
+            _ctx.Transform = Matrix3x2.CreateScale(s, s) * Matrix3x2.CreateTranslation(x, y) * oldT;
+            DrawPlate(it.Model);
+            _ctx.Transform = oldT;
+        }
 
         if (it.Model.Kind == DockItemKind.App) DrawAppGlyph(it, x, y, s);
         else if (it.Model.Kind == DockItemKind.Folder) DrawFolder(x, y, s);
@@ -156,14 +171,14 @@ public sealed class DockPainter : IDisposable
 
         // contorno fino del squircle
         _ctx.Transform = Matrix3x2.CreateScale(s, s) * Matrix3x2.CreateTranslation(x, y) * oldT;
-        Solid(1, 1, 1, 0.45f); _ctx.DrawGeometry(_squircle, _solid, 1f / s);
+        Solid(1, 1, 1, 0.30f); _ctx.DrawGeometry(_squircle, _solid, 1f / s);
         _ctx.Transform = oldT;
 
         // indicador de app abierta
         if (it.Model.Running)
         {
             Solid((float)_g.MarkR, (float)_g.MarkG, (float)_g.MarkB, it.Model.Active ? (float)Math.Min(1, _g.MarkAlpha + 0.10) : (float)(_g.MarkAlpha - 0.10));
-            _ctx.FillEllipse(new Ellipse(new Vector2(x + s / 2, barBottom - (float)_m.PadBottom + 6.5f), (float)_m.DotSize / 2, (float)_m.DotSize / 2), _solid);
+            _ctx.FillEllipse(new Ellipse(new Vector2(x + s / 2, barBottom - (float)_m.PadBottom + (float)_m.DotCenterBelowIcon), (float)_m.DotSize / 2, (float)_m.DotSize / 2), _solid);
         }
     }
 
@@ -190,10 +205,10 @@ public sealed class DockPainter : IDisposable
         // Reemplazo: placa de color + inicial (ícono real no disponible).
         int h = Math.Abs((it.Model.Path ?? it.Model.Title).GetHashCode());
         float hue = (h % 360) / 360f; var c = Hsv(hue, 0.55f, 0.85f);
-        using (var g = Grad(new Vector2(0, y), new Vector2(0, y + s), (0f, new Color4(Math.Min(1, c.R + .15f), Math.Min(1, c.G + .15f), Math.Min(1, c.B + .15f), 1)), (1f, c)))
+        using (var g = Grad(new Vector2(0, 0), new Vector2(0, 1), (0f, new Color4(Math.Min(1, c.R + .15f), Math.Min(1, c.G + .15f), Math.Min(1, c.B + .15f), 1)), (1f, c)))
         {
             var old = _ctx.Transform;
-            _ctx.Transform = Matrix3x2.CreateScale(s * .86f, s * .86f) * Matrix3x2.CreateTranslation(x + s * .07f, y + s * .07f) * old;
+            _ctx.Transform = Matrix3x2.CreateScale(s, s) * Matrix3x2.CreateTranslation(x, y) * old;
             _ctx.FillGeometry(_squircle, g);
             _ctx.Transform = old;
         }

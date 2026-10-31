@@ -3,6 +3,8 @@
 Las medidas se expresan en píxeles de la captura (escala desconocida) y como razón respecto al ancho del ícono, que NO depende de la escala.
 Uso: tabla_comparativa.py medidas.json repeticiones.json"""
 import json, sys, os, statistics as st
+# Los valores 'del código' son los de ANTES de la calibración (c05aa0f): el formato actual de DockMetrics es proporcional y se lee con valores_codigo.cs / tabla_antes_despues.py.
+if '--rev' not in sys.argv: sys.argv += ['--rev', 'c05aa0f']
 sys.path.insert(0, os.path.dirname(__file__)); import valores_codigo as vc
 M, G = vc.M, vc.G
 j = json.load(open(sys.argv[1])); rep = json.load(open(sys.argv[2]))

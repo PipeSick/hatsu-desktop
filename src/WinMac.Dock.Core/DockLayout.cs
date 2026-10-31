@@ -13,7 +13,7 @@ public static class DockLayout
         var c = new double[items.Count]; double x = m.PadX;
         for (int i = 0; i < items.Count; i++)
         {
-            if (items[i].Kind == DockItemKind.Separator) { c[i] = x + m.SeparatorWidth / 2; x += m.SeparatorWidth; }
+            if (items[i].Kind == DockItemKind.Separator) { double line = x - m.Gap + m.SeparatorLeft; c[i] = line + m.SeparatorLine / 2; x = line + m.SeparatorLine + m.SeparatorRight; }
             else { c[i] = x + m.BaseSize / 2; x += m.BaseSize + m.Gap; }
         }
         return c;
@@ -42,7 +42,7 @@ public static class DockLayout
         var f = new ItemFrame[items.Count]; double x = m.PadX; double last = x;
         for (int i = 0; i < items.Count; i++)
         {
-            if (items[i].Kind == DockItemKind.Separator) { f[i] = new ItemFrame(i, x + m.SeparatorGap, 0, 1); x += m.SeparatorWidth; last = x - m.Gap; continue; }
+            if (items[i].Kind == DockItemKind.Separator) { double line = x - m.Gap + m.SeparatorLeft; f[i] = new ItemFrame(i, line, 0, 1); x = line + m.SeparatorLine + m.SeparatorRight; last = x; continue; } // X = borde izquierdo de la línea
             double sc = scales is null ? 1 : Math.Max(0, scales[i]);
             double size = m.BaseSize * sc;
             f[i] = new ItemFrame(i, x, size, sc);
