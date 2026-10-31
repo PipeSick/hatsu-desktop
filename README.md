@@ -1,6 +1,6 @@
 # WinMac (nombre provisional)
 
-Experiencia de escritorio inspirada en macOS Tahoe para Windows 11. Proyecto open source (licencia prevista: Apache-2.0, pendiente de añadir `LICENSE`).
+Experiencia de escritorio inspirada en macOS Tahoe para Windows 11. Proyecto open source bajo licencia **Apache-2.0** (ver [`LICENSE`](LICENSE), [`NOTICE`](NOTICE) y [`THIRD_PARTY.md`](THIRD_PARTY.md)).
 
 Estado: **Fase 1** (validación de tecnologías). No hay producto utilizable todavía.
 
