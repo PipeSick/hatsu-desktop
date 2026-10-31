@@ -101,11 +101,14 @@ public sealed class BarHost : IDisposable
     private BarTheme ResolveTheme() => _cfg.Theme switch { BarThemeMode.Dark => BarTheme.Dark, BarThemeMode.Light => BarTheme.Light, _ => SystemTheme.Current() == DockTheme.Dark ? BarTheme.Dark : BarTheme.Light };
 
     // ------------------------------------------------------------------ AppBar
+    private bool _zOrdered;   // la barra se pone «siempre encima» UNA vez; después, reposicionarla (AppBar) no debe volver a subirla por encima de otras ventanas «siempre encima» como la Isla
+
     private void PlaceWindow()
     {
         Metrics(); _winLeftPx = _monitor.Left; _winTopPx = _monitor.Top;
         if (_cfg.ReserveSpace) AppBarSetPos(); else AppBarRemove();
-        BarNative.SetWindowPos(_hwnd, new IntPtr(-1), _winLeftPx, _winTopPx, _winWpx, _winHpx, 0x0010u | 0x0040u /* NOACTIVATE | SHOWWINDOW */);
+        BarNative.SetWindowPos(_hwnd, new IntPtr(-1), _winLeftPx, _winTopPx, _winWpx, _winHpx, 0x0010u | 0x0040u | (_zOrdered ? 0x0004u /* NOZORDER */ : 0u) /* NOACTIVATE | SHOWWINDOW [| NOZORDER] */);
+        _zOrdered = true;
     }
 
     private void AppBarSetPos()
