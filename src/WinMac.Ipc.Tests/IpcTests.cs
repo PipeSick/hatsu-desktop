@@ -177,6 +177,17 @@ public class StateTests
     }
 
     [Fact]
+    public async Task An_unhealthy_module_does_not_answer_heartbeats_and_a_healthy_one_does()
+    {
+        var pipe = T.Pipe(); await using var server = T.Server(pipe); int pongs = 0; server.MessageReceived += (_, e) => { if (e.T == MsgType.Pong) Interlocked.Increment(ref pongs); };
+        await using var client = T.Client(pipe, "bar"); bool healthy = false; client.HealthCheck = () => healthy; Assert.True(await T.Until(() => server.IsConnected("bar")));
+        for (int i = 0; i < 5; i++) { server.Send("bar", MsgType.Ping); await Task.Delay(40); }
+        await Task.Delay(300); Assert.Equal(0, pongs);                                                    // interfaz bloqueada: ni un pong
+        healthy = true; server.Send("bar", MsgType.Ping); Assert.True(await T.Until(() => pongs == 1));
+        client.HealthCheck = () => throw new InvalidOperationException("falla la comprobación"); server.Send("bar", MsgType.Ping); await Task.Delay(300); Assert.Equal(1, pongs);   // una comprobación que falla cuenta como «no sano»
+    }
+
+    [Fact]
     public async Task Shutdown_and_bye_flow_between_host_and_module()
     {
         var pipe = T.Pipe(); await using var server = T.Server(pipe); var seen = new List<string>(); server.MessageReceived += (m, e) => { lock (seen) seen.Add(e.T); };

@@ -15,6 +15,8 @@ public sealed class ModuleHostLink : IAsyncDisposable
     /// <summary>El host pidió cerrar: el módulo debe terminar por su camino normal (se dispara en un hilo de trabajo).</summary>
     public event Action? ShutdownRequested;
     public bool IsConnected => _client.IsConnected;
+    /// <summary>Ver <see cref="IpcClient.HealthCheck"/>: devolver false mientras la interfaz del módulo esté bloqueada.</summary>
+    public Func<bool>? HealthCheck { get => _client.HealthCheck; set => _client.HealthCheck = value; }
 
     public static ModuleHostLink? FromArgs(string[] args, string module, string version)
     {

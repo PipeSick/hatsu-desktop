@@ -105,14 +105,14 @@ public class EndToEndTests : IDisposable
     }
 
     [Fact]
-    public async Task When_the_host_dies_a_hosted_module_keeps_running_alone_and_reconnects_when_the_host_returns()
+    public async Task When_the_channel_to_the_host_is_lost_a_hosted_module_keeps_running_alone_and_reconnects_when_it_returns()
     {
         string pipe = "winmac-e2e-" + Guid.NewGuid().ToString("N"), token = PipeNames.NewToken();
         var launcher = new SystemProcessLauncher { OnStarted = p => { lock (_spawned) _spawned.Add(p.Id); } };
         var server = new IpcServer(new ServerOptions(pipe, token)); server.Start();
         var proc = launcher.Start(Fake("dock", "normal"), pipe, token);
         Assert.True(await Until(() => server.IsConnected("dock")));
-        await server.DisposeAsync();                                                   // «el host muere»
+        await server.DisposeAsync();                                                   // se pierde el canal (el proceso host, en Windows, habría cerrado al módulo con el Job Object)
         await Task.Delay(2000); Assert.False(proc.Exited.IsCompleted, "el módulo se cerró al caer el host");   // sigue funcionando solo
         await using var again = new IpcServer(new ServerOptions(pipe, token)); again.Start();
         Assert.True(await Until(() => again.IsConnected("dock"), 15000), "no se reconectó al volver el host");

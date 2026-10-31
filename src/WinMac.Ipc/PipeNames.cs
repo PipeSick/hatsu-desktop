@@ -7,9 +7,9 @@ namespace WinMac.Ipc;
 
 public static class PipeNames
 {
-    /// <summary>Nombre del canal del usuario actual: <c>WinMac.&lt;SID&gt;</c> (en Windows <c>\\.\pipe\WinMac.&lt;SID&gt;</c>).</summary>
+    /// <summary>Nombre del canal del usuario actual y de SU sesión de Windows: <c>WinMac.&lt;SID&gt;.&lt;sesión&gt;</c> (así dos sesiones del mismo usuario, p. ej. escritorio remoto, no se mezclan).</summary>
     public static string ForCurrentUser() =>
-        "WinMac." + (OperatingSystem.IsWindows() ? WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName : Environment.UserName);
+        "WinMac." + (OperatingSystem.IsWindows() ? WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName : Environment.UserName) + "." + System.Diagnostics.Process.GetCurrentProcess().SessionId;
 
     /// <summary>Token de sesión de 256 bits (base64 URL).</summary>
     public static string NewToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+', '-').Replace('/', '_').TrimEnd('=');

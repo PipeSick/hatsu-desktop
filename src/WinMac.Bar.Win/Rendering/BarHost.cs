@@ -39,6 +39,10 @@ public sealed class BarHost : IDisposable
 
     /// <summary>Pide el cierre normal de la barra (lo usa el host de WinMac vía <c>--hosted</c>). Seguro desde otro hilo.</summary>
     public void RequestQuit() => _quitting = true;
+
+    private long _lastTickMs = Environment.TickCount64; private volatile bool _modal;
+    /// <summary>¿La interfaz sigue viva? El bucle principal avanza al menos cada 50 ms; un menú contextual abierto (bucle modal de Windows) cuenta como vivo. El host lo usa para el latido.</summary>
+    public bool Responsive => _modal || Environment.TickCount64 - Volatile.Read(ref _lastTickMs) < 10_000;
     /// <summary>true = registrar el AppBar. Se puede cambiar en marcha desde el menú.</summary>
     public bool Reserved => _registered;
 
@@ -58,6 +62,7 @@ public sealed class BarHost : IDisposable
         while (true)
         {
             while (BarNative.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1)) { if (msg.message == WM_QUIT) return 0; BarNative.TranslateMessage(ref msg); BarNative.DispatchMessage(ref msg); }
+            Volatile.Write(ref _lastTickMs, Environment.TickCount64);
             _app?.Pump(); PollInputs(); Housekeeping();
             if (_quitting) return 0;
             if (selfTest) { _force = true; if (clock.Elapsed.TotalSeconds > 10) throw new TimeoutException("selftest: no se alcanzaron los frames en 10 s"); }
@@ -260,7 +265,8 @@ public sealed class BarHost : IDisposable
             BarNative.AppendMenuW(menu, 0, (UIntPtr)2, "Salir de la barra superior");
             int x = _winLeftPx + (int)((item?.X ?? 0) * _scale), y = _winTopPx + _winHpx;
             BarNative.SetForegroundWindow(_hwnd);
-            int cmd = Native2Track(menu, x, y);
+            _modal = true; int cmd;
+            try { cmd = Native2Track(menu, x, y); } finally { _modal = false; }
             BarNative.PostMessage(_hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
             if (cmd == 1) { _cfg = _cfg with { ReserveSpace = !_cfg.ReserveSpace }; _ctl.Config = _cfg; if (_cfgPath is not null) _cfg.TrySave(_cfgPath); PlaceWindow(); }
             else if (cmd == 2) _quitting = true;

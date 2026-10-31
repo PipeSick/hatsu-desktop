@@ -28,6 +28,9 @@ public sealed class IpcClient : IAsyncDisposable
     public event Action? ShutdownRequested;
     public bool IsConnected => _connected;
 
+    /// <summary>Si devuelve false el cliente NO contesta a los latidos (el host lo dará por colgado). El módulo lo usa para decir «mi interfaz ha dejado de avanzar»; el hilo del canal, solo, no demuestra nada.</summary>
+    public Func<bool>? HealthCheck { get; set; }
+
     public void Start() => _loop ??= Task.Run(() => RunAsync(_cts.Token));
 
     /// <summary>Publica un valor de estado (se retiene en el servidor y se vuelve a enviar tras una reconexión).</summary>
@@ -97,7 +100,7 @@ public sealed class IpcClient : IAsyncDisposable
             if (e is null) return;
             switch (e.T)
             {
-                case MsgType.Ping: _out.Enqueue(new Envelope { T = MsgType.Pong }, control: true); break;
+                case MsgType.Ping: { bool ok = true; try { ok = HealthCheck?.Invoke() ?? true; } catch (Exception) { ok = false; } if (ok) _out.Enqueue(new Envelope { T = MsgType.Pong }, control: true); break; }
                 case MsgType.Shutdown: _ = Task.Run(() => ShutdownRequested?.Invoke()); break;
                 case MsgType.Pub or MsgType.Evt when e.Topic is not null:
                     Action<JsonElement?>? h; lock (_subs) _subs.TryGetValue(e.Topic, out h);

@@ -81,7 +81,7 @@ internal static class Program
         using var host = new DockHost(cfg, new DockMetrics(), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), args.Contains("--demo"), Log, args.Contains("--no-config") ? null : cfgPath);
         // --hosted (lo pasa WinMac.exe): enlace con el host. Sin él, el dock funciona exactamente como siempre. Si el host cae, el dock sigue solo.
         var link = ModuleHostLink.FromArgs(args, "dock", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
-        if (link is not null) { link.ShutdownRequested += host.RequestQuit; link.Start(); Log("Modo hosted: enlazado con WinMac.exe."); }
+        if (link is not null) { link.ShutdownRequested += host.RequestQuit; link.HealthCheck = () => host.Responsive; link.Start(); Log("Modo hosted: enlazado con WinMac.exe."); }
         Log("Iniciando dock…");
         int rc = host.Run();
         Log("Dock terminado. " + host.Report());

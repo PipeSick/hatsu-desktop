@@ -30,7 +30,7 @@ switch (mode)
     case "never-ready": await SleepForeverAsync(); return 0;                         // vive pero no se conecta: debe vencer el tiempo de «listo»
     case "crash": link.Start(); await WaitConnectedAsync(); await Task.Delay(150); Mark("crash"); Environment.Exit(7); return 7;
     case "exit-clean": link.Start(); await WaitConnectedAsync(); await Task.Delay(150); Mark("exit-clean"); await link.ByeAsync(TimeSpan.FromSeconds(1)); return 0;
-    case "hang": link.Start(); await WaitConnectedAsync(); await Task.Delay(150); await link.DisposeAsync(); Mark("hang"); await SleepForeverAsync(); return 0;   // se calla: no contesta a los latidos
+    case "hang": link.Start(); await WaitConnectedAsync(); await Task.Delay(150); link.HealthCheck = () => false; Mark("hang"); await SleepForeverAsync(); return 0;   // sigue conectado pero «su interfaz no avanza»: no contesta a los latidos
     default:
         link.Start();
         await Task.WhenAny(shutdown.Task, Task.Delay(Timeout.Infinite, safety.Token).ContinueWith(_ => { }));

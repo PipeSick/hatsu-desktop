@@ -42,6 +42,10 @@ public sealed class DockHost : IDisposable
     /// <summary>Pide el cierre normal del dock (lo usa el host de WinMac vía <c>--hosted</c>). Seguro desde otro hilo: el bucle lo atiende en ≤ 50 ms.</summary>
     public void RequestQuit() => _quitting = true;
 
+    private long _lastTickMs = Environment.TickCount64; private volatile bool _modal;
+    /// <summary>¿La interfaz sigue viva? El bucle principal avanza al menos cada 50 ms; un menú contextual abierto (bucle modal de Windows) cuenta como vivo. El host lo usa para el latido.</summary>
+    public bool Responsive => _modal || Environment.TickCount64 - Volatile.Read(ref _lastTickMs) < 10_000;
+
     /// <param name="configPath">Si se indica, las apps ancladas y su orden se guardan aquí (escritura atómica, con retardo) y se recargan si el archivo cambia desde fuera.</param>
     public DockHost(DockConfig cfg, DockMetrics m, GlassStyle glass, bool demo, Action<string> log, string? configPath = null)
     {
@@ -70,6 +74,7 @@ public sealed class DockHost : IDisposable
         while (true)
         {
             while (Native2.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1)) { if (msg.message == WM_QUIT) return 0; Native2.TranslateMessage(ref msg); Native2.DispatchMessage(ref msg); }
+            Volatile.Write(ref _lastTickMs, Environment.TickCount64);
             _tracker?.Pump();
             PollInputs();
             Housekeeping();
@@ -370,12 +375,13 @@ public sealed class DockHost : IDisposable
             }
             Native.GetCursorPos(out var p);
             Native.SetForegroundWindow(_hwnd);   // requisito documentado de TrackPopupMenu: sin esto el menú no se cierra al pulsar fuera
+            _modal = true;
             int cmd = Native2.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x20 | 0x4 | 0x2 /* RETURNCMD|NONOTIFY|BOTTOMALIGN|CENTERALIGN|RIGHTBUTTON */, p.X, p.Y, _hwnd, IntPtr.Zero);
             Native.PostMessage(_hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
             return cmd > 0 && cmd <= entries.Count ? entries[cmd - 1].Action : null;
         }
         catch (Exception e) { _log("Menú contextual falló: " + e.Message); return null; }
-        finally { Native2.DestroyMenu(menu); }
+        finally { _modal = false; Native2.DestroyMenu(menu); }
     }
 
     /// <summary>Solo la barra (y los íconos ampliados) capturan el ratón; el resto de la ventana, transparente, lo deja pasar a las apps de abajo.</summary>
