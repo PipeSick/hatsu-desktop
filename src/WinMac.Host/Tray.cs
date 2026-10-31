@@ -9,13 +9,13 @@ namespace WinMac.Host.App;
 internal sealed class Tray : IDisposable
 {
     private const uint WM_TRAY = Native.WM_APP + 1; private const int IDI_APPLICATION = 32512;
-    private readonly Native.WndProc _proc; private readonly Func<IReadOnlyDictionary<string, ModuleState>> _states; private readonly Action _quit; private readonly Action<string> _restart; private readonly Action<string> _log;
+    private readonly Native.WndProc _proc; private readonly Func<IReadOnlyDictionary<string, ModuleState>> _states; private readonly Action _quit; private readonly Action<string> _open; private readonly Action _settings; private readonly Action<string> _log;
     private readonly bool _showIcon; private IntPtr _hwnd; private uint _taskbarCreated; private bool _added;
     public IntPtr Handle => _hwnd;
 
-    public Tray(Func<IReadOnlyDictionary<string, ModuleState>> states, Action quit, Action<string> restart, Action<string> log, bool showIcon)
+    public Tray(Func<IReadOnlyDictionary<string, ModuleState>> states, Action quit, Action<string> open, Action settings, Action<string> log, bool showIcon)
     {
-        _states = states; _quit = quit; _restart = restart; _log = log; _showIcon = showIcon; _proc = WndProcImpl;
+        _states = states; _quit = quit; _open = open; _settings = settings; _log = log; _showIcon = showIcon; _proc = WndProcImpl;
         var cls = new Native.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<Native.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = Native.GetModuleHandle(null), lpszClassName = "WinMacHost" };
         Native.RegisterClassEx(ref cls);
         _hwnd = Native.CreateWindowEx(Native.WS_EX_TOOLWINDOW, "WinMacHost", "WinMac", Native.WS_POPUP, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
@@ -52,7 +52,7 @@ internal sealed class Tray : IDisposable
     private static string Text(ModuleState s) => s switch
     {
         ModuleState.Running => "en ejecución", ModuleState.Starting => "iniciando…", ModuleState.Stopping => "cerrando…", ModuleState.Stopped => "detenido", ModuleState.Crashed => "reiniciando…",
-        ModuleState.Failed => "falló (no se reintenta)", _ => "desactivado",
+        ModuleState.Failed => "falló (no se reintenta)", ModuleState.NotInstalled => "no instalada", _ => "desactivado",
     };
 
     private void ShowMenu()
@@ -62,16 +62,18 @@ internal sealed class Tray : IDisposable
         {
             var states = _states().ToList();
             foreach (var (id, st) in states) Native.AppendMenuW(menu, 0x1 /* GRAYED */, UIntPtr.Zero, $"{Label(id)}: {Text(st)}");
-            var reopen = states.Where(k => k.Value is ModuleState.Stopped or ModuleState.Failed).Select(k => k.Key).ToList();   // «Abrir» solo donde hace falta
+            var reopen = states.Where(k => k.Value is ModuleState.Stopped or ModuleState.Failed).Concat(states.Where(k => k.Value == ModuleState.Disabled)).Select(k => k.Key).ToList();   // «Abrir» o «Activar» solo donde hace falta
             if (reopen.Count > 0) Native.AppendMenuW(menu, 0x800 /* SEPARATOR */, UIntPtr.Zero, null);
-            for (int i = 0; i < reopen.Count; i++) Native.AppendMenuW(menu, 0, (UIntPtr)(uint)(100 + i), $"Abrir {Label(reopen[i])}");
+            for (int i = 0; i < reopen.Count; i++) Native.AppendMenuW(menu, 0, (UIntPtr)(uint)(100 + i), $"{(states.First(k => k.Key == reopen[i]).Value == ModuleState.Disabled ? "Activar" : "Abrir")} {Label(reopen[i])}");
             Native.AppendMenuW(menu, 0x800 /* SEPARATOR */, UIntPtr.Zero, null);
+            Native.AppendMenuW(menu, 0, (UIntPtr)2, "Ajustes de WinMac…");
             Native.AppendMenuW(menu, 0, (UIntPtr)1, "Salir de WinMac");
             Native.GetCursorPos(out var p); Native.SetForegroundWindow(_hwnd);   // requisito documentado de TrackPopupMenu
             int cmd = Native.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x20 | 0x2 /* RETURNCMD|NONOTIFY|BOTTOMALIGN|RIGHTBUTTON */, p.X, p.Y, _hwnd, IntPtr.Zero);
             Native.PostMessage(_hwnd, Native.WM_NULL, IntPtr.Zero, IntPtr.Zero);
             if (cmd == 1) _quit();
-            else if (cmd >= 100 && cmd - 100 < reopen.Count) _restart(reopen[cmd - 100]);
+            else if (cmd == 2) _settings();
+            else if (cmd >= 100 && cmd - 100 < reopen.Count) _open(reopen[cmd - 100]);
         }
         catch (Exception e) { _log("[host] el menú de la bandeja falló: " + e.Message); }
         finally { Native.DestroyMenu(menu); }

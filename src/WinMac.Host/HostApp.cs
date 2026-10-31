@@ -4,7 +4,7 @@ using WinMac.Ipc;
 namespace WinMac.Host.App;
 
 /// <summary>Opciones de línea de comandos del host (las de prueba están marcadas).</summary>
-internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTray, bool Fast, string? PipeName)
+internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTray, bool Fast, string? PipeName, string NotchWinSettingsPath)
 {
     public static string Arg(string[] a, string n, string def) { int i = Array.IndexOf(a, n); return i >= 0 && i + 1 < a.Length ? a[i + 1] : def; }
     public static HostOptions Parse(string[] a) => new(
@@ -12,7 +12,8 @@ internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTra
         Arg(a, "--log", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "host.log")),
         a.Contains("--no-tray"),          // PRUEBAS: sin icono de bandeja (runners sin escritorio)
         a.Contains("--fast"),             // PRUEBAS: tiempos de supervisión reducidos
-        a.Contains("--pipe-name") ? Arg(a, "--pipe-name", "") : null);
+        a.Contains("--pipe-name") ? Arg(a, "--pipe-name", "") : null,
+        Arg(a, "--notchwin-settings", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NotchWin", "settings.json")));   // origen de la migración única (PRUEBAS: se puede redirigir)
 }
 
 internal sealed class FileLog(string path)
@@ -49,6 +50,7 @@ internal static class HostApp
         using var reopen = new EventWaitHandle(false, EventResetMode.AutoReset, ReopenEventName);
 
         var cfg = HostConfig.Load(o.ConfigPath);
+        cfg = MigrateNotchOnce(cfg, o, log);
         string baseDir = AppContext.BaseDirectory, pipe = o.PipeName ?? PipeNames.ForCurrentUser(), token = PipeNames.NewToken();
         log($"[host] iniciado (pid {Environment.ProcessId}); configuración: {o.ConfigPath}; canal: {pipe}");
 
@@ -57,7 +59,7 @@ internal static class HostApp
 
         Supervisor? sup = null;
         var server = new IpcServer(new ServerOptions(pipe, token) { PeerValidator = pid => sup?.IsKnownPid(pid) ?? false });
-        server.Start();
+        server.Start(); var bus = new IpcHostBus(server);
         var launcher = new SystemProcessLauncher
         {
             OnStarted = p => { try { job?.Assign(p); } catch (Exception e) { log($"[host] AVISO: no se pudo asignar {p.ProcessName} al Job Object: {e.Message}"); } },
@@ -66,12 +68,18 @@ internal static class HostApp
         var policy = o.Fast
             ? new SupervisorPolicy { ReadyTimeout = TimeSpan.FromSeconds(8), HeartbeatInterval = TimeSpan.FromMilliseconds(500), BackoffStart = TimeSpan.FromMilliseconds(100), BackoffMax = TimeSpan.FromMilliseconds(500), StopGrace = TimeSpan.FromSeconds(5), StartStagger = TimeSpan.FromMilliseconds(50) }
             : new SupervisorPolicy();
-        sup = new Supervisor(launcher, new IpcHostBus(server), new SystemClock(), policy, pipe, token, log);
-        foreach (var (spec, enabled) in cfg.Resolve(baseDir)) sup.Add(spec, enabled);
+        sup = new Supervisor(launcher, bus, new SystemClock(), policy, pipe, token, log);
+        foreach (var (spec, enabled, available) in cfg.Resolve(baseDir)) sup.Add(spec, enabled, available);
+        var config = new ConfigService(o.ConfigPath, cfg, log); var controller = new HostController(config, sup, bus, log); controller.Start();   // la Isla recibe sus ajustes al conectar
 
         bool quitting = false; void RequestQuit() => quitting = true;
-        Tray? tray = null;
-        try { tray = new Tray(() => sup.States, RequestQuit, id => sup.Restart(id), log, showIcon: !o.NoTray); }
+        Tray? tray = null; SettingsWindow? settings = null;
+        string exePath = Environment.ProcessPath ?? "WinMac.exe";
+        try
+        {
+            settings = new SettingsWindow(config, () => sup.States, controller.OpenNotchLocalSettings, exePath, log);
+            tray = new Tray(() => sup.States, RequestQuit, id => { if (sup.States.TryGetValue(id, out var st) && st == ModuleState.Disabled) config.SetModuleEnabled(id, true); else sup.Restart(id); }, settings.Show, log, showIcon: !o.NoTray);
+        }
         catch (Exception e) { log("[host] sin ventana/bandeja: " + e.Message); }
 
         sup.StartAsync().GetAwaiter().GetResult();
@@ -80,7 +88,11 @@ internal static class HostApp
         // Bucle de mensajes (la bandeja y el cierre de sesión lo necesitan) + vigilancia de la señal de cierre (--quit).
         while (!quitting)
         {
-            while (Native.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1)) { Native.TranslateMessage(ref msg); Native.DispatchMessage(ref msg); }
+            while (Native.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1))
+            {
+                if (settings is { IsOpen: true } && Native.IsDialogMessage(settings.Handle, ref msg)) continue;   // Tab y Enter en la ventana de ajustes
+                Native.TranslateMessage(ref msg); Native.DispatchMessage(ref msg);
+            }
             if (reopen.WaitOne(0)) { var ids = sup.RestartStopped(); log("[host] reapertura pedida: " + (ids.Count == 0 ? "nada que reabrir" : string.Join(", ", ids))); }
             if (quit.WaitOne(0)) { log("[host] señal de cierre recibida (--quit)"); break; }
             Native.MsgWaitForMultipleObjectsEx(0, null, 100, Native.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);
@@ -90,8 +102,26 @@ internal static class HostApp
         tray?.RemoveIcon();
         sup.StopAllAsync().GetAwaiter().GetResult();
         log("[host] módulos cerrados: " + string.Join(", ", sup.States.Select(kv => $"{kv.Key}={kv.Value}")));
-        tray?.Dispose(); job?.Dispose(); server.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        settings?.Dispose(); tray?.Dispose(); job?.Dispose(); server.DisposeAsync().AsTask().GetAwaiter().GetResult();
         log("[host] fin."); return 0;
+    }
+
+    /// <summary>
+    /// Migración ÚNICA y NO destructiva: si <c>winmac.json</c> aún no tiene ajustes de la Isla y NotchWin ya tenía los suyos, se copian los campos centrales (nunca claves ni rutas locales).
+    /// El <c>settings.json</c> original no se toca ni se borra. Una vez guardada la sección, no se vuelve a importar.
+    /// </summary>
+    private static HostConfig MigrateNotchOnce(HostConfig cfg, HostOptions o, Action<string> log)
+    {
+        if (cfg.Notch is not null || !File.Exists(o.NotchWinSettingsPath)) return cfg;
+        try
+        {
+            var imported = NotchSettings.ImportFromNotchWin(File.ReadAllText(o.NotchWinSettingsPath));
+            if (imported is null) { log("[host] los ajustes anteriores de NotchWin no se pudieron leer: se usan los de fábrica"); return cfg; }
+            var mods = new Dictionary<string, ModuleConfig>(cfg.Modules);
+            var next = cfg with { Notch = imported, Modules = mods };
+            HostConfig.Save(o.ConfigPath, next); log("[host] ajustes de la Isla importados de " + o.NotchWinSettingsPath + " (el archivo original no se modificó)"); return next;
+        }
+        catch (Exception e) { log("[host] no se pudo importar los ajustes de NotchWin: " + e.Message); return cfg; }
     }
 
     /// <summary>Pide el cierre a las ventanas de nivel superior de un proceso (WM_CLOSE): cooperativo, no fuerza nada.</summary>

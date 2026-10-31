@@ -221,3 +221,35 @@ public class LiveToggleTests
         Assert.False(await f.Sup.SetEnabledAsync("notch", true)); Assert.Equal(0, f.Launcher.Count("notch"));
     }
 }
+
+public class NotchChannelRoundtripTests
+{
+    [Fact]
+    public async Task The_notch_receives_the_settings_on_connect_asks_for_a_change_and_gets_the_new_state_back_over_the_real_channel()
+    {
+        string pipe = "winmac-cfg-" + Guid.NewGuid().ToString("N"), token = "t", file = Path.Combine(Path.GetTempPath(), "winmac-rt-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            await using var server = new WinMac.Ipc.IpcServer(new WinMac.Ipc.ServerOptions(pipe, token)); server.Start(); var bus = new IpcHostBus(server);
+            var f = new Fixture(); var cfg = new ConfigService(file, new HostConfig { Notch = new NotchSettings { GlassLevel = 50 } }); var ctl = new HostController(cfg, f.Sup, bus); ctl.Start();
+
+            await using var notch = new WinMac.Ipc.IpcClient(new WinMac.Ipc.ClientOptions(pipe, token, "notch") { MaxBackoff = TimeSpan.FromMilliseconds(200) });
+            var seen = new List<JsonElement>(); var cmds = new List<string>();
+            notch.Subscribe(NotchSettings.Topic, d => { if (d is { } e) lock (seen) seen.Add(e.Clone()); });
+            notch.Subscribe(NotchSettings.CommandTopic, d => { lock (cmds) cmds.Add(d?.GetProperty("cmd").GetString() ?? ""); });
+            notch.Start();
+            Assert.True(await Until(() => { lock (seen) return seen.Count >= 1; }), "no recibió los ajustes iniciales (retenidos)");
+            lock (seen) Assert.Equal(50, seen[0].GetProperty("glassLevel").GetInt32());
+
+            notch.Event(NotchSettings.SetTopic, new { glassLevel = 85, lyricsEnabled = true, sections = new[] { new { id = "timer", enabled = true } }, position = "Bogus" });
+            Assert.True(await Until(() => { lock (seen) return seen.Any(e => e.GetProperty("glassLevel").GetInt32() == 85); }), "no recibió el estado nuevo");
+            lock (seen) { var last = seen[^1]; Assert.Equal(85, last.GetProperty("glassLevel").GetInt32()); Assert.True(last.GetProperty("lyricsEnabled").GetBoolean()); Assert.Equal("TopCenter", last.GetProperty("position").GetString()); Assert.Equal("timer", last.GetProperty("sections")[0].GetProperty("id").GetString()); }
+            Assert.Equal(85, HostConfig.Load(file).Notch!.GlassLevel);   // el host es el dueño: lo guardó él
+
+            ctl.OpenNotchLocalSettings(); Assert.True(await Until(() => { lock (cmds) return cmds.Count == 1; })); Assert.Equal("open-local-settings", cmds[0]);
+        }
+        finally { try { File.Delete(file); } catch (IOException) { } }
+    }
+
+    private static async Task<bool> Until(Func<bool> c, int ms = 8000) { var end = DateTime.UtcNow.AddMilliseconds(ms); while (DateTime.UtcNow < end) { if (c()) return true; await Task.Delay(20); } return c(); }
+}

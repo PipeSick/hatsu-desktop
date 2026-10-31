@@ -55,6 +55,23 @@ public class EndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task Turning_a_real_module_off_and_on_through_the_config_closes_only_it_and_starts_it_again()
+    {
+        var (server, sup, _, _) = Rig(); await using var _s = server; var bus = new IpcHostBus(server);
+        var cfgPath = Path.Combine(_out, "winmac.json"); Directory.CreateDirectory(_out);
+        var cfg = new ConfigService(cfgPath, new HostConfig()); var ctl = new HostController(cfg, sup, bus); ctl.Start();
+        sup.Add(Fake("bar", "normal"), true); sup.Add(Fake("notch", "normal"), true); await sup.StartAsync();
+        Assert.True(await Until(() => sup.States["bar"] == ModuleState.Running && sup.States["notch"] == ModuleState.Running), "no llegaron a «listo»: " + string.Join(", ", sup.States));
+        cfg.SetModuleEnabled("notch", false);
+        Assert.True(await Until(() => sup.States["notch"] == ModuleState.Disabled), "la Isla no se desactivó: " + string.Join(", ", sup.States));
+        Assert.True(Logged("notch", "bye"), "no cerró por su camino normal"); Assert.Equal(ModuleState.Running, sup.States["bar"]); Assert.Equal(1, Starts("bar"));   // la Barra ni se enteró
+        cfg.SetModuleEnabled("notch", true);
+        Assert.True(await Until(() => sup.States["notch"] == ModuleState.Running && Starts("notch") == 2), "la Isla no volvió: " + string.Join(", ", sup.States));
+        Assert.False(HostConfig.Load(cfgPath).Modules["notch"].Enabled is false);   // y el estado final quedó guardado
+        await sup.StopAllAsync(); Assert.True(await Until(AllGone, 5000), "quedó algún proceso");
+    }
+
+    [Fact]
     public async Task A_crashing_module_is_restarted_then_given_up_on_while_the_other_module_is_untouched()
     {
         var (server, sup, _, _) = Rig(); await using var _s = server;
