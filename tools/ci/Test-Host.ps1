@@ -32,7 +32,7 @@ function StartHost($room, [switch]$Tray) { $p = Start-Process -FilePath $hostExe
 function LogHas($room, [string]$text) { (Test-Path $room.Log) -and (Select-String -Path $room.Log -SimpleMatch -Pattern $text -Quiet) }
 function ModLog($room, [string]$id) { $f = Join-Path $room.Dir "$id.log"; if (Test-Path $f) { Get-Content $f } else { @() } }
 function Starts($room, [string]$id) { @(ModLog $room $id | Where-Object { $_ -match ' started$' }).Count }
-function Pids($room, [string]$id) { @(ModLog $room $id | Where-Object { $_ -match ' started$' } | ForEach-Object { [int]($_ -split ' ')[1] }) }
+function Pids($room, [string]$id) { [int[]]$r = @(ModLog $room $id | Where-Object { $_ -match ' started$' } | ForEach-Object { [int]($_ -split ' ')[1] }); , $r }   # la coma evita que un solo PID se devuelva como número suelto (y que + sume en vez de unir)
 function AnyAlive([int[]]$pids) { foreach ($p in $pids) { if (Get-Process -Id $p -ErrorAction SilentlyContinue) { return $true } }; return $false }
 function Ports { (Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique) -join ',' }
 function Quit($room, $proc) { Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; if ($proc) { [void]$proc.WaitForExit(30000) } }
@@ -55,20 +55,20 @@ Check 'B1 un segundo WinMac.exe sale solo y sin error' ($exited -and $h2.ExitCod
 Check 'B1 no se duplicaron los módulos' ((Starts $r1 'bar') -eq 1 -and (Starts $r1 'dock') -eq 1)
 
 # ── 3. Cierre ordenado (B3): --quit → módulos cierran por su camino normal y no queda nada
-$pids = @((Pids $r1 'bar') + (Pids $r1 'dock'))
+$pids = [int[]]((Pids $r1 'bar') + (Pids $r1 'dock'))
 Quit $r1 $h1
 Check 'B3 el host termina tras --quit' ($h1.HasExited -and $h1.ExitCode -eq 0)
 Check 'B3 los módulos cerraron por su camino normal (shutdown → bye)' ((ModLog $r1 'bar') -match ' bye$' -and (ModLog $r1 'dock') -match ' bye$')
-Check 'B3 no queda ningún proceso de módulo' (-not (AnyAlive $pids)) ("pids: $($pids -join ',')")
+Check 'B3 no queda ningún proceso de módulo' (($pids.Count -eq 2) -and -not (AnyAlive $pids)) ("pids: $($pids -join ',')")
 
 # ── 4. Host muerto de golpe (B4): el Job Object se lleva a los hijos
 $r4 = NewRoom 'kill'; $h4 = StartHost $r4
 [void](WaitFor { (LogHas $r4 '[bar] Running') -and (LogHas $r4 '[dock] Running') } 30)
-$pids4 = @((Pids $r4 'bar') + (Pids $r4 'dock')); $alive = AnyAlive $pids4
+$pids4 = [int[]]((Pids $r4 'bar') + (Pids $r4 'dock')); $alive = AnyAlive $pids4
 Stop-Process -Id $h4.Id -Force
 $gone = WaitFor { -not (AnyAlive $pids4) } 8
-Check 'B4 antes de matar el host, los módulos estaban vivos' $alive
-Check 'B4 al morir el host de golpe, los hijos desaparecen (Job Object)' $gone ("pids: $($pids4 -join ',')")
+Check 'B4 antes de matar el host, los dos módulos estaban vivos' ($alive -and $pids4.Count -eq 2) ("pids: $($pids4 -join ',')")
+Check 'B4 al morir el host de golpe, los hijos desaparecen (Job Object)' ($gone -and $pids4.Count -eq 2) ("pids: $($pids4 -join ',')")
 Cleanup
 
 # ── 5. Un módulo que cae no afecta al otro, se reinicia y al final se abandona (B5)
