@@ -24,6 +24,15 @@ internal sealed class FakeAudio : FakeBase, IAudioService, IOutputRestore
     public ServiceResult SetMuted(bool muted) => Result($"SetMuted {muted}");
     public ServiceResult SetDefaultOutput(string deviceId) => Result($"SetDefaultOutput {deviceId}");
     public ServiceResult CanSwitchOutput() => ServiceResult.Ok;
+    public AudioInputState Input { get; set; } = new(true, 50, false, true, [new("mic", "Micrófono", true)]);
+    public AudioSessionsState Sessions { get; set; } = new(true, [new("pid:10", 10, "Spotify", @"C:\Spotify.exe", 80, false, false, true), new("system", 0, "Sonidos del sistema", null, 100, false, true, false)]);
+    public AudioInputState ReadInput() { Record("ReadInput"); return Input; }
+    public ServiceResult SetInputVolume(int percent) => Result($"SetInputVolume {percent}");
+    public ServiceResult SetInputMuted(bool muted) => Result($"SetInputMuted {muted}");
+    public ServiceResult SetDefaultInput(string deviceId) => Result($"SetDefaultInput {deviceId}");
+    public AudioSessionsState ReadSessions() { Record("ReadSessions"); return Sessions; }
+    public ServiceResult SetSessionVolume(string sessionId, int percent) => Result($"SetSessionVolume {sessionId} {percent}");
+    public ServiceResult SetSessionMuted(string sessionId, bool muted) => Result($"SetSessionMuted {sessionId} {muted}");
 }
 
 internal sealed class FakeWifi : FakeBase, IWifiService

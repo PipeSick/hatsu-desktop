@@ -6,7 +6,7 @@ namespace WinMac.SystemControl.Win;
 /// Audio por Core Audio (API documentada): volumen maestro, silencio y lista de salidas activas del dispositivo predeterminado.
 /// El cambio de salida predeterminada usa <see cref="PolicyConfigSwitcher"/> (COM NO oficial, aislado, verificado y reversible).
 /// </summary>
-public sealed class AudioService : IAudioService, IOutputRestore
+public sealed partial class AudioService : IAudioService, IOutputRestore
 {
     private readonly PolicyConfigSwitcher _switcher = new();
     /// <summary>Salida predeterminada anterior al último cambio hecho por WinMac (para «volver a la anterior»).</summary>
@@ -23,18 +23,19 @@ public sealed class AudioService : IAudioService, IOutputRestore
             string? defId = null; def.GetId(out defId);
             if (!TryVolume(def, out var ep)) return AudioState.None("No se pudo leer el volumen del dispositivo");
             ep.GetMasterVolumeLevelScalar(out float level); ep.GetMute(out bool muted);
-            return new AudioState(true, (int)Math.Round(Math.Clamp(level, 0f, 1f) * 100), muted, ListOutputs(en, defId));
+            return new AudioState(true, (int)Math.Round(Math.Clamp(level, 0f, 1f) * 100), muted, ListDevices(en, 0, defId));
         }
         catch (Exception e) { return AudioState.None("Core Audio falló: " + e.GetType().Name); }
         finally { if (enumerator is not null && Marshal.IsComObject(enumerator)) Marshal.ReleaseComObject(enumerator); }
     }
 
-    private static IReadOnlyList<AudioDevice> ListOutputs(IMMDeviceEnumerator en, string? defaultId)
+    /// <param name="flow">0 = salidas (render), 1 = entradas (captura).</param>
+    private static IReadOnlyList<AudioDevice> ListDevices(IMMDeviceEnumerator en, int flow, string? defaultId)
     {
         var list = new List<AudioDevice>();
         try
         {
-            if (en.EnumAudioEndpoints(0, 1 /* DEVICE_STATE_ACTIVE */, out var col) != 0 || col is null) return list;
+            if (en.EnumAudioEndpoints(flow, 1 /* DEVICE_STATE_ACTIVE */, out var col) != 0 || col is null) return list;
             col.GetCount(out uint n);
             for (uint i = 0; i < n && i < 32; i++)
             {
@@ -67,12 +68,12 @@ public sealed class AudioService : IAudioService, IOutputRestore
         ep = v; return true;
     }
 
-    private ServiceResult WithEndpoint(Func<IAudioEndpointVolume, int> op, string what) => ServiceResult.Guard(() =>
+    private ServiceResult WithEndpoint(Func<IAudioEndpointVolume, int> op, string what, int flow = 0) => ServiceResult.Guard(() =>
     {
         var enumerator = new MMDeviceEnumeratorClass();
         try
         {
-            if (((IMMDeviceEnumerator)(object)enumerator).GetDefaultAudioEndpoint(0, 1, out var def) != 0 || def is null) return ServiceResult.Unavailable("No hay dispositivo de salida de audio");
+            if (((IMMDeviceEnumerator)(object)enumerator).GetDefaultAudioEndpoint(flow, 1, out var def) != 0 || def is null) return ServiceResult.Unavailable(flow == 0 ? "No hay dispositivo de salida de audio" : "No hay micrófono");
             if (!TryVolume(def, out var ep)) return ServiceResult.Unavailable("El dispositivo no permite controlar el volumen");
             int hr = op(ep);
             return hr == 0 ? ServiceResult.Ok : ServiceResult.Failed($"{what}: error 0x{hr:X8}");

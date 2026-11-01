@@ -11,6 +11,22 @@ public sealed record AudioState(bool Available, int Volume, bool Muted, IReadOnl
     public int Waves => !Available || Muted || Volume <= 0 ? 0 : Volume < 34 ? 1 : Volume < 67 ? 2 : 3;
 }
 
+/// <summary>Entrada de audio (micrófono) del dispositivo predeterminado. <see cref="VolumeControllable"/> = false si el dispositivo no permite ajustar su volumen desde Windows (el control se muestra deshabilitado, no simulado).</summary>
+public sealed record AudioInputState(bool Available, int Volume, bool Muted, bool VolumeControllable, IReadOnlyList<AudioDevice> Devices, string? Reason = null)
+{
+    public static AudioInputState None(string reason) => new(false, 0, false, false, [], reason);
+}
+
+/// <summary>
+/// Una aplicación con sesión de audio en la salida predeterminada. <see cref="Id"/> es estable mientras la app corre (agrupa todas las sesiones del mismo proceso: «pid:1234»; «system» = sonidos del sistema).
+/// </summary>
+public sealed record AudioSession(string Id, int Pid, string Name, string? ExePath, int Volume, bool Muted, bool IsSystemSounds, bool Active);
+
+public sealed record AudioSessionsState(bool Available, IReadOnlyList<AudioSession> Sessions, string? Reason = null)
+{
+    public static AudioSessionsState None(string reason) => new(false, [], reason);
+}
+
 // ───────────── Wi-Fi
 public sealed record WifiNetwork(string Ssid, int Signal, bool Secured, bool Connected, bool HasProfile, string? ProfileName, int? RssiDbm = null, int? FrequencyMhz = null)
 {

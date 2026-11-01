@@ -12,6 +12,18 @@ public interface IAudioService
     ServiceResult SetDefaultOutput(string deviceId);
     /// <summary>¿Se puede cambiar la salida desde WinMac en este equipo? (detección de compatibilidad, sin cambiar nada)</summary>
     ServiceResult CanSwitchOutput();
+
+    // Mezclador (el mismo servicio que el Control Center: una sola implementación para cada dispositivo).
+    /// <summary>Micrófono predeterminado y los demás dispositivos de entrada activos.</summary>
+    AudioInputState ReadInput();
+    ServiceResult SetInputVolume(int percent);
+    ServiceResult SetInputMuted(bool muted);
+    ServiceResult SetDefaultInput(string deviceId);
+    /// <summary>Aplicaciones con sesión de audio en la salida predeterminada (activas e inactivas no expiradas, como el mezclador de Windows).</summary>
+    AudioSessionsState ReadSessions();
+    /// <summary>Volumen de una aplicación (todas sus sesiones). <paramref name="sessionId"/> es el <see cref="AudioSession.Id"/>.</summary>
+    ServiceResult SetSessionVolume(string sessionId, int percent);
+    ServiceResult SetSessionMuted(string sessionId, bool muted);
 }
 
 /// <summary>Un servicio de audio que recuerda la salida anterior al último cambio hecho desde WinMac, para poder restaurarla.</summary>
