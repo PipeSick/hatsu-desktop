@@ -35,8 +35,15 @@ public class EndToEndTests : IDisposable
         return (server, new Supervisor(launcher, new IpcHostBus(server), new SystemClock(), policy ?? Fast, pipe, token), launcher, pipe);
     }
 
-    private int Starts(string id) { var f = Path.Combine(_out, id + ".log"); return File.Exists(f) ? File.ReadAllLines(f).Count(l => l.EndsWith(" started")) : 0; }
-    private bool Logged(string id, string what) { var f = Path.Combine(_out, id + ".log"); return File.Exists(f) && File.ReadAllLines(f).Any(l => l.EndsWith(" " + what)); }
+    /// <summary>Lee el registro de un módulo MIENTRAS el módulo lo sigue escribiendo: en Windows <c>File.ReadAllLines</c> falla si el otro proceso lo tiene abierto, así que se abre compartiendo lectura y escritura.</summary>
+    private static string[] ReadLogLines(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); using var sr = new StreamReader(fs);
+        var lines = new List<string>(); string? l; while ((l = sr.ReadLine()) is not null) lines.Add(l); return [.. lines];
+    }
+
+    private int Starts(string id) { var f = Path.Combine(_out, id + ".log"); return File.Exists(f) ? ReadLogLines(f).Count(l => l.EndsWith(" started")) : 0; }
+    private bool Logged(string id, string what) { var f = Path.Combine(_out, id + ".log"); return File.Exists(f) && ReadLogLines(f).Any(l => l.EndsWith(" " + what)); }
     private static async Task<bool> Until(Func<bool> c, int ms = 20000) { var end = DateTime.UtcNow.AddMilliseconds(ms); while (DateTime.UtcNow < end) { if (c()) return true; await Task.Delay(25); } return c(); }
     private bool AllGone() { lock (_spawned) return _spawned.All(pid => { try { using var p = Process.GetProcessById(pid); return p.HasExited; } catch (ArgumentException) { return true; } }); }
 
