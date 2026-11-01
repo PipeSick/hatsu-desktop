@@ -144,7 +144,7 @@ public sealed record MemoryInfo(ulong TotalBytes, ulong AvailableBytes, ulong? C
 }
 
 /// <summary>Una muestra del hardware. Cada sensor es independiente: que uno no se pueda leer no afecta a los demás.</summary>
-public sealed record SystemSample(Reading<double> CpuPercent, Reading<double> GpuPercent, Reading<double> CpuTempC, Reading<double> GpuTempC, MemoryInfo? Memory, string? MemoryReason, TimeSpan Uptime, Reading<int> ConnectedDevices)
+public sealed record SystemSample(Reading<double> CpuPercent, Reading<double> GpuPercent, Reading<double> CpuTempC, Reading<double> GpuTempC, MemoryInfo? Memory, string? MemoryReason, TimeSpan Uptime, Reading<int> ConnectedDevices, string? CpuTempNote = null)
 {
     public static SystemSample Empty { get; } = new(Reading<double>.Unavailable("Leyendo…"), Reading<double>.Unavailable("Leyendo…"), Reading<double>.Unavailable("Leyendo…"), Reading<double>.Unavailable("Leyendo…"), null, "Leyendo…", TimeSpan.Zero, Reading<int>.Unavailable("Leyendo…"));
 }
