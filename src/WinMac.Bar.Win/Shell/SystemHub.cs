@@ -12,7 +12,7 @@ internal sealed class SystemHub
 {
     private readonly SystemServices _s; private readonly Action<Action> _post; private readonly Action<string> _log; private readonly object _lock = new();
     private SystemSnapshot _snap = SystemSnapshot.Empty; private string _lastKey = "";
-    private int _audio, _wifi, _bt, _slow; private readonly Dictionary<string, int> _latest = []; private readonly HashSet<string> _running = [];
+    private int _audio, _wifi, _bt, _fast, _bright; private long _brightAt; private readonly Dictionary<string, int> _latest = []; private readonly HashSet<string> _running = [];
     public event Action? Changed;   // en el hilo de la barra
 
     public SystemHub(SystemServices services, Action<Action> post, Action<string> log) { _s = services; _post = post; _log = log; }
@@ -51,22 +51,35 @@ internal sealed class SystemHub
         Task.Run(() => { try { var b = _s.Bluetooth.Read(withDevices); Update(s => s with { Bluetooth = withDevices || !s.Bluetooth.Available || s.Bluetooth.Devices.Count == 0 ? b : b with { Devices = s.Bluetooth.Devices } }); } catch (Exception e) { _log("[hub] bluetooth: " + e.Message); } finally { Volatile.Write(ref _bt, 0); } });
     }
 
-    /// <summary>Brillo, modo de energía, apariencia y compatibilidad del cambio de salida: cambian poco y algunos son lentos (DDC/CI).</summary>
-    public void RefreshSlow()
+    /// <summary>Todo lo que cambia poco: lo rápido (energía, apariencia, compatibilidad de salida) y el brillo, cada uno por su lado.</summary>
+    public void RefreshSlow() { RefreshFast(); RefreshBrightness(false); }
+
+    /// <summary>Modo de energía, apariencia y compatibilidad del cambio de salida: instantáneos. NUNCA esperan al brillo (DDC/CI puede tardar varios segundos y descartaría esta lectura).</summary>
+    public void RefreshFast()
     {
-        if (Interlocked.Exchange(ref _slow, 1) == 1) return;
+        if (Interlocked.Exchange(ref _fast, 1) == 1) return;
         Task.Run(() =>
         {
             try
             {
-                // Lo rápido se publica ANTES que el brillo: DDC/CI puede tardar varios segundos (monitores sin DDC/CI) y no debe retrasar el reflejo del modo de energía o del tema.
                 var pw = _s.Power.ReadMode(); var ap = _s.Appearance.Read(); var sw = _s.Audio.CanSwitchOutput();
                 Update(s => s with { Power = pw, Appearance = ap, OutputSwitchOk = sw.IsOk, OutputSwitchReason = sw.IsOk ? null : sw.Message });
-                var br = _s.Brightness.Read();
-                Update(s => s with { Brightness = br });
             }
-            catch (Exception e) { _log("[hub] lecturas lentas: " + e.Message); }
-            finally { Volatile.Write(ref _slow, 0); }
+            catch (Exception e) { _log("[hub] lecturas rápidas: " + e.Message); }
+            finally { Volatile.Write(ref _fast, 0); }
+        });
+    }
+
+    /// <summary>Brillo (DDC/CI/WMI, lento). Si ya se vio que no hay pantallas controlables no se vuelve a sondear en 60 s, salvo que se fuerce (p. ej. tras mover el deslizador).</summary>
+    public void RefreshBrightness(bool force)
+    {
+        if (!force && !Snapshot.Brightness.Available && Snapshot.Brightness.Reason != "Leyendo…" && Environment.TickCount64 - Interlocked.Read(ref _brightAt) < 60_000) return;
+        if (Interlocked.Exchange(ref _bright, 1) == 1) return;
+        Task.Run(() =>
+        {
+            try { var br = _s.Brightness.Read(); Update(s => s with { Brightness = br }); }
+            catch (Exception e) { _log("[hub] brillo: " + e.Message); }
+            finally { Interlocked.Exchange(ref _brightAt, Environment.TickCount64); Volatile.Write(ref _bright, 0); }
         });
     }
 

@@ -161,7 +161,7 @@ public sealed partial class BarHost
             switch (id)
             {
                 case "notifications": _popover?.Hide(); _hub.Run(() => { Thread.Sleep(250); return svc.Session.OpenNotificationCenter(); }, r => { if (!r.IsOk) ShowInfo("Notificaciones", r.Message); }); return;
-                case "appearance": { bool dark = !s.Appearance.Dark; Op("appearance", "Cambiando…", () => svc.Appearance.SetDark(dark), _hub.RefreshSlow); return; }
+                case "appearance": { bool dark = !s.Appearance.Dark; _hub.Patch(x => x with { Appearance = x.Appearance with { Dark = dark } }); Op("appearance", "Cambiando…", () => svc.Appearance.SetDark(dark), _hub.RefreshFast); return; }
                 case "wifi-radio": { bool on = s.Wifi.RadioOn != true; Op("wifi-radio", on ? "Activando…" : "Desactivando…", () => svc.Wifi.SetRadio(on), () => { _hub.RefreshWifi(true); }); return; }
                 case "bt-radio": { bool on = !s.Bluetooth.RadioOn; Op("bt-radio", on ? "Activando…" : "Desactivando…", () => svc.Bluetooth.SetRadio(on), () => _hub.RefreshBluetooth(true)); return; }
                 case "mute": { bool m = !s.Audio.Muted; Op("mute", "…", () => svc.Audio.SetMuted(m), _hub.RefreshAudio); return; }
@@ -182,7 +182,7 @@ public sealed partial class BarHost
             }
 
             if (id.StartsWith("out:")) { var dev = id[4..]; Op(id, "Cambiando…", () => svc.Audio.SetDefaultOutput(dev), () => { _hub.RefreshAudio(); _hub.RefreshSlow(); }); return; }
-            if (id.StartsWith("power:") && Enum.TryParse<PowerMode>(id[6..], out var pm)) { Op(id, "Cambiando…", () => svc.Power.SetMode(pm), _hub.RefreshSlow); return; }
+            if (id.StartsWith("power:") && Enum.TryParse<PowerMode>(id[6..], out var pm)) { _hub.Patch(x => x with { Power = new PowerModeState(true, pm) }); Op(id, "Cambiando…", () => svc.Power.SetMode(pm), _hub.RefreshFast); return; }
             if (id.StartsWith("topology:") && Enum.TryParse<DisplayTopology>(id[9..], out var topo)) { _popover?.Hide(); _hub.Run(() => svc.Display.SetTopology(topo), r => { if (!r.IsOk) ShowInfo("Pantallas", r.Message); }); return; }
         }
         catch (Exception ex) { _log("[bar] evento de panel falló: " + ex.GetType().Name + ": " + ex.Message); }
@@ -201,7 +201,7 @@ public sealed partial class BarHost
             var mon = _hub.Snapshot.Brightness.Monitors.ToList(); if (mon.Count == 0) return;
             _hub.Patch(s => s with { Brightness = s.Brightness with { Monitors = s.Brightness.Monitors.Select(m => m with { Percent = v }).ToList() } });
             _hub.SetLatest("brightness", v, p => { ServiceResult last = ServiceResult.Ok; foreach (var m in mon) { last = svc.Brightness.Set(m.Id, p); if (!last.IsOk) break; } return last; },
-                r => { if (!r.IsOk) SetMessage(r.Message); if (commit || !r.IsOk) _hub.RefreshSlow(); RebuildPanel(); });
+                r => { if (!r.IsOk) SetMessage(r.Message); if (commit || !r.IsOk) _hub.RefreshBrightness(true); RebuildPanel(); });
         }
 
         RebuildPanel();
