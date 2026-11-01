@@ -166,9 +166,10 @@ internal static class StorageDiagnostics
         // 5) WMI de fiabilidad (directa y por asociación) y métricas finales con su origen
         var (wmiTemp, wmiWear, wmiHours) = Reliability(n, phys, data, lines);
         var temp = MetricPick.First(("WMI (MSFT_StorageReliabilityCounter)", wmiTemp), ("IOCTL registro NVMe 0x02 (vía dispositivo)", p.LogViaDevice?.TempC), ("IOCTL registro NVMe 0x02 (vía adaptador)", p.LogViaAdapter?.TempC), ("IOCTL propiedad de temperatura (52)", p.Temp?.Celsius));
-        var wear = MetricPick.First(("WMI (MSFT_StorageReliabilityCounter)", wmiWear), ("IOCTL registro NVMe 0x02 (vía dispositivo)", p.LogViaDevice?.WearPercent), ("IOCTL registro NVMe 0x02 (vía adaptador)", p.LogViaAdapter?.WearPercent));
-        var hours = MetricPick.First(("WMI (MSFT_StorageReliabilityCounter)", wmiHours), ("IOCTL registro NVMe 0x02 (vía dispositivo)", p.LogViaDevice?.Hours), ("IOCTL registro NVMe 0x02 (vía adaptador)", p.LogViaAdapter?.Hours));
-        lines.Add("    Métricas finales (primero WMI y después el propio disco; OJO: el panel solo usa la vía «por dispositivo», no la «por adaptador», que aquí se prueba para diagnóstico):");
+        // desgaste y horas: primero el registro del propio disco (WMI dio «0 %» en un disco cuyo registro NVMe dice 4 %), WMI solo si el disco no responde
+        var wear = MetricPick.First(("IOCTL registro NVMe 0x02 (vía dispositivo)", p.LogViaDevice?.WearPercent), ("WMI (MSFT_StorageReliabilityCounter)", wmiWear), ("IOCTL registro NVMe 0x02 (vía adaptador)", p.LogViaAdapter?.WearPercent));
+        var hours = MetricPick.First(("IOCTL registro NVMe 0x02 (vía dispositivo)", p.LogViaDevice?.Hours), ("WMI (MSFT_StorageReliabilityCounter)", wmiHours), ("IOCTL registro NVMe 0x02 (vía adaptador)", p.LogViaAdapter?.Hours));
+        lines.Add("    Métricas finales (temperatura: primero WMI; desgaste y horas: primero el registro del propio disco; OJO: el panel solo usa la vía «por dispositivo», no la «por adaptador», que aquí se prueba para diagnóstico):");
         lines.Add($"      temperatura {Fmt(temp, " °C")} · origen: {temp.Source}");
         lines.Add($"      desgaste    {Fmt(wear, " %")} · origen: {wear.Source}");
         lines.Add($"      horas       {Fmt(hours, " h")} · origen: {hours.Source}");
@@ -253,6 +254,7 @@ internal static class StorageDiagnostics
 
         var row = direct ?? assoc;
         double? temp = Positive(row, "Temperature"), wear = Positive(row, "Wear", allowZero: true), hours = Positive(row, "PowerOnHours", allowZero: true);
+        if (temp is null && hours is null && wear == 0) { wear = null; lines.Add("      la fila de WMI no trae temperatura ni horas: su «desgaste 0» se toma como «sin dato», no como 0 %"); }
         return (temp, wear, hours);
     }
 
