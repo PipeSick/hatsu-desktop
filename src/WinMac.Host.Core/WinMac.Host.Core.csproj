@@ -4,5 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>WinMac.Host</RootNamespace>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\WinMac.Ipc\WinMac.Ipc.csproj" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinMac.Ipc\WinMac.Ipc.csproj" />
+    <ProjectReference Include="..\WinMac.Bar.Core\WinMac.Bar.Core.csproj" />   <!-- BarConfig: una sola definición de los ajustes de la Barra, la usan el host y la propia Barra -->
+  </ItemGroup>
 </Project>

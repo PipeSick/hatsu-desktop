@@ -4,7 +4,7 @@ using WinMac.Ipc;
 namespace WinMac.Host.App;
 
 /// <summary>Opciones de línea de comandos del host (las de prueba están marcadas).</summary>
-internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTray, bool Fast, string? PipeName, string NotchWinSettingsPath)
+internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTray, bool Fast, string? PipeName, string NotchWinSettingsPath, string BarJsonPath)
 {
     public static string Arg(string[] a, string n, string def) { int i = Array.IndexOf(a, n); return i >= 0 && i + 1 < a.Length ? a[i + 1] : def; }
     public static HostOptions Parse(string[] a) => new(
@@ -13,7 +13,8 @@ internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTra
         a.Contains("--no-tray"),          // PRUEBAS: sin icono de bandeja (runners sin escritorio)
         a.Contains("--fast"),             // PRUEBAS: tiempos de supervisión reducidos
         a.Contains("--pipe-name") ? Arg(a, "--pipe-name", "") : null,
-        Arg(a, "--notchwin-settings", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NotchWin", "settings.json")));   // origen de la migración única (PRUEBAS: se puede redirigir)
+        Arg(a, "--notchwin-settings", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NotchWin", "settings.json")),
+        Arg(a, "--bar-json", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "bar.json")));   // origen de la migración única (PRUEBAS: se puede redirigir)
 }
 
 internal sealed class FileLog(string path)
@@ -51,6 +52,7 @@ internal static class HostApp
 
         var cfg = HostConfig.Load(o.ConfigPath);
         cfg = MigrateNotchOnce(cfg, o, log);
+        cfg = MigrateBarOnce(cfg, o, log);
         string baseDir = AppContext.BaseDirectory, pipe = o.PipeName ?? PipeNames.ForCurrentUser(), token = PipeNames.NewToken();
         log($"[host] iniciado (pid {Environment.ProcessId}); configuración: {o.ConfigPath}; canal: {pipe}");
 
@@ -122,6 +124,22 @@ internal static class HostApp
             HostConfig.Save(o.ConfigPath, next); log("[host] ajustes de la Isla importados de " + o.NotchWinSettingsPath + " (el archivo original no se modificó)"); return next;
         }
         catch (Exception e) { log("[host] no se pudo importar los ajustes de NotchWin: " + e.Message); return cfg; }
+    }
+
+    /// <summary>
+    /// Migración ÚNICA y NO destructiva de los ajustes de la Barra: si <c>winmac.json</c> aún no tiene sección <c>bar</c> y existe <c>bar.json</c>, se copian. El archivo original no se
+    /// toca ni se borra. Desde entonces la fuente de verdad es <c>winmac.json</c> (la Barra recibe sus ajustes del host; sin host sigue usando bar.json).
+    /// </summary>
+    private static HostConfig MigrateBarOnce(HostConfig cfg, HostOptions o, Action<string> log)
+    {
+        if (cfg.Bar is not null || !File.Exists(o.BarJsonPath)) return cfg;
+        try
+        {
+            var imported = WinMac.Bar.BarConfig.LoadOrDefault(o.BarJsonPath).Sanitize();
+            var next = cfg with { Bar = imported };
+            HostConfig.Save(o.ConfigPath, next); log("[host] ajustes de la Barra importados de " + o.BarJsonPath + " (el archivo original no se modificó)"); return next;
+        }
+        catch (Exception e) { log("[host] no se pudo importar los ajustes de la Barra: " + e.Message); return cfg; }
     }
 
     /// <summary>Pide el cierre a las ventanas de nivel superior de un proceso (WM_CLOSE): cooperativo, no fuerza nada.</summary>

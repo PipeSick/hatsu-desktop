@@ -148,7 +148,7 @@ public class HostControllerTests
     [Fact]
     public void Start_publishes_the_current_notch_settings_as_retained_state()
     {
-        var (f, _, h, file) = Make(); try { h.Start(); lock (f.Bus.Published) { Assert.Single(f.Bus.Published); Assert.Equal(NotchSettings.Topic, f.Bus.Published[0].Topic); } } finally { File.Delete(file); }
+        var (f, _, h, file) = Make(); try { h.Start(); lock (f.Bus.Published) { Assert.Equal(2, f.Bus.Published.Count); Assert.Equal(NotchSettings.Topic, f.Bus.Published[0].Topic); Assert.Equal(HostController.BarTopic, f.Bus.Published[1].Topic); } } finally { File.Delete(file); }
     }
 
     [Fact]
@@ -265,4 +265,38 @@ public class NotchChannelRoundtripTests
     }
 
     private static async Task<bool> Until(Func<bool> c, int ms = 8000) { var end = DateTime.UtcNow.AddMilliseconds(ms); while (DateTime.UtcNow < end) { if (c()) return true; await Task.Delay(20); } return c(); }
+}
+
+
+public class BarCentralConfigTests
+{
+    private static JsonElement J(string json) => JsonDocument.Parse(json).RootElement.Clone();
+    private static string Tmp() => Path.Combine(Path.GetTempPath(), "winmac-bar-" + Guid.NewGuid().ToString("N") + ".json");
+
+    [Fact]
+    public void A_bar_patch_is_saved_in_winmac_json_and_roundtrips_without_touching_the_notch()
+    {
+        var f = Tmp();
+        try
+        {
+            var s = new ConfigService(f, new HostConfig()); s.ApplyNotchPatch(J("{\"glassLevel\":30}"));
+            Assert.True(s.ApplyBarPatch(J("{\"showSeconds\":true}"))); Assert.False(s.ApplyBarPatch(J("{\"showSeconds\":true}")));
+            var l = HostConfig.Load(f); Assert.True(l.Bar!.ShowSeconds); Assert.Equal(30, l.Notch!.GlassLevel);
+        }
+        finally { try { File.Delete(f); } catch (IOException) { } }
+    }
+
+    [Fact]
+    public void The_bar_patch_travels_only_from_the_bar_module_and_is_republished()
+    {
+        var file = Tmp(); var f = new Fixture().With(("bar", true), ("dock", true), ("notch", true));
+        try
+        {
+            var c = new ConfigService(file, new HostConfig()); var h = new HostController(c, f.Sup, f.Bus); h.Start();
+            f.Bus.RaiseEvent("dock", HostController.BarSetTopic, "{\"showSeconds\":true}"); Assert.False(c.Bar.ShowSeconds);
+            f.Bus.RaiseEvent("bar", HostController.BarSetTopic, "{\"showSeconds\":true}"); Assert.True(c.Bar.ShowSeconds);
+            lock (f.Bus.Published) Assert.Equal(HostController.BarTopic, f.Bus.Published[^1].Topic);
+        }
+        finally { try { File.Delete(file); } catch (IOException) { } }
+    }
 }

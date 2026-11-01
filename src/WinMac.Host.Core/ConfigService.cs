@@ -1,4 +1,5 @@
 using System.Text.Json;
+using WinMac.Bar;
 
 namespace WinMac.Host;
 
@@ -41,6 +42,14 @@ public sealed class ConfigService
 
     public bool ApplyNotchPatch(JsonElement patch) => UpdateNotch(n => n.ApplyPatch(patch));
 
+    public BarConfig Bar => Current.Bar ?? new BarConfig();
+    public bool UpdateBar(Func<BarConfig, BarConfig> change) => Update(c =>
+    {
+        var cur = c.Bar ?? new BarConfig(); var n = change(cur).Sanitize();
+        return n == cur && c.Bar is not null ? c : c with { Bar = n };
+    });
+    public bool ApplyBarPatch(JsonElement patch) => UpdateBar(b => b.ApplyPatch(patch));
+
     public bool SetModuleEnabled(string module, bool enabled) => Update(c =>
     {
         if (!c.Modules.TryGetValue(module, out var m)) return c;
@@ -71,20 +80,28 @@ public sealed class HostController
     }
 
     /// <summary>Publica el estado inicial (el módulo lo recibe al suscribirse, aunque se conecte más tarde).</summary>
-    public void Start() => _bus.Publish(NotchSettings.Topic, _cfg.Notch.ToWire());
+    public const string BarTopic = "config.bar", BarSetTopic = "config.bar.set";
+
+    public void Start() { _bus.Publish(NotchSettings.Topic, _cfg.Notch.ToWire()); _bus.Publish(BarTopic, BarWire(_cfg.Bar)); }
+
+    /// <summary>La configuración de la Barra tal como viaja (camelCase, enums como texto).</summary>
+    private static object BarWire(BarConfig b) => JsonDocument.Parse(b.ToWireJson()).RootElement.Clone();
 
     /// <summary>Pide al módulo que abra su ventana de rutas y datos locales (lo único que no es central).</summary>
     public void OpenNotchLocalSettings() => _bus.Emit(NotchSettings.CommandTopic, new { cmd = "open-local-settings" });
 
     private void OnEvent(string module, string topic, JsonElement? data)
     {
-        if (module != "notch" || topic != NotchSettings.SetTopic || data is not { } d) return;   // solo la Isla puede cambiar SUS ajustes, y solo por este tópico
-        try { _cfg.ApplyNotchPatch(d); } catch (Exception e) { _log("[config] parche de la Isla descartado: " + e.Message); }
+        if (data is not { } d) return;
+        // cada módulo cambia SOLO sus propios ajustes y solo por su tópico
+        if (module == "notch" && topic == NotchSettings.SetTopic) { try { _cfg.ApplyNotchPatch(d); } catch (Exception e) { _log("[config] parche de la Isla descartado: " + e.Message); } }
+        else if (module == "bar" && topic == BarSetTopic) { try { _cfg.ApplyBarPatch(d); } catch (Exception e) { _log("[config] parche de la Barra descartado: " + e.Message); } }
     }
 
     private void OnChanged(HostConfig old, HostConfig @new)
     {
         if (!ConfigService.SameNotch(old.Notch ?? new NotchSettings(), @new.Notch ?? new NotchSettings()) || old.Notch is null != @new.Notch is null) _bus.Publish(NotchSettings.Topic, (@new.Notch ?? new NotchSettings()).ToWire());
+        if ((old.Bar ?? new BarConfig()) != (@new.Bar ?? new BarConfig()) || old.Bar is null != @new.Bar is null) _bus.Publish(BarTopic, BarWire(@new.Bar ?? new BarConfig()));
         foreach (var (id, m) in @new.Modules)
             if (!old.Modules.TryGetValue(id, out var o) || o.Enabled != m.Enabled)
             {
