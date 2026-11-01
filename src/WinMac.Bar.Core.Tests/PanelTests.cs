@@ -239,8 +239,8 @@ public class PanelBuilderTests
         var sys = Nothing with { Wifi = new WifiState(true, true, "Casa", 89, nets, RadioOn: true) };
         var off = PanelBuilder.WifiPanel(Ctx(sys)); Assert.DoesNotContain("dBm", off.Widgets.Single(w => w.Id == "net:Casa").Sub);
         var on = PanelBuilder.WifiPanel(Ctx(sys, new BarConfig { WifiDetails = true }));
-        Assert.Contains("89 %", on.Widgets.Single(w => w.Id == "net:Casa").Sub); Assert.Contains("-57 dBm", on.Widgets.Single(w => w.Id == "net:Casa").Sub); Assert.Contains("5 GHz", on.Widgets.Single(w => w.Id == "net:Casa").Sub);
-        Assert.Contains("40 %", on.Widgets.Single(w => w.Id == "net:Sin").Sub); Assert.DoesNotContain("dBm", on.Widgets.Single(w => w.Id == "net:Sin").Sub);   // sin dato de Windows no se inventa
+        var casa = on.Widgets.Single(w => w.Id == "net:Casa").Sub; Assert.Equal("5 GHz · -57 dBm · Conectado", casa); Assert.True(casa!.Length <= 30);   // cabe en la fila de 320 px
+        Assert.Equal("2,4 GHz · -80 dBm · Conocida", on.Widgets.Single(w => w.Id == "net:Vecino").Sub); Assert.Equal("Conocida", on.Widgets.Single(w => w.Id == "net:Sin").Sub);   // sin dato de Windows no se inventa
     }
 
     [Fact]
