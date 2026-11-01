@@ -2,7 +2,7 @@
   <!-- WinMac.exe: host/supervisor. Lanza Barra y Dock como procesos hijos dentro de un Job Object, los vigila y los cierra en orden. Sin interfaz propia salvo el icono de la bandeja. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>WinMac.Host.App</RootNamespace>
     <AssemblyName>WinMac</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -10,5 +10,6 @@
   <ItemGroup>
     <ProjectReference Include="..\WinMac.Host.Core\WinMac.Host.Core.csproj" />
     <ProjectReference Include="..\WinMac.Ipc\WinMac.Ipc.csproj" />
+    <ProjectReference Include="..\WinMac.Dock.Win\WinMac.Dock.Win.csproj" />
   </ItemGroup>
 </Project>

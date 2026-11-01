@@ -4,6 +4,7 @@
 //   WinMac.exe --background         igual; es lo que registra el inicio automático
 //   WinMac.exe --quit               pide al host en ejecución que se cierre normalmente (cierra sus módulos)
 //   WinMac.exe --install-autostart  crea UNA clave HKCU\...\Run («WinMac») · --remove-autostart la borra
+//   WinMac.exe --render-settings <general|bar|hub|notch> --out f.png [--theme light|dark] [--scale 2] [--scroll N] [--suggest] [--no-notch]   dibuja Ajustes fuera de pantalla (CI)
 //   Solo pruebas: --config <ruta> · --log <ruta> · --no-tray · --fast · --pipe-name <nombre> · --autostart-name <nombre>
 using WinMac.Host.App;
 
@@ -19,6 +20,7 @@ internal static class Program
             if (args.Contains("--install-autostart")) { Autostart.Install(exe, name); Console.WriteLine($"Inicio automático activado ({name} → {Autostart.Current(name)})."); return 0; }
             if (args.Contains("--remove-autostart")) { Console.WriteLine(Autostart.Remove(name) ? "Inicio automático desactivado." : "El inicio automático no estaba activado."); return 0; }
             if (args.Contains("--quit")) return HostApp.SignalQuit();
+            if (args.Contains("--render-settings")) return SettingsOffscreen.Run(args);   // solo CI: dibuja Ajustes fuera de pantalla
             return HostApp.Run(HostOptions.Parse(args));
         }
         catch (Exception e) { try { Console.Error.WriteLine("ERROR: " + e); } catch (Exception) { } return 1; }

@@ -93,6 +93,7 @@ jobs:
           New-Item -ItemType Directory -Force sheet | Out-Null
           Copy-Item smoke/contact-sheet.png sheet/ -ErrorAction SilentlyContinue
           Copy-Item smoke/preview-*.png sheet/ -ErrorAction SilentlyContinue
+          Copy-Item smoke/ajustes-*.png sheet/ -ErrorAction SilentlyContinue
       - name: Subir resultados de humo
         id: up_smoke
         if: always()

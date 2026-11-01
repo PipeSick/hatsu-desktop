@@ -60,6 +60,25 @@ Run 'Panel Discos con altura limitada a 720 DIP, abajo (desplazable)' $bar @('--
 Run 'Panel Sistema a 150 % de DPI en 1080p (centro)' $bar @('--render-panel', 'hub', '--tab', 'system', '--max-height', '672', '--scroll', '120', '--out', "`"$OutDir\panel-hub-system-150dpi-1080p.png`"", '--scale', '1.5') 90
 # Control de las franjas verticales: con --bands se dibujan las dos bandas del fondo sintético de contraste (las que antes aparecían); los PNG normales no las llevan.
 Run 'Panel Sistema con las franjas del fondo de prueba (control)' $bar @('--render-panel', 'hub', '--tab', 'system', '--bands', '--out', "`"$OutDir\panel-hub-system-franjas-control.png`"", '--scale', '2') 90
+# Ajustes de WinMac (ventana estilo iOS): se dibuja FUERA de pantalla con el pintor real. Valida el dibujo, NO el ratón ni el foco.
+$hostExe = "$PublishDir/Host/WinMac.exe"
+function RunSettings($label, $png, $extra) {
+  $out = Join-Path $OutDir $png
+  Run $label $hostExe (@('--render-settings') + $extra + @('--out', "`"$out`"", '--scale', '2')) 90
+  if (Test-Path $hostExe) {
+    $ok = (Test-Path $out) -and ((Get-Item $out).Length -gt 8000)
+    if (-not $ok) { Write-Host "FALTA O VACÍO: $png"; $script:rows += [pscustomobject]@{ Paso = "$label (PNG)"; Resultado = 'FALLO'; Detalle = 'el PNG no se generó o está vacío' } }
+    else { $det = (Get-Content "$out.txt" -ErrorAction SilentlyContinue | Select-Object -First 1); Write-Host "  $png $((Get-Item $out).Length) bytes  $det" }
+  }
+}
+RunSettings 'Ajustes general (oscuro)' 'ajustes-general.png' @('general')
+RunSettings 'Ajustes barra superior (oscuro)' 'ajustes-bar.png' @('bar')
+RunSettings 'Ajustes panel y tiempo (oscuro)' 'ajustes-hub.png' @('hub')
+RunSettings 'Ajustes isla (oscuro)' 'ajustes-notch.png' @('notch')
+RunSettings 'Ajustes panel y tiempo con sugerencias de ciudad' 'ajustes-hub-sugerencias.png' @('hub', '--suggest')
+RunSettings 'Ajustes panel y tiempo (claro)' 'ajustes-hub-claro.png' @('hub', '--theme', 'light')
+RunSettings 'Ajustes barra superior desplazada (claro)' 'ajustes-bar-desplazada-claro.png' @('bar', '--theme', 'light', '--scroll', '400')
+RunSettings 'Ajustes isla sin NotchWin instalada' 'ajustes-notch-sin-isla.png' @('notch', '--no-notch')
 Run 'Barra offscreen light/glass con resalte' $bar @('--render-png', "`"$OutDir\bar-light-glass-hover.png`"", '--theme', 'light', '--bg', 'glass', '--scale', '2', '--hover', '4') 90
 Run 'Barra --status (informativo)' $bar @('--status') 60 -Informational
 Run 'Barra selftest' $bar @('--selftest') 120

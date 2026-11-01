@@ -19,6 +19,24 @@ public static class CityResolver
         return sb.ToString().Trim();
     }
 
+    /// <summary>«Molina, Maule, Chile».</summary>
+    public static string DisplayLabel(GeoPoint p) => Label(p);
+
+    /// <summary>Lo que se busca en el proveedor: el nombre, sin la pista de país o región tras la coma.</summary>
+    public static string QueryOf(string input) { input = (input ?? "").Trim(); int c = input.IndexOf(','); return (c > 0 ? input[..c] : input).Trim(); }
+
+    /// <summary>
+    /// Sugerencias mientras se escribe: con pista («Molina, Chi») solo las que la contengan; sin pista, primero las del país del equipo. Sin repetidos y como máximo <paramref name="max"/>.
+    /// </summary>
+    public static IReadOnlyList<GeoPoint> Suggest(IReadOnlyList<GeoPoint> found, string input, string? preferCountry, int max = 5)
+    {
+        input = (input ?? "").Trim(); int c = input.IndexOf(','); string hint = c > 0 ? Norm(input[(c + 1)..]) : "";
+        IEnumerable<GeoPoint> q = found.DistinctBy(g => g.Key);
+        if (hint.Length > 0) q = q.Where(g => Norm(g.Region).Contains(hint) || Norm(g.Name).Contains(hint));
+        else if (!string.IsNullOrWhiteSpace(preferCountry)) { string pc = Norm(preferCountry); q = q.OrderBy(g => Norm(g.Region).EndsWith(pc) ? 0 : 1); }   // OrderBy es estable: el resto conserva el orden del proveedor
+        return q.Take(max).ToList();
+    }
+
     private static string Label(GeoPoint p) => string.IsNullOrWhiteSpace(p.Region) ? p.Name : $"{p.Name}, {p.Region}";
 
     /// <summary>

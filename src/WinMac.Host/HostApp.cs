@@ -96,7 +96,6 @@ internal static class HostApp
             while (uiActions.TryDequeue(out var act)) { try { act(); } catch (Exception e) { log("[host] acción de interfaz falló: " + e.Message); } }
             while (Native.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1))
             {
-                if (settings is { IsOpen: true } && Native.IsDialogMessage(settings.Handle, ref msg)) continue;   // Tab y Enter en la ventana de ajustes
                 Native.TranslateMessage(ref msg); Native.DispatchMessage(ref msg);
             }
             if (reopen.WaitOne(0)) { var ids = sup.RestartStopped(); log("[host] reapertura pedida: " + (ids.Count == 0 ? "nada que reabrir" : string.Join(", ", ids))); }
