@@ -122,6 +122,7 @@ internal static class Program
             }
             catch (Exception e) { Log("  [FALLO] discos: " + e.GetType().Name + ": " + e.Message); }
             Log("  Lo que Windows dice de los discos:"); foreach (var l in WinMac.Bar.Win.Shell.Hub.HubServicesFactory.DiskDiagnostics()) Log("    " + l);
+            foreach (var l in WinMac.Bar.Win.Shell.Hub.HubServicesFactory.StorageReport()) Log("  " + l);   // diagnóstico SMART/NVMe por disco (solo lectura)
         }
         finally { owner.Dispose(); }
     }

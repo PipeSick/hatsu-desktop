@@ -1,85 +1,131 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
+using WinMac.Bar.Hub;
 
 namespace WinMac.Bar.Win.Shell.Hub;
 
-/// <summary>Lo que el propio disco informa (temperatura, desgaste, horas, datos leídos/escritos). Todo es opcional: lo que el disco no entrega queda en null.</summary>
-internal sealed record StorageHealth(double? TempC, long? Hours, double? WearPercent, double? ReadBytes, double? WrittenBytes, string? Why);
+/// <summary>
+/// Lo que el propio disco informa (temperatura, desgaste, horas, datos leídos/escritos). Todo es opcional: lo que el disco no entrega queda en null.
+/// Las propiedades <c>*Source</c> dicen de dónde salió cada métrica (para el diagnóstico; el panel no las muestra).
+/// </summary>
+internal sealed record StorageHealth(double? TempC, long? Hours, double? WearPercent, double? ReadBytes, double? WrittenBytes, string? Why, string? TempSource = null, string? HoursSource = null, string? WearSource = null);
+
+/// <summary>Cada consulta de solo lectura que se le hace a un disco o volumen.</summary>
+internal enum StorageOp { DeviceNumber, DeviceDescriptor, AdapterDescriptor, Temperature, NvmeIdentify, NvmeHealthViaDevice, NvmeHealthViaAdapter }
+
+/// <summary>El resultado de una consulta: la traza (ruta, acceso, operación, error, bytes) y los bytes devueltos. La interpretación va aparte, en <see cref="StorageResponse"/>.</summary>
+internal sealed record StorageStep(IoctlTrace Trace, byte[] Data);
 
 /// <summary>
 /// Consulta al controlador del disco con IOCTL_STORAGE_QUERY_PROPERTY (API documentada): la temperatura (StorageDeviceTemperatureProperty) y, en NVMe, el registro de salud estándar (log 0x02:
 /// temperatura compuesta, % usado, horas, unidades leídas/escritas). Se abre el disco solo para consultar propiedades (acceso 0 y, si no, de lectura); si Windows lo niega, el motivo REAL queda en <c>Why</c>.
 /// Nunca escribe nada en el disco. Sin administrador puede no estar permitido en algunos equipos: se informa, no se inventa.
+/// El diagnóstico detallado (<c>--selftest-system</c>) usa las mismas funciones con la traza completa; el panel solo usa <see cref="Read"/>.
 /// </summary>
 internal static class StorageQuery
 {
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr sec, uint disp, uint flags, IntPtr tmpl);
-    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool DeviceIoControl(SafeFileHandle h, uint code, IntPtr inBuf, uint inSize, IntPtr outBuf, uint outSize, out uint returned, IntPtr overlapped);
+    [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "DeviceIoControl")] private static extern bool DeviceIoControlBytes(SafeFileHandle h, uint code, [In] byte[] inBuf, uint inSize, [Out] byte[] outBuf, uint outSize, out uint returned, IntPtr overlapped);
 
-    private const uint IOCTL_STORAGE_QUERY_PROPERTY = 0x002D1400, GENERIC_READ = 0x80000000, SHARE_RW = 3, OPEN_EXISTING = 3;
-    private const uint StorageDeviceTemperatureProperty = 12, StorageDeviceProtocolSpecificProperty = 50;
+    private const uint IOCTL_STORAGE_QUERY_PROPERTY = 0x002D1400, IOCTL_STORAGE_GET_DEVICE_NUMBER = 0x002D1080, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS = 0x00560000;
+    private const uint GENERIC_READ = 0x80000000, SHARE_RW = 3, OPEN_EXISTING = 3;
+
+    /// <summary>Acceso 0: solo consultar propiedades del dispositivo (sin derecho de lectura de datos). Es el primero que se prueba.</summary>
+    internal const uint QueryAccess = 0;
+
+    /// <summary>Acceso de lectura (GENERIC_READ): solo se prueba si el de consulta recibe «acceso denegado». Sigue sin escribir nada.</summary>
+    internal const uint ReadAccess = GENERIC_READ;
+
+    internal static string AccessName(uint access) => access == QueryAccess ? "0 (solo consulta)" : "GENERIC_READ";
 
     public static StorageHealth Read(int diskNumber, bool nvme)
     {
+        string target = $@"\\.\PhysicalDrive{diskNumber}";
         try
         {
-            using var h = Open(diskNumber, out int err);
+            SafeFileHandle? h = null; uint used = QueryAccess; int err = 0;
+            foreach (uint access in new[] { QueryAccess, ReadAccess })   // primero solo consulta de propiedades; si hace falta, lectura
+            {
+                used = access; h = Open(target, access, out err);
+                if (h is not null || err != 5) break;
+            }
+
             if (h is null) return new StorageHealth(null, null, null, null, null, err == 5 ? "El disco solo entrega estos datos a un proceso con permisos de administrador" : "Windows no permitió consultar el disco (error " + err + ")");
-            double? temp = ReadTemperature(h); StorageHealth? log = nvme ? ReadNvmeLog(h) : null;
-            return new StorageHealth(log?.TempC ?? temp, log?.Hours, log?.WearPercent, log?.ReadBytes, log?.WrittenBytes,
-                temp is null && log is null ? (nvme ? "El disco no respondió a la consulta de salud" : "El disco no informa su temperatura a las apps (SATA/USB sin esa función)") : null);
+            using var handle = h;
+            var tempStep = Run(handle, target, used, StorageOp.Temperature);
+            TemperatureParse? temp = tempStep.Trace.Ok ? StorageResponse.ParseTemperature(tempStep.Data) : null;
+            NvmeHealth? log = null;
+            if (nvme)
+            {
+                var logStep = Run(handle, target, used, StorageOp.NvmeHealthViaDevice);
+                if (logStep.Trace.Ok) log = StorageResponse.ParseNvmeHealth(logStep.Data);
+            }
+
+            bool any = temp?.Celsius is not null || (log?.HasAny ?? false);
+            const string fromLog = "registro NVMe 0x02";
+            double? t = log?.TempC ?? temp?.Celsius;
+            return new StorageHealth(t, log?.Hours, log?.WearPercent, log?.ReadBytes, log?.WrittenBytes,
+                any ? null : (nvme ? "El disco no respondió a la consulta de salud" : "El disco no informa su temperatura a las apps (SATA/USB sin esa función)"),
+                log?.TempC is not null ? fromLog : temp?.Celsius is not null ? "propiedad de temperatura" : null, log?.Hours is not null ? fromLog : null, log?.WearPercent is not null ? fromLog : null);
         }
         catch (Exception e) { return new StorageHealth(null, null, null, null, null, "No se pudo consultar el disco (" + e.GetType().Name + ")"); }
     }
 
-    private static SafeFileHandle? Open(int n, out int err)
+    /// <summary>Abre la ruta con el acceso dado. Devuelve null y el error Win32 real si Windows lo niega.</summary>
+    internal static SafeFileHandle? Open(string path, uint access, out int error)
     {
-        err = 0;
-        foreach (uint access in new[] { 0u, GENERIC_READ })   // primero solo consulta de propiedades; si hace falta, lectura
-        {
-            var h = CreateFileW($@"\\.\PhysicalDrive{n}", access, SHARE_RW, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
-            if (!h.IsInvalid) return h; err = Marshal.GetLastWin32Error(); h.Dispose(); if (err != 5) break;
-        }
-
+        var h = CreateFileW(path, access, SHARE_RW, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+        if (!h.IsInvalid) { error = 0; return h; }
+        error = Marshal.GetLastWin32Error(); h.Dispose();
         return null;
     }
 
-    private static IntPtr Buf(int size) { var p = Marshal.AllocHGlobal(size); for (int i = 0; i < size; i += 8) Marshal.WriteInt64(p, i, 0); return p; }
-
-    private static double? ReadTemperature(SafeFileHandle h)
+    /// <summary>Ejecuta UNA consulta y devuelve su traza. Si falla, el error Win32 queda en la traza y <c>Data</c> vacío.</summary>
+    internal static StorageStep Run(SafeFileHandle h, string target, uint access, StorageOp op)
     {
-        var inp = Buf(16); var outp = Buf(512);
-        try
-        {
-            Marshal.WriteInt32(inp, 0, (int)StorageDeviceTemperatureProperty); Marshal.WriteInt32(inp, 4, 0);   // PropertyStandardQuery
-            if (!DeviceIoControl(h, IOCTL_STORAGE_QUERY_PROPERTY, inp, 12, outp, 512, out uint ret, IntPtr.Zero) || ret < 24 + 16) return null;
-            int count = Marshal.ReadInt16(outp, 12); if (count < 1) return null;   // STORAGE_TEMPERATURE_DATA_DESCRIPTOR: InfoCount; el primer STORAGE_TEMPERATURE_INFO empieza en 24 (Temperature a +2)
-            short t = Marshal.ReadInt16(outp, 24 + 2); return t is > 0 and < 150 ? t : null;
-        }
-        finally { Marshal.FreeHGlobal(inp); Marshal.FreeHGlobal(outp); }
+        var (name, input, outSize, code) = Describe(op);
+        var output = new byte[outSize];
+        bool ok = DeviceIoControlBytes(h, code, input, (uint)input.Length, output, (uint)output.Length, out uint returned, IntPtr.Zero);
+        int err = ok ? 0 : Marshal.GetLastWin32Error();
+        int n = (int)Math.Min(returned, (uint)output.Length);
+        byte[] data = ok ? output.AsSpan(0, n).ToArray() : Array.Empty<byte>();
+        return new StorageStep(new IoctlTrace(target, AccessName(access), name, ok, err, n, Array.Empty<string>()), data);
     }
 
-    private static StorageHealth? ReadNvmeLog(SafeFileHandle h)
+    private static (string Name, byte[] Input, int OutSize, uint Code) Describe(StorageOp op) => op switch
     {
-        const int header = 8, proto = 40, dataLen = 512, total = header + proto + 4096;   // STORAGE_PROPERTY_QUERY(8) + STORAGE_PROTOCOL_SPECIFIC_DATA(40) + datos
-        var buf = Buf(total);
-        try
+        StorageOp.DeviceNumber => ("IOCTL_STORAGE_GET_DEVICE_NUMBER", Array.Empty<byte>(), 12, IOCTL_STORAGE_GET_DEVICE_NUMBER),
+        StorageOp.DeviceDescriptor => ("StorageDeviceProperty (0): fabricante, producto, serie, bus", StorageRequests.PropertyQuery(StorageRequests.DeviceProperty), 1024, IOCTL_STORAGE_QUERY_PROPERTY),
+        StorageOp.AdapterDescriptor => ("StorageAdapterProperty (1): bus y transferencia del adaptador", StorageRequests.PropertyQuery(StorageRequests.AdapterProperty), 256, IOCTL_STORAGE_QUERY_PROPERTY),
+        StorageOp.Temperature => ("StorageDeviceTemperatureProperty (52): temperatura", StorageRequests.PropertyQuery(StorageRequests.DeviceTemperatureProperty), 512, IOCTL_STORAGE_QUERY_PROPERTY),
+        StorageOp.NvmeIdentify => ("NVMe Identify Controller vía propiedad de dispositivo (50)",
+            StorageRequests.ProtocolQuery(StorageRequests.DeviceProtocolSpecificProperty, StorageRequests.ProtocolTypeNvme, StorageRequests.NvmeDataTypeIdentify, StorageRequests.NvmeIdentifyController, 0, 4096),
+            StorageRequests.ProtocolPrefix + 4096, IOCTL_STORAGE_QUERY_PROPERTY),
+        StorageOp.NvmeHealthViaDevice => ("NVMe registro de salud 0x02 vía propiedad de dispositivo (50)",
+            StorageRequests.ProtocolQuery(StorageRequests.DeviceProtocolSpecificProperty, StorageRequests.ProtocolTypeNvme, StorageRequests.NvmeDataTypeLogPage, StorageRequests.NvmeLogHealthInfo, 0, 512),
+            StorageRequests.ProtocolPrefix + 4096, IOCTL_STORAGE_QUERY_PROPERTY),
+        StorageOp.NvmeHealthViaAdapter => ("NVMe registro de salud 0x02 vía propiedad de adaptador (49)",
+            StorageRequests.ProtocolQuery(StorageRequests.AdapterProtocolSpecificProperty, StorageRequests.ProtocolTypeNvme, StorageRequests.NvmeDataTypeLogPage, StorageRequests.NvmeLogHealthInfo, 0, 512),
+            StorageRequests.ProtocolPrefix + 4096, IOCTL_STORAGE_QUERY_PROPERTY),
+        _ => throw new ArgumentOutOfRangeException(nameof(op)),
+    };
+
+    /// <summary>Discos físicos que contienen el volumen, preguntándoselo al propio volumen (IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS), sin pasar por WMI. <paramref name="letter"/> es «C:».</summary>
+    internal static (IoctlTrace Trace, IReadOnlyList<int> Disks) VolumeDisks(string letter)
+    {
+        string target = $@"\\.\{letter}";
+        var h = Open(target, QueryAccess, out int err);
+        if (h is null) return (new IoctlTrace(target, AccessName(QueryAccess), "abrir el volumen", false, err, 0, Array.Empty<string>()), Array.Empty<int>());
+        using (h)
         {
-            Marshal.WriteInt32(buf, 0, (int)StorageDeviceProtocolSpecificProperty); Marshal.WriteInt32(buf, 4, 0);
-            Marshal.WriteInt32(buf, header + 0, 3);        // ProtocolTypeNvme
-            Marshal.WriteInt32(buf, header + 4, 2);        // NVMeDataTypeLogPage
-            Marshal.WriteInt32(buf, header + 8, 2);        // NVME_LOG_PAGE_HEALTH_INFO
-            Marshal.WriteInt32(buf, header + 12, 0);       // sub-valor
-            Marshal.WriteInt32(buf, header + 16, proto);   // ProtocolDataOffset
-            Marshal.WriteInt32(buf, header + 20, dataLen); // ProtocolDataLength
-            if (!DeviceIoControl(h, IOCTL_STORAGE_QUERY_PROPERTY, buf, (uint)(header + proto + dataLen), buf, (uint)total, out uint ret, IntPtr.Zero) || ret < header + proto + 144) return null;
-            int d = header + proto;   // el registro empieza tras el descriptor (cabecera de 8 + datos de protocolo)
-            byte B(int i) => Marshal.ReadByte(buf, d + i); ulong U64(int i) => (ulong)Marshal.ReadInt64(buf, d + i);
-            int kelvin = B(1) | (B(2) << 8); double? temp = kelvin is > 273 and < 423 ? kelvin - 273.15 : null;
-            double? wear = B(5) <= 255 ? Math.Min(B(5), (byte)100) : null;
-            ulong hours = U64(128), read = U64(32), written = U64(48);
-            return new StorageHealth(temp, hours is > 0 and < 2_000_000 ? (long)hours : null, wear, read > 0 ? read * 512_000.0 : null, written > 0 ? written * 512_000.0 : null, null);
+            var output = new byte[256];
+            bool ok = DeviceIoControlBytes(h, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, Array.Empty<byte>(), 0, output, (uint)output.Length, out uint returned, IntPtr.Zero);
+            int ioErr = ok ? 0 : Marshal.GetLastWin32Error();
+            int n = (int)Math.Min(returned, (uint)output.Length);
+            const string name = "IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS";
+            if (!ok) return (new IoctlTrace(target, AccessName(QueryAccess), name, false, ioErr, n, Array.Empty<string>()), Array.Empty<int>());
+            var parsed = StorageResponse.ParseVolumeExtents(output.AsSpan(0, n));
+            return (new IoctlTrace(target, AccessName(QueryAccess), name, true, 0, n, parsed.Problems), parsed.Disks);
         }
-        finally { Marshal.FreeHGlobal(buf); }
     }
 }

@@ -67,3 +67,15 @@ Compila (`Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, `.\tools\
 7. **Tiempo:** Ajustes → «Panel de WinMac y Tiempo» → escribe tu ciudad y sal del campo: debe resolverla y mostrar «Ciudad: …». Abre el panel del Tiempo. Corta la red un momento y comprueba que sigue mostrando los datos marcados como desactualizados.
 8. **Ajustes y Salir:** «Ajustes» abre la ventana con foco en el grupo de la pestaña. **«Salir» debe cerrar WinMac entero** (Barra, Dock, Isla); comprueba en el Administrador de tareas que no quedan procesos.
 9. Pega el resultado de `.\dist\WinMac\WinMac.Bar.App.exe --selftest-system` (incluye la sonda de notificaciones).
+
+## Diagnóstico SMART/NVMe por disco (`--selftest-system`)
+Estado: **COMPILA + PRUEBAS AUTOMÁTICAS de la lógica pura (formato de las peticiones, interpretación y validación de respuestas, comparación de identidades); lo que responda cada SSD real SOLO se sabe ejecutándolo en el PC.** Nada de esto aparece en el panel Discos, que sigue mostrando solo «No disponible» con un motivo corto.
+
+Qué imprime, por cada `\\.\PhysicalDriveN` (WMI, Windows y el propio disco; **solo lectura, sin administrador, no escribe en ningún disco**):
+- Cada volumen preguntado al propio volumen (`IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS`) y comparado con `MSFT_Partition`.
+- Cada `DeviceIoControl` por separado, con ruta, nivel de acceso (0 «solo consulta» y `GENERIC_READ`), propiedad pedida, resultado, **código de error Win32**, bytes devueltos y errores de validación de la respuesta: número de dispositivo, descriptor del dispositivo y del adaptador, temperatura (propiedad 52), NVMe Identify y registro de salud 0x02 por dispositivo y por adaptador.
+- Identidad según `MSFT_PhysicalDisk`, `MSFT_Disk`, `Win32_DiskDrive` y la propia ruta, **comparadas por número de serie, tamaño y modelo** (no se supone que «disco N» sea el mismo en todas) y las fuentes que no lo conocen marcadas como AUSENTE.
+- Cadena de dispositivos y controlador (Administrador de dispositivos + `ImagePath` del servicio, con empresa y versión del archivo), y los grupos de Espacios de almacenamiento.
+- Fiabilidad según WMI (directa y por asociación) y las métricas finales con su **origen** (WMI, propiedad de temperatura o registro NVMe).
+
+Corrección incluida: la propiedad de temperatura se pedía con el número 12 (`StorageDevicePowerProperty`); la correcta es 52 (`StorageDeviceTemperatureProperty`, según winioctl.h). Y un registro NVMe sin ningún dato verosímil se descarta entero (antes podía dar un «0 % usado» inventado).
