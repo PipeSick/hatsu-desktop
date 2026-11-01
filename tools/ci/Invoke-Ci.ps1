@@ -79,6 +79,7 @@ foreach ($c in $components) {
     $r.Test = if ($LASTEXITCODE -eq 0) { 'OK' } else { 'FALLO' }
     $line = Select-String -Path "$log-test.log" -Pattern '(Passed!|Failed!)' | Select-Object -Last 1
     if ($line) { $r.Detail = $line.Line.Trim(); Write-Host "  $($r.Detail)" }
+    if ($r.Test -eq 'FALLO') { Select-String -Path "$log-test.log" -Pattern '^\s+Failed ' -Context 0, 12 | ForEach-Object { Write-Host "    $($_.Line.Trim())"; $_.Context.PostContext | ForEach-Object { Write-Host "      $($_.TrimEnd())" } } }   # qué prueba falló y por qué, en el propio registro (sin bajar el .trx)
   }
   if ($c.Kind -eq 'app' -and $r.Build -eq 'OK' -and -not $NoPublish -and ($isWin -or $n -ne 'S3.DockWinUI')) {
     $sc = if ($n -eq 'S3.DockWinUI') { 'true' } else { 'false' }
