@@ -17,13 +17,21 @@ public sealed record VolumeInfo(bool Available, int Percent, bool Muted)
     public int Waves => !Available || Muted || Percent <= 0 ? 0 : Percent < 34 ? 1 : Percent < 67 ? 2 : 3;
 }
 
-public sealed record NetworkInfo(NetKind Kind)
+/// <summary>Red. <see cref="Ssid"/> y <see cref="Bars"/> (0–4) solo vienen rellenados con Wi-Fi conectado; -1 = no se sabe (no se inventa).</summary>
+public sealed record NetworkInfo(NetKind Kind, string? Ssid = null, int Bars = -1)
 {
     public static readonly NetworkInfo Unknown = new(NetKind.Unknown);
 }
 
-/// <summary>Todo lo que la barra muestra. Lo rellenan los proveedores del adaptador de Windows; el núcleo no lee el sistema.</summary>
-public sealed record BarState(DateTime Now, string? ActiveApp, BatteryInfo Battery, VolumeInfo Volume, NetworkInfo Network)
+/// <summary><see cref="Present"/> = hay adaptador Bluetooth. <see cref="On"/> = radio encendida; <see cref="Connected"/> = dispositivos conectados.</summary>
+public sealed record BluetoothInfo(bool Present, bool On, int Connected)
 {
+    public static readonly BluetoothInfo None = new(false, false, 0);
+}
+
+/// <summary>Todo lo que la barra muestra. Lo rellenan los proveedores del adaptador de Windows; el núcleo no lee el sistema.</summary>
+public sealed record BarState(DateTime Now, string? ActiveApp, BatteryInfo Battery, VolumeInfo Volume, NetworkInfo Network, BluetoothInfo? Bluetooth = null, IReadOnlyList<string>? AppMenus = null)
+{
+    public BluetoothInfo Bt => Bluetooth ?? BluetoothInfo.None;
     public static BarState Empty(DateTime now) => new(now, null, BatteryInfo.None, VolumeInfo.None, NetworkInfo.Unknown);
 }

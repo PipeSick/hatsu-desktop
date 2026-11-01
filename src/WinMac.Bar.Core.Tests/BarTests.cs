@@ -63,11 +63,11 @@ public class ModelTests
     {
         var (l, r) = BarModel.Build(S(), new BarConfig());
         Assert.Equal([BarItemKind.WinMacMenu, BarItemKind.AppName], l.Select(i => i.Kind)); Assert.Equal("Bloc de notas", l[1].Text); Assert.True(l[1].Bold);
-        Assert.Equal([BarItemKind.Network, BarItemKind.Volume, BarItemKind.Battery, BarItemKind.Clock], r.Select(i => i.Kind)); Assert.Equal("80%", r[2].Text);
+        Assert.Equal([BarItemKind.Network, BarItemKind.Volume, BarItemKind.Battery, BarItemKind.ControlCenter, BarItemKind.Clock], r.Select(i => i.Kind)); Assert.Equal("80%", r[2].Text);   // + Centro de control (siempre que no se apague en los ajustes)
         var (l2, r2) = BarModel.Build(S(app: null, b: BatteryInfo.None, v: VolumeInfo.None, n: NetworkInfo.Unknown), new BarConfig());
-        Assert.Single(l2); Assert.Equal([BarItemKind.Clock], r2.Select(i => i.Kind));
+        Assert.Single(l2); Assert.Equal([BarItemKind.ControlCenter, BarItemKind.Clock], r2.Select(i => i.Kind));   // sin red/volumen/batería solo queda lo que tiene respaldo
         var (_, r3) = BarModel.Build(S(), new BarConfig { ShowNetwork = false, ShowVolume = false, ShowBatteryPercent = false });
-        Assert.Equal([BarItemKind.Battery, BarItemKind.Clock], r3.Select(i => i.Kind)); Assert.Equal("", r3[0].Text);
+        Assert.Equal([BarItemKind.Battery, BarItemKind.ControlCenter, BarItemKind.Clock], r3.Select(i => i.Kind)); Assert.Equal("", r3[0].Text);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public class LayoutTests
         var f = Frame(1920); var m = new BarMetrics();
         Assert.Equal(m.PadX, f.Items[0].X, 6); var last = f.Items[^1]; Assert.Equal(1920 - m.PadX, last.X + last.W, 6);
         for (int i = 1; i < f.Items.Count; i++) Assert.True(f.Items[i].X >= f.Items[i - 1].X + f.Items[i - 1].W - 1e-9, $"se solapan {i - 1} y {i}");
-        Assert.Equal([BarItemKind.WinMacMenu, BarItemKind.AppName, BarItemKind.Network, BarItemKind.Volume, BarItemKind.Battery, BarItemKind.Clock], f.Items.Select(i => i.Item.Kind));
+        Assert.Equal([BarItemKind.WinMacMenu, BarItemKind.AppName, BarItemKind.Network, BarItemKind.Volume, BarItemKind.Battery, BarItemKind.ControlCenter, BarItemKind.Clock], f.Items.Select(i => i.Item.Kind));
     }
 
     [Fact]

@@ -57,7 +57,7 @@ public sealed class BarController
     public BarAction OnClick(double x)
     {
         int i = BarLayout.HitTest(_frame, x);
-        return i < 0 ? new BarAction(BarActionKind.None) : BarModel.ActionFor(_frame.Items[i].Item.Kind);
+        return i < 0 ? new BarAction(BarActionKind.None) : BarModel.ClickAction(_frame.Items[i].Item);
     }
 
     /// <summary>Elemento (Id) bajo X, para que el host ancle un menú junto a él. Null si no hay.</summary>
