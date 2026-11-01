@@ -1,3 +1,4 @@
+using WinMac.Bar.Hub;
 using WinMac.Calendar;
 using WinMac.SystemControl;
 
@@ -15,13 +16,26 @@ public interface IPanelUi
     void ShowInfo(string title, string? text);
     /// <summary>Abre un URI de Windows (p. ej. <c>ms-settings:network-wifi</c>).</summary>
     void OpenUri(string uri);
+
+    // ── panel multifunción
+    /// <summary>Se eligió otra pestaña: el anfitrión empieza a leer lo de esa pestaña (y deja de leer lo de la anterior).</summary>
+    void TabChanged(HubTab tab);
+    /// <summary>Abre la ventana central de Ajustes de WinMac, en la sección relacionada si existe («sound», «system», «network», «disks», «weather»).</summary>
+    void OpenSettings(string? section);
+    /// <summary>Cierra WinMac completo (host y módulos) por el cierre ordenado existente. No es cerrar el panel.</summary>
+    void QuitWinMac();
+    /// <summary>Menú de opciones junto al puntero; llama a <paramref name="onPick"/> con el Id elegido (nada si se cancela).</summary>
+    void ShowChoices(string title, IReadOnlyList<Choice> choices, Action<string> onPick);
+    /// <summary>Cambia un ajuste central (parche JSON camelCase), que el host guarda y reparte.</summary>
+    void PatchConfig(object patch);
+    bool Confirm(string title, string text);
 }
 
 /// <summary>
 /// Traduce lo que el usuario toca en un panel (<see cref="PanelEvent"/>) en operaciones REALES sobre los servicios del sistema, siempre fuera del hilo de interfaz y con «ocupado» visible,
 /// el valor mostrado al instante cuando es seguro, y el error con su motivo si algo falla. Es lógica pura: se prueba con servicios simulados, sin Windows.
 /// </summary>
-public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> log, TimeSpan? notificationDelay = null)
+public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> log, TimeSpan? notificationDelay = null, HubRuntime? rt = null)
 {
     private readonly TimeSpan _notifyDelay = notificationDelay ?? TimeSpan.FromMilliseconds(250);
 
@@ -51,6 +65,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
             if (id == "back") { ui.Navigate(PanelKind.ControlCenter); return; }
             if (id.StartsWith("open:ms-settings:") || id.StartsWith("open:ms-windows-store:")) { ui.HidePanel(); ui.OpenUri(id[5..]); return; }
             if (id.StartsWith("open:")) { var k = id[5..] switch { "wifi" => PanelKind.Wifi, "bluetooth" => PanelKind.Bluetooth, "sound" => PanelKind.Sound, "battery" => PanelKind.Battery, "display" => PanelKind.Display, _ => PanelKind.ControlCenter }; ui.Navigate(k); return; }
+            if (HubAction(id)) return;
             var s = hub.Snapshot; var svc = hub.Services;
             switch (id)
             {
@@ -75,6 +90,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
                 return;
             }
 
+            if (id.StartsWith("in:")) { var mic = id[3..]; Op(id, "Cambiando…", () => svc.Audio.SetDefaultInput(mic), () => { hub.RefreshInput(); }); return; }
             if (id.StartsWith("out:")) { var dev = id[4..]; Op(id, "Cambiando…", () => svc.Audio.SetDefaultOutput(dev), () => { hub.RefreshAudio(); hub.RefreshSlow(); }); return; }
             if (id.StartsWith("power:") && Enum.TryParse<PowerMode>(id[6..], out var pm)) { hub.Patch(x => x with { Power = new PowerModeState(true, pm) }); Op(id, "Cambiando…", () => svc.Power.SetMode(pm), hub.RefreshFast); return; }
             if (id.StartsWith("topology:") && Enum.TryParse<DisplayTopology>(id[9..], out var topo)) { ui.HidePanel(); hub.Run(() => svc.Display.SetTopology(topo), r => { if (!r.IsOk) ui.ShowInfo("Pantallas", r.Message); }); return; }
@@ -82,9 +98,81 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
         catch (Exception ex) { log("[bar] evento de panel falló: " + ex.GetType().Name + ": " + ex.Message); }
     }
 
+    private void ToggleSelectedVolume(string letter) => ui.Ctx = ui.Ctx with { Hub = ui.Ctx.Hub is { } h ? h with { SelectedVolume = letter } : null };
+
+    /// <summary>Acciones del panel multifunción y del Tiempo. Devuelve true si el Id era de ellas.</summary>
+    private bool HubAction(string id)
+    {
+        var svc = hub.Services; var s = hub.Snapshot;
+        if (id.StartsWith("tab:") && HubTabs.TryParse(id[4..], out var tab))
+        {
+            ui.Ctx = ui.Ctx with { Tab = tab, Message = null }; ui.PatchConfig(new { hubTab = tab.ToString() }); ui.TabChanged(tab); ui.Rebuild(); return true;
+        }
+
+        if (id.StartsWith("settings:") && HubTabs.TryParse(id[9..], out var st)) { ui.OpenSettings(st.ToString().ToLowerInvariant()); return true; }
+        if (id == "hub:settings") { ui.OpenSettings(ui.Ctx.Tab.ToString().ToLowerInvariant()); return true; }
+        if (id == "hub:settings-weather") { ui.HidePanel(); ui.OpenSettings("weather"); return true; }
+        if (id == "hub:quit") { ui.QuitWinMac(); return true; }
+
+        switch (id)
+        {
+            case "pick:out":
+                ui.ShowChoices("Salida", s.Audio.Outputs.Select(d => new Choice("out:" + d.Id, d.Name, d.IsDefault)).ToList(), pick => Handle(new PanelEvent(PanelEventKind.Click, pick))); return true;
+            case "pick:in":
+                ui.ShowChoices("Micrófono", s.Mic.Devices.Select(d => new Choice("in:" + d.Id, d.Name, d.IsDefault)).ToList(), pick => Handle(new PanelEvent(PanelEventKind.Click, pick))); return true;
+            case "mic-mute": { bool m = !s.Mic.Muted; Op("mic-mute", "…", () => svc.Audio.SetInputMuted(m), hub.RefreshInput); return true; }
+            case "unit":
+            {
+                var next = (RateUnit)(((int)ui.Ctx.Cfg.RateUnit + 1) % 4);
+                ui.Ctx = ui.Ctx with { Cfg = ui.Ctx.Cfg with { RateUnit = next } }; ui.PatchConfig(new { rateUnit = next.ToString() }); ui.Rebuild(); return true;   // se ve al instante; el host lo guarda
+            }
+
+            case "speedtest":
+                if (rt is null || !rt.Speed.Available) { SetMessage("La prueba de velocidad no está disponible en este equipo"); ui.Rebuild(); return true; }
+                if (!ui.Confirm("Prueba de velocidad", "La prueba consume datos: descarga hasta 25 MB y sube hasta 8 MB con tu conexión. ¿Ejecutarla ahora?")) return true;   // nunca arranca sola ni sin confirmar
+                rt.Speed.Start(); ui.Rebuild(); return true;
+            case "speedtest-cancel": rt?.Speed.Cancel(); return true;
+            case "weather:refresh": rt?.Weather.Refresh(force: true); ui.Rebuild(); return true;
+            case "weather:open": ui.HidePanel(); ui.OpenUri("bingweather:"); return true;
+            case "eject-all":
+            {
+                if (rt is null) return true;
+                foreach (var v in HubSelection.External(rt.Monitor.Disks)) { var letter = v.Letter; rt.Monitor.Eject(letter, r => { if (!r.IsOk) { SetMessage($"{letter} {r.Message}"); ui.Rebuild(); } }); }
+                return true;
+            }
+        }
+
+        if (id.StartsWith("disk:")) { ToggleSelectedVolume(id[5..]); ui.Rebuild(); return true; }
+        if (id.StartsWith("explorer:")) { ui.OpenUri(id[9..] + "\\"); return true; }
+        if (id.StartsWith("eject:")) { var letter = id[6..]; rt?.Monitor.Eject(letter, r => { SetMessage(r.IsOk ? null : r.Message ?? "No se pudo expulsar"); ui.Rebuild(); }); return true; }
+        if (id.StartsWith("appmute:"))
+        {
+            var sid = id[8..]; var app = s.AppSessions.Sessions.FirstOrDefault(a => a.Id == sid); if (app is null) return true; bool m = !app.Muted;
+            hub.Patch(x => x with { Sessions = x.AppSessions with { Sessions = x.AppSessions.Sessions.Select(a => a.Id == sid ? a with { Muted = m } : a).ToList() } });
+            Op(id, "…", () => svc.Audio.SetSessionMuted(sid, m), hub.RefreshSessions); return true;
+        }
+
+        return false;
+    }
+
     private void OnSlider(PanelEvent e)
     {
         int v = (int)Math.Round(e.Value); var svc = hub.Services; bool commit = e.Kind == PanelEventKind.SliderCommit;
+        if (e.Id == "mic")
+        {
+            hub.Patch(s => s with { Input = s.Mic with { Volume = v } });
+            hub.SetLatest("mic", v, svc.Audio.SetInputVolume, r => { if (!r.IsOk) SetMessage(r.Message); if (commit || !r.IsOk) hub.RefreshInput(); ui.Rebuild(); });
+            ui.Rebuild(); return;
+        }
+
+        if (e.Id.StartsWith("appvol:"))
+        {
+            var sid = e.Id[7..];
+            hub.Patch(s => s with { Sessions = s.AppSessions with { Sessions = s.AppSessions.Sessions.Select(a => a.Id == sid ? a with { Volume = v } : a).ToList() } });
+            hub.SetLatest("app:" + sid, v, p => svc.Audio.SetSessionVolume(sid, p), r => { if (!r.IsOk) SetMessage(r.Message); if (commit || !r.IsOk) hub.RefreshSessions(); ui.Rebuild(); });
+            ui.Rebuild(); return;
+        }
+
         if (e.Id == "volume")
         {
             hub.Patch(s => s with { Audio = s.Audio with { Volume = v } });   // la posición del deslizador sigue al puntero; al soltar se relee el valor REAL

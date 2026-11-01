@@ -40,6 +40,21 @@ public sealed record BarConfig
     // Controles del Control Center que se muestran (un control sin respaldo en el equipo se muestra deshabilitado con su motivo, o se oculta aquí).
     /// <summary>Wi-Fi: al tocar una red se despliega con señal, potencia (dBm), banda (2,4 / 5 / 6 GHz) y seguridad, con la acción de conectar dentro. Apagado por defecto (la lista conecta con un toque).</summary>
     public bool WifiDetails { get; init; } = false;
+    // ── Panel multifunción (un solo icono) y Tiempo (otro icono independiente)
+    public bool ShowHub { get; init; } = true;
+    public bool ShowWeather { get; init; } = true;
+    /// <summary>Última pestaña del panel multifunción (se recuerda entre sesiones).</summary>
+    public Hub.HubTab HubTab { get; init; } = Hub.HubTab.Sound;
+    /// <summary>Cada cuánto se leen sensores, red y discos MIENTRAS el panel está abierto (con el panel cerrado no se lee nada).</summary>
+    public int HubRefreshMs { get; init; } = 1000;
+    public Hub.RateUnit RateUnit { get; init; } = Hub.RateUnit.Auto;
+    /// <summary>Ciudad del Tiempo como «Nombre|lat|lon»; null = sin elegir (el panel lo pide).</summary>
+    public string? WeatherCity { get; init; }
+    /// <summary>Ciudades adicionales «Nombre|lat|lon;Nombre|lat|lon».</summary>
+    public string? WeatherFavorites { get; init; }
+    public bool WeatherFahrenheit { get; init; } = false;
+    /// <summary>Usar la ubicación del equipo en vez de la ciudad elegida. Solo con permiso de Windows; apagado por defecto.</summary>
+    public bool WeatherAutoLocation { get; init; } = false;
     public bool CcWifi { get; init; } = true;
     public bool CcBluetooth { get; init; } = true;
     public bool CcSound { get; init; } = true;
@@ -58,6 +73,9 @@ public sealed record BarConfig
         Language = Language == "en" ? "en" : "es",
         CenterGap = double.IsFinite(CenterGap) ? Math.Clamp(CenterGap, 0, 0.6) : 0.30,
         CalendarIcsPath = string.IsNullOrWhiteSpace(CalendarIcsPath) ? null : CalendarIcsPath.Trim().Trim('"'),
+        HubRefreshMs = Math.Clamp(HubRefreshMs, 500, 10_000),
+        WeatherCity = Hub.GeoPoint.Parse(WeatherCity)?.Serialize(),
+        WeatherFavorites = Hub.GeoPoint.ParseList(WeatherFavorites) is { Count: > 0 } favs ? Hub.GeoPoint.SerializeList(favs) : null,
     };
 
     /// <summary>Aplica un parche JSON (camelCase, solo los campos presentes): lo desconocido o de otro tipo se ignora campo a campo.</summary>
@@ -92,7 +110,7 @@ public sealed record BarConfig
         catch (Exception) { return this; }   // un parche ilegible nunca estropea la configuración
     }
 
-    private static readonly HashSet<string> KnownNullable = new(StringComparer.OrdinalIgnoreCase) { "calendarIcsPath" };
+    private static readonly HashSet<string> KnownNullable = new(StringComparer.OrdinalIgnoreCase) { "calendarIcsPath", "weatherCity", "weatherFavorites" };
 
     /// <summary>Lo que se envía al módulo (camelCase).</summary>
     public string ToWireJson() => System.Text.Json.JsonSerializer.Serialize(this, Wire);

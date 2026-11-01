@@ -10,7 +10,7 @@ public sealed record PanelEvent(PanelEventKind Kind, string Id, double Value = 0
 public sealed class PanelController
 {
     private PanelModel _model = new(PanelKind.ControlCenter, "", []); private PanelFrame _frame = new(PanelLayout.Width, 0, []);
-    private int _hover = -1, _down = -1; private bool _dragging; private double _lastValue;
+    private int _hover = -1, _down = -1; private bool _dragging, _muteDown; private double _lastValue;
 
     public PanelModel Model => _model;
     public PanelFrame Frame => _frame;
@@ -26,10 +26,13 @@ public sealed class PanelController
         if (_dragging && _down < 0) _dragging = false;   // el deslizador desapareció durante el arrastre
     }
 
-    private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav
+    private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav or WidgetKind.Tabs or WidgetKind.TabHeader or WidgetKind.Select or WidgetKind.AppRow or WidgetKind.Stats or WidgetKind.CityRow
         || (w.Kind == WidgetKind.Header && w.Id == "back");
 
     public void PointerLeave() { _hover = -1; }
+
+    /// <summary>Identificador del evento de deslizador: el de la fila de una aplicación lleva el prefijo «appvol:» (su Id es el de la sesión de audio).</summary>
+    private static string DragId(Widget w) => w.Kind == WidgetKind.AppRow ? "appvol:" + w.Id : w.Id;
 
     public PanelEvent? PointerMove(double x, double y)
     {
@@ -37,7 +40,7 @@ public sealed class PanelController
         {
             double v = PanelLayout.SliderValueAt(_frame.Items[_down], x);
             if (Math.Abs(v - _lastValue) < 0.5) return null;
-            _lastValue = v; return new PanelEvent(PanelEventKind.SliderChange, _frame.Items[_down].W.Id, v);
+            _lastValue = v; return new PanelEvent(PanelEventKind.SliderChange, DragId(_frame.Items[_down].W), v);
         }
 
         int i = PanelLayout.HitTest(_frame, x, y); _hover = i >= 0 && Interactive(_frame.Items[i].W) ? i : -1; return null;
@@ -45,11 +48,22 @@ public sealed class PanelController
 
     public PanelEvent? PointerDown(double x, double y)
     {
-        int i = PanelLayout.HitTest(_frame, x, y); _down = i >= 0 && Interactive(_frame.Items[i].W) ? i : -1;
-        if (_down >= 0 && _frame.Items[_down].W.Kind == WidgetKind.Slider)
+        int i = PanelLayout.HitTest(_frame, x, y); _down = i >= 0 && Interactive(_frame.Items[i].W) ? i : -1; _muteDown = false;
+        if (_down < 0) return null;
+        var f = _frame.Items[_down];
+        if (f.W.Kind == WidgetKind.Slider)
         {
-            _dragging = true; _lastValue = PanelLayout.SliderValueAt(_frame.Items[_down], x);
-            return new PanelEvent(PanelEventKind.SliderChange, _frame.Items[_down].W.Id, _lastValue);
+            if (PanelLayout.SliderMuteHit(f, x)) { _muteDown = true; return null; }   // el icono de silencio no arrastra: se resuelve al soltar
+            _dragging = true; _lastValue = PanelLayout.SliderValueAt(f, x);
+            return new PanelEvent(PanelEventKind.SliderChange, DragId(f.W), _lastValue);
+        }
+
+        if (f.W.Kind == WidgetKind.AppRow)
+        {
+            if (PanelLayout.AppMuteHit(f, x, y)) { _muteDown = true; return null; }
+            if (!PanelLayout.AppSliderHit(f, x, y)) { _down = -1; return null; }   // pulsar el nombre o el icono no hace nada
+            _dragging = true; _lastValue = PanelLayout.SliderValueAt(f, x);
+            return new PanelEvent(PanelEventKind.SliderChange, DragId(f.W), _lastValue);
         }
 
         return null;
@@ -61,7 +75,7 @@ public sealed class PanelController
         if (_dragging)
         {
             _dragging = false; if (down < 0 || down >= _frame.Items.Count) return null;
-            return new PanelEvent(PanelEventKind.SliderCommit, _frame.Items[down].W.Id, PanelLayout.SliderValueAt(_frame.Items[down], x));
+            return new PanelEvent(PanelEventKind.SliderCommit, DragId(_frame.Items[down].W), PanelLayout.SliderValueAt(_frame.Items[down], x));
         }
 
         if (down < 0 || down >= _frame.Items.Count) return null;
@@ -75,6 +89,13 @@ public sealed class PanelController
                 return new PanelEvent(PanelEventKind.Click, "day:" + md.Days[cell].Date.ToString("yyyy-MM-dd"));
             }
             case WidgetKind.Nav: return new PanelEvent(PanelEventKind.Click, x < f.X + f.Width / 2 ? "prev" : "next");
+            case WidgetKind.Slider: return _muteDown && PanelLayout.SliderMuteHit(f, x) && w.Data is string muteId ? new PanelEvent(PanelEventKind.Click, muteId) : null;
+            case WidgetKind.AppRow: return _muteDown && PanelLayout.AppMuteHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "appmute:" + w.Id) : null;
+            case WidgetKind.Tabs:
+            {
+                int t = PanelLayout.TabAt(f, x); return w.Data is TabsData td && t >= 0 ? new PanelEvent(PanelEventKind.Click, "tab:" + td.Tabs[t].Id) : null;
+            }
+            case WidgetKind.Stats: return PanelLayout.StatsPillHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "unit") : null;
             default: return new PanelEvent(PanelEventKind.Click, w.Id);
         }
     }

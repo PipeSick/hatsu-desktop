@@ -29,9 +29,16 @@ public sealed record BluetoothInfo(bool Present, bool On, int Connected)
     public static readonly BluetoothInfo None = new(false, false, 0);
 }
 
-/// <summary>Todo lo que la barra muestra. Lo rellenan los proveedores del adaptador de Windows; el núcleo no lee el sistema.</summary>
-public sealed record BarState(DateTime Now, string? ActiveApp, BatteryInfo Battery, VolumeInfo Volume, NetworkInfo Network, BluetoothInfo? Bluetooth = null, IReadOnlyList<string>? AppMenus = null)
+/// <summary>Lo que muestra el icono del Tiempo en la barra: clave de icono y texto («12°C»; vacío mientras carga o sin ciudad).</summary>
+public sealed record WeatherBarInfo(string IconKey, string Text)
 {
+    public static readonly WeatherBarInfo None = new("cloudy", "");
+}
+
+/// <summary>Todo lo que la barra muestra. Lo rellenan los proveedores del adaptador de Windows; el núcleo no lee el sistema.</summary>
+public sealed record BarState(DateTime Now, string? ActiveApp, BatteryInfo Battery, VolumeInfo Volume, NetworkInfo Network, BluetoothInfo? Bluetooth = null, IReadOnlyList<string>? AppMenus = null, WeatherBarInfo? WeatherInfo = null)
+{
+    public WeatherBarInfo Weather => WeatherInfo ?? WeatherBarInfo.None;
     public BluetoothInfo Bt => Bluetooth ?? BluetoothInfo.None;
     public static BarState Empty(DateTime now) => new(now, null, BatteryInfo.None, VolumeInfo.None, NetworkInfo.Unknown);
 }

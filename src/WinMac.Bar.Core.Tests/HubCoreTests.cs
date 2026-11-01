@@ -122,7 +122,7 @@ public class MonitoringTests
 
 public class WeatherTests
 {
-    private const string Sample = """
+    internal const string Sample = """
     {"utc_offset_seconds":-10800,"current":{"time":"2026-11-01T06:00","interval":900,"temperature_2m":12.0,"weather_code":3,"is_day":1},
      "hourly":{"time":["2026-11-01T05:00","2026-11-01T06:00","2026-11-01T07:00","2026-11-01T08:00","2026-11-01T09:00","2026-11-01T10:00"],
        "temperature_2m":[11.5,12,12.4,13,14,15],"weather_code":[3,3,3,61,3,3],"is_day":[0,1,1,1,1,1],"precipitation_probability":[0,0,5,10,0,0]},

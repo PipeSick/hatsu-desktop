@@ -1,6 +1,6 @@
 namespace WinMac.Bar;
 
-public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu }
+public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather }
 
 /// <summary>
 /// Un elemento de la barra. <see cref="Text"/> puede estar vacío (solo icono). <see cref="GlyphWidth"/> es el ancho fijo del icono (0 = sin icono).
@@ -32,6 +32,8 @@ public static class BarModel
         if (c.AppMenus && s.AppMenus is { Count: > 0 } menus) for (int i = 0; i < menus.Count; i++) left.Add(new BarItem(BarItemKind.AppMenu, menus[i], 0, Key: "AppMenu" + i));
 
         var right = new List<BarItem>();
+        if (c.ShowHub) right.Add(new BarItem(BarItemKind.Hub, "", IconW));   // UN solo icono de la aplicación: un panel con pestañas
+        if (c.ShowWeather) right.Add(new BarItem(BarItemKind.Weather, s.Weather.Text, IconW));   // el Tiempo es un componente aparte, con su propio panel
         if (c.ShowBluetooth && s.Bt.Present) right.Add(new BarItem(BarItemKind.Bluetooth, "", IconW));
         if (c.ShowNetwork && s.Network.Kind != NetKind.Unknown) right.Add(new BarItem(BarItemKind.Network, "", IconW));
         if (c.ShowVolume && s.Volume.Available) right.Add(new BarItem(BarItemKind.Volume, "", IconW));
@@ -52,6 +54,8 @@ public static class BarModel
         BarItemKind.Bluetooth => new BarAction(BarActionKind.OpenSettings, "ms-settings:bluetooth"),
         BarItemKind.ControlCenter => new BarAction(BarActionKind.OpenSettings, "ms-settings:"),
         BarItemKind.AppMenu => new BarAction(BarActionKind.ShowAppMenu),
+        BarItemKind.Hub => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Hub),
+        BarItemKind.Weather => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Weather),
         _ => new BarAction(BarActionKind.None),
     };
 

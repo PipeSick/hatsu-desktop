@@ -11,7 +11,7 @@ public sealed class SystemHub
 {
     private readonly SystemServices _s; private readonly Action<Action> _post; private readonly Action<string> _log; private readonly object _lock = new();
     private SystemSnapshot _snap = SystemSnapshot.Empty; private string _lastKey = "";
-    private int _audio, _wifi, _bt, _fast, _bright; private long _brightAt; private readonly Dictionary<string, (int Value, Func<int, ServiceResult> Apply, Action<ServiceResult> Done)> _latest = []; private readonly HashSet<string> _running = [];
+    private int _audio, _wifi, _bt, _fast, _bright, _input, _sessions; private long _brightAt; private readonly Dictionary<string, (int Value, Func<int, ServiceResult> Apply, Action<ServiceResult> Done)> _latest = []; private readonly HashSet<string> _running = [];
     public event Action? Changed;   // en el hilo de la barra
 
     private readonly Action<Action> _background;
@@ -35,6 +35,7 @@ public sealed class SystemHub
     /// <summary>Resumen de lo que se dibuja: evita redibujar la barra si una lectura no cambió nada visible.</summary>
     private static string Key(SystemSnapshot s) =>
         $"{s.Audio.Available}|{s.Audio.Volume}|{s.Audio.Muted}|{string.Join(",", s.Audio.Outputs.Select(o => o.Id + o.IsDefault))}|{s.Wifi.Available}|{s.Wifi.Connected}|{s.Wifi.Ssid}|{s.Wifi.Bars}|{s.Wifi.RadioOn}|{string.Join(",", s.Wifi.Networks.Select(n => n.Ssid + n.Bars + n.Connected))}"
+        + $"|{s.Mic.Available}|{s.Mic.Volume}|{s.Mic.Muted}|{string.Join(",", s.Mic.Devices.Select(d => d.Id + d.IsDefault))}|{string.Join(",", s.AppSessions.Sessions.Select(a => a.Id + a.Volume + a.Muted + a.Active))}"
         + $"|{s.Bluetooth.Available}|{s.Bluetooth.RadioOn}|{string.Join(",", s.Bluetooth.Devices.Select(d => d.Id + d.Connected))}|{s.Brightness.Available}|{s.Brightness.Percent}|{s.Power.Available}|{s.Power.Mode}|{s.Appearance.Available}|{s.Appearance.Dark}|{s.OutputSwitchOk}|{s.CanRestoreOutput}";
 
     // Cada Refresh* es de un solo vuelo con su propia bandera (ref no se puede capturar en la lambda: se resuelve aquí con métodos explícitos).
@@ -42,6 +43,20 @@ public sealed class SystemHub
     {
         if (Interlocked.Exchange(ref _audio, 1) == 1) return;
         _background(() => { try { var a = _s.Audio.Read(); Update(s => s with { Audio = a, CanRestoreOutput = CanRestore(a) }); } catch (Exception e) { _log("[hub] audio: " + e.Message); } finally { Volatile.Write(ref _audio, 0); } });
+    }
+
+    /// <summary>Micrófono: lo lee la pestaña Sonido mientras está visible.</summary>
+    public void RefreshInput()
+    {
+        if (Interlocked.Exchange(ref _input, 1) == 1) return;
+        _background(() => { try { var i = _s.Audio.ReadInput(); Update(s => s with { Input = i }); } catch (Exception e) { _log("[hub] micrófono: " + e.Message); } finally { Volatile.Write(ref _input, 0); } });
+    }
+
+    /// <summary>Aplicaciones con audio: se vuelve a leer mientras la pestaña Sonido está abierta, así aparecen y desaparecen al abrir o cerrar aplicaciones.</summary>
+    public void RefreshSessions()
+    {
+        if (Interlocked.Exchange(ref _sessions, 1) == 1) return;
+        _background(() => { try { var a = _s.Audio.ReadSessions(); Update(s => s with { Sessions = a }); } catch (Exception e) { _log("[hub] sesiones de audio: " + e.Message); } finally { Volatile.Write(ref _sessions, 0); } });
     }
 
     public void RefreshWifi(bool scan)

@@ -5,15 +5,17 @@ namespace WinMac.Bar;
 
 /// <summary>Última lectura de los servicios del sistema (la rellena un hilo de trabajo; la interfaz solo lee).</summary>
 public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothState Bluetooth, BrightnessState Brightness, PowerModeState Power, AppearanceState Appearance,
-    bool OutputSwitchOk, string? OutputSwitchReason, bool CanRestoreOutput)
+    bool OutputSwitchOk, string? OutputSwitchReason, bool CanRestoreOutput, AudioInputState? Input = null, AudioSessionsState? Sessions = null)
 {
+    public AudioInputState Mic => Input ?? AudioInputState.None("Leyendo…");
+    public AudioSessionsState AppSessions => Sessions ?? AudioSessionsState.None("Leyendo…");
     public static SystemSnapshot Empty { get; } = new(AudioState.None("Leyendo…"), WifiState.None("Leyendo…"), BluetoothState.None("Leyendo…"), BrightnessState.None("Leyendo…"),
         PowerModeState.None("Leyendo…"), AppearanceState.None("Leyendo…"), false, "Leyendo…", false);
 }
 
 /// <summary>Estado de interfaz de los paneles: mes visible, día elegido, operaciones en curso («Conectando…») y el último error.</summary>
 public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo Battery, DateTime Now, IReadOnlyList<CalendarEvent> Events, int ViewYear, int ViewMonth,
-    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null)
+    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null)
 {
     public static PanelContext Initial(BarConfig cfg, DateTime now) => new(SystemSnapshot.Empty, cfg, BatteryInfo.None, now, [], now.Year, now.Month, null, new Dictionary<string, string>(), null);
 }
@@ -22,7 +24,7 @@ public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo
 /// Del estado real del equipo a los elementos del panel. Regla de oro: lo que no tiene respaldo se muestra DESHABILITADO con el motivo (o se oculta si el usuario lo apagó en los ajustes);
 /// nunca un control que parezca funcionar sin hacerlo.
 /// </summary>
-public static class PanelBuilder
+public static partial class PanelBuilder
 {
     public static PanelModel Build(PanelKind kind, PanelContext c) => kind switch
     {
@@ -32,6 +34,8 @@ public static class PanelBuilder
         PanelKind.Battery => BatteryPanel(c),
         PanelKind.Calendar => CalendarPanel(c),
         PanelKind.Display => DisplayPanel(c),
+        PanelKind.Hub => HubPanel(c),
+        PanelKind.Weather => WeatherPanel(c),
         _ => ControlCenter(c),
     };
 
