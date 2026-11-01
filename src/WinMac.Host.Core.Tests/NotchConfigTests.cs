@@ -428,7 +428,30 @@ public class CityResolverTests
     public async Task A_typed_city_is_resolved_by_name_to_its_first_match_with_region_for_the_status_line()
     {
         var src = new Src(n => n == "Molina" ? [Molina, new("Molina", "Murcia, España", 38, -1.2)] : []);
-        var r = await CityResolver.ResolveOneAsync("  Molina ", src, CancellationToken.None); Assert.Equal("Molina", r.Place!.Name); Assert.Equal(-35.1167, r.Place.Lat); Assert.Equal("Molina, Maule, Chile", r.Message); Assert.Equal(["Molina"], src.Queries);
+        var r = await CityResolver.ResolveOneAsync("  Molina ", src, CancellationToken.None); Assert.Equal("Molina", r.Place!.Name); Assert.Equal(-35.1167, r.Place.Lat); Assert.StartsWith("Molina, Maule, Chile", r.Message); Assert.Contains("Murcia", r.Message); Assert.Contains("«Molina, país»", r.Message); Assert.Equal(["Molina"], src.Queries);   // avisa de que hay otras y cómo elegir
+    }
+
+    private static readonly WinMac.Bar.Hub.GeoPoint MolinaEs = new("Molina de Segura", "Región de Murcia, España", 38.05, -1.21);
+
+    [Fact]
+    public async Task A_country_or_region_hint_picks_that_city_even_when_another_one_ranks_first()
+    {
+        var src = new Src(n => n == "Molina" ? [MolinaEs, Molina] : []);   // el proveedor pone primero la de España
+        var chile = await CityResolver.ResolveOneAsync("Molina, Chile", src, CancellationToken.None); Assert.Equal(-35.1167, chile.Place!.Lat); Assert.Equal(["Molina"], src.Queries);   // busca solo el nombre
+        var maule = await CityResolver.ResolveOneAsync("Molina, MAULÉ", src, CancellationToken.None); Assert.Equal(-35.1167, maule.Place!.Lat);   // sin importar mayúsculas ni tildes
+        var murcia = await CityResolver.ResolveOneAsync("Molina, murcia", src, CancellationToken.None); Assert.Equal(38.05, murcia.Place!.Lat);
+        var none = await CityResolver.ResolveOneAsync("Molina, Japón", src, CancellationToken.None); Assert.Null(none.Place); Assert.Contains("no está en «Japón»", none.Message); Assert.Contains("Maule, Chile", none.Message);
+    }
+
+    [Fact]
+    public async Task Without_a_hint_the_city_of_the_computers_own_country_is_preferred()
+    {
+        var src = new Src(_ => [MolinaEs, Molina]);
+        Assert.Equal(-35.1167, (await CityResolver.ResolveOneAsync("Molina", src, CancellationToken.None, "Chile")).Place!.Lat);
+        Assert.Equal(38.05, (await CityResolver.ResolveOneAsync("Molina", src, CancellationToken.None)).Place!.Lat);   // sin país conocido: el primero del proveedor
+        Assert.Equal(38.05, (await CityResolver.ResolveOneAsync("Molina", src, CancellationToken.None, "Japón")).Place!.Lat);   // un país sin coincidencias no deja sin resultado
+        var many = await CityResolver.ResolveManyAsync("Molina, Santiago", new Src(n => n == "Molina" ? [MolinaEs, Molina] : [Santiago]), CancellationToken.None, preferCountry: "Chile");
+        Assert.Equal(["Molina", "Santiago"], many.Places.Select(p => p.Name)); Assert.Equal(-35.1167, many.Places[0].Lat);   // en la lista de ciudades la coma separa ciudades (no es una pista)
     }
 
     [Fact]

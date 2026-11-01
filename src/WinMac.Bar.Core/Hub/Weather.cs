@@ -199,7 +199,7 @@ public sealed class OpenMeteoSource(HttpClient http) : IWeatherSource
     }
 
     public async Task<IReadOnlyList<GeoPoint>> SearchAsync(string name, CancellationToken ct) =>
-        OpenMeteoParser.ParseGeocoding(await GetAsync($"{Geocoding}?name={Uri.EscapeDataString(name)}&count=6&language=es&format=json", ct).ConfigureAwait(false));
+        OpenMeteoParser.ParseGeocoding(await GetAsync($"{Geocoding}?name={Uri.EscapeDataString(name)}&count=10&language=es&format=json", ct).ConfigureAwait(false));
 
     private async Task<string> GetAsync(string url, CancellationToken ct)
     {

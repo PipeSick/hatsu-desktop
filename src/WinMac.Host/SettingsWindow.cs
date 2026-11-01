@@ -119,8 +119,8 @@ internal sealed class SettingsWindow : IDisposable
         Ctl(0, "STATIC", "Leer sensores cada (ms)", SS_LEFT, x + 14, y + 54, 160, 20); Ctl(ID_HUBMS, "EDIT", "1000", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 180, y + 52, 64, 22);
         Ctl(0, "STATIC", "Red en", SS_LEFT, x + 270, y + 54, 50, 20); Combo(ID_RATE, RateNames, x + 326, y + 50, 140);
         Ctl(0, "STATIC", "Ciudad", SS_LEFT, x + 14, y + 86, 60, 20); Ctl(ID_WCITY, "EDIT", "", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 80, y + 84, 386, 22);
-        Ctl(ID_WSTATUS, "STATIC", "", SS_LEFT, x + 80, y + 110, w - 94, 20);
-        Ctl(0, "STATIC", "Otras", SS_LEFT, x + 14, y + 136, 60, 20); Ctl(ID_WFAV, "EDIT", "", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 80, y + 134, 386, 22);
+        Ctl(ID_WSTATUS, "STATIC", "", SS_LEFT, x + 80, y + 108, w - 94, 30);   // dos líneas: dice qué ciudad se eligió y cómo pedir otra
+        Ctl(0, "STATIC", "Otras", SS_LEFT, x + 14, y + 142, 60, 20); Ctl(ID_WFAV, "EDIT", "", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 80, y + 140, 386, 22);
         Ctl(ID_BARBASE + 23, "BUTTON", BarToggles[23].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14, y + 166, 110, 22); Ctl(ID_BARBASE + 24, "BUTTON", BarToggles[24].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 130, y + 166, 340, 22);
     }
 
@@ -199,6 +199,9 @@ internal sealed class SettingsWindow : IDisposable
         return Native.DefWindowProc(h, msg, w, l);
     }
 
+    private volatile bool _cityDirty, _favDirty;
+    /// <summary>País del equipo (según el idioma de Windows): ante varias ciudades con el mismo nombre, se prefiere la de aquí.</summary>
+    private static string? HomeCountry() { try { return System.Globalization.RegionInfo.CurrentRegion.DisplayName; } catch (ArgumentException) { return null; } }
     private volatile string _weatherStatus = ""; private WinMac.Bar.Hub.OpenMeteoSource? _wx;
     private WinMac.Bar.Hub.OpenMeteoSource WeatherSource => _wx ??= new WinMac.Bar.Hub.OpenMeteoSource(new HttpClient { Timeout = TimeSpan.FromSeconds(15) });
 
@@ -207,11 +210,10 @@ internal sealed class SettingsWindow : IDisposable
     {
         try
         {
-            string current = WinMac.Bar.Hub.GeoPoint.Parse(_cfg.Bar.WeatherCity)?.Name ?? ""; if (string.Equals(text, current, StringComparison.CurrentCultureIgnoreCase)) return;
             if (text.Length == 0) { _cfg.ApplyBarPatch(Patch("weatherCity", null)); _weatherStatus = "Sin ciudad: el Tiempo no hace peticiones."; }
             else
             {
-                _weatherStatus = "Buscando…"; PostRefresh(); var r = await CityResolver.ResolveOneAsync(text, WeatherSource, CancellationToken.None).ConfigureAwait(false);
+                _weatherStatus = "Buscando…"; PostRefresh(); var r = await CityResolver.ResolveOneAsync(text, WeatherSource, CancellationToken.None, HomeCountry()).ConfigureAwait(false);
                 if (r.Place is not null) { _cfg.ApplyBarPatch(Patch("weatherCity", r.Place.Serialize())); _weatherStatus = "Ciudad: " + r.Message; } else _weatherStatus = r.Message;
             }
         }
@@ -223,8 +225,7 @@ internal sealed class SettingsWindow : IDisposable
     {
         try
         {
-            string current = string.Join(", ", WinMac.Bar.Hub.GeoPoint.ParseList(_cfg.Bar.WeatherFavorites).Select(g => g.Name)); if (string.Equals(text, current, StringComparison.CurrentCultureIgnoreCase)) return;
-            var (places, problems) = await CityResolver.ResolveManyAsync(text, WeatherSource, CancellationToken.None).ConfigureAwait(false);
+            var (places, problems) = await CityResolver.ResolveManyAsync(text, WeatherSource, CancellationToken.None, preferCountry: HomeCountry()).ConfigureAwait(false);
             _cfg.ApplyBarPatch(Patch("weatherFavorites", places.Count == 0 ? null : WinMac.Bar.Hub.GeoPoint.SerializeList(places)));
             _weatherStatus = problems.Count == 0 ? _weatherStatus : string.Join(" · ", problems);
         }
@@ -247,15 +248,17 @@ internal sealed class SettingsWindow : IDisposable
 
     private void OnCommand(int id, int code)
     {
-        const int BN_CLICKED = 0, CBN_SELCHANGE = 1, EN_KILLFOCUS = 0x200, LBN_DBLCLK = 2;
+        const int BN_CLICKED = 0, CBN_SELCHANGE = 1, EN_KILLFOCUS = 0x200, EN_CHANGE = 0x300, LBN_DBLCLK = 2;
         if (id >= ID_BARBASE && id < ID_BARBASE + BarToggles.Length && code == BN_CLICKED)
         { var f = BarToggles[id - ID_BARBASE].Field; bool on = Checked(_c[id]); _cfg.ApplyBarPatch(Patch(f, on)); return; }
         switch (id)
         {
             case ID_HUBMS when code == EN_KILLFOCUS: { if (int.TryParse(TextOf(id).Trim(), out int ms)) _cfg.ApplyBarPatch(Patch("hubRefreshMs", ms)); Refresh(); break; }
             case ID_RATE when code == CBN_SELCHANGE: { int i = (int)Native.SendMessage(_c[id], CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero); if (i >= 0 && i < RateValues.Length) _cfg.ApplyBarPatch(Patch("rateUnit", RateValues[i])); break; }
-            case ID_WCITY when code == EN_KILLFOCUS: _ = ResolveCityAsync(TextOf(id).Trim()); break;
-            case ID_WFAV when code == EN_KILLFOCUS: _ = ResolveFavoritesAsync(TextOf(id).Trim()); break;
+            case ID_WCITY when code == EN_CHANGE: if (GetFocus() == _c[id]) _cityDirty = true; break;   // solo cuenta lo que TÚ escribes (no el texto que pone la propia ventana al refrescar)
+            case ID_WFAV when code == EN_CHANGE: if (GetFocus() == _c[id]) _favDirty = true; break;
+            case ID_WCITY when code == EN_KILLFOCUS: if (_cityDirty) { _cityDirty = false; _ = ResolveCityAsync(TextOf(id).Trim()); } break;
+            case ID_WFAV when code == EN_KILLFOCUS: if (_favDirty) { _favDirty = false; _ = ResolveFavoritesAsync(TextOf(id).Trim()); } break;
             case ID_BGCOMBO when code == CBN_SELCHANGE: { int i = (int)Native.SendMessage(_c[id], CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero); if (i >= 0 && i < BackgroundValues.Length) _cfg.ApplyBarPatch(Patch("background", BackgroundValues[i])); break; }
             case ID_THEMECOMBO when code == CBN_SELCHANGE: { int i = (int)Native.SendMessage(_c[id], CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero); if (i >= 0 && i < ThemeValues.Length) _cfg.ApplyBarPatch(Patch("theme", ThemeValues[i])); break; }
             case ID_ICS when code == EN_KILLFOCUS: { var t = TextOf(id).Trim(); _cfg.ApplyBarPatch(Patch("calendarIcsPath", t.Length == 0 ? null : t)); break; }
