@@ -55,6 +55,7 @@ foreach ($theme in 'light', 'dark') { foreach ($bg in 'glass', 'transparent') {
 Run 'Barra offscreen light/glass con resalte' $bar @('--render-png', "`"$OutDir\bar-light-glass-hover.png`"", '--theme', 'light', '--bg', 'glass', '--scale', '2', '--hover', '4') 90
 Run 'Barra --status (informativo)' $bar @('--status') 60 -Informational
 Run 'Barra selftest' $bar @('--selftest') 120
+Run 'Barra selftest-system (informativo: el runner no tiene Wi-Fi, Bluetooth ni brillo)' $bar @('--selftest-system') 120 -Informational
 Run 'Barra selftest-appbar (informativo)' $bar @('--selftest-appbar') 120 -Informational
 # Host (WinMac.exe) con módulos de mentira: instancia única, cierre ordenado, host muerto → hijos muertos, caídas, inicio automático, puertos. Es GATING (falla el job si algo falla).
 $hostOut = Join-Path $OutDir 'host-tests.txt'

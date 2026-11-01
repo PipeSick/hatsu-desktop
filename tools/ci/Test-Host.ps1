@@ -27,7 +27,7 @@ function NewRoom([string]$name, [string]$barMode = 'normal', [string]$dockMode =
   $cfg | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
   return [pscustomobject]@{ Dir = $d; Cfg = Join-Path $d 'winmac.json'; Log = Join-Path $d 'host.log' }
 }
-function HostArgs($room, [switch]$Tray) { $a = @('--fast', '--notchwin-settings', "`"$(Join-Path $room.Dir 'sin-notchwin.json')`"", '--config', "`"$($room.Cfg)`"", '--log', "`"$($room.Log)`""); if (-not $Tray) { $a = @('--no-tray') + $a }; $a }
+function HostArgs($room, [switch]$Tray) { $a = @('--fast', '--notchwin-settings', "`"$(Join-Path $room.Dir 'sin-notchwin.json')`"", '--bar-json', "`"$(Join-Path $room.Dir 'sin-bar.json')`"", '--config', "`"$($room.Cfg)`"", '--log', "`"$($room.Log)`""); if (-not $Tray) { $a = @('--no-tray') + $a }; $a }
 function StartHost($room, [switch]$Tray) { $p = Start-Process -FilePath $hostExe -ArgumentList (HostArgs $room -Tray:$Tray) -PassThru -WindowStyle Hidden; $null = $p.Handle; $p }   # .Handle: sin él, ExitCode puede quedar vacío
 function LogHas($room, [string]$text) { (Test-Path $room.Log) -and (Select-String -Path $room.Log -SimpleMatch -Pattern $text -Quiet) }
 function ModLog($room, [string]$id) { $f = Join-Path $room.Dir "$id.log"; if (Test-Path $f) { Get-Content $f } else { @() } }
