@@ -196,7 +196,7 @@ public static partial class PanelBuilder
         w.Add(Sep("sep-2"));
         w.Add(Cap("cap-io", "Actividad en directo"));
         var io = disk is null ? null : m.MetersOf(disk.Number); var unit = c.Cfg.RateUnit;
-        if (disk is null) w.Add(Note("io-none", "No se pudo asociar este volumen a un disco físico: sin actividad ni SMART."));
+        if (disk is null) w.Add(Note("io-none", "No se pudo asociar este volumen a un disco físico: sin actividad ni SMART." + (snap.Reason is null ? "" : " Motivo: " + snap.Reason + ".")));
         else if (io is null) w.Add(Note("io-wait", "Midiendo la actividad…"));
         else
         {

@@ -94,10 +94,38 @@ internal static class Program
         Log("Controles del sistema que permite este equipo (no se cambia nada):");
         var lines = WinMac.SystemControl.Win.SystemServicesFactory.Probe(WinMac.SystemControl.Win.SystemServicesFactory.CreateReal());
         foreach (var l in lines) Log("  " + l);
+        HubProbe();
         int bad = lines.Count(l => l.StartsWith("[FALLO]"));
         Log(bad == 0 ? "Ningún servicio lanzó excepciones (un servicio «no disponible» es un resultado válido)." : $"{bad} servicio(s) lanzaron excepciones: es un error.");
         return bad == 0 ? 0 : 1;
     }
+
+    /// <summary>Qué leen de verdad los monitores del panel en ESTE equipo (discos, memoria, temperaturas): para diagnosticar con datos reales, sin cambiar nada.</summary>
+    private static void HubProbe()
+    {
+        Log("Panel de WinMac (lecturas reales de este equipo):");
+        var (svc, owner) = WinMac.Bar.Win.Shell.Hub.HubServicesFactory.CreateReal();
+        try
+        {
+            try
+            {
+                var s = svc.System.Read();
+                Log($"  CPU {Fmt(s.CpuPercent)} · GPU {Fmt(s.GpuPercent)} · temp. CPU {Fmt(s.CpuTempC)} · temp. GPU {Fmt(s.GpuTempC)}");
+                Log($"  Memoria: {(s.Memory is { } m ? $"{m.UsedBytes >> 20} MB usados de {m.TotalBytes >> 20} MB; paginación {(m.PageFileUsedBytes is { } pu ? (pu >> 20) + " MB" : "no disponible")}" : s.MemoryReason ?? "no disponible")} · USB {Fmt(s.ConnectedDevices)}");
+            }
+            catch (Exception e) { Log("  [FALLO] sistema: " + e.GetType().Name + ": " + e.Message); }
+            try
+            {
+                var d = svc.Disks.ReadCatalog();
+                Log($"  Discos físicos: {d.Disks.Count} · volúmenes: {d.Volumes.Count}" + (d.Reason is null ? "" : " · motivo: " + d.Reason));
+                foreach (var v in d.Volumes) { var disk = d.DiskOf(v); Log($"    {v.Letter} «{v.Label}» → " + (disk is null ? "SIN disco físico asociado" : $"disco {disk.Number} {disk.Model} ({disk.Media}) estado {disk.Smart.Health ?? "n/d"}, temp {(disk.Smart.TemperatureC is { } t ? t + " °C" : "n/d")}, desgaste {(disk.Smart.WearPercent is { } w ? w + " %" : "n/d")}, horas {disk.Smart.PowerOnHours?.ToString() ?? "n/d"}" + (disk.Smart.Reason is null ? "" : " [" + disk.Smart.Reason + "]"))); }
+            }
+            catch (Exception e) { Log("  [FALLO] discos: " + e.GetType().Name + ": " + e.Message); }
+        }
+        finally { owner.Dispose(); }
+    }
+
+    private static string Fmt<T>(WinMac.Bar.Hub.Reading<T> r) where T : struct => r.Available ? Convert.ToString(r.Value, System.Globalization.CultureInfo.InvariantCulture)! : "no disponible (" + r.Reason + ")";
 
     private static int MonitorProbe()
     {

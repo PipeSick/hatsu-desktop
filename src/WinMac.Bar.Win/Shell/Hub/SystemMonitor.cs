@@ -14,7 +14,7 @@ internal sealed class SystemMonitor : ISystemMonitor, IDisposable
     private ulong _lastIdle, _lastTotal; private bool _haveCpu; private double _lastCpu;
     private PdhQuery? _gpuQuery, _thermalQuery; private IntPtr? _gpuCounter, _thermalCounter; private int _gpuReads, _gpuSamples;
     private readonly Nvml _nvml = new();
-    private DateTime _slowAt = DateTime.MinValue; private (ulong Used, ulong Total)? _pageFile; private int? _usbCount; private ulong? _compressed;
+    private DateTime _slowAt = DateTime.MinValue; private (ulong Used, ulong Total)? _pageFile; private int? _usbCount; private ulong? _compressed; private string? _slowWhy;
 
     public SystemSample Read()
     {
@@ -31,7 +31,7 @@ internal sealed class SystemMonitor : ISystemMonitor, IDisposable
             else memReason = "Windows no entregó el uso de memoria";
         }
         catch (Exception e) { memReason = "No se pudo leer la memoria: " + e.GetType().Name; }
-        var devices = _usbCount is { } n ? Reading<int>.Of(n) : Reading<int>.Unavailable("No se pudo contar los dispositivos USB");
+        var devices = _usbCount is { } n ? Reading<int>.Of(n) : Reading<int>.Unavailable("No se pudo contar los dispositivos USB" + (_slowWhy is null ? "" : " (" + _slowWhy + ")"));
         return new SystemSample(cpu, gpu, cpuTemp, gpuTemp, mem, memReason, TimeSpan.FromMilliseconds(Environment.TickCount64), devices, note);
     }
 
@@ -82,7 +82,7 @@ internal sealed class SystemMonitor : ISystemMonitor, IDisposable
             if (_thermalCounter is null) return (Reading<double>.Unavailable("Este equipo no expone zonas térmicas; leer la CPU exige un controlador con privilegios que WinMac no instala"), null);
             _thermalQuery.Collect();
             var temps = PdhQuery.Doubles(_thermalCounter.Value).Select(x => x.Value - 273.15).Where(c => c is > 0 and < 150).ToList();   // kelvin → °C; lo absurdo se descarta
-            return temps.Count == 0 ? (Reading<double>.Unavailable("Las zonas térmicas de este equipo no entregan lecturas válidas"), null) : (Reading<double>.Of(temps.Max()), "zona térmica ACPI (aproximada)");
+            return temps.Count == 0 ? (Reading<double>.Unavailable("Windows no entrega la temperatura de la CPU a las apps normales (las zonas térmicas de este equipo no dan lecturas válidas); solo la leen programas con un controlador de hardware"), null) : (Reading<double>.Of(temps.Max()), "zona térmica ACPI (aproximada)");
         }
         catch (Exception e) { return (Reading<double>.Unavailable("No se pudo leer la temperatura: " + e.GetType().Name), null); }
     }
@@ -93,16 +93,18 @@ internal sealed class SystemMonitor : ISystemMonitor, IDisposable
         if (DateTime.UtcNow - _slowAt < TimeSpan.FromSeconds(15)) return; _slowAt = DateTime.UtcNow;
         try
         {
-            dynamic? cim = Wmi.Connect(@"root\cimv2");
-            if (cim is not null)
-            {
-                ulong used = 0, total = 0; foreach (dynamic o in cim.ExecQuery("SELECT AllocatedBaseSize, CurrentUsage FROM Win32_PageFileUsage")) { total += (ulong)(uint)o.AllocatedBaseSize * 1024 * 1024; used += (ulong)(uint)o.CurrentUsage * 1024 * 1024; }
-                _pageFile = total > 0 ? (used, total) : null;
-                int usb = 0; foreach (dynamic o in cim.ExecQuery("SELECT PNPDeviceID FROM Win32_PnPEntity WHERE PNPDeviceID LIKE 'USB\\\\VID%' AND Present = TRUE")) { string id = (string)o.PNPDeviceID; if (!id.Contains("&MI_", StringComparison.OrdinalIgnoreCase)) usb++; }
-                _usbCount = usb;
-            }
+            ulong used = 0, total = 0;
+            foreach (var o in Wmi.Query(@"root\cimv2", "SELECT AllocatedBaseSize, CurrentUsage FROM Win32_PageFileUsage")) { total += Wmi.U64(o["AllocatedBaseSize"]) * 1024 * 1024; used += Wmi.U64(o["CurrentUsage"]) * 1024 * 1024; }
+            _pageFile = total > 0 ? (used, total) : null;
         }
-        catch (Exception) { _pageFile = null; _usbCount = null; }
+        catch (Exception e) { _pageFile = null; _slowWhy = e.GetType().Name; }
+        try
+        {
+            int usb = 0;
+            foreach (var o in Wmi.Query(@"root\cimv2", "SELECT PNPDeviceID FROM Win32_PnPEntity WHERE PNPDeviceID LIKE 'USB\\\\VID%' AND Present = TRUE")) { string id = Wmi.Str(o["PNPDeviceID"]); if (!id.Contains("&MI_", StringComparison.OrdinalIgnoreCase)) usb++; }   // interfaces de un mismo dispositivo compuesto no cuentan aparte
+            _usbCount = usb;
+        }
+        catch (Exception e) { _usbCount = null; _slowWhy = e.GetType().Name; }
         try { using var p = Process.GetProcessesByName("Memory Compression").FirstOrDefault(); _compressed = p is null ? null : (ulong)p.WorkingSet64; } catch (Exception) { _compressed = null; }   // proceso protegido: si no se puede leer, se dice «no disponible»
     }
 

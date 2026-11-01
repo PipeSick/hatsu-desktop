@@ -27,49 +27,53 @@ internal sealed class DiskMonitor : IDiskMonitor, IDisposable
         }
 
         var physical = new List<PhysicalRec>(); var partitions = new List<PartitionRec>(); string? reason = null;
-        dynamic? storage = Wmi.Connect(@"root\Microsoft\Windows\Storage");
-        if (storage is null) reason = "Windows no expone la información de discos físicos";
-        else
+        const string ns = @"root\Microsoft\Windows\Storage";
+        try
         {
-            try
+            var (smart, smartWhy) = ReadReliability(ns);
+            foreach (var o in Wmi.Query(ns, "SELECT DeviceId, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"))
             {
-                var smart = ReadReliability(storage);
-                foreach (dynamic o in storage.ExecQuery("SELECT DeviceId, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"))
-                {
-                    int number = int.TryParse((string)o.DeviceId, out int n) ? n : -1; if (number < 0) continue;
-                    string health = (int)o.HealthStatus switch { 0 => "Saludable", 1 => "Advertencia", 2 => "Con fallos", _ => "Desconocido" };
-                    var rel = smart.GetValueOrDefault(number);
-                    physical.Add(new PhysicalRec(number, (string?)o.FriendlyName ?? "", ((int)o.MediaType) switch { 3 => "HDD", 4 => "SSD", _ => null }, BusName((int)o.BusType), (ulong)o.Size,
-                        new SmartInfo((int)o.HealthStatus is 0 or 1 or 2 ? health : null, rel?.Temp, rel?.Hours, rel?.Wear, null, null, rel is null ? "Temperatura, desgaste y horas requieren permisos de administrador o el dispositivo no las entrega" : null)));
-                }
-
-                foreach (dynamic o in storage.ExecQuery("SELECT DiskNumber, DriveLetter FROM MSFT_Partition"))
-                {
-                    int code = (int)(ushort)o.DriveLetter; if (code is >= 65 and <= 90 or >= 97 and <= 122) partitions.Add(new PartitionRec((int)(uint)o.DiskNumber, ((char)code).ToString()));
-                }
+                int number = Wmi.I32(o["DeviceId"]); if (number < 0) continue;
+                int hs = Wmi.I32(o["HealthStatus"], 5); string? health = hs switch { 0 => "Saludable", 1 => "Advertencia", 2 => "Con fallos", _ => null };
+                var rel = smart.GetValueOrDefault(number);
+                physical.Add(new PhysicalRec(number, Wmi.Str(o["FriendlyName"]), Wmi.I32(o["MediaType"]) switch { 3 => "HDD", 4 => "SSD", _ => null }, BusName(Wmi.I32(o["BusType"])), Wmi.U64(o["Size"]),
+                    new SmartInfo(health, rel?.Temp, rel?.Hours, rel?.Wear, null, null, rel is null ? smartWhy : null)));
             }
-            catch (Exception e) { reason = "No se pudo leer la información de discos físicos: " + e.GetType().Name; }
+
+            foreach (var o in Wmi.Query(ns, "SELECT DiskNumber, DriveLetter FROM MSFT_Partition"))
+            {
+                int code = o["DriveLetter"] switch { char c => c, string s when s.Length > 0 => s[0], null => 0, var v => Wmi.I32(v, 0) };
+                if (code is >= 65 and <= 90 or >= 97 and <= 122) partitions.Add(new PartitionRec(Wmi.I32(o["DiskNumber"]), ((char)code).ToString()));
+            }
         }
+        catch (Exception e) { reason = "no se pudo leer la información de discos físicos (" + e.GetType().Name + ": " + Short(e.Message) + ")"; }
 
         var snap = DiskCatalog.Build(physical, partitions, volumes);
         return reason is null ? snap : snap with { Reason = reason };
     }
 
+    private static string Short(string m) { m = m.Replace('\r', ' ').Replace('\n', ' ').Trim(); return m.Length > 90 ? m[..90] + "…" : m; }
+
     private sealed record Reliability(double? Temp, long? Hours, double? Wear);
 
-    private static Dictionary<int, Reliability> ReadReliability(dynamic storage)
+    /// <summary>Temperatura, desgaste y horas: Windows suele reservarlas a administradores. Si no se pueden leer, el motivo REAL queda en el texto (no se inventa nada).</summary>
+    private static (Dictionary<int, Reliability> Map, string? Why) ReadReliability(string ns)
     {
-        var map = new Dictionary<int, Reliability>();
+        var map = new Dictionary<int, Reliability>(); string? why = null;
         try
         {
-            foreach (dynamic o in storage.ExecQuery("SELECT DeviceId, Temperature, Wear, PowerOnHours FROM MSFT_StorageReliabilityCounter"))
+            foreach (var o in Wmi.Query(ns, "SELECT DeviceId, Temperature, Wear, PowerOnHours FROM MSFT_StorageReliabilityCounter"))
             {
-                if (!int.TryParse((string)o.DeviceId, out int n)) continue;
-                map[n] = new Reliability(o.Temperature is null || (int)o.Temperature <= 0 ? null : (int)o.Temperature, o.PowerOnHours is null ? null : (long)(uint)o.PowerOnHours, o.Wear is null ? null : (int)o.Wear);
+                int n = Wmi.I32(o["DeviceId"]); if (n < 0) continue;
+                double? temp = o["Temperature"] is { } t && Wmi.I64(t) > 0 ? Wmi.I64(t) : null; long? hours = o["PowerOnHours"] is { } h ? Wmi.I64(h) : null; double? wear = o["Wear"] is { } w ? Wmi.I64(w) : null;
+                map[n] = new Reliability(temp, hours, wear);
             }
+
+            if (map.Count == 0) why = "Windows no entrega temperatura, desgaste ni horas de este disco";
         }
-        catch (Exception) { /* acceso denegado (requiere administrador): los discos quedan con «no disponible» y su motivo */ }
-        return map;
+        catch (System.Management.ManagementException e) when (e.ErrorCode == System.Management.ManagementStatus.AccessDenied) { why = "Temperatura, desgaste y horas requieren abrir WinMac como administrador"; }
+        catch (Exception e) { why = "No se pudieron leer temperatura, desgaste y horas (" + e.GetType().Name + ")"; }
+        return (map, why);
     }
 
     private static string BusName(int t) => t switch { 7 => "USB", 17 => "NVMe", 11 => "SATA", 3 => "ATA", 8 => "RAID", 1 => "SCSI", 6 => "Fibre Channel", 9 => "iSCSI", 10 => "SAS", 12 => "SD", 13 => "MMC", _ => "" };

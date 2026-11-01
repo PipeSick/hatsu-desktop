@@ -93,16 +93,27 @@ internal sealed class PdhQuery : IDisposable
     public void Dispose() { if (_query != IntPtr.Zero) { HubNative.PdhCloseQuery(_query); _query = IntPtr.Zero; } }
 }
 
-/// <summary>WMI con enlace tardío (sin paquetes NuGet), como el brillo. Devuelve null si WMI o el espacio de nombres no están disponibles.</summary>
+/// <summary>
+/// WMI con System.Management (tipado): las propiedades llegan con su tipo real. (El enlace tardío por COM devolvía los números de 64 bits como TEXTO, y eso rompía en silencio la lectura del tamaño de los discos.)
+/// Las consultas lanzan si fallan: quien llama decide qué decir al usuario y con qué motivo.
+/// </summary>
 internal static class Wmi
 {
-    public static dynamic? Connect(string ns)
+    public static IReadOnlyList<IReadOnlyDictionary<string, object?>> Query(string ns, string wql)
     {
-        try
+        var rows = new List<IReadOnlyDictionary<string, object?>>();
+        using var searcher = new System.Management.ManagementObjectSearcher(new System.Management.ManagementScope(ns), new System.Management.ObjectQuery(wql));
+        using var results = searcher.Get();
+        foreach (System.Management.ManagementBaseObject o in results)
         {
-            var t = Type.GetTypeFromProgID("WbemScripting.SWbemLocator"); if (t is null) return null;
-            dynamic locator = Activator.CreateInstance(t)!; return locator.ConnectServer(".", ns);
+            using (o) { var d = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase); foreach (System.Management.PropertyData p in o.Properties) d[p.Name] = p.Value; rows.Add(d); }
         }
-        catch (Exception) { return null; }
+
+        return rows;
     }
+
+    public static ulong U64(object? v) => v switch { null => 0, ulong u => u, string s => ulong.TryParse(s, out var x) ? x : 0, char c => c, _ => (ulong)Math.Max(0, Convert.ToInt64(v)) };
+    public static long I64(object? v) => v switch { null => 0, string s => long.TryParse(s, out var x) ? x : 0, char c => c, ulong u => (long)Math.Min(u, long.MaxValue), _ => Convert.ToInt64(v) };
+    public static int I32(object? v, int fallback = -1) { try { return v is null ? fallback : (int)I64(v); } catch (Exception e) when (e is FormatException or InvalidCastException or OverflowException) { return fallback; } }
+    public static string Str(object? v) => v as string ?? v?.ToString() ?? "";
 }
