@@ -24,7 +24,7 @@ internal sealed class SettingsWindow : IDisposable
         ("showNetwork", "Wi-Fi / red", b => b.ShowNetwork), ("showVolume", "Volumen", b => b.ShowVolume), ("showBattery", "Batería", b => b.ShowBattery), ("showBatteryPercent", "Porcentaje de batería", b => b.ShowBatteryPercent),
         ("showBluetooth", "Bluetooth", b => b.ShowBluetooth), ("showControlCenter", "Control Center", b => b.ShowControlCenter), ("showSeconds", "Segundos en el reloj", b => b.ShowSeconds), ("showDate", "Fecha junto a la hora", b => b.ShowDate),
         ("use24Hour", "Reloj de 24 horas", b => b.Use24Hour), ("reserveSpace", "Reservar el borde superior", b => b.ReserveSpace), ("confirmDestructive", "Confirmar reiniciar / apagar / cerrar sesión", b => b.ConfirmDestructive),
-        ("appMenus", "Menús de la app activa (experimental)", b => b.AppMenus),
+        ("wifiDetails", "Wi-Fi: mostrar potencia y banda en la lista", b => b.WifiDetails), ("appMenus", "Menús de app activa (experimental)", b => b.AppMenus),
         ("ccWifi", "CC: Wi-Fi", b => b.CcWifi), ("ccBluetooth", "CC: Bluetooth", b => b.CcBluetooth), ("ccSound", "CC: Sonido", b => b.CcSound), ("ccBrightness", "CC: Brillo", b => b.CcBrightness),
         ("ccPower", "CC: Energía", b => b.CcPower), ("ccAppearance", "CC: Apariencia", b => b.CcAppearance), ("ccDisplay", "CC: Pantallas", b => b.CcDisplay), ("ccNotifications", "CC: Notificaciones", b => b.CcNotifications),
     ];
@@ -95,12 +95,12 @@ internal sealed class SettingsWindow : IDisposable
 
     private void BuildBar(int x, int y, int w)
     {
-        Ctl(0, "BUTTON", "Barra superior", BS_GROUPBOX, x, y, w, 500);
+        Ctl(0, "BUTTON", "Barra superior", BS_GROUPBOX, x, y, w, 560);
         Ctl(0, "STATIC", "Fondo", SS_LEFT, x + 14, y + 26, 60, 20); Combo(ID_BGCOMBO, BackgroundNames, x + 80, y + 22, 140);
         Ctl(0, "STATIC", "Tema", SS_LEFT, x + 250, y + 26, 50, 20); Combo(ID_THEMECOMBO, ThemeNames, x + 300, y + 22, 140);
-        for (int i = 0; i < 12; i++) Ctl(ID_BARBASE + i, "BUTTON", BarToggles[i].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14, y + 58 + i * 26, w - 28, 22);
-        Ctl(0, "STATIC", "Archivo .ics del calendario (opcional):", SS_LEFT, x + 14, y + 376, w - 28, 20); Ctl(ID_ICS, "EDIT", "", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 14, y + 398, w - 28, 22);
-        for (int i = 12; i < BarToggles.Length; i++) Ctl(ID_BARBASE + i, "BUTTON", BarToggles[i].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14 + ((i - 12) % 2) * 235, y + 430 + ((i - 12) / 2) * 22, 225, 20);
+        for (int i = 0; i < 13; i++) Ctl(ID_BARBASE + i, "BUTTON", BarToggles[i].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14, y + 58 + i * 26, w - 28, 22);
+        Ctl(0, "STATIC", "Archivo .ics del calendario (opcional):", SS_LEFT, x + 14, y + 404, w - 28, 20); Ctl(ID_ICS, "EDIT", "", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 14, y + 426, w - 28, 22);
+        for (int i = 13; i < BarToggles.Length; i++) Ctl(ID_BARBASE + i, "BUTTON", BarToggles[i].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14 + ((i - 13) % 2) * 235, y + 458 + ((i - 13) / 2) * 22, 225, 20);
     }
 
     private void Combo(int id, string[] items, int x, int y, int w)

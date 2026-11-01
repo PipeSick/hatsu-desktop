@@ -59,8 +59,11 @@ internal sealed class SystemHub
         {
             try
             {
-                var br = _s.Brightness.Read(); var pw = _s.Power.ReadMode(); var ap = _s.Appearance.Read(); var sw = _s.Audio.CanSwitchOutput();
-                Update(s => s with { Brightness = br, Power = pw, Appearance = ap, OutputSwitchOk = sw.IsOk, OutputSwitchReason = sw.IsOk ? null : sw.Message });
+                // Lo rápido se publica ANTES que el brillo: DDC/CI puede tardar varios segundos (monitores sin DDC/CI) y no debe retrasar el reflejo del modo de energía o del tema.
+                var pw = _s.Power.ReadMode(); var ap = _s.Appearance.Read(); var sw = _s.Audio.CanSwitchOutput();
+                Update(s => s with { Power = pw, Appearance = ap, OutputSwitchOk = sw.IsOk, OutputSwitchReason = sw.IsOk ? null : sw.Message });
+                var br = _s.Brightness.Read();
+                Update(s => s with { Brightness = br });
             }
             catch (Exception e) { _log("[hub] lecturas lentas: " + e.Message); }
             finally { Volatile.Write(ref _slow, 0); }

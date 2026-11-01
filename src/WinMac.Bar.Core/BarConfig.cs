@@ -38,6 +38,8 @@ public sealed record BarConfig
     /// <summary>Archivo .ics para los eventos del calendario desplegable (solo lectura). null = sin eventos.</summary>
     public string? CalendarIcsPath { get; init; }
     // Controles del Control Center que se muestran (un control sin respaldo en el equipo se muestra deshabilitado con su motivo, o se oculta aquí).
+    /// <summary>En la lista de redes Wi-Fi, mostrar además la potencia (dBm) y la banda (2,4 / 5 / 6 GHz). Apagado por defecto.</summary>
+    public bool WifiDetails { get; init; } = false;
     public bool CcWifi { get; init; } = true;
     public bool CcBluetooth { get; init; } = true;
     public bool CcSound { get; init; } = true;

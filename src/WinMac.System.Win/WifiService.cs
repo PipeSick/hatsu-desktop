@@ -10,7 +10,7 @@ namespace WinMac.SystemControl.Win;
 /// </summary>
 public sealed class WifiService : IWifiService
 {
-    private const int AvailableNetworkSize = 628, ListHeader = 8, InterfaceInfoSize = 532;
+    private const int AvailableNetworkSize = 628, ListHeader = 8, InterfaceInfoSize = 532, BssEntrySize = 360;
     private const uint FlagConnected = 1, FlagHasProfile = 2;
 
     private static ServiceResult Code(uint rc, string what) => rc switch
@@ -46,6 +46,7 @@ public sealed class WifiService : IWifiService
             uint scanRc = scan ? Native.WlanScan(h, ref iface, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero) : 0;   // asíncrono: los resultados aparecen en la lectura siguiente
             bool? radio = ReadRadioOn(h, iface);
             var nets = ReadNetworks(h, iface, out uint listRc);
+            if (listRc == 0) nets = AddBssInfo(h, iface, nets);
             // Windows 11 exige el permiso de ubicación para ver redes (WLAN devuelve «acceso denegado»): se dice, no se finge una lista vacía.
             if (listRc == 5 || (scan && scanRc == 5)) return new WifiState(true, false, null, 0, [], LocationReason, radio);
             if (listRc != 0) return new WifiState(true, false, null, 0, [], $"Wi-Fi: no se pudo leer la lista de redes (error {listRc})", radio);
@@ -94,6 +95,33 @@ public sealed class WifiService : IWifiService
         // una fila por SSID: la conectada o, si no, la de mejor señal
         return result.GroupBy(n => n.Ssid).Select(g => g.OrderByDescending(n => n.Connected).ThenByDescending(n => n.Signal).First())
             .OrderByDescending(n => n.Connected).ThenByDescending(n => n.Signal).ToList();
+    }
+
+    /// <summary>
+    /// Potencia (RSSI, dBm) y frecuencia de cada red, de <c>WlanGetNetworkBssList</c> (WLAN_BSS_ENTRY = 360 bytes; RSSI en 56, frecuencia central en kHz en 92). Por SSID se toma el punto de acceso
+    /// más fuerte. Si la lectura falla la lista queda como estaba: son datos de detalle y nunca deben quitar las redes.
+    /// </summary>
+    private static IReadOnlyList<WifiNetwork> AddBssInfo(IntPtr h, Guid iface, IReadOnlyList<WifiNetwork> nets)
+    {
+        try
+        {
+            if (Native.WlanGetNetworkBssList(h, ref iface, IntPtr.Zero, 3 /* dot11_BSS_type_any */, false, IntPtr.Zero, out var list) != 0) return nets;
+            try
+            {
+                int count = Marshal.ReadInt32(list, 4); var best = new Dictionary<string, (int Rssi, int Khz)>();
+                for (int i = 0; i < count && i < 512; i++)
+                {
+                    var p = list + 8 + i * BssEntrySize;
+                    int len = Math.Clamp(Marshal.ReadInt32(p, 0), 0, 32); var raw = new byte[len]; Marshal.Copy(p + 4, raw, 0, len);
+                    string ssid = System.Text.Encoding.UTF8.GetString(raw); if (string.IsNullOrWhiteSpace(ssid)) continue;
+                    int rssi = Marshal.ReadInt32(p, 56), khz = Marshal.ReadInt32(p, 92);
+                    if (!best.TryGetValue(ssid, out var cur) || rssi > cur.Rssi) best[ssid] = (rssi, khz);
+                }
+                return nets.Select(n => best.TryGetValue(n.Ssid, out var b) ? n with { RssiDbm = b.Rssi is < 0 and > -120 ? b.Rssi : null, FrequencyMhz = b.Khz > 0 ? b.Khz / 1000 : null } : n).ToList();
+            }
+            finally { Native.WlanFreeMemory(list); }
+        }
+        catch (Exception) { return nets; }
     }
 
     public ServiceResult Connect(string profileName, string ssid) => ServiceResult.Guard(() =>

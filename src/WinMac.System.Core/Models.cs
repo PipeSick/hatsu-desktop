@@ -12,8 +12,10 @@ public sealed record AudioState(bool Available, int Volume, bool Muted, IReadOnl
 }
 
 // ───────────── Wi-Fi
-public sealed record WifiNetwork(string Ssid, int Signal, bool Secured, bool Connected, bool HasProfile, string? ProfileName)
+public sealed record WifiNetwork(string Ssid, int Signal, bool Secured, bool Connected, bool HasProfile, string? ProfileName, int? RssiDbm = null, int? FrequencyMhz = null)
 {
+    /// <summary>«5 GHz» / «2,4 GHz» / «6 GHz» según la frecuencia central (null si Windows no la dio).</summary>
+    public string? BandText => FrequencyMhz switch { null => null, >= 5925 => "6 GHz", >= 4900 => "5 GHz", >= 2400 => "2,4 GHz", _ => null };
     /// <summary>Barras 1–4 según la calidad de señal (0–100) que da Windows.</summary>
     public int Bars => WifiState.BarsFor(Signal);
 }

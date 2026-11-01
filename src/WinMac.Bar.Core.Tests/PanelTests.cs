@@ -232,6 +232,18 @@ public class PanelBuilderTests
     }
 
     [Fact]
+    public void Wifi_signal_and_band_appear_only_when_the_option_is_on_and_band_is_derived_from_the_frequency()
+    {
+        var nets = new List<WifiNetwork> { new("Casa", 89, true, true, true, "Casa", -57, 5260), new("Vecino", 40, true, false, true, "Vecino", -80, 2437), new("Sin", 40, true, false, true, "Sin") };
+        Assert.Equal(["5 GHz", "2,4 GHz", null], nets.Select(n => n.BandText)); Assert.Equal("6 GHz", (nets[0] with { FrequencyMhz = 6195 }).BandText);
+        var sys = Nothing with { Wifi = new WifiState(true, true, "Casa", 89, nets, RadioOn: true) };
+        var off = PanelBuilder.WifiPanel(Ctx(sys)); Assert.DoesNotContain("dBm", off.Widgets.Single(w => w.Id == "net:Casa").Sub);
+        var on = PanelBuilder.WifiPanel(Ctx(sys, new BarConfig { WifiDetails = true }));
+        Assert.Contains("89 %", on.Widgets.Single(w => w.Id == "net:Casa").Sub); Assert.Contains("-57 dBm", on.Widgets.Single(w => w.Id == "net:Casa").Sub); Assert.Contains("5 GHz", on.Widgets.Single(w => w.Id == "net:Casa").Sub);
+        Assert.Contains("40 %", on.Widgets.Single(w => w.Id == "net:Sin").Sub); Assert.DoesNotContain("dBm", on.Widgets.Single(w => w.Id == "net:Sin").Sub);   // sin dato de Windows no se inventa
+    }
+
+    [Fact]
     public void The_audio_output_list_is_switchable_only_when_the_unofficial_api_is_compatible_and_offers_restore()
     {
         var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos", false) };

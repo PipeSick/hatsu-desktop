@@ -73,6 +73,7 @@ public static class PanelBuilder
             foreach (var n in s.Networks.Take(6))   // el panel no se desplaza: 6 redes caben incluso en 1080p
             {
                 string sub = c.Busy.TryGetValue("net:" + n.Ssid, out var b) ? b : n.Connected ? "Conectado · toca para desconectar" : n.HasProfile ? "Red conocida" : n.Secured ? "Requiere contraseña: conéctala desde Configuración" : "Abierta: conéctala desde Configuración";
+                if (c.Cfg.WifiDetails && !c.Busy.ContainsKey("net:" + n.Ssid)) sub += " · " + string.Join(" · ", new[] { $"{n.Signal} %", n.RssiDbm is { } r ? $"{r} dBm" : null, n.BandText }.Where(x => x is not null));
                 w.Add(new Widget(WidgetKind.Row, "net:" + n.Ssid, n.Ssid, sub, On: n.Connected, Enabled: n.Connected || n.HasProfile, Bars: n.Bars, Glyph: n.Secured ? "lock" : null));
             }
         }
