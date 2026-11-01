@@ -30,12 +30,11 @@ internal sealed class PopoverWindow : IDisposable
     public PanelKind? Kind => _open ? _ctl.Model.Kind : null;
     public (int X, int Y) Position { get; private set; }
 
-    public void Show(PanelModel model, int anchorXpx, int barBottomPx, BarNative.RECT monitor, double scale, BarTheme theme, bool alignRight)
+    public void Show(PanelModel model, int anchorXpx, int barBottomPx, PxRect monitor, double scale, BarTheme theme, bool alignRight)
     {
         EnsureWindow(scale); _theme = theme; if (_painter is not null) _painter.Theme = theme;
         _ctl.SetModel(model); ResizeFor(model);
-        int margin = (int)(8 * _scale), x = alignRight ? monitor.Right - _wPx - margin : Math.Clamp(anchorXpx - _wPx / 2, monitor.Left + margin, monitor.Right - _wPx - margin);
-        int y = barBottomPx + (int)(4 * _scale); Position = (x, y);
+        var (x, y) = PopoverPlacement.Place(anchorXpx, barBottomPx, _wPx, _hPx, monitor, _scale, alignRight); Position = (x, y);   // siempre entero dentro del monitor de la barra pulsada
         BarNative.SetWindowPos(_hwnd, new IntPtr(-1), x, y, _wPx, _hPx, 0x0040u /* SHOWWINDOW */);
         _open = true; _dirty = true; BarNative.SetForegroundWindow(_hwnd); Render();
     }
@@ -112,6 +111,7 @@ internal sealed class PopoverWindow : IDisposable
                 case WM_LBUTTONUP: { BarNative.ReleaseCapture(); var ev = _ctl.PointerUp(X(l), Y(l)); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero; }
                 case WM_ACTIVATE when ((long)w & 0xFFFF) == 0 && _open && !KeepOpen: Hide(); return IntPtr.Zero;   // perdió el foco: como un menú
                 case WM_KEYDOWN when (int)w == 0x1B: Hide(); return IntPtr.Zero;
+                case 0x2E0 /* WM_DPICHANGED */: return IntPtr.Zero;   // el tamaño y el escalado del panel los fija Show() según el monitor de destino: Windows no debe redimensionarlo por su cuenta al moverlo entre monitores
             }
         }
         catch (Exception e) { _log("[panel] error: " + e.GetType().Name + ": " + e.Message); }

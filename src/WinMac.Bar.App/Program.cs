@@ -9,6 +9,7 @@
 //   WinMac.Bar.App --selftest               comprobaciones no interactivas (NO registra AppBar); código 0 si todo funciona
 //   WinMac.Bar.App --selftest-appbar        SOLO CI: registra y libera un AppBar durante unos fotogramas
 //   WinMac.Bar.App --selftest-system        mide qué controles del sistema permite ESTE equipo (audio, Wi-Fi, Bluetooth, brillo, energía, apariencia) sin cambiar nada
+//   WinMac.Bar.App --selftest-monitors      lista los monitores que ve Windows y cuáles llevarán barra (modo espejo = una sola); no cambia nada
 //   Opciones: --config ruta.json · --no-config
 using System.Diagnostics;
 using WinMac.Bar;
@@ -48,6 +49,7 @@ internal static class Program
             if (args.Contains("--status")) return Status();
             if (args.Contains("--quit")) return Quit();
             if (args.Contains("--selftest-system")) return SystemProbe();
+            if (args.Contains("--selftest-monitors")) return MonitorProbe();
             if (args.Contains("--selftest")) return SelfTest(appBar: false);
             if (args.Contains("--selftest-appbar")) return SelfTest(appBar: true);
             return RunBar(args);
@@ -86,6 +88,13 @@ internal static class Program
         int bad = lines.Count(l => l.StartsWith("[FALLO]"));
         Log(bad == 0 ? "Ningún servicio lanzó excepciones (un servicio «no disponible» es un resultado válido)." : $"{bad} servicio(s) lanzaron excepciones: es un error.");
         return bad == 0 ? 0 : 1;
+    }
+
+    private static int MonitorProbe()
+    {
+        Log("Monitores (no se cambia nada):");
+        foreach (var l in BarHost.DescribeMonitors()) Log(l);
+        return 0;
     }
 
     private static int Quit()

@@ -14,6 +14,12 @@ public interface IAudioService
     ServiceResult CanSwitchOutput();
 }
 
+/// <summary>Un servicio de audio que recuerda la salida anterior al último cambio hecho desde WinMac, para poder restaurarla.</summary>
+public interface IOutputRestore
+{
+    string? PreviousDefaultId { get; }
+}
+
 public interface IWifiService
 {
     WifiState Read(bool scan);

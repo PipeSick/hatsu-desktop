@@ -10,9 +10,11 @@ namespace WinMac.Bar.Win.Rendering;
 /// La barra «que controla Windows»: menú Apple con acciones reales, paneles (Control Center, Wi-Fi, Bluetooth, sonido, energía, calendario, pantallas), menús EXPERIMENTALES de la app activa
 /// y aplicación en vivo de la configuración central. Todo el trabajo lento va a hilos de trabajo (<see cref="SystemHub"/>); aquí solo se decide qué mostrar y se traducen los eventos.
 /// </summary>
-public sealed partial class BarHost
+public sealed partial class BarHost : IPanelUi
 {
-    private SystemHub _hub = null!; private PopoverWindow? _popover; private PanelContext _pctx = null!; private PanelKind _pkind; private int _anchorX; private bool _alignRight;
+    private SystemHub _hub = null!; private PanelOperations _ops = null!; private PopoverWindow? _popover; private PanelContext _pctx = null!; private PanelKind _pkind; private int _anchorX; private bool _alignRight;
+    private BarWindow? _popSource;      // la barra (monitor) donde se abrió el panel desplegable
+    private BarWindow? _actionSource;   // la barra donde se hizo el último clic: dueña de los cuadros de diálogo y de los menús
     private readonly Queue<Action> _uiQueue = new(); private readonly object _cfgLock = new(); private BarConfig? _pendingCfg;
     private IReadOnlyList<AppMenuTop> _appMenuTops = []; private IReadOnlyList<string>? _appMenuLabels; private IntPtr _appMenuWindow;
     private DateTime _lastPanelRefresh = DateTime.MinValue, _lastEvents = DateTime.MinValue; private int _panelTicks;
@@ -26,11 +28,11 @@ public sealed partial class BarHost
     private void InitPanels(SystemServices? services)
     {
         _hub = new SystemHub(services ?? SystemServicesFactory.CreateReal(), Post, _log);
-        _hub.Changed += OnHubChanged;
+        _hub.Changed += OnHubChanged; _ops = new PanelOperations(_hub, this, _log);
     }
 
     // ───────────────────────────── hilo de la barra
-    private void Post(Action a) { lock (_uiQueue) _uiQueue.Enqueue(a); var h = _hwnd; if (h != IntPtr.Zero) BarNative.PostMessage(h, WM_APP_UI, IntPtr.Zero, IntPtr.Zero); }
+    private void Post(Action a) { lock (_uiQueue) _uiQueue.Enqueue(a); var h = _hubHwnd; if (h != IntPtr.Zero) BarNative.PostMessage(h, WM_APP_UI, IntPtr.Zero, IntPtr.Zero); }
 
     private void DrainUi()
     {
@@ -50,7 +52,7 @@ public sealed partial class BarHost
         return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels);
     }
 
-    private void OnHubChanged() { _ctl.State = MakeState(); _force = true; if (_popover is { IsOpen: true }) RebuildPanel(); }
+    private void OnHubChanged() { SetStateAll(); if (_popover is { IsOpen: true }) RebuildPanel(); }
 
     private void PanelsTick()
     {
@@ -71,12 +73,12 @@ public sealed partial class BarHost
     }
 
     // ───────────────────────────── paneles
-    private void OpenPanelFromBar(BarAction a, BarItemFrame? item)
+    private void OpenPanelFromBar(BarWindow src, BarAction a, BarItemFrame? item)
     {
         if (a.Panel is not PanelKind kind) { if (a.Uri is not null) BarNative.ShellExecuteW(IntPtr.Zero, "open", a.Uri, null, null, 1); return; }
-        if (_popover is { IsOpen: true } && _pkind == kind) { _popover.Hide(); return; }   // segundo clic en el mismo icono = cerrar
-        int cx = item is null ? _winLeftPx + _winWpx / 2 : _winLeftPx + (int)((item.X + item.W / 2) * _scale);
-        try { OpenPanel(kind, cx, alignRight: kind == PanelKind.ControlCenter); }
+        if (_popover is { IsOpen: true } && _pkind == kind && ReferenceEquals(_popSource, src)) { _popover.Hide(); return; }   // segundo clic en el mismo icono de la misma barra = cerrar; en otra barra = abrirlo ahí
+        int cx = item is null ? src.Left + src.MonitorRect.W / 2 : src.Left + (int)((item.X + item.W / 2) * src.Scale);
+        try { OpenPanel(src, kind, cx, alignRight: kind == PanelKind.ControlCenter); }
         catch (Exception e)
         {
             _log("[bar] no se pudo abrir el panel: " + e.GetType().Name + ": " + e.Message);   // nunca dejar al usuario sin acción: se abre la página de Configuración
@@ -84,13 +86,13 @@ public sealed partial class BarHost
         }
     }
 
-    private void OpenPanel(PanelKind kind, int anchorX, bool alignRight)
+    private void OpenPanel(BarWindow src, PanelKind kind, int anchorX, bool alignRight)
     {
         _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log);
-        _pkind = kind; _anchorX = anchorX; _alignRight = alignRight; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
+        _popSource = src; _pkind = kind; _anchorX = anchorX; _alignRight = alignRight; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
         _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery };
         var model = PanelBuilder.Build(kind, _pctx);
-        _popover.Show(model, anchorX, _winTopPx + _winHpx, _monitor, _scale, _theme, alignRight);
+        _popover.Show(model, anchorX, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight);   // se abre en el monitor donde se hizo clic, escalado a SU DPI
         RefreshFor(kind, firstOpen: true);
     }
 
@@ -118,7 +120,7 @@ public sealed partial class BarHost
         _popover.SetModel(PanelBuilder.Build(_pkind, _pctx));
     }
 
-    private void OnPanelClosed() { _force = true; }
+    private void OnPanelClosed() { _popSource = null; foreach (var w in _wins) w.Redraw(); }
 
     private void LoadEvents()
     {
@@ -132,80 +134,15 @@ public sealed partial class BarHost
         });
     }
 
-    private void SetMessage(string? m) { _pctx = _pctx with { Message = m }; }
-    private void SetBusy(string key, string? text)
-    {
-        var d = new Dictionary<string, string>(_pctx.Busy); if (text is null) d.Remove(key); else d[key] = text; _pctx = _pctx with { Busy = d };
-    }
+    // Las acciones de los paneles (PanelOperations, en el núcleo y con pruebas) piden a esta clase lo que solo ella puede hacer: reconstruir el panel, navegar, cerrar, avisar y abrir URIs.
+    PanelContext IPanelUi.Ctx { get => _pctx; set => _pctx = value; }
+    void IPanelUi.Rebuild() => RebuildPanel();
+    void IPanelUi.Navigate(PanelKind kind) => NavigatePanel(kind);
+    void IPanelUi.HidePanel() => _popover?.Hide();
+    void IPanelUi.ShowInfo(string title, string? text) => ShowInfo(title, text);
+    void IPanelUi.OpenUri(string uri) => BarNative.ShellExecuteW(IntPtr.Zero, "open", uri, null, null, 1);
 
-    /// <summary>Operación del sistema fuera del hilo de interfaz, con «ocupado» visible y el error (con su motivo) si falla. <paramref name="refresh"/> relee el estado real al terminar.</summary>
-    private void Op(string busyKey, string busyText, Func<ServiceResult> op, Action refresh)
-    {
-        SetBusy(busyKey, busyText); SetMessage(null); RebuildPanel();
-        _hub.Run(op, r =>
-        {
-            SetBusy(busyKey, null); if (!r.IsOk) SetMessage(r.Message ?? "La operación falló"); refresh(); RebuildPanel();
-        });
-    }
-
-    private void OnPanelEvent(PanelEvent e)
-    {
-        try
-        {
-            if (e.Kind is PanelEventKind.SliderChange or PanelEventKind.SliderCommit) { OnSlider(e); return; }
-            string id = e.Id;
-            if (id == "back") { NavigatePanel(PanelKind.ControlCenter); return; }
-            if (id.StartsWith("open:ms-settings:") || id.StartsWith("open:ms-windows-store:")) { _popover?.Hide(); BarNative.ShellExecuteW(IntPtr.Zero, "open", id[5..], null, null, 1); return; }
-            if (id.StartsWith("open:")) { var k = id[5..] switch { "wifi" => PanelKind.Wifi, "bluetooth" => PanelKind.Bluetooth, "sound" => PanelKind.Sound, "battery" => PanelKind.Battery, "display" => PanelKind.Display, _ => PanelKind.ControlCenter }; NavigatePanel(k); return; }
-            var s = _hub.Snapshot; var svc = _hub.Services;
-            switch (id)
-            {
-                case "notifications": _popover?.Hide(); _hub.Run(() => { Thread.Sleep(250); return svc.Session.OpenNotificationCenter(); }, r => { if (!r.IsOk) ShowInfo("Notificaciones", r.Message); }); return;
-                case "appearance": { bool dark = !s.Appearance.Dark; _hub.Patch(x => x with { Appearance = x.Appearance with { Dark = dark } }); Op("appearance", "Cambiando…", () => svc.Appearance.SetDark(dark), _hub.RefreshFast); return; }
-                case "wifi-radio": { bool on = s.Wifi.RadioOn != true; Op("wifi-radio", on ? "Activando…" : "Desactivando…", () => svc.Wifi.SetRadio(on), () => { _hub.RefreshWifi(true); }); return; }
-                case "bt-radio": { bool on = !s.Bluetooth.RadioOn; Op("bt-radio", on ? "Activando…" : "Desactivando…", () => svc.Bluetooth.SetRadio(on), () => _hub.RefreshBluetooth(true)); return; }
-                case "mute": { bool m = !s.Audio.Muted; Op("mute", "…", () => svc.Audio.SetMuted(m), _hub.RefreshAudio); return; }
-                case "audio-restore": { var prev = _hub.AudioImpl?.PreviousDefaultId; if (prev is null) return; Op("audio-restore", "Restaurando…", () => svc.Audio.SetDefaultOutput(prev), () => { _hub.RefreshAudio(); _hub.RefreshSlow(); }); return; }
-                case "prev": case "next": { var (y, m) = CalendarGrid.Shift(_pctx.ViewYear, _pctx.ViewMonth, id == "next" ? 1 : -1); _pctx = _pctx with { ViewYear = y, ViewMonth = m }; RebuildPanel(); return; }
-            }
-
-            if (id.StartsWith("day:") && DateOnly.TryParseExact(id[4..], "yyyy-MM-dd", out var day)) { _pctx = _pctx with { SelectedDay = day }; RebuildPanel(); return; }
-            if (id.StartsWith("net:") && _cfg.WifiDetails)   // con detalles activados la fila se despliega (la acción está dentro)
-            { _pctx = _pctx with { ExpandedNet = _pctx.ExpandedNet == id[4..] ? null : id[4..] }; RebuildPanel(); return; }
-            if (id.StartsWith("net:") || id.StartsWith("netact:"))
-            {
-                string ssid = id[(id.IndexOf(':') + 1)..], busy = "net:" + ssid;
-                var net = s.Wifi.Networks.FirstOrDefault(n => n.Ssid == ssid); if (net is null) return;
-                if (net.Connected) Op(busy, "Desconectando…", svc.Wifi.Disconnect, () => _hub.RefreshWifi(true));
-                else Op(busy, "Conectando…", () => svc.Wifi.Connect(net.ProfileName ?? "", net.Ssid), () => { _hub.RefreshWifi(true); });
-                return;
-            }
-
-            if (id.StartsWith("out:")) { var dev = id[4..]; Op(id, "Cambiando…", () => svc.Audio.SetDefaultOutput(dev), () => { _hub.RefreshAudio(); _hub.RefreshSlow(); }); return; }
-            if (id.StartsWith("power:") && Enum.TryParse<PowerMode>(id[6..], out var pm)) { _hub.Patch(x => x with { Power = new PowerModeState(true, pm) }); Op(id, "Cambiando…", () => svc.Power.SetMode(pm), _hub.RefreshFast); return; }
-            if (id.StartsWith("topology:") && Enum.TryParse<DisplayTopology>(id[9..], out var topo)) { _popover?.Hide(); _hub.Run(() => svc.Display.SetTopology(topo), r => { if (!r.IsOk) ShowInfo("Pantallas", r.Message); }); return; }
-        }
-        catch (Exception ex) { _log("[bar] evento de panel falló: " + ex.GetType().Name + ": " + ex.Message); }
-    }
-
-    private void OnSlider(PanelEvent e)
-    {
-        int v = (int)Math.Round(e.Value); var svc = _hub.Services; bool commit = e.Kind == PanelEventKind.SliderCommit;
-        if (e.Id == "volume")
-        {
-            _hub.Patch(s => s with { Audio = s.Audio with { Volume = v } });   // la posición del deslizador sigue al puntero; al soltar se relee el valor REAL
-            _hub.SetLatest("volume", v, svc.Audio.SetVolume, r => { if (!r.IsOk) { SetMessage(r.Message); } if (commit || !r.IsOk) _hub.RefreshAudio(); RebuildPanel(); });
-        }
-        else if (e.Id == "brightness")
-        {
-            var mon = _hub.Snapshot.Brightness.Monitors.ToList(); if (mon.Count == 0) return;
-            _hub.Patch(s => s with { Brightness = s.Brightness with { Monitors = s.Brightness.Monitors.Select(m => m with { Percent = v }).ToList() } });
-            _hub.SetLatest("brightness", v, p => { ServiceResult last = ServiceResult.Ok; foreach (var m in mon) { last = svc.Brightness.Set(m.Id, p); if (!last.IsOk) break; } return last; },
-                r => { if (!r.IsOk) SetMessage(r.Message); if (commit || !r.IsOk) _hub.RefreshBrightness(true); RebuildPanel(); });
-        }
-
-        RebuildPanel();
-    }
+    private void OnPanelEvent(PanelEvent e) => _ops.Handle(e);
 
     // ───────────────────────────── cuadros de diálogo propios
     private void ShowInfo(string title, string? text) { if (string.IsNullOrWhiteSpace(text)) return; ModalBox(title, text!, 0x40 /* ICONINFORMATION | OK */); }
@@ -215,12 +152,12 @@ public sealed partial class BarHost
     private int ModalBox(string title, string text, uint flags)
     {
         if (_popover is not null) _popover.KeepOpen = true; _modal = true;
-        try { return BarNative.MessageBoxW(_hwnd, text, title, flags | 0x40000 /* TOPMOST */ | 0x10000 /* SETFOREGROUND */); }
+        try { return BarNative.MessageBoxW(_actionSource?.Hwnd ?? (_wins.Count > 0 ? _wins[0].Hwnd : IntPtr.Zero), text, title, flags | 0x40000 /* TOPMOST */ | 0x10000 /* SETFOREGROUND */); }
         finally { _modal = false; if (_popover is not null) _popover.KeepOpen = false; }
     }
 
     // ───────────────────────────── menú Apple
-    private void ShowAppleMenu(BarItemFrame? item)
+    private void ShowAppleMenu(BarWindow src, BarItemFrame? item)
     {
         IntPtr menu = BarNative.CreatePopupMenu(); IntPtr prev = BarNative.GetForegroundWindow();
         string? appName = SessionService.ForegroundProcessName();
@@ -237,12 +174,12 @@ public sealed partial class BarHost
             Add(SystemActionKind.Lock); Add(SystemActionKind.LogOff); Line();
             BarNative.AppendMenuW(menu, _cfg.ReserveSpace ? 0x8u : 0u, (UIntPtr)1, "Reservar espacio arriba");
             BarNative.AppendMenuW(menu, 0, (UIntPtr)2, "Salir de la barra superior");
-            int x = _winLeftPx + (int)((item?.X ?? 0) * _scale), y = _winTopPx + _winHpx;
-            BarNative.SetForegroundWindow(_hwnd);
+            int x = src.Left + (int)((item?.X ?? 0) * src.Scale), y = src.Top + src.Height;   // el menú nace bajo la barra pulsada; Windows lo mantiene dentro de ese monitor
+            BarNative.SetForegroundWindow(src.Hwnd);
             _modal = true; int cmd;
-            try { cmd = BarNative.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, x, y, _hwnd, IntPtr.Zero); } finally { _modal = false; }
-            BarNative.PostMessage(_hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
-            if (prev != IntPtr.Zero && prev != _hwnd) BarNative.SetForegroundWindow(prev);   // la acción se ejecuta con el foco de vuelta en la app que lo tenía
+            try { cmd = BarNative.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, x, y, src.Hwnd, IntPtr.Zero); } finally { _modal = false; }
+            BarNative.PostMessage(src.Hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
+            if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev)) BarNative.SetForegroundWindow(prev);   // la acción se ejecuta con el foco de vuelta en la app que lo tenía
             if (cmd == 1) SetReserve(!_cfg.ReserveSpace);
             else if (cmd == 2) _quitting = true;
             else if (cmd >= 2000) RunSystemAction((SystemActionKind)(cmd - 2000), appName);
@@ -276,31 +213,30 @@ public sealed partial class BarHost
         var tops = AppMenuService.Read(h); _appMenuTops = tops; _appMenuWindow = h; _appMenuLabels = tops.Count > 0 ? tops.Select(t => t.Text).ToList() : null;
     }
 
-    private void ShowAppMenu(int index, BarItemFrame? item)
+    private void ShowAppMenu(BarWindow src, int index, BarItemFrame? item)
     {
         if (index < 0 || index >= _appMenuTops.Count || _appMenuWindow == IntPtr.Zero) return;
         _popover?.Hide();
-        int x = _winLeftPx + (int)((item?.X ?? 0) * _scale), y = _winTopPx + _winHpx; IntPtr prev = BarNative.GetForegroundWindow();
+        int x = src.Left + (int)((item?.X ?? 0) * src.Scale), y = src.Top + src.Height; IntPtr prev = BarNative.GetForegroundWindow();
         _modal = true;
-        try { var r = AppMenuService.Show(_hwnd, _appMenuWindow, _appMenuTops[index], x, y); if (!r.IsOk) _log("[bar] menú de la app: " + r.Message); }
-        finally { _modal = false; if (prev != IntPtr.Zero && prev != _hwnd) BarNative.SetForegroundWindow(prev); }
+        try { var r = AppMenuService.Show(src.Hwnd, _appMenuWindow, _appMenuTops[index], x, y); if (!r.IsOk) _log("[bar] menú de la app: " + r.Message); }
+        finally { _modal = false; if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev)) BarNative.SetForegroundWindow(prev); }
     }
 
     // ───────────────────────────── configuración central en vivo
     /// <summary>Aplica una configuración nueva (la recibe del host). Seguro desde cualquier hilo; se aplica en el hilo de la barra y solo toca lo que cambió.</summary>
-    public void ApplyConfig(BarConfig c) { lock (_cfgLock) _pendingCfg = c; var h = _hwnd; if (h != IntPtr.Zero) BarNative.PostMessage(h, WM_APP_CONFIG, IntPtr.Zero, IntPtr.Zero); }
+    public void ApplyConfig(BarConfig c) { lock (_cfgLock) _pendingCfg = c; var h = _hubHwnd; if (h != IntPtr.Zero) BarNative.PostMessage(h, WM_APP_CONFIG, IntPtr.Zero, IntPtr.Zero); }
 
     private void ApplyPendingConfig()
     {
         BarConfig? c; lock (_cfgLock) { c = _pendingCfg; _pendingCfg = null; }
         if (c is null || c == _cfg) return;
-        var old = _cfg; _cfg = c; _ctl.Config = c;
-        if (old.ReserveSpace != c.ReserveSpace) PlaceWindow();
-        if (old.Background != c.Background) { _painter.Background = c.Background; BuildBackdrop(); }
-        if (old.Theme != c.Theme) { _theme = ResolveTheme(); _painter.Theme = _theme; BuildBackdrop(); }
+        var old = _cfg; _cfg = c;
+        foreach (var w in _wins) w.ApplyConfig(old, c);   // todas las barras comparten la configuración central y la aplican en vivo
+        if (old.Theme != c.Theme) SetThemeAll(ResolveTheme());
         if (old.AppMenus != c.AppMenus) { if (c.AppMenus) RefreshAppMenus(); else { _appMenuTops = []; _appMenuLabels = null; } }
         if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind == PanelKind.Calendar && _popover is { IsOpen: true }) LoadEvents();
-        _nextClock = DateTime.MinValue; UpdateState(force: false); _force = true;
+        _nextClock = DateTime.MinValue; UpdateState(force: false);
         if (_popover is { IsOpen: true }) RebuildPanel();
     }
 

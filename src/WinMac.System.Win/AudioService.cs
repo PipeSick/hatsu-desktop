@@ -6,11 +6,11 @@ namespace WinMac.SystemControl.Win;
 /// Audio por Core Audio (API documentada): volumen maestro, silencio y lista de salidas activas del dispositivo predeterminado.
 /// El cambio de salida predeterminada usa <see cref="PolicyConfigSwitcher"/> (COM NO oficial, aislado, verificado y reversible).
 /// </summary>
-public sealed class AudioService : IAudioService
+public sealed class AudioService : IAudioService, IOutputRestore
 {
     private readonly PolicyConfigSwitcher _switcher = new();
     /// <summary>Salida predeterminada anterior al último cambio hecho por WinMac (para «volver a la anterior»).</summary>
-    public string? PreviousDefaultId { get; private set; }
+    public string? PreviousDefaultId { get; private set; }   // implementa IOutputRestore
 
     public AudioState Read()
     {
