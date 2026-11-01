@@ -6,6 +6,9 @@ namespace WinMac.Bar.Win.Shell.Hub;
 /// <summary>Los servicios reales del panel multifunción. Se crean una vez; nada consulta hasta que el panel está abierto.</summary>
 public static class HubServicesFactory
 {
+    /// <summary>Lo que Windows dice de los discos, tal cual (diagnóstico de la asociación volumen → disco físico).</summary>
+    public static IReadOnlyList<string> DiskDiagnostics() => DiskMonitor.Diagnose();
+
     public static (HubServices Services, IDisposable Owner) CreateReal()
     {
         var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) }; http.DefaultRequestHeaders.UserAgent.ParseAdd("WinMac/1.0 (panel del tiempo)");

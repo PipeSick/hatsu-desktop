@@ -121,6 +121,7 @@ internal static class Program
                 foreach (var v in d.Volumes) { var disk = d.DiskOf(v); Log($"    {v.Letter} «{v.Label}» → " + (disk is null ? "SIN disco físico asociado" : $"disco {disk.Number} {disk.Model} ({disk.Media}) estado {disk.Smart.Health ?? "n/d"}, temp {(disk.Smart.TemperatureC is { } t ? t + " °C" : "n/d")}, desgaste {(disk.Smart.WearPercent is { } w ? w + " %" : "n/d")}, horas {disk.Smart.PowerOnHours?.ToString() ?? "n/d"}" + (disk.Smart.Reason is null ? "" : " [" + disk.Smart.Reason + "]"))); }
             }
             catch (Exception e) { Log("  [FALLO] discos: " + e.GetType().Name + ": " + e.Message); }
+            Log("  Lo que Windows dice de los discos:"); foreach (var l in WinMac.Bar.Win.Shell.Hub.HubServicesFactory.DiskDiagnostics()) Log("    " + l);
         }
         finally { owner.Dispose(); }
     }

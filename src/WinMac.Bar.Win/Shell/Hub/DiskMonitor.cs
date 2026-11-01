@@ -48,8 +48,32 @@ internal sealed class DiskMonitor : IDiskMonitor, IDisposable
         }
         catch (Exception e) { reason = "no se pudo leer la información de discos físicos (" + e.GetType().Name + ": " + Short(e.Message) + ")"; }
 
+        // Volúmenes sin partición conocida por la vía moderna: se prueba la vía clásica (Win32_LogicalDiskToPartition → DiskIndex), que cubre más configuraciones de disco.
+        foreach (var v in volumes)
+        {
+            string letter = v.Letter.Trim().TrimEnd('\\', '/').TrimEnd(':').ToUpperInvariant(); if (letter.Length != 1 || partitions.Any(p => string.Equals(p.DriveLetter, letter, StringComparison.OrdinalIgnoreCase))) continue;
+            try
+            {
+                var row = Wmi.Query(@"root\cimv2", $"ASSOCIATORS OF {{Win32_LogicalDisk.DeviceID='{letter}:'}} WHERE AssocClass = Win32_LogicalDiskToPartition").FirstOrDefault();
+                if (row is not null && row.TryGetValue("DiskIndex", out var di) && di is not null) partitions.Add(new PartitionRec(Wmi.I32(di), letter));
+            }
+            catch (Exception) { /* sin esta vía el volumen queda sin disco físico, y se dice */ }
+        }
+
         var snap = DiskCatalog.Build(physical, partitions, volumes);
         return reason is null ? snap : snap with { Reason = reason };
+    }
+
+    /// <summary>Lo que Windows dice de los discos, tal cual (para diagnosticar una asociación que falla): discos, discos físicos, particiones con letra y la vía clásica de cada volumen.</summary>
+    public static IReadOnlyList<string> Diagnose()
+    {
+        var lines = new List<string>(); const string ns = @"root\Microsoft\Windows\Storage";
+        void Try(string title, Action a) { try { a(); } catch (Exception e) { lines.Add($"{title}: {e.GetType().Name}: {Short(e.Message)}"); } }
+        Try("MSFT_Disk", () => { foreach (var o in Wmi.Query(ns, "SELECT Number, FriendlyName, Size, BusType, PartitionStyle, IsOffline FROM MSFT_Disk")) lines.Add($"MSFT_Disk #{Wmi.Str(o["Number"])} «{Wmi.Str(o["FriendlyName"])}» {Wmi.U64(o["Size"]) >> 30} GB bus {Wmi.Str(o["BusType"])} estilo {Wmi.Str(o["PartitionStyle"])} sin conexión {Wmi.Str(o["IsOffline"])}"); });
+        Try("MSFT_PhysicalDisk", () => { foreach (var o in Wmi.Query(ns, "SELECT DeviceId, FriendlyName, Size, BusType, MediaType FROM MSFT_PhysicalDisk")) lines.Add($"MSFT_PhysicalDisk id «{Wmi.Str(o["DeviceId"])}» «{Wmi.Str(o["FriendlyName"])}» {Wmi.U64(o["Size"]) >> 30} GB bus {Wmi.Str(o["BusType"])} medio {Wmi.Str(o["MediaType"])}"); });
+        Try("MSFT_Partition", () => { foreach (var o in Wmi.Query(ns, "SELECT DiskNumber, PartitionNumber, DriveLetter, Size FROM MSFT_Partition")) lines.Add($"MSFT_Partition disco {Wmi.Str(o["DiskNumber"])} nº {Wmi.Str(o["PartitionNumber"])} letra «{(o["DriveLetter"] is char c && c != 0 ? c.ToString() : Wmi.Str(o["DriveLetter"]))}» {Wmi.U64(o["Size"]) >> 30} GB"); });
+        Try("Win32_LogicalDiskToPartition", () => { foreach (var d in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed)) { string l = d.Name.TrimEnd('\\'); foreach (var o in Wmi.Query(@"root\cimv2", $"ASSOCIATORS OF {{Win32_LogicalDisk.DeviceID='{l}'}} WHERE AssocClass = Win32_LogicalDiskToPartition")) lines.Add($"{l} → partición «{Wmi.Str(o["DeviceID"])}» disco {Wmi.Str(o["DiskIndex"])}"); } });
+        return lines;
     }
 
     private static string Short(string m) { m = m.Replace('\r', ' ').Replace('\n', ' ').Trim(); return m.Length > 90 ? m[..90] + "…" : m; }
