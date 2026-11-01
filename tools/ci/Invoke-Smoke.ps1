@@ -55,8 +55,8 @@ foreach ($theme in 'light', 'dark') { foreach ($bg in 'glass', 'transparent') {
 foreach ($tab in 'sound', 'system', 'network', 'disks') { Run "Panel multifunción $tab (datos de muestra, fuera de pantalla)" $bar @('--render-panel', 'hub', '--tab', $tab, '--out', "`"$OutDir\panel-hub-$tab.png`"", '--scale', '2') 90 }
 Run 'Panel del Tiempo (datos de muestra, fuera de pantalla)' $bar @('--render-panel', 'weather', '--out', "`"$OutDir\panel-weather.png`"", '--scale', '2') 90
 # Pantalla de 1080p a 100 % (≈1016 DIP libres bajo la barra) y a 150 % (≈672 DIP): el contenido se desplaza y las pestañas y el pie siguen visibles. Arriba y abajo del recorrido.
-Run 'Panel Discos en 1080p (arriba)' $bar @('--render-panel', 'hub', '--tab', 'disks', '--max-height', '1016', '--scroll', '0', '--out', "`"$OutDir\panel-hub-disks-1080p-arriba.png`"", '--scale', '1') 90
-Run 'Panel Discos en 1080p (abajo)' $bar @('--render-panel', 'hub', '--tab', 'disks', '--max-height', '1016', '--scroll', '9999', '--out', "`"$OutDir\panel-hub-disks-1080p-abajo.png`"", '--scale', '1') 90
+Run 'Panel Discos con altura limitada a 720 DIP, arriba (desplazable)' $bar @('--render-panel', 'hub', '--tab', 'disks', '--max-height', '720', '--scroll', '0', '--out', "`"$OutDir\panel-hub-disks-scroll-arriba.png`"", '--scale', '1') 90
+Run 'Panel Discos con altura limitada a 720 DIP, abajo (desplazable)' $bar @('--render-panel', 'hub', '--tab', 'disks', '--max-height', '720', '--scroll', '9999', '--out', "`"$OutDir\panel-hub-disks-scroll-abajo.png`"", '--scale', '1') 90
 Run 'Panel Sistema a 150 % de DPI en 1080p (centro)' $bar @('--render-panel', 'hub', '--tab', 'system', '--max-height', '672', '--scroll', '120', '--out', "`"$OutDir\panel-hub-system-150dpi-1080p.png`"", '--scale', '1.5') 90
 # Control de las franjas verticales: con --bands se dibujan las dos bandas del fondo sintético de contraste (las que antes aparecían); los PNG normales no las llevan.
 Run 'Panel Sistema con las franjas del fondo de prueba (control)' $bar @('--render-panel', 'hub', '--tab', 'system', '--bands', '--out', "`"$OutDir\panel-hub-system-franjas-control.png`"", '--scale', '2') 90

@@ -85,4 +85,12 @@ public class PanelScrollTests
         var m = Hub(HubTab.System); var cpu = m.Widgets.First(w => w.Id == "temp-cpu"); Assert.Equal("CPU", cpu.Sub);
         if (!cpu.Enabled) Assert.Contains(m.Widgets, w => w.Id == "temp-cpu-why");
     }
+
+    [Fact]
+    public void The_fixed_top_items_are_always_before_the_scroll_zone_and_inside_the_panel_so_the_painter_can_draw_them_unclipped()
+    {
+        var f = PanelLayout.Compute(Hub(HubTab.System), 480, 120); var v = f.View!;
+        Assert.True(v.From >= 3);   // logotipo, pestañas y título
+        for (int i = 0; i < v.From; i++) Assert.True(f.Items[i].Y >= 0 && f.Items[i].Y + f.Items[i].Height <= v.Top + 0.01);   // por encima de la zona de recorte: dibujarlos dentro de ella los haría desaparecer
+    }
 }

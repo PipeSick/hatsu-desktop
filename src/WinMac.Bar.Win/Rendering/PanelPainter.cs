@@ -44,10 +44,11 @@ public sealed partial class PanelPainter : IDisposable
         // tarjeta
         FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, 16, Dark ? new Color4(0.13f, 0.13f, 0.15f, 0.94f) : new Color4(0.96f, 0.96f, 0.97f, 0.95f));
         Brush(Fill(0.14f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(0.5, 0.5, f.Width - 0.5, f.Height - 0.5), RadiusX = 16, RadiusY = 16 }, _solid, 1f);
-        var v = f.View;
+        var v = f.View; int i = 0;
+        if (v is not null) for (; i < v.From; i++) DrawWidget(f.Items[i], i == hover);   // logotipo, pestañas y título: fijos, sin recorte
         if (v is not null) _ctx.PushAxisAlignedClip(R(0, v.Top, f.Width, v.Bottom), AntialiasMode.Aliased);   // lo desplazado no invade las pestañas ni el pie
         if (f.Card is { } cr) { FillRR(cr.X, cr.Y, cr.X + cr.W, cr.Y + cr.H, 14, Fill(0.075f)); Brush(Fill(0.12f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cr.X + 0.5, cr.Y + 0.5, cr.X + cr.W - 0.5, cr.Y + cr.H - 0.5), RadiusX = 14, RadiusY = 14 }, _solid, 1f); }   // la tarjeta del contenido, como en las pestañas de referencia
-        for (int i = 0; i < f.Items.Count; i++)
+        for (; i < f.Items.Count; i++)
         {
             if (v is not null && i == v.To) { _ctx.PopAxisAlignedClip(); v = null; }   // a partir de aquí, los elementos fijos del pie
             DrawWidget(f.Items[i], i == hover);
