@@ -16,8 +16,19 @@ internal sealed class SettingsWindow : IDisposable
     private const uint BM_GETCHECK = 0xF0, BM_SETCHECK = 0xF1, CB_ADDSTRING = 0x143, CB_GETCURSEL = 0x147, CB_SETCURSEL = 0x14E, LB_ADDSTRING = 0x180, LB_RESETCONTENT = 0x184, LB_SETCURSEL = 0x186, LB_GETCURSEL = 0x188;
     private const uint TBM_GETPOS = 0x400, TBM_SETPOS = 0x405, TBM_SETRANGE = 0x406, TB_ENDTRACK = 8;
     private const int ID_BAR = 200, ID_DOCK = 201, ID_NOTCH = 202, ID_AUTOSTART = 203, ID_POS = 210, ID_GLASS = 211, ID_PLAYER = 212, ID_PATH = 213, ID_LYRICS = 214, ID_PILL = 215, ID_MUSIC = 216, ID_AGENTS = 217, ID_POLL = 218,
-        ID_LIST = 220, ID_UP = 221, ID_DOWN = 222, ID_TOGGLE = 223, ID_LOCAL = 230, ID_CLOSE = 231, ID_GLASSVAL = 240, ID_NOTE = 241;
+        ID_BARBASE = 300, ID_BGCOMBO = 360, ID_THEMECOMBO = 361, ID_ICS = 362, ID_LIST = 220, ID_UP = 221, ID_DOWN = 222, ID_TOGGLE = 223, ID_LOCAL = 230, ID_CLOSE = 231, ID_GLASSVAL = 240, ID_NOTE = 241;
     private const string ClassName = "WinMacSettings";
+    /// <summary>Opciones booleanas de la Barra: (campo del parche, texto, lectura, escritura). Un solo lugar; la ventana las pinta y aplica por tabla.</summary>
+    private static readonly (string Field, string Text, Func<WinMac.Bar.BarConfig, bool> Get)[] BarToggles =
+    [
+        ("showNetwork", "Wi-Fi / red", b => b.ShowNetwork), ("showVolume", "Volumen", b => b.ShowVolume), ("showBattery", "Batería", b => b.ShowBattery), ("showBatteryPercent", "Porcentaje de batería", b => b.ShowBatteryPercent),
+        ("showBluetooth", "Bluetooth", b => b.ShowBluetooth), ("showControlCenter", "Control Center", b => b.ShowControlCenter), ("showSeconds", "Segundos en el reloj", b => b.ShowSeconds), ("showDate", "Fecha junto a la hora", b => b.ShowDate),
+        ("use24Hour", "Reloj de 24 horas", b => b.Use24Hour), ("reserveSpace", "Reservar el borde superior", b => b.ReserveSpace), ("confirmDestructive", "Confirmar reiniciar / apagar / cerrar sesión", b => b.ConfirmDestructive),
+        ("appMenus", "Menús de la app activa (experimental)", b => b.AppMenus),
+        ("ccWifi", "CC: Wi-Fi", b => b.CcWifi), ("ccBluetooth", "CC: Bluetooth", b => b.CcBluetooth), ("ccSound", "CC: Sonido", b => b.CcSound), ("ccBrightness", "CC: Brillo", b => b.CcBrightness),
+        ("ccPower", "CC: Energía", b => b.CcPower), ("ccAppearance", "CC: Apariencia", b => b.CcAppearance), ("ccDisplay", "CC: Pantallas", b => b.CcDisplay), ("ccNotifications", "CC: Notificaciones", b => b.CcNotifications),
+    ];
+    private static readonly string[] BackgroundNames = ["Vidrio", "Transparente"], BackgroundValues = ["Glass", "Transparent"], ThemeNames = ["Sistema", "Claro", "Oscuro"], ThemeValues = ["System", "Light", "Dark"];
     private static readonly string[] PositionNames = ["Centro", "Izquierda", "Derecha"], PlayerNames = ["Spotify", "Feishin", "Otro (indicar ruta)"];
     private static readonly Dictionary<string, string> SectionNames = new()
     {
@@ -54,7 +65,7 @@ internal sealed class SettingsWindow : IDisposable
         var cls = new Native.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<Native.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = inst, lpszClassName = ClassName, hbrBackground = (IntPtr)16 /* COLOR_BTNFACE+1 */, hCursor = Native.LoadCursorW(IntPtr.Zero, (IntPtr)32512) };
         Native.RegisterClassEx(ref cls);   // si ya estaba registrada (segunda apertura) falla sin consecuencias
         const uint style = 0x00CA0000;   // WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX: tamaño fijo
-        var r = new Native.RECT { Right = S(500), Bottom = S(690) }; Native.AdjustWindowRectEx(ref r, style, false, 0);
+        var r = new Native.RECT { Right = S(1010), Bottom = S(690) }; Native.AdjustWindowRectEx(ref r, style, false, 0);
         int sw = Native.GetSystemMetrics(0), sh = Native.GetSystemMetrics(1);
         _hwnd = Native.CreateWindowEx(0, ClassName, "Ajustes de WinMac", style, Math.Max(0, (sw - (r.Right - r.Left)) / 2), Math.Max(0, (sh - (r.Bottom - r.Top)) / 2), r.Right - r.Left, r.Bottom - r.Top, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
@@ -78,7 +89,18 @@ internal sealed class SettingsWindow : IDisposable
         Ctl(ID_UP, "BUTTON", "Subir", WS_TABSTOP, x + 280, y + 298, 160, 26); Ctl(ID_DOWN, "BUTTON", "Bajar", WS_TABSTOP, x + 280, y + 330, 160, 26); Ctl(ID_TOGGLE, "BUTTON", "Mostrar / ocultar", WS_TABSTOP, x + 280, y + 362, 160, 26);
         y += 405;
         Ctl(ID_LOCAL, "BUTTON", "Rutas y datos de la Isla…", WS_TABSTOP, x, y + 4, 220, 28); Ctl(ID_CLOSE, "BUTTON", "Cerrar", WS_TABSTOP, x + w - 110, y + 4, 110, 28);
+        BuildBar(500, 10, 490);
         Native.SendMessage(_c[ID_GLASS], TBM_SETRANGE, (IntPtr)1, (IntPtr)((100 << 16) | 0));
+    }
+
+    private void BuildBar(int x, int y, int w)
+    {
+        Ctl(0, "BUTTON", "Barra superior", BS_GROUPBOX, x, y, w, 500);
+        Ctl(0, "STATIC", "Fondo", SS_LEFT, x + 14, y + 26, 60, 20); Combo(ID_BGCOMBO, BackgroundNames, x + 80, y + 22, 140);
+        Ctl(0, "STATIC", "Tema", SS_LEFT, x + 250, y + 26, 50, 20); Combo(ID_THEMECOMBO, ThemeNames, x + 300, y + 22, 140);
+        for (int i = 0; i < 12; i++) Ctl(ID_BARBASE + i, "BUTTON", BarToggles[i].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14, y + 58 + i * 26, w - 28, 22);
+        Ctl(0, "STATIC", "Archivo .ics del calendario (opcional):", SS_LEFT, x + 14, y + 376, w - 28, 20); Ctl(ID_ICS, "EDIT", "", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 14, y + 398, w - 28, 22);
+        for (int i = 12; i < BarToggles.Length; i++) Ctl(ID_BARBASE + i, "BUTTON", BarToggles[i].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14 + ((i - 12) % 2) * 235, y + 430 + ((i - 12) / 2) * 22, 225, 20);
     }
 
     private void Combo(int id, string[] items, int x, int y, int w)
@@ -116,6 +138,11 @@ internal sealed class SettingsWindow : IDisposable
             SetIfNotFocused(ID_PATH, n.CustomPlayerPath ?? ""); SetIfNotFocused(ID_POLL, n.PollIntervalSeconds.ToString());
             SetCheck(ID_MUSIC, n.MusicEnabled); SetCheck(ID_AGENTS, n.AgentsEnabled); SetCheck(ID_LYRICS, n.LyricsEnabled); SetCheck(ID_PILL, n.LyricsInPill);
             Enable(ID_PILL, n.LyricsEnabled); Enable(ID_PATH, n.MusicPlayer == "Custom");
+            var bar = _cfg.Bar;
+            for (int i = 0; i < BarToggles.Length; i++) SetCheck(ID_BARBASE + i, BarToggles[i].Get(bar));
+            Native.SendMessage(_c[ID_BGCOMBO], CB_SETCURSEL, (IntPtr)Index(BackgroundValues, bar.Background.ToString()), IntPtr.Zero);
+            Native.SendMessage(_c[ID_THEMECOMBO], CB_SETCURSEL, (IntPtr)Index(ThemeValues, bar.Theme.ToString()), IntPtr.Zero);
+            SetIfNotFocused(ID_ICS, bar.CalendarIcsPath ?? "");
             int sel = (int)Native.SendMessage(_c[ID_LIST], LB_GETCURSEL, IntPtr.Zero, IntPtr.Zero);
             Native.SendMessage(_c[ID_LIST], LB_RESETCONTENT, IntPtr.Zero, IntPtr.Zero);
             foreach (var s in n.Sections) Native.SendMessage(_c[ID_LIST], LB_ADDSTRING, IntPtr.Zero, (s.Enabled ? "✓  " : "      ") + (SectionNames.TryGetValue(s.Id, out var nm) ? nm : s.Id));
@@ -148,11 +175,18 @@ internal sealed class SettingsWindow : IDisposable
         return Native.DefWindowProc(h, msg, w, l);
     }
 
+    private static System.Text.Json.JsonElement Patch(string field, object? value) => System.Text.Json.JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [field] = value });
+
     private void OnCommand(int id, int code)
     {
         const int BN_CLICKED = 0, CBN_SELCHANGE = 1, EN_KILLFOCUS = 0x200, LBN_DBLCLK = 2;
+        if (id >= ID_BARBASE && id < ID_BARBASE + BarToggles.Length && code == BN_CLICKED)
+        { var f = BarToggles[id - ID_BARBASE].Field; bool on = Checked(_c[id]); _cfg.ApplyBarPatch(Patch(f, on)); return; }
         switch (id)
         {
+            case ID_BGCOMBO when code == CBN_SELCHANGE: { int i = (int)Native.SendMessage(_c[id], CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero); if (i >= 0 && i < BackgroundValues.Length) _cfg.ApplyBarPatch(Patch("background", BackgroundValues[i])); break; }
+            case ID_THEMECOMBO when code == CBN_SELCHANGE: { int i = (int)Native.SendMessage(_c[id], CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero); if (i >= 0 && i < ThemeValues.Length) _cfg.ApplyBarPatch(Patch("theme", ThemeValues[i])); break; }
+            case ID_ICS when code == EN_KILLFOCUS: { var t = TextOf(id).Trim(); _cfg.ApplyBarPatch(Patch("calendarIcsPath", t.Length == 0 ? null : t)); break; }
             case ID_BAR or ID_DOCK or ID_NOTCH when code == BN_CLICKED:
                 _cfg.SetModuleEnabled(id == ID_BAR ? "bar" : id == ID_DOCK ? "dock" : "notch", Checked(_c[id])); break;
             case ID_AUTOSTART when code == BN_CLICKED:
