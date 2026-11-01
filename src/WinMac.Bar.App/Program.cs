@@ -118,7 +118,7 @@ internal static class Program
             {
                 var d = svc.Disks.ReadCatalog();
                 Log($"  Discos físicos: {d.Disks.Count} · volúmenes: {d.Volumes.Count}" + (d.Reason is null ? "" : " · motivo: " + d.Reason));
-                foreach (var v in d.Volumes) { var disk = d.DiskOf(v); Log($"    {v.Letter} «{v.Label}» → " + (disk is null ? "SIN disco físico asociado" : $"disco {disk.Number} {disk.Model} ({disk.Media}) estado {disk.Smart.Health ?? "n/d"}, temp {(disk.Smart.TemperatureC is { } t ? t + " °C" : "n/d")}, desgaste {(disk.Smart.WearPercent is { } w ? w + " %" : "n/d")}, horas {disk.Smart.PowerOnHours?.ToString() ?? "n/d"}" + (disk.Smart.Reason is null ? "" : " [" + disk.Smart.Reason + "]"))); }
+                foreach (var v in d.Volumes) { var disk = d.DiskOf(v); Log($"    {v.Letter} «{v.Label}» → " + (disk is null ? "SIN disco físico asociado" : $"disco {disk.Number} {disk.Model} ({disk.Media}) estado {disk.Smart.Health ?? "n/d"}, temp {(disk.Smart.TemperatureC is { } t ? t.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + " °C" : "n/d")}, desgaste {(disk.Smart.WearPercent is { } w ? w + " %" : "n/d")}, horas {disk.Smart.PowerOnHours?.ToString() ?? "n/d"}" + (disk.Smart.Reason is null ? "" : " [" + disk.Smart.Reason + "]"))); }
             }
             catch (Exception e) { Log("  [FALLO] discos: " + e.GetType().Name + ": " + e.Message); }
             Log("  Lo que Windows dice de los discos:"); foreach (var l in WinMac.Bar.Win.Shell.Hub.HubServicesFactory.DiskDiagnostics()) Log("    " + l);
