@@ -35,15 +35,31 @@ public sealed partial class PanelPainter : IDisposable
     private static RawRectF R(double l, double t, double r, double b) => new((float)l, (float)t, (float)r, (float)b);
     private void FillRR(double l, double t, double r, double b, float rad, Color4 c) { Brush(c); _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = R(l, t, r, b), RadiusX = rad, RadiusY = rad }, _solid); }
 
+    private PanelKind _kind;
+
     public void Paint(PanelFrame f, PanelModel m, int hover, bool clear = true)
     {
-        _ctx.BeginDraw();
+        _kind = m.Kind; _ctx.BeginDraw();
         if (clear) _ctx.Clear(new Color4(0, 0, 0, 0));
         // tarjeta
         FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, 16, Dark ? new Color4(0.13f, 0.13f, 0.15f, 0.94f) : new Color4(0.96f, 0.96f, 0.97f, 0.95f));
         Brush(Fill(0.14f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(0.5, 0.5, f.Width - 0.5, f.Height - 0.5), RadiusX = 16, RadiusY = 16 }, _solid, 1f);
+        var v = f.View;
+        if (v is not null) _ctx.PushAxisAlignedClip(R(0, v.Top, f.Width, v.Bottom), AntialiasMode.Aliased);   // lo desplazado no invade las pestañas ni el pie
         if (f.Card is { } cr) { FillRR(cr.X, cr.Y, cr.X + cr.W, cr.Y + cr.H, 14, Fill(0.075f)); Brush(Fill(0.12f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cr.X + 0.5, cr.Y + 0.5, cr.X + cr.W - 0.5, cr.Y + cr.H - 0.5), RadiusX = 14, RadiusY = 14 }, _solid, 1f); }   // la tarjeta del contenido, como en las pestañas de referencia
-        for (int i = 0; i < f.Items.Count; i++) DrawWidget(f.Items[i], i == hover);
+        for (int i = 0; i < f.Items.Count; i++)
+        {
+            if (v is not null && i == v.To) { _ctx.PopAxisAlignedClip(); v = null; }   // a partir de aquí, los elementos fijos del pie
+            DrawWidget(f.Items[i], i == hover);
+        }
+
+        if (v is not null) _ctx.PopAxisAlignedClip();
+        if (f.View is { MaxOffset: > 0.5 } sv)   // indicador de desplazamiento
+        {
+            double tr0 = sv.Top + 8, tr1 = sv.Bottom - 8, th = Math.Max(24, (tr1 - tr0) * (sv.Bottom - sv.Top) / sv.ContentHeight), ty = tr0 + (tr1 - tr0 - th) * (sv.Offset / sv.MaxOffset);
+            FillRR(f.Width - 8, ty, f.Width - 5, ty + th, 1.5f, Fill(0.38f));
+        }
+
         _ctx.EndDraw();
     }
 
@@ -78,8 +94,24 @@ public sealed partial class PanelPainter : IDisposable
             case WidgetKind.Tile:
             {
                 var bg = w.On ? Accent : Fill(hover && w.Enabled ? 0.17f : 0.11f);
-                FillRR(x, y, x + wd, y + h, 12, w.Enabled ? bg : Fill(0.07f));
                 var fg = w.On ? new Color4(1, 1, 1, 1) : Fg(dim);
+                if (_kind == PanelKind.Hub && w.Id.StartsWith("temp-", StringComparison.Ordinal))   // temperatura: etiqueta con icono arriba y el valor debajo, centrados (como la referencia)
+                {
+                    EnsureFonts(); FillRR(x, y, x + wd, y + h, 11, Fill(0.07f));
+                    double lw = MeasureText(w.Sub ?? "", _small) + 20, lx = x + wd / 2 - lw / 2;
+                    Glyph(w.Glyph ?? "", lx + 7, y + 11, 5.5f, Fg(0.6f)); Text(w.Sub ?? "", _small, lx + 20, y + 3, lw, 17, Fg(0.62f));
+                    Text(w.Text, w.Enabled ? _big : _boldSmall, x, y + 19, wd, 24, w.Enabled ? fg : Fg(0.55f), center: true); break;
+                }
+
+                if (h < 60)   // fila compacta (discos): icono a la izquierda, nombre y detalle
+                {
+                    FillRR(x, y, x + wd, y + h, 10, w.Enabled ? bg : Fill(0.07f));
+                    Glyph(w.Glyph ?? "", x + 22, y + h / 2, 7.5f, fg);
+                    Text(w.Text, _bodyBold, x + 40, y + h / 2 - 19, wd - 46, 20, fg);
+                    Text(w.Sub ?? "", _small, x + 40, y + h / 2 - 1, wd - 46, 18, w.On ? new Color4(1, 1, 1, 0.85f) : Fg(0.6f * dim)); break;
+                }
+
+                FillRR(x, y, x + wd, y + h, 12, w.Enabled ? bg : Fill(0.07f));
                 FillCircle(x + 26, y + 26, 15, w.On ? new Color4(1, 1, 1, 0.22f) : Fill(0.12f * dim));
                 Glyph(w.Glyph ?? "", x + 26, y + 26, 8.5f, fg, w.Bars);
                 Text(w.Text, _bodyBold, x + 50, y + 8, wd - 56, 22, fg);
@@ -89,7 +121,7 @@ public sealed partial class PanelPainter : IDisposable
             }
             case WidgetKind.Slider:
             {
-                var (l, r) = PanelLayout.SliderTrack(f); double cy = y + 23, pct = Math.Clamp(w.Value, 0, 100) / 100;
+                var (l, r) = PanelLayout.SliderTrack(f); double cy = w.Text.Length == 0 && h < 40 ? y + h / 2 : y + 23, pct = Math.Clamp(w.Value, 0, 100) / 100;
                 Text(w.Text, _small, x + 4, y - 1, wd, 16, Fg(0.55f * dim), vcenter: false);
                 FillRR(l, cy - 4, r, cy + 4, 4, Fill(0.18f * dim));
                 if (w.Enabled) FillRR(l, cy - 4, l + (r - l) * pct, cy + 4, 4, Dark ? new Color4(1, 1, 1, 0.95f) : new Color4(0.25f, 0.25f, 0.28f, 1f));
@@ -122,7 +154,12 @@ public sealed partial class PanelPainter : IDisposable
             {
                 FillRR(x, y, x + wd, y + h, 8, Fill(hover && w.Enabled ? 0.17f : 0.10f));
                 var bc = w.Enabled ? Fg() : Fg(0.45f);
-                if (w.Glyph is not null) { double tw = MeasureText(w.Text, _body), gx = x + wd / 2 - tw / 2 - 12; Glyph(w.Glyph, gx, y + h / 2, 7, bc); Text(w.Text, _body, gx + 14, y, tw + 8, h, bc); }
+                if (w.Glyph is not null)
+                {
+                    double tw = MeasureText(w.Text, _body), room = wd - 40;   // glifo + texto no pueden salirse del botón: si no caben, el texto se recorta con «…»
+                    if (tw > room) { Glyph(w.Glyph, x + 16, y + h / 2, 7, bc); Text(w.Text, _body, x + 32, y, wd - 38, h, bc); }
+                    else { double gx = x + wd / 2 - tw / 2 - 12; Glyph(w.Glyph, gx, y + h / 2, 7, bc); Text(w.Text, _body, gx + 14, y, tw + 8, h, bc); }
+                }
                 else Text(w.Text, _body, x, y, wd, h, bc, center: true);
                 break;
             }

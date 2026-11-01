@@ -6,7 +6,7 @@
 //   WinMac.Bar.App --quit                   pide a la barra en ejecución que se cierre normalmente (libera el espacio reservado)
 //   WinMac.Bar.App --status                 imprime lo que leen los proveedores del sistema (batería, volumen, red) — informativo
 //   WinMac.Bar.App --render-png f.png [--theme light|dark] [--bg glass|transparent] [--scale 2] [--hover N]   renderiza FUERA de pantalla (para CI)
-//   WinMac.Bar.App --render-panel hub|weather --out f.png [--tab sound|system|network|disks] [--theme light|dark] [--scale 2]   panel con DATOS DE MUESTRA, fuera de pantalla (para comparar con las referencias)
+//   WinMac.Bar.App --render-panel hub|weather --out f.png [--tab sound|system|network|disks] [--theme light|dark] [--scale 2] [--max-height DIP] [--scroll DIP] [--bands]   panel con DATOS DE MUESTRA, fuera de pantalla (para comparar con las referencias)
 //   WinMac.Bar.App --selftest               comprobaciones no interactivas (NO registra AppBar); código 0 si todo funciona
 //   WinMac.Bar.App --selftest-appbar        SOLO CI: registra y libera un AppBar durante unos fotogramas
 //   WinMac.Bar.App --selftest-system        mide qué controles del sistema permite ESTE equipo (audio, Wi-Fi, Bluetooth, brillo, energía, apariencia) sin cambiar nada
@@ -51,7 +51,8 @@ internal static class Program
             {
                 var theme = Arg(args, "--theme")?.ToLowerInvariant() == "light" ? BarTheme.Light : BarTheme.Dark; double scale = double.TryParse(Arg(args, "--scale"), System.Globalization.CultureInfo.InvariantCulture, out var sc2) ? sc2 : 2.0;
                 if (!Enum.TryParse<WinMac.Bar.Hub.HubTab>(Arg(args, "--tab"), true, out var tab)) tab = WinMac.Bar.Hub.HubTab.Sound;
-                Log("PNG: " + PanelOffscreen.Render(Arg(args, "--out") ?? "panel.png", kind.ToLowerInvariant(), tab, theme, scale)); return 0;
+                double maxH = double.TryParse(Arg(args, "--max-height"), System.Globalization.CultureInfo.InvariantCulture, out var mh) ? mh : double.PositiveInfinity, scrollTo = double.TryParse(Arg(args, "--scroll"), System.Globalization.CultureInfo.InvariantCulture, out var sy) ? sy : 0;
+                Log("PNG: " + PanelOffscreen.Render(Arg(args, "--out") ?? "panel.png", kind.ToLowerInvariant(), tab, theme, scale, maxH, scrollTo, bands: args.Contains("--bands"))); return 0;
             }
             if (args.Contains("--status")) return Status();
             if (args.Contains("--quit")) return Quit();

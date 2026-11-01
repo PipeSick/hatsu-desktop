@@ -148,7 +148,7 @@ public class HubPanelModelTests
     public void Sensors_that_cannot_be_read_say_so_with_the_reason_and_draw_no_invented_chart()
     {
         var r = new HubRig(); r.Sys.Next = FakeSys.Sample(40, null, null, null); r.LoadAll(HubTab.System); var m = r.Hub();
-        Assert.False(W(m, "temp-cpu").Enabled); Assert.Equal("No disponible", W(m, "temp-cpu").Text); Assert.Contains("sin sensor", W(m, "temp-cpu").Sub); Assert.Contains("sin sensor", W(m, "temp-gpu").Sub);
+        Assert.False(W(m, "temp-cpu").Enabled); Assert.Equal("No disponible", W(m, "temp-cpu").Text); Assert.Equal("CPU", W(m, "temp-cpu").Sub); Assert.Equal("GPU", W(m, "temp-gpu").Sub); Assert.Contains("sin sensor", W(m, "temp-cpu-why").Text); Assert.Contains("sin sensor", W(m, "temp-gpu-why").Text);   // el motivo va en una nota completa, no truncado dentro del mosaico
         Assert.Equal("No disponible", W(m, "use-gpu").Sub); Assert.False(Has(m, "chart-gpu")); Assert.True(Has(m, "chart-cpu")); Assert.Contains("sin GPU", W(m, "use-gpu-why").Text);
     }
 

@@ -46,7 +46,10 @@ public static class PanelOffscreen
     private sealed class NoIcons : IAppIcons { public byte[]? GetBgra(string exePath, int size) => null; }
 
     /// <param name="kind">«hub» o «weather».</param>
-    public static string Render(string pngPath, string kind, HubTab tab, BarTheme theme, double scale)
+    /// <param name="maxHeight">Altura máxima en DIP (como la de una pantalla de 1080p): si el contenido no cabe, se desplaza el centro. Infinito = sin límite.</param>
+    /// <param name="scroll">Desplazamiento del contenido en DIP (solo con maxHeight).</param>
+    /// <param name="bands">Dibuja las dos franjas de contraste del fondo sintético (para demostrar que las franjas son del fondo de prueba, no del panel).</param>
+    public static string Render(string pngPath, string kind, HubTab tab, BarTheme theme, double scale, double maxHeight = double.PositiveInfinity, double scroll = 0, bool bands = false)
     {
         DateTime now = new(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc);
         var services = new HubServices(new SampleSys(), new SampleNet(), new SampleDisks(), new SampleWeather(), null, new NoIcons(), null);
@@ -58,14 +61,14 @@ public static class PanelOffscreen
             new AudioSessionsState(true, [new("pid:1", 1, "Spotify", null, 100, false, false, true), new("pid:2", 2, "Discord", null, 100, false, false, true), new("pid:3", 3, "Google Chrome", null, 100, false, false, true), new("pid:4", 4, "Sonidos del sistema", null, 100, false, true, false)]));
         var cfg = new BarConfig { Use24Hour = false };
         var ctx = PanelContext.Initial(cfg, now) with { Sys = snapshot, Tab = tab, Hub = new HubData(mon, new SpeedTestState(SpeedTestStatus.Idle, null, null), weather.Current(), null, false) };
-        var model = kind == "weather" ? PanelBuilder.WeatherPanel(ctx) : PanelBuilder.HubPanel(ctx); var frame = PanelLayout.Compute(model);
+        var model = kind == "weather" ? PanelBuilder.WeatherPanel(ctx) : PanelBuilder.HubPanel(ctx); var frame = PanelLayout.Compute(model, maxHeight, scroll);
         using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new PanelPainter(dev) { Theme = theme };
         int pw = (int)Math.Ceiling(frame.Width * scale), ph = (int)Math.Ceiling(frame.Height * scale); var dockTheme = theme == BarTheme.Dark ? DockTheme.Dark : DockTheme.Light;
-        using var under = SyntheticBackdrop.Create(dev, frame.Width, frame.Height, scale, dockTheme); using var target = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale); var c = dev.Context; c.Target = target;
+        using var under = SyntheticBackdrop.Create(dev, frame.Width, frame.Height, scale, dockTheme, bands); using var target = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale); var c = dev.Context; c.Target = target;
         c.BeginDraw(); c.DrawBitmap(under, (Vortice.RawRectF?)new Vortice.RawRectF(0, 0, (float)frame.Width, (float)frame.Height), 1f, BitmapInterpolationMode.Linear, (Vortice.RawRectF?)null); c.EndDraw();
         painter.Paint(frame, model, -1, clear: false);
         var rgba = BarOffscreen.Readback(dev, target, pw, ph, scale); Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(pngPath))!);
         File.WriteAllBytes(pngPath, PngWriter.EncodeRgba(rgba, pw, ph)); c.Target = null;
-        return $"{pw}x{ph}px, {dev.Description}, {kind} {(kind == "hub" ? tab.ToString() : "")}, tema {theme}, datos de muestra";
+        return $"{pw}x{ph}px, {dev.Description}, {kind} {(kind == "hub" ? tab.ToString() : "")}, tema {theme}, datos de muestra" + (frame.View is { } v ? $", desplazable (contenido {v.ContentHeight:0} DIP, visible {v.Bottom - v.Top:0}, desplazado {v.Offset:0}/{v.MaxOffset:0})" : "");
     }
 }

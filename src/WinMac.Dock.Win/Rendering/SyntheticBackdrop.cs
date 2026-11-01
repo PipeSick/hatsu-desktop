@@ -12,7 +12,7 @@ public static class SyntheticBackdrop
     /// <param name="wDip">Ancho de la ventana en DIP.</param>
     /// <param name="hDip">Alto de la ventana en DIP.</param>
     /// <param name="scale">Escala (DPI/96). El bitmap tiene wDip*scale píxeles y se dibuja en DIP con el DPI actual del contexto.</param>
-    public static ID2D1Bitmap1 Create(D2DDevice dev, double wDip, double hDip, double scale, DockTheme theme = DockTheme.Light)
+    public static ID2D1Bitmap1 Create(D2DDevice dev, double wDip, double hDip, double scale, DockTheme theme = DockTheme.Light, bool bands = true)
     {
         bool dark = theme == DockTheme.Dark; float pw = (float)wDip, ph = (float)hDip;  // coordenadas en DIP
         var ctx = dev.Context; var prev = ctx.Target;
@@ -31,8 +31,8 @@ public static class SyntheticBackdrop
                 float r = 20 + (float)rnd.NextDouble() * 90;
                 ctx.FillEllipse(new Ellipse(new Vector2((float)(rnd.NextDouble() * pw), (float)(rnd.NextDouble() * ph)), r, r), solid);
             }
-            solid.Color = new Color4(1, 1, 1, dark ? 0.55f : 0.9f); ctx.FillRectangle(new RawRectF(pw * 0.62f, 0, pw * 0.74f, ph), solid); // franja clara (comprueba contraste del borde)
-            solid.Color = new Color4(0, 0, 0, 0.7f); ctx.FillRectangle(new RawRectF(pw * 0.10f, 0, pw * 0.20f, ph), solid);  // franja oscura
+            if (bands) { solid.Color = new Color4(1, 1, 1, dark ? 0.55f : 0.9f); ctx.FillRectangle(new RawRectF(pw * 0.62f, 0, pw * 0.74f, ph), solid); // franja clara (comprueba contraste del borde)
+            solid.Color = new Color4(0, 0, 0, 0.7f); ctx.FillRectangle(new RawRectF(pw * 0.10f, 0, pw * 0.20f, ph), solid); }  // franja oscura
             ctx.EndDraw();
             return bmp;
         }

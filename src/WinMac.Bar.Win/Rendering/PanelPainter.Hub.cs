@@ -12,7 +12,7 @@ namespace WinMac.Bar.Win.Rendering;
 /// </summary>
 public sealed partial class PanelPainter
 {
-    private IDWriteTextFormat _big = null!, _huge = null!, _cap = null!, _boldSmall = null!, _boldTiny = null!; private bool _fontsReady; private ID2D1StrokeStyle? _dash;
+    private IDWriteTextFormat _big = null!, _huge = null!, _cap = null!, _boldSmall = null!, _boldTiny = null!, _stat = null!; private bool _fontsReady; private ID2D1StrokeStyle? _dash;
     private readonly Dictionary<string, ID2D1Bitmap?> _icons = [];
 
     /// <summary>Entrega los píxeles BGRA premultiplicados 32×32 del icono de un ejecutable (o null). Se consulta una vez por ejecutable y se guarda como bitmap.</summary>
@@ -22,12 +22,12 @@ public sealed partial class PanelPainter
     {
         if (_fontsReady) return; _fontsReady = true;
         _big = _dw.CreateTextFormat("Segoe UI Semibold", 20); _huge = _dw.CreateTextFormat("Segoe UI Light", 44); _cap = _dw.CreateTextFormat("Segoe UI Semibold", 11.5f);
-        _boldSmall = _dw.CreateTextFormat("Segoe UI Semibold", 12); _boldTiny = _dw.CreateTextFormat("Segoe UI Semibold", 10.5f);
+        _boldSmall = _dw.CreateTextFormat("Segoe UI Semibold", 12); _boldTiny = _dw.CreateTextFormat("Segoe UI Semibold", 10.5f); _stat = _dw.CreateTextFormat("Segoe UI Semibold", 17);
     }
 
     private void DisposeHub()
     {
-        if (_fontsReady) { _big.Dispose(); _huge.Dispose(); _cap.Dispose(); _boldSmall.Dispose(); _boldTiny.Dispose(); } _dash?.Dispose();
+        if (_fontsReady) { _big.Dispose(); _huge.Dispose(); _cap.Dispose(); _boldSmall.Dispose(); _boldTiny.Dispose(); _stat.Dispose(); } _dash?.Dispose();
         foreach (var b in _icons.Values) b?.Dispose(); _icons.Clear();
     }
 
@@ -75,7 +75,8 @@ public sealed partial class PanelPainter
             case WidgetKind.Tabs: DrawTabs(f); break;
             case WidgetKind.TabHeader:
                 TextAlign(w.Text, _cap, x + 4, y, wd - 30, h, Fg(0.62f)); Glyph("sliders", x + wd - 14, y + h / 2, 7.5f, Fg(hover ? 0.95f : 0.6f)); break;
-            case WidgetKind.Caption: TextAlign(w.Text, _small, x + 2, y, wd - 4, h, Fg(0.48f)); break;
+            case WidgetKind.Caption: TextAlign(w.Text, _boldSmall, x + 2, y, wd - 4, h, Fg(0.6f)); break;
+            case WidgetKind.Separator: if (_kind is PanelKind.Hub or PanelKind.Weather) Line(x + 2, y + h / 2, x + wd - 2, y + h / 2, Fill(0.13f), 1f); break;   // línea fina entre secciones (solo en estos paneles)
             case WidgetKind.Chart: DrawChart(f); break;
             case WidgetKind.MeterRow: DrawMeterRow(f); break;
             case WidgetKind.KeyValue:
@@ -107,7 +108,7 @@ public sealed partial class PanelPainter
         for (int i = 0; i < td.Tabs.Count; i++)
         {
             double cx = x + 6 + cw * i, mid = cx + cw / 2; bool sel = i == td.Selected;
-            if (sel) FillRR(cx + 3, y + 5, cx + cw - 3, y + h - 5, 11, new Color4(Accent.R, Accent.G, Accent.B, 0.30f));
+            if (sel) { double hw = Math.Min(cw - 6, 54) / 2; FillRR(mid - hw, y + 4, mid + hw, y + h - 4, 11, new Color4(Accent.R, Accent.G, Accent.B, 0.30f)); }
             Glyph(td.Tabs[i].Glyph, mid, y + h / 2, 9.5f, sel ? Accent : Fg(0.68f));
         }
     }
@@ -141,26 +142,27 @@ public sealed partial class PanelPainter
         var w = f.W; double x = f.X, y = f.Y, wd = f.Width, h = f.Height; var col = Named((w.Data as MeterData)?.Color); double frac = Math.Clamp(w.Value, 0, 1);
         if (string.IsNullOrEmpty(w.Text))   // sin etiqueta: barra a todo el ancho y el texto debajo (uso del disco)
         {
-            FillRR(x + 2, y + 2, x + wd - 2, y + 13, 5.5f, Fill(0.16f)); if (frac > 0) FillRR(x + 2, y + 2, x + 2 + (wd - 4) * frac, y + 13, 5.5f, col);
-            TextAlign(w.Sub ?? "", _small, x + 2, y + 13, wd, h - 13, Fg(0.78f)); return;
+            FillRR(x + 2, y + 3, x + wd - 2, y + 10, 3.5f, Fill(0.16f)); if (frac > 0) FillRR(x + 2, y + 3, x + 2 + (wd - 4) * frac, y + 10, 3.5f, col);
+            TextAlign(w.Sub ?? "", _small, x + 2, y + 10, wd, h - 10, Fg(0.78f)); return;
         }
 
         Glyph("chevron", x + 7, y + h / 2, 4.5f, Fg(0.55f)); TextAlign(w.Text, _body, x + 18, y, 84, h, Fg(0.85f));
-        double bx = x + 96, bw = Math.Max(20, wd - 96 - 52); FillRR(bx, y + h / 2 - 5, bx + bw, y + h / 2 + 5, 5, Fill(0.16f)); if (frac > 0) FillRR(bx, y + h / 2 - 5, bx + Math.Max(10, bw * frac), y + h / 2 + 5, 5, col);
+        double bx = x + 96, bw = Math.Max(20, wd - 96 - 52); FillRR(bx, y + h / 2 - 3, bx + bw, y + h / 2 + 3, 3, Fill(0.16f)); if (frac > 0) FillRR(bx, y + h / 2 - 3, bx + Math.Max(8, bw * frac), y + h / 2 + 3, 3, col);
         TextAlign(w.Sub ?? "", _bodyBold, x + wd - 48, y, 46, h, Fg(), TextAlignment.Trailing);
     }
 
     private void DrawStats(WidgetFrame f)
     {
-        if (f.W.Data is not StatsData sd) return; double x = f.X, y = f.Y, wd = f.Width, h = f.Height, half = wd / 2;
-        void Col(StatItem it, double cx0)
+        if (f.W.Data is not StatsData sd) return; double x = f.X, y = f.Y, wd = f.Width, h = f.Height;
+        double pillW = sd.Pill is null ? 0 : 42, split = x + wd * 0.46;   // la unidad (arriba a la derecha) NUNCA pisa la cifra de subida: la columna derecha termina donde empieza el botón
+        void Col(StatItem it, double cx0, double cx1)
         {
-            var col = Named(it.Color); Glyph(it.Arrow == "down" ? "arrow-down" : "arrow-up", cx0 + 8, y + 18, 6.5f, col);
-            TextAlign(it.Value, _big, cx0 + 24, y + 2, half - 34, 30, Fg()); TextAlign(it.Label, _body, cx0 + 24, y + 31, half - 34, 22, Fg(0.62f), vcenter: false);
+            var col = Named(it.Color); Glyph(it.Arrow == "down" ? "arrow-down" : "arrow-up", cx0 + 8, y + 15, 6f, col);
+            TextAlign(it.Value, _stat, cx0 + 22, y + 3, cx1 - cx0 - 22, 24, Fg()); TextAlign(it.Label, _body, cx0 + 22, y + 28, cx1 - cx0 - 22, 20, Fg(0.62f), vcenter: false);
         }
 
-        Col(sd.Left, x + 2); Line(x + half - 4, y + 8, x + half - 4, y + h - 8, Fill(0.18f), 1f); Col(sd.Right, x + half + 6);
-        if (sd.Pill is not null) { FillRR(x + wd - 54, y + 4, x + wd, y + 30, 8, Fill(0.13f)); TextAlign(sd.Pill, _boldSmall, x + wd - 54, y + 4, 54, 26, Fg(0.9f), TextAlignment.Center); }
+        Col(sd.Left, x + 2, split - 8); Line(split, y + 6, split, y + h - 6, Fill(0.18f), 1f); Col(sd.Right, split + 8, x + wd - (pillW > 0 ? pillW + 6 : 0));
+        if (sd.Pill is not null) { FillRR(x + wd - pillW, y + 3, x + wd, y + 27, 8, Fill(0.13f)); TextAlign(sd.Pill, _boldSmall, x + wd - pillW, y + 3, pillW, 24, Fg(0.9f), TextAlignment.Center); }
     }
 
     private void DrawSelect(WidgetFrame f, bool hover)
@@ -175,14 +177,14 @@ public sealed partial class PanelPainter
     {
         if (f.W.Data is not AppRowData ad) return; var w = f.W; double x = f.X, y = f.Y, wd = f.Width, h = f.Height; float dim = ad.Active ? 1f : 0.62f;
         var bmp = IconFor(ad.ExePath);
-        if (bmp is not null) _ctx.DrawBitmap(bmp, (RawRectF?)R(x + 6, y + 6, x + 38, y + 38), dim, BitmapInterpolationMode.Linear, (RawRectF?)null);
-        else { FillRR(x + 6, y + 6, x + 38, y + 38, 9, Fill(0.16f)); TextAlign(string.IsNullOrEmpty(ad.Name) ? "?" : ad.Name[..1].ToUpperInvariant(), _big, x + 6, y + 6, 32, 32, Fg(0.8f), TextAlignment.Center); }   // sin icono: una inicial, nunca un icono falso
-        TextAlign(ad.Name, _bodyBold, x + 46, y + 3, wd - 46 - 34, 22, Fg(dim));
+        if (bmp is not null) _ctx.DrawBitmap(bmp, (RawRectF?)R(x + 6, y + 4, x + 36, y + 34), dim, BitmapInterpolationMode.Linear, (RawRectF?)null);
+        else { FillRR(x + 6, y + 4, x + 36, y + 34, 8, Fill(0.16f)); TextAlign(string.IsNullOrEmpty(ad.Name) ? "?" : ad.Name[..1].ToUpperInvariant(), _big, x + 6, y + 4, 30, 30, Fg(0.8f), TextAlignment.Center); }   // sin icono: una inicial, nunca un icono falso
+        TextAlign(ad.Name, _bodyBold, x + 46, y + 2, wd - 46 - 34, 20, Fg(dim));
         var (l, r) = PanelLayout.AppSliderTrack(f); double cy = y + h - 14, pct = Math.Clamp(ad.Volume, 0, 100) / 100.0;
         FillRR(l, cy - 4, r, cy + 4, 4, Fill(0.18f * dim)); if (!ad.Muted) FillRR(l, cy - 4, l + (r - l) * pct, cy + 4, 4, Dark ? new Color4(0.55f, 0.65f, 1f, 0.9f * dim) : new Color4(0.25f, 0.4f, 0.9f, dim));
         double tx = l + (r - l) * pct; FillCircle(tx, cy, 8, new Color4(0.62f, 0.68f, 0.82f, 1f * dim)); Brush(new Color4(0, 0, 0, 0.22f)); _ctx.DrawEllipse(new Ellipse(new Vector2((float)tx, (float)cy), 8, 8), _solid, 0.8f);
-        TextAlign(ad.Muted ? "—" : $"{ad.Volume}%", _body, r + 12, cy - 10, 40, 20, Fg(0.65f * dim), TextAlignment.Trailing);
-        Glyph(ad.Muted ? "sound-muted" : "sound", x + wd - 16, cy, 7.5f, Fg(0.65f * dim));
+        TextAlign(ad.Muted ? "—" : $"{ad.Volume}%", _body, r + 8, cy - 10, 36, 20, Fg(0.65f * dim), TextAlignment.Trailing);
+        Glyph(ad.Muted ? "sound-muted" : "sound", x + wd - 17, cy, 6.5f, Fg(0.65f * dim));
     }
 
     // ───────────────────────────── Tiempo
@@ -197,15 +199,16 @@ public sealed partial class PanelPainter
 
     private void DrawStrip(WidgetFrame f)
     {
-        if (f.W.Data is not StripData sd || sd.Items.Count == 0) return; double x = f.X, y = f.Y, cw = f.Width / sd.Items.Count;
+        if (f.W.Data is not StripData sd || sd.Items.Count == 0) return; double x = f.X, y = f.Y;
+        double[] wts = sd.Items.Select(i => i.IsSun ? 1.7 : 1.0).ToArray(); double tot = wts.Sum(), cur = x;   // la columna del amanecer/atardecer es más ancha: su texto cabe en una sola línea, como la referencia
         for (int i = 0; i < sd.Items.Count; i++)
         {
-            var it = sd.Items[i]; double cx = x + cw * i + cw / 2;
-            TextAlign(it.Label, _boldSmall, x + cw * i, y + 1, cw, 18, Fg(), TextAlignment.Center);
+            var it = sd.Items[i]; double cw = f.Width * wts[i] / tot, cx = cur + cw / 2;
+            TextAlign(it.Label, _boldSmall, cur, y + 1, cw, 18, Fg(), TextAlignment.Center);
             WeatherIcon(it.IconKey, cx, y + 36, 11f);
-            if (it.PrecipProb is { } p) TextAlign($"{p}%", _tiny, x + cw * i, y + 49, cw, 14, new Color4(0.45f, 0.75f, 1f, 0.95f), TextAlignment.Center);
-            if (it.IsSun) TextAlign(it.Text, _boldTiny, x + cw * i + 1, y + 62, cw - 2, 30, Fg(), TextAlignment.Center, vcenter: false, wrap: true);
-            else TextAlign(it.Text, _boldSmall, x + cw * i, y + 66, cw, 20, Fg(), TextAlignment.Center);
+            if (it.PrecipProb is { } p) TextAlign($"{p}%", _tiny, cur, y + 50, cw, 14, new Color4(0.45f, 0.75f, 1f, 0.95f), TextAlignment.Center);
+            TextAlign(it.Text, _boldSmall, cur, y + 66, cw, 20, Fg(), TextAlignment.Center);
+            cur += cw;
         }
     }
 

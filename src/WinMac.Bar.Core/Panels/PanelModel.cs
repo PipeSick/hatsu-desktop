@@ -54,11 +54,15 @@ public sealed record MonthData(IReadOnlyList<CalendarDay> Days, IReadOnlyList<st
 
 /// <param name="Width">Ancho del panel en DIP (el Control Center y los demás, 320; el multifunción y el Tiempo, a la medida de sus referencias).</param>
 /// <param name="Card">Rango de elementos (índices, ambos incluidos) que van dentro de una tarjeta redondeada con margen interior, como el contenido de las pestañas de referencia.</param>
-public sealed record PanelModel(PanelKind Kind, string Title, IReadOnlyList<Widget> Widgets, double Width = PanelLayout.Width, (int From, int To)? Card = null);
+/// <param name="PinTop">Cuántos elementos del principio (logotipo, pestañas, título) quedan fijos arriba cuando el contenido se desplaza.</param>
+/// <param name="PinBottom">Cuántos elementos del final (Ajustes y Salir) quedan fijos abajo cuando el contenido se desplaza.</param>
+public sealed record PanelModel(PanelKind Kind, string Title, IReadOnlyList<Widget> Widgets, double Width = PanelLayout.Width, (int From, int To)? Card = null, int PinTop = 0, int PinBottom = 0);
 
 public sealed record WidgetFrame(Widget W, double X, double Y, double Width, double Height);
 public sealed record CardRect(double X, double Y, double W, double H);
-public sealed record PanelFrame(double Width, double Height, IReadOnlyList<WidgetFrame> Items, CardRect? Card = null);
+/// <summary>Zona desplazable de un panel más alto que la pantalla: los elementos [From, To) de <see cref="PanelFrame.Items"/> se ven solo entre Top y Bottom.</summary>
+public sealed record ScrollView(int From, int To, double Top, double Bottom, double ContentHeight, double Offset, double MaxOffset);
+public sealed record PanelFrame(double Width, double Height, IReadOnlyList<WidgetFrame> Items, CardRect? Card = null, ScrollView? View = null);
 
 /// <summary>Reparto del panel (DIP). Puro: se prueba sin Windows.</summary>
 public static class PanelLayout
@@ -67,38 +71,48 @@ public static class PanelLayout
 
     public static double HeightOf(Widget w) => w.Kind switch
     {
-        WidgetKind.Header => w.Glyph == "logo" ? 62 : 34,
+        WidgetKind.Header => w.Glyph == "logo" ? 56 : 34,
         WidgetKind.Nav => 34,
-        WidgetKind.Tile => 64,
-        WidgetKind.Slider => w.Enabled || string.IsNullOrEmpty(w.Reason) ? 46 : 64,
+        WidgetKind.Tile => w.Id.StartsWith("temp-", StringComparison.Ordinal) ? 46 : w.Id.StartsWith("disk:", StringComparison.Ordinal) ? 40 : 64,
+        WidgetKind.Slider => w.Enabled || string.IsNullOrEmpty(w.Reason) ? (w.Text.Length == 0 ? 30 : 46) : 64,
         WidgetKind.Row => string.IsNullOrEmpty(w.Sub) ? 36 : 46,
         WidgetKind.Info => string.IsNullOrEmpty(w.Sub) ? 30 : 42,
-        WidgetKind.Button => 36,
+        WidgetKind.Button => w.Id.StartsWith("hub:", StringComparison.Ordinal) ? 32 : 34,
         WidgetKind.Note => Math.Max(24, 14 + 14 * Math.Ceiling(w.Text.Length / 40.0)),
-        WidgetKind.Separator => 10,
+        WidgetKind.Separator => 8,
         WidgetKind.Month => MonthHeader + 6 * MonthRow,
-        WidgetKind.Tabs => 58,
-        WidgetKind.TabHeader => 34,
-        WidgetKind.Caption => 24,
-        WidgetKind.Chart => 64,
-        WidgetKind.MeterRow => 26,
-        WidgetKind.KeyValue => 26,
-        WidgetKind.Stats => 62,
-        WidgetKind.Select => 36,
-        WidgetKind.AppRow => 62,
+        WidgetKind.Tabs => 46,
+        WidgetKind.TabHeader => 28,
+        WidgetKind.Caption => 22,
+        WidgetKind.Chart => 50,
+        WidgetKind.MeterRow => 24,
+        WidgetKind.KeyValue => 22,
+        WidgetKind.Stats => 54,
+        WidgetKind.Select => 32,
+        WidgetKind.AppRow => 54,
         WidgetKind.WeatherHead => 96,
-        WidgetKind.Strip => 98,
-        WidgetKind.CityRow => 32,
+        WidgetKind.Strip => 92,
+        WidgetKind.CityRow => 30,
         _ => 30,
     };
 
-    public static PanelFrame Compute(PanelModel m)
+    /// <summary>Separación entre elementos dentro de la tarjeta del contenido (más apretada que fuera: como las filas de las referencias).</summary>
+    public const double CardGap = 2, ScrollBarGutter = 6;
+
+    /// <summary>
+    /// Reparte el panel. Si <paramref name="maxHeight"/> es menor que la altura natural y el modelo tiene elementos fijos (<see cref="PanelModel.PinTop"/>/<see cref="PanelModel.PinBottom"/>),
+    /// la altura se limita y SOLO el centro se desplaza (<paramref name="scroll"/> en DIP): el logotipo, las pestañas y los botones Ajustes/Salir siguen siempre accesibles.
+    /// </summary>
+    public static PanelFrame Compute(PanelModel m, double maxHeight = double.PositiveInfinity, double scroll = 0)
     {
         var items = new List<WidgetFrame>(); double y = Pad, inner = m.Width - 2 * Pad, half = (inner - Gap) / 2;
         var ws = m.Widgets; double? cardTop = null; double cardBottom = 0; bool cardOpen = false;
+        int scrollFrom = -1, scrollTo = -1; double topEnd = 0, bottomStart = 0; int bottomIdx = ws.Count - m.PinBottom;
         for (int i = 0; i < ws.Count; i++)
         {
-            bool inCard = m.Card is { } cd && i >= cd.From && i <= cd.To;
+            if (m.PinTop > 0 && i == m.PinTop) { scrollFrom = items.Count; topEnd = y; }
+            if (m.PinBottom > 0 && i == bottomIdx) { scrollTo = items.Count; bottomStart = y; }
+            bool inCard = m.Card is { } cd && i >= cd.From && i <= cd.To; double gap = inCard ? CardGap : Gap;
             if (inCard && !cardOpen) { cardOpen = true; cardTop = y; y += CardPad; }
             double x0 = inCard ? Pad + CardInset : Pad, wInner = inCard ? inner - 2 * CardInset : inner, wHalf = (wInner - Gap) / 2;
             var w = ws[i];
@@ -108,20 +122,39 @@ public static class PanelLayout
                 double h = Math.Max(HeightOf(w), next is null ? 0 : HeightOf(next));
                 items.Add(new WidgetFrame(w, x0, y, next is null ? wInner : wHalf, h));
                 if (next is not null) { items.Add(new WidgetFrame(next, x0 + wHalf + Gap, y, wHalf, h)); i++; }
-                y += h + Gap;
+                y += h + gap;
             }
-            else { double hh = HeightOf(w); items.Add(new WidgetFrame(w, x0, y, wInner, hh)); y += hh + (w.Kind is WidgetKind.Separator ? 0 : Gap); }
-            if (cardOpen && (m.Card is { } c2 && (i >= c2.To || i == ws.Count - 1))) { cardBottom = y - Gap + CardPad; cardOpen = false; y = cardBottom + Gap; }
+            else { double hh = HeightOf(w); items.Add(new WidgetFrame(w, x0, y, wInner, hh)); y += hh + (w.Kind is WidgetKind.Separator ? 0 : gap); }
+            if (cardOpen && (m.Card is { } c2 && (i >= c2.To || i == ws.Count - 1))) { cardBottom = y - gap + CardPad; cardOpen = false; y = cardBottom + Gap; }
         }
 
         CardRect? card = cardTop is { } t ? new CardRect(Pad, t, inner, cardBottom - t) : null;
-        return new PanelFrame(m.Width, y - Gap + Pad, items, card);
+        double natural = y - Gap + Pad;
+        if (natural <= maxHeight || scrollFrom < 0 || scrollTo < 0 || scrollTo <= scrollFrom) return new PanelFrame(m.Width, natural, items, card);
+
+        // Más alto que la pantalla: el centro se desplaza entre las zonas fijas.
+        double bottomH = natural - bottomStart, viewBottom = Math.Max(topEnd + 40, maxHeight - bottomH), viewH = viewBottom - topEnd, content = bottomStart - topEnd;
+        double maxOff = Math.Max(0, content - viewH), off = Math.Clamp(scroll, 0, maxOff), toBottom = viewBottom - bottomStart + 0;
+        var moved = new List<WidgetFrame>(items.Count);
+        for (int i = 0; i < items.Count; i++)
+        {
+            var it = items[i];
+            moved.Add(i >= scrollTo ? it with { Y = it.Y + toBottom } : i >= scrollFrom ? it with { Y = it.Y - off } : it);
+        }
+
+        return new PanelFrame(m.Width, viewBottom + bottomH, moved, card is null ? null : card with { Y = card.Y - off }, new ScrollView(scrollFrom, scrollTo, topEnd, viewBottom, content, off, maxOff));
     }
 
-    /// <summary>Índice del elemento bajo el punto, o -1.</summary>
+    /// <summary>Índice del elemento bajo el punto, o -1. Un elemento desplazado fuera de la zona visible no se puede pulsar.</summary>
     public static int HitTest(PanelFrame f, double x, double y)
     {
-        for (int i = 0; i < f.Items.Count; i++) { var it = f.Items[i]; if (x >= it.X && x < it.X + it.Width && y >= it.Y && y < it.Y + it.Height) return i; }
+        for (int i = 0; i < f.Items.Count; i++)
+        {
+            var it = f.Items[i];
+            if (f.View is { } v && i >= v.From && i < v.To && (y < v.Top || y >= v.Bottom)) continue;
+            if (x >= it.X && x < it.X + it.Width && y >= it.Y && y < it.Y + it.Height) return i;
+        }
+
         return -1;
     }
 
@@ -130,13 +163,13 @@ public static class PanelLayout
 
     // ── Geometría de las filas con sub-áreas pulsables (la usan el dibujo y el controlador: una sola fuente)
     /// <summary>Fila de aplicación: icono a la izquierda, pista del volumen bajo el nombre, porcentaje y silencio a la derecha.</summary>
-    public static (double Left, double Right) AppSliderTrack(WidgetFrame f) => (f.X + 46, f.X + f.Width - 76);
+    public static (double Left, double Right) AppSliderTrack(WidgetFrame f) => (f.X + 46, f.X + f.Width - 86);
     public static bool AppMuteHit(WidgetFrame f, double x, double y) => x >= f.X + f.Width - 30 && x <= f.X + f.Width && y >= f.Y + 4 && y <= f.Y + f.Height - 4;
     public static bool AppSliderHit(WidgetFrame f, double x, double y) { var (l, r) = AppSliderTrack(f); return x >= l - 8 && x <= r + 8 && y >= f.Y + f.Height - 30 && y <= f.Y + f.Height; }
     /// <summary>Deslizador con icono de silencio a la izquierda (Data = id del clic de silencio): pulsar el icono silencia, pulsar la pista arrastra.</summary>
     public static bool SliderMuteHit(WidgetFrame f, double x) => f.W.Data is string && x < f.X + 36;
     /// <summary>Botón de unidad de las estadísticas (arriba a la derecha).</summary>
-    public static bool StatsPillHit(WidgetFrame f, double x, double y) => f.W.Data is StatsData { Pill: not null } && x >= f.X + f.Width - 64 && y <= f.Y + 36;
+    public static bool StatsPillHit(WidgetFrame f, double x, double y) => f.W.Data is StatsData { Pill: not null } && x >= f.X + f.Width - 46 && y <= f.Y + 30;
     /// <summary>Pestaña bajo el punto (0…n-1) o -1.</summary>
     public static int TabAt(WidgetFrame f, double x)
     {

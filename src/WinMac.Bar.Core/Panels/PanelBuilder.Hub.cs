@@ -47,7 +47,7 @@ public static partial class PanelBuilder
         int from = w.Count; w.AddRange(content); int to = w.Count - 1;
         w.Add(new Widget(WidgetKind.Button, "hub:settings", "Ajustes", Col: 0, Glyph: "gear"));
         w.Add(new Widget(WidgetKind.Button, "hub:quit", "Salir", Col: 1, Glyph: "power"));
-        return new PanelModel(PanelKind.Hub, AppIdentity.Current.Name, w, PanelLayout.HubWidth, (from, to));
+        return new PanelModel(PanelKind.Hub, AppIdentity.Current.Name, w, PanelLayout.HubWidth, (from, to), PinTop: from, PinBottom: 2);
     }
 
     // ───────────────────────────── Sonido (FOTO 2)
@@ -78,6 +78,8 @@ public static partial class PanelBuilder
         w.Add(Cap("cap-temp", "Temperaturas"));
         w.Add(TempTile("temp-cpu", "CPU", "cpu", s.CpuTempC) with { Col = 0 });
         w.Add(TempTile("temp-gpu", "GPU", "gpu", s.GpuTempC) with { Col = 1 });
+        if (!s.CpuTempC.Available) w.Add(Note("temp-cpu-why", "CPU: " + (s.CpuTempC.Reason ?? "sin lectura") + "."));
+        if (!s.GpuTempC.Available) w.Add(Note("temp-gpu-why", "GPU: " + (s.GpuTempC.Reason ?? "sin lectura") + "."));
         if (s.CpuTempNote is not null && s.CpuTempC.Available) w.Add(Note("temp-note", "CPU: " + s.CpuTempNote + ". Windows no da la temperatura real de la CPU sin un controlador con privilegios."));
         w.Add(Sep("sep-1"));
         w.Add(Cap("cap-hw", "Uso del hardware"));
@@ -103,7 +105,7 @@ public static partial class PanelBuilder
     }
 
     private static Widget TempTile(string id, string label, string glyph, Reading<double> r) =>
-        new(WidgetKind.Tile, id, r.Available ? Deg(r.Value!.Value) : "No disponible", r.Available ? label : label + " · " + (r.Reason ?? "sin lectura"), Enabled: r.Available, Reason: null, Glyph: glyph);
+        new(WidgetKind.Tile, id, r.Available ? Deg(r.Value!.Value) : "No disponible", label, Enabled: r.Available, Reason: null, Glyph: glyph);
 
     private static void UsageBlock(List<Widget> w, string id, string label, Reading<double> now, History hist, string color)
     {
@@ -227,7 +229,7 @@ public static partial class PanelBuilder
         w.Add(Note("ext-note", ext.Count == 0 ? "No hay discos externos listos para expulsar." : selExt ? "La expulsión usa el mecanismo seguro de Windows: si la unidad está en uso, no se fuerza." : "El disco seleccionado es interno: no se puede expulsar."));
         w.Add(Sep("sep-5"));
         w.Add(Cap("cap-tools", "Herramientas"));
-        w.Add(new Widget(WidgetKind.Button, "explorer:" + sel, "Abrir en el Explorador", Col: 0, Glyph: "folder"));
+        w.Add(new Widget(WidgetKind.Button, "explorer:" + sel, "Explorador", Col: 0, Glyph: "folder"));
         w.Add(new Widget(WidgetKind.Button, "open:ms-settings:storagesense", "Almacenamiento", Col: 1, Glyph: "gear"));
     }
 

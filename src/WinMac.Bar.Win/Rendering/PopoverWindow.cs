@@ -16,13 +16,17 @@ namespace WinMac.Bar.Win.Rendering;
 internal sealed class PopoverWindow : IDisposable
 {
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
-    private const int WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_ACTIVATE = 0x6, WM_KEYDOWN = 0x100, WM_MOUSELEAVE = 0x2A3, WM_CAPTURECHANGED = 0x215;
+    private const int WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_ACTIVATE = 0x6, WM_KEYDOWN = 0x100, WM_MOUSELEAVE = 0x2A3, WM_CAPTURECHANGED = 0x215, WM_MOUSEWHEEL = 0x20A;
     private readonly Action<PanelEvent> _onEvent; private readonly Action _onClosed; private readonly Action<string> _log; private readonly BarNative.WndProc _proc;
     private readonly PanelController _ctl = new();
     private IntPtr _hwnd; private D2DDevice? _dev; private PanelPainter? _painter; private IDXGISwapChain1? _swap; private ID2D1Bitmap1? _bmp; private IDCompositionDevice? _dcomp; private IDCompositionTarget? _target; private IDCompositionVisual? _visual;
     private double _scale = 1; private int _wPx, _hPx; private bool _dirty, _open, _tracking; private BarTheme _theme;
     /// <summary>Mientras una acción abre un cuadro de diálogo propio, perder el foco NO debe cerrar el panel.</summary>
     public bool KeepOpen { get; set; }
+
+    private PxRect _monitor; private int _barBottom;
+    /// <summary>Alto máximo del panel en DIP: lo que queda del monitor bajo la barra, con un margen. Si el contenido no cabe (1080p, DPI alto), se desplaza.</summary>
+    private static double MaxHeightDip(PxRect monitor, int barBottomPx, double scale) => Math.Max(240, (monitor.Bottom - barBottomPx) / scale - 16);
 
     private readonly Func<string, byte[]?>? _icons;
     public PopoverWindow(Action<PanelEvent> onEvent, Action onClosed, Action<string> log, Func<string, byte[]?>? icons = null) { _onEvent = onEvent; _onClosed = onClosed; _log = log; _icons = icons; _proc = WndProcImpl; }
@@ -35,7 +39,7 @@ internal sealed class PopoverWindow : IDisposable
     public void Show(PanelModel model, int anchorXpx, int barBottomPx, PxRect monitor, double scale, BarTheme theme, bool alignRight)
     {
         EnsureWindow(scale); _theme = theme; if (_painter is not null) _painter.Theme = theme;
-        _ctl.SetModel(model); ResizeFor(model);
+        _ctl.SetMaxHeight(MaxHeightDip(monitor, barBottomPx, scale)); _monitor = monitor; _barBottom = barBottomPx; _ctl.SetModel(model); ResizeFor(model);
         var (x, y) = PopoverPlacement.Place(anchorXpx, barBottomPx, _wPx, _hPx, monitor, _scale, alignRight); Position = (x, y);   // siempre entero dentro del monitor de la barra pulsada
         BarNative.SetWindowPos(_hwnd, new IntPtr(-1), x, y, _wPx, _hPx, 0x0040u /* SHOWWINDOW */);
         _open = true; _dirty = true; BarNative.SetForegroundWindow(_hwnd); Render();
@@ -106,7 +110,12 @@ internal sealed class PopoverWindow : IDisposable
                 case WM_MOUSEMOVE:
                 {
                     if (!_tracking) { var t = new BarNative.TRACKMOUSEEVENT { cbSize = (uint)Marshal.SizeOf<BarNative.TRACKMOUSEEVENT>(), dwFlags = 2 /* TME_LEAVE */, hwndTrack = _hwnd }; _tracking = BarNative.TrackMouseEvent(ref t); }
-                    var ev = _ctl.PointerMove(X(l), Y(l)); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero;
+                    _lastX = X(l); _lastY = Y(l); var ev = _ctl.PointerMove(_lastX, _lastY); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero;
+                }
+                case WM_MOUSEWHEEL:
+                {
+                    int delta = (short)(((long)w >> 16) & 0xFFFF); if (_ctl.Scroll(-delta / 120.0 * 48)) { var ev = _ctl.PointerMove(_lastX, _lastY); _dirty = true; if (ev is not null) _onEvent(ev); }   // una muesca = 48 DIP
+                    return IntPtr.Zero;
                 }
                 case WM_MOUSELEAVE: _tracking = false; if (!_ctl.Dragging) { _ctl.PointerLeave(); _dirty = true; } return IntPtr.Zero;
                 case WM_LBUTTONDOWN: { BarNative.SetCapture(_hwnd); var ev = _ctl.PointerDown(X(l), Y(l)); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero; }
@@ -120,6 +129,7 @@ internal sealed class PopoverWindow : IDisposable
         return BarNative.DefWindowProc(h, msg, w, l);
     }
 
+    private double _lastX, _lastY;
     private double X(IntPtr l) => (short)((long)l & 0xFFFF) / _scale;
     private double Y(IntPtr l) => (short)(((long)l >> 16) & 0xFFFF) / _scale;
 

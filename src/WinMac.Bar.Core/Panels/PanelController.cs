@@ -11,6 +11,26 @@ public sealed class PanelController
 {
     private PanelModel _model = new(PanelKind.ControlCenter, "", []); private PanelFrame _frame = new(PanelLayout.Width, 0, []);
     private int _hover = -1, _down = -1; private bool _dragging, _muteDown; private double _lastValue;
+    private double _maxHeight = double.PositiveInfinity, _scroll;
+
+    /// <summary>Altura máxima del panel en DIP (la de la pantalla donde está). Si el contenido no cabe, se desplaza el centro y las pestañas y el pie quedan fijos.</summary>
+    public double MaxHeight => _maxHeight;
+    public double ScrollOffset => _frame.View?.Offset ?? 0;
+    public bool CanScroll => _frame.View is { MaxOffset: > 0.5 };
+
+    public void SetMaxHeight(double maxHeight)
+    {
+        if (Math.Abs(maxHeight - _maxHeight) < 0.01) return;
+        _maxHeight = maxHeight; _frame = PanelLayout.Compute(_model, _maxHeight, _scroll); _scroll = _frame.View?.Offset ?? 0;
+    }
+
+    /// <summary>Desplaza el contenido (positivo = hacia abajo). Devuelve true si algo cambió.</summary>
+    public bool Scroll(double deltaDip)
+    {
+        if (!CanScroll) return false; double before = ScrollOffset;
+        _scroll = Math.Clamp(before + deltaDip, 0, _frame.View!.MaxOffset); if (Math.Abs(_scroll - before) < 0.01) return false;
+        _frame = PanelLayout.Compute(_model, _maxHeight, _scroll); _scroll = _frame.View?.Offset ?? 0; return true;
+    }
 
     public PanelModel Model => _model;
     public PanelFrame Frame => _frame;
@@ -20,7 +40,8 @@ public sealed class PanelController
     public void SetModel(PanelModel m)
     {
         string? hoverId = _hover >= 0 && _hover < _frame.Items.Count ? _frame.Items[_hover].W.Id : null, downId = _down >= 0 && _down < _frame.Items.Count ? _frame.Items[_down].W.Id : null;
-        _model = m; _frame = PanelLayout.Compute(m);
+        if (ScrollKey(_model) != ScrollKey(m)) _scroll = 0;   // otra pestaña: vuelve arriba
+        _model = m; _frame = PanelLayout.Compute(m, _maxHeight, _scroll); _scroll = _frame.View?.Offset ?? 0;
         _hover = hoverId is null ? -1 : _frame.Items.ToList().FindIndex(f => f.W.Id == hoverId);
         _down = downId is null ? -1 : _frame.Items.ToList().FindIndex(f => f.W.Id == downId);
         if (_dragging && _down < 0) _dragging = false;   // el deslizador desapareció durante el arrastre
@@ -28,6 +49,8 @@ public sealed class PanelController
 
     private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav or WidgetKind.Tabs or WidgetKind.TabHeader or WidgetKind.Select or WidgetKind.AppRow or WidgetKind.Stats or WidgetKind.CityRow
         || (w.Kind == WidgetKind.Header && w.Id == "back");
+
+    private static string ScrollKey(PanelModel m) => m.PinTop > 0 && m.PinTop <= m.Widgets.Count ? m.Kind + "/" + m.Widgets[m.PinTop - 1].Id : m.Kind.ToString();
 
     public void PointerLeave() { _hover = -1; }
 
