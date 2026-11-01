@@ -93,7 +93,9 @@ public sealed class BarPainter : IDisposable
             switch (f.Item.Kind)
             {
                 case BarItemKind.WinMacMenu: DrawLogo(x, cy); break;
-                case BarItemKind.Network: DrawNetwork(x, cy, s.Network.Kind); break;
+                case BarItemKind.Network: DrawNetwork(x, cy, s.Network.Kind, s.Network.Bars); break;
+                case BarItemKind.Bluetooth: DrawBluetooth(x, cy, s.Bt.On); break;
+                case BarItemKind.ControlCenter: DrawControlCenter(x, cy); break;
                 case BarItemKind.Volume: DrawVolume(x, cy, s.Volume); break;
                 case BarItemKind.Battery: DrawBattery(x, cy, s.Battery); break;
             }
@@ -177,7 +179,7 @@ public sealed class BarPainter : IDisposable
         for (int i = 0; i < 3; i++) { using var a = Arc(x + 8, cy, radii[i], -Math.PI / 4, Math.PI / 4); Stroke(a, 1.4f, i < v.Waves ? 1f : 0.28f); }
     }
 
-    private void DrawNetwork(float x, float cy, NetKind k)
+    private void DrawNetwork(float x, float cy, NetKind k, int bars = -1)
     {
         if (k == NetKind.Ethernet)
         {
@@ -187,9 +189,27 @@ public sealed class BarPainter : IDisposable
         }
         bool off = k == NetKind.Offline; float ox = x + 8, oy = cy + 5.5f;   // sector de 90° apuntando hacia arriba
         float[] radii = [4f, 7.5f, 11f];
-        for (int i = 0; i < 3; i++) { using var a = Arc(ox, oy, radii[i], -3 * Math.PI / 4, -Math.PI / 4); Stroke(a, 1.4f, off ? 0.30f : 1f); }
+        int active = bars < 0 ? 3 : (int)Math.Ceiling(bars * 3 / 4.0);   // intensidad real de la señal (sin dato = todas)
+        for (int i = 0; i < 3; i++) { using var a = Arc(ox, oy, radii[i], -3 * Math.PI / 4, -Math.PI / 4); Stroke(a, 1.4f, off ? 0.30f : i < active ? 1f : 0.28f); }
         Brush(Fg(off ? 0.30f : 1f)); _ctx.FillEllipse(new Ellipse(new Vector2(ox, oy - 0.2f), 1.5f, 1.5f), _solid);
         if (off) { Brush(Fg()); _ctx.DrawLine(new Vector2(x + 2, cy - 6), new Vector2(x + 14, cy + 6.5f), _solid, 1.5f, _round); }
+    }
+
+    private void DrawBluetooth(float x, float cy, bool on)
+    {
+        float cx = x + 8, a = on ? 1f : 0.4f; Brush(Fg(a));
+        _ctx.DrawLine(new Vector2(cx - 3.8f, cy - 3.8f), new Vector2(cx + 3.8f, cy + 3.8f), _solid, 1.4f, _round); _ctx.DrawLine(new Vector2(cx + 3.8f, cy + 3.8f), new Vector2(cx, cy + 7f), _solid, 1.4f, _round);
+        _ctx.DrawLine(new Vector2(cx, cy + 7f), new Vector2(cx, cy - 7f), _solid, 1.4f, _round); _ctx.DrawLine(new Vector2(cx, cy - 7f), new Vector2(cx + 3.8f, cy - 3.8f), _solid, 1.4f, _round); _ctx.DrawLine(new Vector2(cx + 3.8f, cy - 3.8f), new Vector2(cx - 3.8f, cy + 3.8f), _solid, 1.4f, _round);
+        if (!on) _ctx.DrawLine(new Vector2(x + 2, cy - 6.5f), new Vector2(x + 14, cy + 6.5f), _solid, 1.5f, _round);   // radio apagada
+    }
+
+    /// <summary>Icono del Centro de control: dos interruptores superpuestos, como en macOS.</summary>
+    private void DrawControlCenter(float x, float cy)
+    {
+        Brush(Fg()); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(x + 1f, cy - 6.5f, x + 15f, cy - 0.5f), RadiusX = 3, RadiusY = 3 }, _solid, 1.2f);
+        _ctx.FillEllipse(new Ellipse(new Vector2(x + 11.5f, cy - 3.5f), 1.9f, 1.9f), _solid);
+        _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(x + 1f, cy + 0.5f, x + 15f, cy + 6.5f), RadiusX = 3, RadiusY = 3 }, _solid, 1.2f);
+        _ctx.FillEllipse(new Ellipse(new Vector2(x + 4.5f, cy + 3.5f), 1.9f, 1.9f), _solid);
     }
 
     public void Dispose() { _solid.Dispose(); _round.Dispose(); _regular.Dispose(); _bold.Dispose(); _logo.Dispose(); _dw.Dispose(); }

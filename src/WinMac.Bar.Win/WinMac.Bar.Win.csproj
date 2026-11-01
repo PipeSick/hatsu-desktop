@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Integración con Windows y render de la barra superior. Reutiliza D2DDevice/GlassBackdrop/WallpaperSource/FullscreenWatcher de Dock.Win (deuda anotada en docs/12 §D3). -->
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>WinMac.Bar.Win</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
@@ -9,5 +9,6 @@
     <ProjectReference Include="..\WinMac.Bar.Core\WinMac.Bar.Core.csproj" />
     <ProjectReference Include="..\WinMac.Dock.Win\WinMac.Dock.Win.csproj" />
     <ProjectReference Include="..\WinMac.Apps.Win\WinMac.Apps.Win.csproj" />
+    <ProjectReference Include="..\WinMac.System.Win\WinMac.System.Win.csproj" />
   </ItemGroup>
 </Project>

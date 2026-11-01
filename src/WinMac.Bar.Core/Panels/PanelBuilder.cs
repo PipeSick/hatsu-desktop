@@ -69,7 +69,7 @@ public static class PanelBuilder
         {
             w.Add(new Widget(WidgetKind.Header, "networks", "Redes", Glyph: "section"));
             if (s.Networks.Count == 0) w.Add(new Widget(WidgetKind.Note, "none", "Buscando redes…"));
-            foreach (var n in s.Networks.Take(8))
+            foreach (var n in s.Networks.Take(6))   // el panel no se desplaza: 6 redes caben incluso en 1080p
             {
                 string sub = c.Busy.TryGetValue("net:" + n.Ssid, out var b) ? b : n.Connected ? "Conectado · toca para desconectar" : n.HasProfile ? "Red conocida" : n.Secured ? "Requiere contraseña: conéctala desde Configuración" : "Abierta: conéctala desde Configuración";
                 w.Add(new Widget(WidgetKind.Row, "net:" + n.Ssid, n.Ssid, sub, On: n.Connected, Enabled: n.Connected || n.HasProfile, Bars: n.Bars, Glyph: n.Secured ? "lock" : null));

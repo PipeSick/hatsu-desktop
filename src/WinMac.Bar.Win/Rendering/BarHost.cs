@@ -17,9 +17,9 @@ namespace WinMac.Bar.Win.Rendering;
 /// Ventana de la barra superior: Win32 + DirectComposition + Direct2D (misma base que el Dock). Reserva el borde superior con un AppBar real (SHAppBarMessage, opcional) y lo libera
 /// siempre al salir (ABM_REMOVE; si el proceso muere, Windows restaura el área de trabajo). No toca la barra de tareas. Reposo = sin render: el bucle espera con tiempo límite de 50 ms.
 /// </summary>
-public sealed class BarHost : IDisposable
+public sealed partial class BarHost : IDisposable
 {
-    private const int WM_DESTROY = 2, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_MOUSEMOVE = 0x200, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12, WM_APP_BAR = 0x8001, WM_APP_YIELD = 0x8002;
+    private const int WM_DESTROY = 2, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_MOUSEMOVE = 0x200, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12, WM_APP_BAR = 0x8001, WM_APP_YIELD = 0x8002, WM_APP_UI = 0x8003, WM_APP_CONFIG = 0x8004;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
     public const string QuitEventName = @"Local\WinMac.Bar.Quit";
 
@@ -31,8 +31,8 @@ public sealed class BarHost : IDisposable
     private IDCompositionDevice _dcomp = null!; private IDCompositionTarget _target = null!; private IDCompositionVisual _visual = null!;
     private BarPainter _painter = null!; private readonly WallpaperSource _wall = new(); private BarView _view = null!;
     private bool _force = true, _registered, _hiddenForFullscreen; private volatile bool _quitting; private uint _taskbarCreated; private BarTheme _theme;
-    private DateTime _lastFs = DateTime.MinValue, _lastBattery = DateTime.MinValue, _lastVolume = DateTime.MinValue, _lastNetwork = DateTime.MinValue, _lastTheme = DateTime.MinValue, _nextClock = DateTime.MinValue;
-    private BatteryInfo _battery = BatteryInfo.None; private VolumeInfo _volume = VolumeInfo.None; private NetworkInfo _network = NetworkInfo.Unknown;
+    private DateTime _lastBt = DateTime.MinValue, _lastFs = DateTime.MinValue, _lastBattery = DateTime.MinValue, _lastVolume = DateTime.MinValue, _lastNetwork = DateTime.MinValue, _lastTheme = DateTime.MinValue, _nextClock = DateTime.MinValue;
+    private BatteryInfo _battery = BatteryInfo.None; private NetworkInfo _network = NetworkInfo.Unknown;
     private double? _px, _py;
 
     public string Diagnostics { get; private set; } = "";
@@ -73,9 +73,9 @@ public sealed class BarHost : IDisposable
     /// <summary>true = registrar el AppBar. Se puede cambiar en marcha desde el menú.</summary>
     public bool Reserved => _registered;
 
-    public BarHost(BarConfig cfg, string? configPath, Action<string> log, bool trackActiveApp = true)
+    public BarHost(BarConfig cfg, string? configPath, Action<string> log, bool trackActiveApp = true, WinMac.SystemControl.SystemServices? services = null)
     {
-        _cfg = cfg; _cfgPath = configPath; _log = log; _proc = WndProcImpl;
+        _cfg = cfg; _cfgPath = configPath; _log = log; _proc = WndProcImpl; InitPanels(services);
         _ctl = new BarController(_m, cfg, BarState.Empty(DateTime.Now));
         if (trackActiveApp) _app = new ActiveAppProvider();
         try { _quit = new EventWaitHandle(false, EventResetMode.ManualReset, QuitEventName); } catch (Exception e) { log("No se pudo crear el evento de cierre: " + e.Message); }
@@ -90,7 +90,7 @@ public sealed class BarHost : IDisposable
         {
             while (BarNative.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1)) { if (msg.message == WM_QUIT) return 0; BarNative.TranslateMessage(ref msg); BarNative.DispatchMessage(ref msg); }
             Volatile.Write(ref _lastTickMs, Environment.TickCount64);
-            _app?.Pump(); PollInputs(); Housekeeping();
+            _app?.Pump(); PollInputs(); Housekeeping(); PanelsTick();
             if (_quitting) return 0;
             if (selfTest) { _force = true; if (clock.Elapsed.TotalSeconds > 10) throw new TimeoutException("selftest: no se alcanzaron los frames en 10 s"); }
             double now = clock.Elapsed.TotalSeconds, dt = Math.Min(now - last, 0.1); last = now;
@@ -230,17 +230,18 @@ public sealed class BarHost : IDisposable
         var now = DateTime.Now; bool changed = false;
         if (now >= _nextClock) { _nextClock = now + ClockFormat.UntilNextChange(now, _cfg); changed = true; }
         if ((now - _lastBattery).TotalSeconds >= 20) { _lastBattery = now; var b = SystemProviders.Battery(); if (b != _battery) { _battery = b; changed = true; } }
-        if ((now - _lastVolume).TotalMilliseconds >= 500) { _lastVolume = now; var v = SystemProviders.Volume(); if (v != _volume) { _volume = v; changed = true; } }
-        if ((now - _lastNetwork).TotalSeconds >= 5) { _lastNetwork = now; var n = SystemProviders.Network(); if (n != _network) { _network = n; changed = true; } }
-        if (_app is not null && _app.TakeChanged()) changed = true;
+        if ((now - _lastVolume).TotalMilliseconds >= 500) { _lastVolume = now; _hub.RefreshAudio(); }   // la lectura corre en un hilo de trabajo; el resultado llega por Changed
+        if ((now - _lastNetwork).TotalSeconds >= 5) { _lastNetwork = now; _hub.RefreshWifi(false); var n = SystemProviders.Network(); if (n.Kind != _network.Kind) { _network = n; changed = true; } }
+        if ((now - _lastBt).TotalSeconds >= 15) { _lastBt = now; _hub.RefreshBluetooth(false); }
+        if (_app is not null && _app.TakeChanged()) { changed = true; RefreshAppMenus(); }
         if ((now - _lastTheme).TotalSeconds >= 5) { _lastTheme = now; var t = ResolveTheme(); if (t != _theme) { _theme = t; _painter.Theme = t; BuildBackdrop(); _force = true; } }
         if (changed) UpdateState(force: false);
     }
 
     private void UpdateState(bool force)
     {
-        _ctl.State = new BarState(DateTime.Now, _app?.Name, _battery, _volume, _network); _force = true;
-        if (force) { _battery = SystemProviders.Battery(); _volume = SystemProviders.Volume(); _network = SystemProviders.Network(); _ctl.State = new BarState(DateTime.Now, _app?.Name, _battery, _volume, _network); }
+        _ctl.State = MakeState(); _force = true;
+        if (force) { _battery = SystemProviders.Battery(); _network = SystemProviders.Network(); _hub.RefreshAudio(); _hub.RefreshWifi(false); _hub.RefreshBluetooth(false); _ctl.State = MakeState(); }
     }
 
     // ------------------------------------------------------------------ mensajes
@@ -258,6 +259,8 @@ public sealed class BarHost : IDisposable
             case WM_LBUTTONUP: { double x = (short)((long)l & 0xFFFF) / _scale; Execute(_ctl.OnClick(x), _ctl.ItemAt(x)); _force = true; return IntPtr.Zero; }
             case WM_RBUTTONUP: { Execute(new BarAction(BarActionKind.ShowMenu), null); _force = true; return IntPtr.Zero; }
             case WM_APP_YIELD: ApplyYield(); return IntPtr.Zero;
+            case WM_APP_UI: DrainUi(); return IntPtr.Zero;
+            case WM_APP_CONFIG: ApplyPendingConfig(); return IntPtr.Zero;
             case WM_APP_BAR:
                 if ((long)w == BarNative.ABN_POSCHANGED && _registered) { PlaceWindow(); _force = true; }
                 else if ((long)w == BarNative.ABN_FULLSCREENAPP) BarNative.SetWindowPos(_hwnd, (long)l != 0 ? new IntPtr(1) /* HWND_BOTTOM */ : new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE|NOMOVE|NOACTIVATE */);
@@ -277,42 +280,19 @@ public sealed class BarHost : IDisposable
             {
                 case BarActionKind.OpenSettings: if (a.Uri is not null) BarNative.ShellExecuteW(IntPtr.Zero, "open", a.Uri, null, null, 1); break;
                 case BarActionKind.Quit: _quitting = true; break;
-                case BarActionKind.ShowMenu: ShowMenu(item); break;
+                case BarActionKind.ShowMenu: ShowAppleMenu(item); break;
+                case BarActionKind.OpenPanel: OpenPanelFromBar(a, item); break;
+                case BarActionKind.ShowAppMenu: ShowAppMenu(a.Index, item); break;
             }
         }
         catch (Exception e) { _log($"Acción {a.Kind} falló: {e.GetType().Name}: {e.Message}"); }
     }
 
-    /// <summary>Menú NATIVO de Windows. Devuelve el foco a la app que lo tenía (TrackPopupMenu exige que nuestra ventana sea la de primer plano).</summary>
-    private void ShowMenu(BarItemFrame? item)
-    {
-        IntPtr menu = BarNative.CreatePopupMenu(); IntPtr prev = BarNative.GetForegroundWindow();
-        try
-        {
-            BarNative.AppendMenuW(menu, 0x1 /* GRAYED */, (UIntPtr)100, "WinMac — barra superior");
-            BarNative.AppendMenuW(menu, 0x800, UIntPtr.Zero, null);
-            BarNative.AppendMenuW(menu, _cfg.ReserveSpace ? 0x8u : 0u, (UIntPtr)1, "Reservar espacio arriba");
-            BarNative.AppendMenuW(menu, 0x800, UIntPtr.Zero, null);
-            BarNative.AppendMenuW(menu, 0, (UIntPtr)2, "Salir de la barra superior");
-            int x = _winLeftPx + (int)((item?.X ?? 0) * _scale), y = _winTopPx + _winHpx;
-            BarNative.SetForegroundWindow(_hwnd);
-            _modal = true; int cmd;
-            try { cmd = Native2Track(menu, x, y); } finally { _modal = false; }
-            BarNative.PostMessage(_hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
-            if (cmd == 1) { _cfg = _cfg with { ReserveSpace = !_cfg.ReserveSpace }; _ctl.Config = _cfg; if (_cfgPath is not null) _cfg.TrySave(_cfgPath); PlaceWindow(); }
-            else if (cmd == 2) _quitting = true;
-        }
-        catch (Exception e) { _log("Menú falló: " + e.Message); }
-        finally { BarNative.DestroyMenu(menu); if (prev != IntPtr.Zero && prev != _hwnd) BarNative.SetForegroundWindow(prev); }
-    }
-
-    private int Native2Track(IntPtr menu, int x, int y) => BarNative.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, x, y, _hwnd, IntPtr.Zero);
-
-    public string Report() => $"{Diagnostics}; ventana {_winWpx}x{_winHpx}px escala {_scale:0.##}; AppBar={(_registered ? "sí" : "no")}; tema={_theme}; fondo={(_blurred is not null ? "sí" : "no")}; batería={_battery.Present}; volumen={_volume.Available}; red={_network.Kind}";
+    public string Report() => $"{Diagnostics}; ventana {_winWpx}x{_winHpx}px escala {_scale:0.##}; AppBar={(_registered ? "sí" : "no")}; tema={_theme}; fondo={(_blurred is not null ? "sí" : "no")}; batería={_battery.Present}; volumen={_hub.Snapshot.Audio.Available}; red={_network.Kind}";
 
     public void Dispose()
     {
-        AppBarRemove(); _app?.Dispose(); _quit?.Dispose(); _blurred?.Dispose(); _wall.Dispose(); _painter?.Dispose(); _bmp?.Dispose(); _swap?.Dispose(); _dev?.Dispose();
+        DisposePanels(); AppBarRemove(); _app?.Dispose(); _quit?.Dispose(); _blurred?.Dispose(); _wall.Dispose(); _painter?.Dispose(); _bmp?.Dispose(); _swap?.Dispose(); _dev?.Dispose();
         if (_hwnd != IntPtr.Zero) BarNative.DestroyWindow(_hwnd);
     }
 }

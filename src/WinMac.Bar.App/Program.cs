@@ -8,6 +8,7 @@
 //   WinMac.Bar.App --render-png f.png [--theme light|dark] [--bg glass|transparent] [--scale 2] [--hover N]   renderiza FUERA de pantalla (para CI)
 //   WinMac.Bar.App --selftest               comprobaciones no interactivas (NO registra AppBar); código 0 si todo funciona
 //   WinMac.Bar.App --selftest-appbar        SOLO CI: registra y libera un AppBar durante unos fotogramas
+//   WinMac.Bar.App --selftest-system        mide qué controles del sistema permite ESTE equipo (audio, Wi-Fi, Bluetooth, brillo, energía, apariencia) sin cambiar nada
 //   Opciones: --config ruta.json · --no-config
 using System.Diagnostics;
 using WinMac.Bar;
@@ -46,6 +47,7 @@ internal static class Program
             }
             if (args.Contains("--status")) return Status();
             if (args.Contains("--quit")) return Quit();
+            if (args.Contains("--selftest-system")) return SystemProbe();
             if (args.Contains("--selftest")) return SelfTest(appBar: false);
             if (args.Contains("--selftest-appbar")) return SelfTest(appBar: true);
             return RunBar(args);
@@ -63,11 +65,27 @@ internal static class Program
         using var host = new BarHost(cfg, cfgPath, Log);
         // --hosted (lo pasa WinMac.exe): enlace con el host. Sin él, la barra funciona exactamente como siempre. Si el host cae, la barra sigue sola.
         var link = ModuleHostLink.FromArgs(args, "bar", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
-        if (link is not null) { link.ShutdownRequested += host.RequestQuit; link.HealthCheck = () => host.Responsive; link.Subscribe(YieldRegions.Topic, d => host.SetYield(YieldRegions.Parse(d))); link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
+        if (link is not null)
+        {
+            link.ShutdownRequested += host.RequestQuit; link.HealthCheck = () => host.Responsive; link.Subscribe(YieldRegions.Topic, d => host.SetYield(YieldRegions.Parse(d)));
+            // Ajustes centrales: el host es la única fuente de verdad. Llegan retenidos al conectar y tras cada cambio; los cambios hechos desde la barra se piden al host.
+            link.Subscribe("config.bar", d => { try { if (d is { } e && System.Text.Json.JsonSerializer.Deserialize<BarConfig>(e.GetRawText(), BarConfig.Wire) is { } c) host.ApplyConfig(c.Sanitize()); } catch (Exception ex) { Log("Ajustes de la barra ilegibles: " + ex.Message); } });
+            host.PersistPatch = patch => link.Event("config.bar.set", patch);
+            link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
         Log("Barra superior iniciada. Cierra con «WinMac.Bar.App --quit» o desde su menú (clic derecho).");
         int rc = host.Run(); Log("Barra superior cerrada. " + host.Report());
         if (link is not null) { if (rc == 0) link.ByeAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult(); link.DisposeAsync().AsTask().GetAwaiter().GetResult(); }   // «bye» = cierre voluntario: el host no nos reinicia
         return rc;
+    }
+
+    private static int SystemProbe()
+    {
+        Log("Controles del sistema que permite este equipo (no se cambia nada):");
+        var lines = WinMac.SystemControl.Win.SystemServicesFactory.Probe(WinMac.SystemControl.Win.SystemServicesFactory.CreateReal());
+        foreach (var l in lines) Log("  " + l);
+        int bad = lines.Count(l => l.StartsWith("[FALLO]"));
+        Log(bad == 0 ? "Ningún servicio lanzó excepciones (un servicio «no disponible» es un resultado válido)." : $"{bad} servicio(s) lanzaron excepciones: es un error.");
+        return bad == 0 ? 0 : 1;
     }
 
     private static int Quit()

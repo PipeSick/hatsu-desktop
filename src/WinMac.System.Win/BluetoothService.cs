@@ -10,14 +10,14 @@ namespace WinMac.SystemControl.Win;
 /// </summary>
 public sealed class BluetoothService : IBluetoothService
 {
-    public BluetoothState Read()
+    public BluetoothState Read(bool withDevices = true)
     {
         try
         {
             var radios = RadioHelper.Of(RadioKind.Bluetooth);
             if (radios.Count == 0) return BluetoothState.None("No hay adaptador Bluetooth");
             bool on = radios.Any(r => r.State == RadioState.On);
-            return new BluetoothState(true, on, on ? Devices() : []);
+            return new BluetoothState(true, on, on && withDevices ? Devices() : []);
         }
         catch (UnauthorizedAccessException e) { return BluetoothState.None(e.Message); }
         catch (Exception e) { return BluetoothState.None("Bluetooth: " + e.GetType().Name); }

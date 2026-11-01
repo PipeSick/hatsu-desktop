@@ -24,7 +24,8 @@ public interface IWifiService
 
 public interface IBluetoothService
 {
-    BluetoothState Read();
+    /// <param name="withDevices">false = solo el estado de la radio (barato: lo usa el icono de la barra); true = también los dispositivos emparejados (más lento: panel abierto).</param>
+    BluetoothState Read(bool withDevices = true);
     ServiceResult SetRadio(bool on);
 }
 
