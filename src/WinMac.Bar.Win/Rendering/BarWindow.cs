@@ -22,7 +22,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     public const string ClassName = "WinMacBar";
 
     private readonly BarHost _host; private readonly BarMetrics _m = new(); private readonly Action<string> _log;
-    private IntPtr _hmon; private BarNative.RECT _monitor;
+    private BarNative.RECT _monitor;
     private double _scale = 1; private int _winLeftPx, _winTopPx, _winWpx, _winHpx;
     private D2DDevice _dev = null!; private IDXGISwapChain1 _swap = null!; private ID2D1Bitmap1? _bmp, _blurred;
     private IDCompositionDevice? _dcomp; private IDCompositionTarget? _target; private IDCompositionVisual? _visual;
@@ -32,7 +32,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
 
     public BarWindow(BarHost host, MonitorSnapshot snap, BarConfig cfg, BarState initial, Action<string> log)
     {
-        _host = host; _log = log; Info = snap.Info; _hmon = snap.Handle; _monitor = snap.Rect; _scale = snap.Info.Scale; _theme = host.Theme;
+        _host = host; _log = log; Info = snap.Info; _monitor = snap.Rect; _scale = snap.Info.Scale; _theme = host.Theme;
         Ctl = new BarController(_m, cfg, initial);
     }
 
@@ -71,7 +71,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     /// <summary>La topología cambió y este monitor sigue existiendo pero con otra resolución, posición o escalado: se recoloca y se recrea la superficie (no ResizeBuffers, lección del Dock).</summary>
     public void Relayout(MonitorSnapshot snap)
     {
-        Info = snap.Info; _hmon = snap.Handle; _monitor = snap.Rect; _scale = snap.Info.Scale; _dev.SetDpi(_scale);
+        Info = snap.Info; _monitor = snap.Rect; _scale = snap.Info.Scale; _dev.SetDpi(_scale);
         ResizeWindow();
     }
 
@@ -220,9 +220,18 @@ internal sealed class BarWindow : IWndTarget, IDisposable
         {
             _lastFs = DateTime.UtcNow;
             // Una app a pantalla completa en OTRO monitor no debe esconder esta barra: solo se oculta si la app en primer plano está en este monitor.
-            bool fs = FullscreenWatcher.ShouldSuppress() && BarNative.MonitorFromWindow(BarNative.GetForegroundWindow(), BarNative.MONITOR_DEFAULTTONEAREST) == _hmon;
+            bool fs = FullscreenWatcher.ShouldSuppress() && ForegroundIsOnThisMonitor();
             if (fs != _hiddenForFullscreen) { _hiddenForFullscreen = fs; BarNative.ShowWindow(Hwnd, fs ? 0 : 4 /* SW_SHOWNOACTIVATE */); _force = true; }
         }
+    }
+
+    /// <summary>¿La ventana en primer plano está en ESTE monitor? Se compara por rectángulo, no por HMONITOR (que Windows puede renovar al suspender o reconectar).</summary>
+    private bool ForegroundIsOnThisMonitor()
+    {
+        var fg = BarNative.GetForegroundWindow(); if (fg == IntPtr.Zero) return false;
+        var h = BarNative.MonitorFromWindow(fg, BarNative.MONITOR_DEFAULTTONEAREST); if (h == IntPtr.Zero) return false;
+        var mi = new BarNative.MONITORINFO { cbSize = (uint)Marshal.SizeOf<BarNative.MONITORINFO>() };
+        return BarNative.GetMonitorInfo(h, ref mi) && mi.rcMonitor.Left == _monitor.Left && mi.rcMonitor.Top == _monitor.Top && mi.rcMonitor.Right == _monitor.Right && mi.rcMonitor.Bottom == _monitor.Bottom;
     }
 
     /// <summary>Un paso de animación y, si hace falta, un fotograma. Devuelve true si dibujó.</summary>

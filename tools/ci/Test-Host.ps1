@@ -27,8 +27,8 @@ function NewRoom([string]$name, [string]$barMode = 'normal', [string]$dockMode =
   $cfg | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
   return [pscustomobject]@{ Dir = $d; Cfg = Join-Path $d 'winmac.json'; Log = Join-Path $d 'host.log' }
 }
-function HostArgs($room, [switch]$Tray) { $a = @('--fast', '--notchwin-settings', "`"$(Join-Path $room.Dir 'sin-notchwin.json')`"", '--bar-json', "`"$(Join-Path $room.Dir 'sin-bar.json')`"", '--config', "`"$($room.Cfg)`"", '--log', "`"$($room.Log)`""); if (-not $Tray) { $a = @('--no-tray') + $a }; $a }
-function StartHost($room, [switch]$Tray) { $p = Start-Process -FilePath $hostExe -ArgumentList (HostArgs $room -Tray:$Tray) -PassThru -WindowStyle Hidden; $null = $p.Handle; $p }   # .Handle: sin él, ExitCode puede quedar vacío
+function HostArgs($room, [switch]$Tray, [string]$BarJson = '') { $a = @('--fast', '--notchwin-settings', "`"$(Join-Path $room.Dir 'sin-notchwin.json')`"", '--bar-json', "`"$(if ($BarJson) { $BarJson } else { Join-Path $room.Dir 'sin-bar.json' })`"", '--config', "`"$($room.Cfg)`"", '--log', "`"$($room.Log)`""); if (-not $Tray) { $a = @('--no-tray') + $a }; $a }
+function StartHost($room, [switch]$Tray, [string]$BarJson = '') { $p = Start-Process -FilePath $hostExe -ArgumentList (HostArgs $room -Tray:$Tray -BarJson $BarJson) -PassThru -WindowStyle Hidden; $null = $p.Handle; $p }   # .Handle: sin él, ExitCode puede quedar vacío
 function LogHas($room, [string]$text) { (Test-Path $room.Log) -and (Select-String -Path $room.Log -SimpleMatch -Pattern $text -Quiet) }
 function ModLog($room, [string]$id) { $f = Join-Path $room.Dir "$id.log"; if (Test-Path $f) { Get-Content $f } else { @() } }
 function Starts($room, [string]$id) { @(ModLog $room $id | Where-Object { $_ -match ' started$' }).Count }
@@ -60,6 +60,26 @@ Quit $r1 $h1
 Check 'B3 el host termina tras --quit' ($h1.HasExited -and $h1.ExitCode -eq 0)
 Check 'B3 los módulos cerraron por su camino normal (shutdown → bye)' ((ModLog $r1 'bar') -match ' bye$' -and (ModLog $r1 'dock') -match ' bye$')
 Check 'B3 no queda ningún proceso de módulo' (($pids.Count -eq 2) -and -not (AnyAlive $pids)) ("pids: $($pids -join ',')")
+
+# ── 3b. Migración de los ajustes de la Barra (bar.json → winmac.json): una sola vez, sin tocar el original
+$r3b = NewRoom 'migracion'; $barJson = Join-Path $r3b.Dir 'bar.json'
+'{ "ShowSeconds": true, "Use24Hour": false, "Background": "Transparent" }' | Set-Content $barJson -Encoding UTF8
+$shaAntes = (Get-FileHash $barJson -Algorithm SHA256).Hash
+$h3b = StartHost $r3b -BarJson $barJson
+$okM = WaitFor { (LogHas $r3b '[bar] Running') -and (LogHas $r3b 'ajustes de la Barra importados') } 30
+Check 'MIG el host importa bar.json al arrancar por primera vez' $okM
+Quit $r3b $h3b
+$central = Get-Content $r3b.Cfg -Raw | ConvertFrom-Json
+$barCfg = if ($central.PSObject.Properties.Name -contains 'bar') { $central.bar } else { $central.Bar }
+Check 'MIG winmac.json recibió los valores de la Barra' ($null -ne $barCfg -and $barCfg.showSeconds -eq $true -and $barCfg.use24Hour -eq $false) ("bar=$($barCfg | ConvertTo-Json -Compress)")
+Check 'MIG el bar.json original no se modificó' ((Get-FileHash $barJson -Algorithm SHA256).Hash -eq $shaAntes)
+Check 'MIG los módulos y demás ajustes del central se conservaron' (($central.modules.PSObject.Properties.Name -contains 'bar') -and ($central.modules.PSObject.Properties.Name -contains 'dock'))
+# segundo arranque: ya hay ajustes de la Barra en el central, así que un bar.json distinto NO los pisa
+'{ "ShowSeconds": false }' | Set-Content $barJson -Encoding UTF8
+$h3c = StartHost $r3b -BarJson $barJson; Start-Sleep -Seconds 4; Quit $r3b $h3c
+$central2 = Get-Content $r3b.Cfg -Raw | ConvertFrom-Json; $barCfg2 = if ($central2.PSObject.Properties.Name -contains 'bar') { $central2.bar } else { $central2.Bar }
+Check 'MIG un segundo arranque no pisa los ajustes ya centralizados' ($barCfg2.showSeconds -eq $true)
+Cleanup
 
 # ── 4. Host muerto de golpe (B4): el Job Object se lleva a los hijos
 $r4 = NewRoom 'kill'; $h4 = StartHost $r4

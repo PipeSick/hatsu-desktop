@@ -185,6 +185,23 @@ public class HostControllerTests
     }
 
     [Fact]
+    public async Task When_the_notch_crashes_or_is_turned_off_the_space_is_released_even_if_the_channel_did_not_report_a_disconnect()
+    {
+        var (f, c, h, file) = Make();
+        try
+        {
+            await f.StartAllAsync(); await f.ReadyAsync("bar"); await f.ReadyAsync("dock"); await f.ReadyAsync("notch");
+            int Empties() { lock (f.Bus.Published) return f.Bus.Published.Count(p => p.Topic == NotchSettings.RectsTopic && System.Text.Json.JsonSerializer.Serialize(p.Data) == "{\"rects\":[]}"); }
+            int before = Empties();
+            f.Launcher.Last("notch").Exit(1);   // cae sin avisar por el canal
+            for (int i = 0; i < 100 && Empties() == before; i++) await Task.Delay(20);
+            Assert.True(Empties() > before, "la caída de la Isla no liberó su espacio en las Barras");
+            int dockBefore = Empties(); f.Launcher.Last("dock").Exit(1); await Task.Delay(100); Assert.Equal(dockBefore, Empties());   // la caída de otro módulo no toca el espacio de la Isla
+        }
+        finally { File.Delete(file); }
+    }
+
+    [Fact]
     public void When_the_notch_disconnects_the_space_it_held_in_the_bar_is_released()
     {
         var (f, _, h, file) = Make();
@@ -298,5 +315,100 @@ public class BarCentralConfigTests
             lock (f.Bus.Published) Assert.Equal(HostController.BarTopic, f.Bus.Published[^1].Topic);
         }
         finally { try { File.Delete(file); } catch (IOException) { } }
+    }
+}
+
+public class BarMigrationTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "winmac-mig-" + Guid.NewGuid().ToString("N"));
+    public BarMigrationTests() { Directory.CreateDirectory(_dir); }
+    public void Dispose() { try { Directory.Delete(_dir, true); } catch (IOException) { } }
+    private string P(string n) => Path.Combine(_dir, n);
+    private static string Sha(string f) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(f)));
+
+    [Fact]
+    public void The_first_start_copies_bar_json_into_winmac_json_without_touching_the_original()
+    {
+        File.WriteAllText(P("bar.json"), new WinMac.Bar.BarConfig { ShowSeconds = true, Use24Hour = false, Background = WinMac.Bar.BarBackground.Transparent, CalendarIcsPath = @"C:\cal\mi.ics" }.ToJson());   // tal como lo escribe la propia Barra (PascalCase)
+        string before = Sha(P("bar.json")); var log = new List<string>();
+        var cfg = BarMigration.ImportOnce(new HostConfig(), P("bar.json"), P("winmac.json"), log.Add);
+        Assert.True(cfg.Bar!.ShowSeconds); Assert.False(cfg.Bar.Use24Hour); Assert.Equal(WinMac.Bar.BarBackground.Transparent, cfg.Bar.Background); Assert.Equal(@"C:\cal\mi.ics", cfg.Bar.CalendarIcsPath);
+        var onDisk = HostConfig.Load(P("winmac.json")); Assert.True(onDisk.Bar!.ShowSeconds); Assert.Equal(cfg.Bar, onDisk.Bar);   // quedó guardado en el archivo central
+        Assert.Equal(before, Sha(P("bar.json"))); Assert.Single(log); Assert.Contains("no se modificó", log[0]);        // el original sigue idéntico
+    }
+
+    [Fact]
+    public void Once_the_central_file_has_bar_settings_a_later_bar_json_never_overwrites_them()
+    {
+        File.WriteAllText(P("bar.json"), new WinMac.Bar.BarConfig { ShowSeconds = true }.ToJson());
+        var first = BarMigration.ImportOnce(new HostConfig(), P("bar.json"), P("winmac.json"), _ => { });
+        var edited = first with { Bar = first.Bar! with { ShowSeconds = false } };   // el usuario lo cambió desde Ajustes
+        File.WriteAllText(P("bar.json"), new WinMac.Bar.BarConfig { ShowSeconds = true, ShowDate = false }.ToJson()); File.Delete(P("winmac.json"));
+        var again = BarMigration.ImportOnce(edited, P("bar.json"), P("winmac.json"), _ => { });
+        Assert.Same(edited, again); Assert.False(again.Bar!.ShowSeconds); Assert.False(File.Exists(P("winmac.json")));   // no reescribe nada
+    }
+
+    [Fact]
+    public void Without_a_bar_json_nothing_is_imported_and_nothing_is_written()
+    {
+        var cfg = new HostConfig(); var res = BarMigration.ImportOnce(cfg, P("no-existe.json"), P("winmac.json"), _ => { });
+        Assert.Same(cfg, res); Assert.Null(res.Bar); Assert.False(File.Exists(P("winmac.json")));
+    }
+
+    [Fact]
+    public void A_corrupt_bar_json_falls_back_to_defaults_and_values_out_of_range_are_sanitized()
+    {
+        File.WriteAllText(P("bar.json"), "{esto no es json");
+        var cfg = BarMigration.ImportOnce(new HostConfig(), P("bar.json"), P("winmac.json"), _ => { });
+        Assert.Equal(new WinMac.Bar.BarConfig().Sanitize(), cfg.Bar);
+        File.WriteAllText(P("bar2.json"), "{\"CenterGap\":99,\"Language\":\"fr\"}");
+        var c2 = BarMigration.ImportOnce(new HostConfig(), P("bar2.json"), P("w2.json"), _ => { });
+        Assert.Equal(0.6, c2.Bar!.CenterGap); Assert.Equal("es", c2.Bar.Language);
+    }
+
+    [Fact]
+    public void After_the_migration_the_bar_receives_its_settings_from_the_host_and_its_changes_round_trip_through_the_central_file()
+    {
+        File.WriteAllText(P("bar.json"), new WinMac.Bar.BarConfig { ShowSeconds = true }.ToJson());
+        var cfg = BarMigration.ImportOnce(new HostConfig(), P("bar.json"), P("winmac.json"), _ => { });
+        var svc = new ConfigService(P("winmac.json"), cfg);
+        svc.ApplyBarPatch(System.Text.Json.JsonDocument.Parse("{\"reserveSpace\":false}").RootElement.Clone());   // lo que envía la Barra cuando el usuario desmarca «Reservar espacio arriba»
+        var reloaded = HostConfig.Load(P("winmac.json")); Assert.False(reloaded.Bar!.ReserveSpace); Assert.True(reloaded.Bar.ShowSeconds);
+    }
+}
+
+public class BarPatchActionTests
+{
+    private static System.Text.Json.JsonElement J(string json) => System.Text.Json.JsonDocument.Parse(json).RootElement.Clone();
+    private static string Tmp() => Path.Combine(Path.GetTempPath(), "winmac-bp-" + Guid.NewGuid().ToString("N") + ".json");
+
+    [Fact]
+    public void Invalid_or_foreign_fields_in_a_bar_patch_change_nothing_and_valid_ones_in_the_same_patch_still_apply()
+    {
+        var f = Tmp();
+        try
+        {
+            var s = new ConfigService(f, new HostConfig());
+            Assert.False(s.ApplyBarPatch(J("{\"nopExiste\":1,\"showSeconds\":\"si\",\"theme\":\"Fucsia\"}")));   // todo inválido: ni cambia ni guarda
+            Assert.False(File.Exists(f));
+            Assert.True(s.ApplyBarPatch(J("{\"showSeconds\":true,\"theme\":\"Fucsia\",\"wifiDetails\":true}")));      // lo válido pasa aunque haya algo inválido al lado
+            Assert.True(s.Bar.ShowSeconds); Assert.True(s.Bar.WifiDetails); Assert.Equal(WinMac.Bar.BarThemeMode.System, s.Bar.Theme);
+            Assert.False(s.ApplyBarPatch(J("[1,2,3]"))); Assert.False(s.ApplyBarPatch(J("\"hola\"")));
+        }
+        finally { try { File.Delete(f); } catch (IOException) { } }
+    }
+
+    [Fact]
+    public void A_bar_patch_does_not_alter_the_notch_settings_or_the_modules_and_the_other_way_round()
+    {
+        var f = Tmp();
+        try
+        {
+            var s = new ConfigService(f, new HostConfig()); s.ApplyNotchPatch(J("{\"glassLevel\":33}")); s.SetModuleEnabled("dock", false);
+            s.ApplyBarPatch(J("{\"showDate\":false}"));
+            var l = HostConfig.Load(f); Assert.Equal(33, l.Notch!.GlassLevel); Assert.False(l.Modules["dock"].Enabled); Assert.False(l.Bar!.ShowDate);
+            s.ApplyNotchPatch(J("{\"glassLevel\":44}")); Assert.False(HostConfig.Load(f).Bar!.ShowDate);
+        }
+        finally { try { File.Delete(f); } catch (IOException) { } }
     }
 }

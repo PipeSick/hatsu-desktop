@@ -46,7 +46,7 @@ public sealed class ConfigService
     public bool UpdateBar(Func<BarConfig, BarConfig> change) => Update(c =>
     {
         var cur = c.Bar ?? new BarConfig(); var n = change(cur).Sanitize();
-        return n == cur && c.Bar is not null ? c : c with { Bar = n };
+        return n == cur ? c : c with { Bar = n };   // sin cambio efectivo no se crea la sección ni se escribe nada (con la sección ausente rigen los valores por defecto)
     });
     public bool ApplyBarPatch(JsonElement patch) => UpdateBar(b => b.ApplyPatch(patch));
 
@@ -70,14 +70,19 @@ public sealed class HostController
     public HostController(ConfigService cfg, Supervisor sup, IHostBus bus, Action<string>? log = null)
     {
         _cfg = cfg; _sup = sup; _bus = bus; _log = log ?? (_ => { });
-        _bus.Event += OnEvent; _cfg.Changed += OnChanged; _bus.Disconnected += OnDisconnected;
+        _bus.Event += OnEvent; _cfg.Changed += OnChanged; _bus.Disconnected += OnDisconnected; _sup.StateChanged += OnModuleState;
     }
 
     /// <summary>Si la Isla se va (cierre, caída, desactivación), el espacio que tenía reservado en la Barra no puede quedarse retenido: se publica vacío.</summary>
-    private void OnDisconnected(string module)
+    private void OnDisconnected(string module) { if (module == "notch") ReleaseNotchSpace(); }
+
+    /// <summary>Segunda vía, por estado del supervisor: aunque el canal no avisara del corte, una Isla caída, fallida o parada no puede dejar espacio retenido en las Barras.</summary>
+    private void OnModuleState(string module, ModuleState state)
     {
-        if (module == "notch") _bus.Publish(NotchSettings.RectsTopic, new { rects = Array.Empty<object>() });
+        if (module == "notch" && state is ModuleState.Crashed or ModuleState.Failed or ModuleState.Stopped or ModuleState.Stopping or ModuleState.Disabled or ModuleState.NotInstalled) ReleaseNotchSpace();
     }
+
+    private void ReleaseNotchSpace() => _bus.Publish(NotchSettings.RectsTopic, new { rects = Array.Empty<object>() });
 
     /// <summary>Publica el estado inicial (el módulo lo recibe al suscribirse, aunque se conecte más tarde).</summary>
     public const string BarTopic = "config.bar", BarSetTopic = "config.bar.set";

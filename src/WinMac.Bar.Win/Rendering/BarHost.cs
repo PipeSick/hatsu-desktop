@@ -76,15 +76,35 @@ public sealed partial class BarHost : IDisposable
         {
             while (BarNative.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1)) { if (msg.message == WM_QUIT) return 0; BarNative.TranslateMessage(ref msg); BarNative.DispatchMessage(ref msg); }
             Volatile.Write(ref _lastTickMs, Environment.TickCount64);
-            _app?.Pump(); PollTopology(); foreach (var w in _wins.ToArray()) w.Poll(); Housekeeping(); PanelsTick();
+            DrainUi(); _app?.Pump(); PollTopology(); foreach (var w in _wins.ToArray()) Guard(w, w.Poll); Housekeeping(); PanelsTick();
             if (_quitting) return 0;
             if (selfTest && clock.Elapsed.TotalSeconds > 10) throw new TimeoutException("selftest: no se alcanzaron los frames en 10 s");
             double now = clock.Elapsed.TotalSeconds, dt = Math.Min(now - last, 0.1); last = now;
             bool rendered = false, needs = false;
-            foreach (var w in _wins.ToArray()) { rendered |= w.Frame(dt, selfTest); needs |= w.NeedsFrames; }
+            foreach (var w in _wins.ToArray()) { Guard(w, () => rendered |= w.Frame(dt, selfTest)); needs |= w.NeedsFrames; }
             if (rendered) frames++;
             if (frames >= maxFrames) return 0;
             if (!needs && !selfTest) BarNative.MsgWaitForMultipleObjectsEx(0, null, 50, BarNative.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);
+        }
+    }
+
+    private int _quarantines; private DateTime _lastQuarantine = DateTime.MinValue;
+
+    /// <summary>
+    /// Cada barra es independiente: si la de un monitor falla (dispositivo de gráficos perdido, ventana destruida por fuera…), se libera SOLO esa y se vuelve a crear en el siguiente repaso de monitores;
+    /// las demás siguen. Si fallan demasiadas veces seguidas no se insiste: se deja caer el proceso para que el host lo reinicie limpio.
+    /// </summary>
+    private void Guard(BarWindow w, Action body)
+    {
+        try { body(); }
+        catch (Exception e)
+        {
+            _log($"[bar] la barra de {w.Info.Id} falló y se recreará: {e.GetType().Name}: {e.Message}");
+            var nowU = DateTime.UtcNow; if (nowU - _lastQuarantine > TimeSpan.FromMinutes(1)) _quarantines = 0; _lastQuarantine = nowU;   // fallos aislados no se acumulan
+            if (++_quarantines > 5) throw;
+            _wins.Remove(w); if (ReferenceEquals(_popSource, w)) { _popSource = null; _popover?.Hide(); } if (ReferenceEquals(_actionSource, w)) _actionSource = null;
+            try { w.Dispose(); } catch (Exception) { /* ya estaba rota */ }
+            _topo.MarkApplied("", DateTime.UtcNow); _nextTopoPoll = DateTime.MinValue;   // la huella aplicada ya no coincide con la realidad: el próximo repaso recrea la barra que falta
         }
     }
 

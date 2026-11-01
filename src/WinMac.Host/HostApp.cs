@@ -52,7 +52,7 @@ internal static class HostApp
 
         var cfg = HostConfig.Load(o.ConfigPath);
         cfg = MigrateNotchOnce(cfg, o, log);
-        cfg = MigrateBarOnce(cfg, o, log);
+        cfg = WinMac.Host.BarMigration.ImportOnce(cfg, o.BarJsonPath, o.ConfigPath, log);
         string baseDir = AppContext.BaseDirectory, pipe = o.PipeName ?? PipeNames.ForCurrentUser(), token = PipeNames.NewToken();
         log($"[host] iniciado (pid {Environment.ProcessId}); configuración: {o.ConfigPath}; canal: {pipe}");
 
@@ -130,18 +130,6 @@ internal static class HostApp
     /// Migración ÚNICA y NO destructiva de los ajustes de la Barra: si <c>winmac.json</c> aún no tiene sección <c>bar</c> y existe <c>bar.json</c>, se copian. El archivo original no se
     /// toca ni se borra. Desde entonces la fuente de verdad es <c>winmac.json</c> (la Barra recibe sus ajustes del host; sin host sigue usando bar.json).
     /// </summary>
-    private static HostConfig MigrateBarOnce(HostConfig cfg, HostOptions o, Action<string> log)
-    {
-        if (cfg.Bar is not null || !File.Exists(o.BarJsonPath)) return cfg;
-        try
-        {
-            var imported = WinMac.Bar.BarConfig.LoadOrDefault(o.BarJsonPath).Sanitize();
-            var next = cfg with { Bar = imported };
-            HostConfig.Save(o.ConfigPath, next); log("[host] ajustes de la Barra importados de " + o.BarJsonPath + " (el archivo original no se modificó)"); return next;
-        }
-        catch (Exception e) { log("[host] no se pudo importar los ajustes de la Barra: " + e.Message); return cfg; }
-    }
-
     /// <summary>Pide el cierre a las ventanas de nivel superior de un proceso (WM_CLOSE): cooperativo, no fuerza nada.</summary>
     private static void PostCloseToWindows(int pid)
     {
