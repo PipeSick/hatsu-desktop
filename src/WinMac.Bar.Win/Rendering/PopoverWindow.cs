@@ -24,7 +24,9 @@ internal sealed class PopoverWindow : IDisposable
     /// <summary>Mientras una acción abre un cuadro de diálogo propio, perder el foco NO debe cerrar el panel.</summary>
     public bool KeepOpen { get; set; }
 
-    public PopoverWindow(Action<PanelEvent> onEvent, Action onClosed, Action<string> log) { _onEvent = onEvent; _onClosed = onClosed; _log = log; _proc = WndProcImpl; }
+    private readonly Func<string, byte[]?>? _icons;
+    public PopoverWindow(Action<PanelEvent> onEvent, Action onClosed, Action<string> log, Func<string, byte[]?>? icons = null) { _onEvent = onEvent; _onClosed = onClosed; _log = log; _icons = icons; _proc = WndProcImpl; }
+    internal IntPtr Hwnd => _hwnd;
 
     public bool IsOpen => _open;
     public PanelKind? Kind => _open ? _ctl.Model.Kind : null;
@@ -53,7 +55,7 @@ internal sealed class PopoverWindow : IDisposable
             BarNative.RegisterClassEx(ref cls);
             _hwnd = BarNative.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, "WinMacPanel", "WinMac panel", WS_POPUP, 0, 0, 10, 10, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
             if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("No se pudo crear la ventana del panel: " + Marshal.GetLastWin32Error());
-            _dev = new D2DDevice(); _painter = new PanelPainter(_dev);
+            _dev = new D2DDevice(); _painter = new PanelPainter(_dev) { IconProvider = _icons };
         }
 
         if (Math.Abs(scale - _scale) > 0.001) { _scale = scale; _dev!.SetDpi(scale); _wPx = _hPx = 0; }

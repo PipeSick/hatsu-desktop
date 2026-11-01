@@ -412,3 +412,92 @@ public class BarPatchActionTests
         finally { try { File.Delete(f); } catch (IOException) { } }
     }
 }
+
+public class CityResolverTests
+{
+    private sealed class Src(Func<string, IReadOnlyList<WinMac.Bar.Hub.GeoPoint>> search) : WinMac.Bar.Hub.IWeatherSource
+    {
+        public List<string> Queries { get; } = [];
+        public Task<WinMac.Bar.Hub.WeatherSnapshot> FetchAsync(WinMac.Bar.Hub.GeoPoint place, IReadOnlyList<WinMac.Bar.Hub.GeoPoint> others, CancellationToken ct) => throw new NotSupportedException();
+        public Task<IReadOnlyList<WinMac.Bar.Hub.GeoPoint>> SearchAsync(string name, CancellationToken ct) { Queries.Add(name); return Task.FromResult(search(name)); }
+    }
+
+    private static readonly WinMac.Bar.Hub.GeoPoint Molina = new("Molina", "Maule, Chile", -35.1167, -71.2833), Santiago = new("Santiago", "Región Metropolitana, Chile", -33.45, -70.67);
+
+    [Fact]
+    public async Task A_typed_city_is_resolved_by_name_to_its_first_match_with_region_for_the_status_line()
+    {
+        var src = new Src(n => n == "Molina" ? [Molina, new("Molina", "Murcia, España", 38, -1.2)] : []);
+        var r = await CityResolver.ResolveOneAsync("  Molina ", src, CancellationToken.None); Assert.Equal("Molina", r.Place!.Name); Assert.Equal(-35.1167, r.Place.Lat); Assert.Equal("Molina, Maule, Chile", r.Message); Assert.Equal(["Molina"], src.Queries);
+    }
+
+    [Fact]
+    public async Task Explicit_coordinates_need_no_network_and_empty_input_does_nothing()
+    {
+        var src = new Src(_ => throw new InvalidOperationException("no debía buscar")); var r = await CityResolver.ResolveOneAsync("Casa|-35.1|-71.2", src, CancellationToken.None);
+        Assert.Equal("Casa", r.Place!.Name); Assert.Empty(src.Queries); Assert.Null((await CityResolver.ResolveOneAsync("   ", src, CancellationToken.None)).Place);
+    }
+
+    [Fact]
+    public async Task Not_found_and_offline_leave_the_city_unchanged_with_a_clear_message_instead_of_throwing()
+    {
+        var none = await CityResolver.ResolveOneAsync("Xyzzyx", new Src(_ => []), CancellationToken.None); Assert.Null(none.Place); Assert.Contains("No se encontró «Xyzzyx»", none.Message);
+        var off = await CityResolver.ResolveOneAsync("Molina", new Src(_ => throw new HttpRequestException("dns")), CancellationToken.None); Assert.Null(off.Place); Assert.Contains("sin conexión", off.Message);
+        var bad = await CityResolver.ResolveOneAsync("Molina", new Src(_ => throw new FormatException("json")), CancellationToken.None); Assert.Null(bad.Place);
+    }
+
+    [Fact]
+    public async Task Several_cities_skip_the_unknown_ones_drop_duplicates_and_cap_at_five()
+    {
+        var src = new Src(n => n switch { "Molina" => [Molina], "Santiago" => [Santiago], "Chillán" => [new("Chillán", null, -36.6, -72.1)], _ => [] });
+        var (places, problems) = await CityResolver.ResolveManyAsync("Molina, Nada, Santiago, molina|-35.1167|-71.2833, Santiago", src, CancellationToken.None);
+        Assert.Equal(["Molina", "Santiago"], places.Select(p => p.Name)); Assert.Single(problems); Assert.Contains("Nada", problems[0]);
+        var many = await CityResolver.ResolveManyAsync(string.Join(",", Enumerable.Range(0, 9).Select(i => $"C{i}|{i + 1}|{i + 1}")), new Src(_ => []), CancellationToken.None, max: 5); Assert.Equal(5, many.Places.Count);
+        Assert.Empty((await CityResolver.ResolveManyAsync("", src, CancellationToken.None)).Places);
+    }
+}
+
+public class BarCommandTests
+{
+    private static (Fixture F, HostController H, List<string> Log, string File) Make(out int[] counters, out List<string?> sections)
+    {
+        var f = new Fixture().With(("bar", true), ("dock", true), ("notch", true)); var file = Path.Combine(Path.GetTempPath(), "winmac-cmd-" + Guid.NewGuid().ToString("N") + ".json"); var log = new List<string>();
+        var h = new HostController(new ConfigService(file, new HostConfig()), f.Sup, f.Bus, log.Add); var c = new int[1]; var s = new List<string?>(); counters = c; sections = s;
+        h.QuitRequested = () => c[0]++; h.SettingsRequested = s.Add; return (f, h, log, file);
+    }
+
+    [Fact]
+    public void Quit_from_the_bar_asks_the_host_for_its_orderly_shutdown_and_nobody_else_can()
+    {
+        var (f, _, _, file) = Make(out var n, out _);
+        try
+        {
+            f.Bus.RaiseEvent("dock", HostController.CommandTopic, "{\"cmd\":\"quit\"}"); f.Bus.RaiseEvent("notch", HostController.CommandTopic, "{\"cmd\":\"quit\"}"); Assert.Equal(0, n[0]);   // otro módulo no puede cerrar WinMac
+            f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"quit\"}"); Assert.Equal(1, n[0]);
+        }
+        finally { File.Delete(file); }
+    }
+
+    [Fact]
+    public void Settings_requests_carry_only_known_sections_and_unknown_commands_or_garbage_do_nothing()
+    {
+        var (f, _, log, file) = Make(out var n, out var sections);
+        try
+        {
+            f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"settings\",\"section\":\"network\"}"); f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"settings\",\"section\":\"weather\"}");
+            f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"settings\",\"section\":\"../../etc\"}"); f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"settings\"}");
+            Assert.Equal(["network", "weather", null, null], sections);   // una sección desconocida se ignora, la ventana igual se abre
+            int before = sections.Count; f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"format-disk\"}"); f.Bus.RaiseEvent("bar", HostController.CommandTopic, "[1,2]"); f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":5}");
+            Assert.Equal(before, sections.Count); Assert.Equal(0, n[0]); Assert.DoesNotContain(log, l => l.Contains("falló"));
+        }
+        finally { File.Delete(file); }
+    }
+
+    [Fact]
+    public void Without_a_handler_commands_are_harmless()
+    {
+        var f = new Fixture().With(("bar", true), ("dock", true), ("notch", true)); var file = Path.Combine(Path.GetTempPath(), "winmac-cmd-" + Guid.NewGuid().ToString("N") + ".json");
+        try { _ = new HostController(new ConfigService(file, new HostConfig()), f.Sup, f.Bus); f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"quit\"}"); f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"settings\"}"); }
+        finally { File.Delete(file); }
+    }
+}

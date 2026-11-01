@@ -6,6 +6,7 @@
 //   WinMac.Bar.App --quit                   pide a la barra en ejecución que se cierre normalmente (libera el espacio reservado)
 //   WinMac.Bar.App --status                 imprime lo que leen los proveedores del sistema (batería, volumen, red) — informativo
 //   WinMac.Bar.App --render-png f.png [--theme light|dark] [--bg glass|transparent] [--scale 2] [--hover N]   renderiza FUERA de pantalla (para CI)
+//   WinMac.Bar.App --render-panel hub|weather --out f.png [--tab sound|system|network|disks] [--theme light|dark] [--scale 2]   panel con DATOS DE MUESTRA, fuera de pantalla (para comparar con las referencias)
 //   WinMac.Bar.App --selftest               comprobaciones no interactivas (NO registra AppBar); código 0 si todo funciona
 //   WinMac.Bar.App --selftest-appbar        SOLO CI: registra y libera un AppBar durante unos fotogramas
 //   WinMac.Bar.App --selftest-system        mide qué controles del sistema permite ESTE equipo (audio, Wi-Fi, Bluetooth, brillo, energía, apariencia) sin cambiar nada
@@ -46,6 +47,12 @@ internal static class Program
                 int hover = int.TryParse(Arg(args, "--hover"), out var h) ? h : -1;
                 Log("PNG: " + BarOffscreen.Render(png, theme, bg, scale, hoverItem: hover)); return 0;
             }
+            if (Arg(args, "--render-panel") is string kind)
+            {
+                var theme = Arg(args, "--theme")?.ToLowerInvariant() == "light" ? BarTheme.Light : BarTheme.Dark; double scale = double.TryParse(Arg(args, "--scale"), System.Globalization.CultureInfo.InvariantCulture, out var sc2) ? sc2 : 2.0;
+                if (!Enum.TryParse<WinMac.Bar.Hub.HubTab>(Arg(args, "--tab"), true, out var tab)) tab = WinMac.Bar.Hub.HubTab.Sound;
+                Log("PNG: " + PanelOffscreen.Render(Arg(args, "--out") ?? "panel.png", kind.ToLowerInvariant(), tab, theme, scale)); return 0;
+            }
             if (args.Contains("--status")) return Status();
             if (args.Contains("--quit")) return Quit();
             if (args.Contains("--selftest-system")) return SystemProbe();
@@ -73,6 +80,7 @@ internal static class Program
             // Ajustes centrales: el host es la única fuente de verdad. Llegan retenidos al conectar y tras cada cambio; los cambios hechos desde la barra se piden al host.
             link.Subscribe("config.bar", d => { try { if (d is { } e && System.Text.Json.JsonSerializer.Deserialize<BarConfig>(e.GetRawText(), BarConfig.Wire) is { } c) host.ApplyConfig(c.Sanitize()); } catch (Exception ex) { Log("Ajustes de la barra ilegibles: " + ex.Message); } });
             host.PersistPatch = patch => link.Event("config.bar.set", patch);
+            host.HostCommand = (cmd, section) => link.Event("host.cmd", new { cmd, section });   // «Ajustes» y «Salir» del panel: las ejecuta el host (cierre ordenado)
             link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
         Log("Barra superior iniciada. Cierra con «WinMac.Bar.App --quit» o desde su menú (clic derecho).");
         int rc = host.Run(); Log("Barra superior cerrada. " + host.Report());

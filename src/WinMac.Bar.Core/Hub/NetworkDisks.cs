@@ -22,6 +22,8 @@ public sealed class TrafficTracker(int historyLength = 60)
     public AdapterInfo? Adapter { get; private set; }
     public string? Reason { get; private set; } = "Leyendo…";
 
+    public void MarkGap() { _down.MarkGap(); _up.MarkGap(); }
+
     public void Update(NetCounters c, DateTime now)
     {
         Reason = c.Reason; Adapter = c.Adapter;

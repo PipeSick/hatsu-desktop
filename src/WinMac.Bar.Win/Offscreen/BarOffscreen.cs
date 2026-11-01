@@ -37,7 +37,7 @@ public static class BarOffscreen
         return $"{pw}x{totalH}px, {dev.Description}, tema {theme}, fondo {bg}, hover={hoverItem}";
     }
 
-    private static byte[] Readback(D2DDevice dev, ID2D1Bitmap1 target, int pw, int ph, double scale)
+    internal static byte[] Readback(D2DDevice dev, ID2D1Bitmap1 target, int pw, int ph, double scale)
     {
         using var cpu = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale, readable: true); cpu.CopyFromBitmap(target);
         var map = cpu.Map(MapOptions.Read); var bgra = new byte[map.Pitch * ph];

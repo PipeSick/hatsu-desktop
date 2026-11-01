@@ -11,7 +11,7 @@ namespace WinMac.Bar.Win.Rendering;
 /// Dibuja un <see cref="PanelFrame"/> con Direct2D (estética de macOS: tarjeta redondeada translúcida, mosaicos con acento azul al activarse, deslizadores blancos). Unidades en DIP.
 /// Un elemento deshabilitado se dibuja atenuado con su motivo debajo: nunca parece funcionar.
 /// </summary>
-public sealed class PanelPainter : IDisposable
+public sealed partial class PanelPainter : IDisposable
 {
     private readonly D2DDevice _dev; private readonly ID2D1DeviceContext _ctx;
     private readonly IDWriteFactory _dw; private readonly IDWriteTextFormat _title, _body, _bodyBold, _small, _tiny;
@@ -42,6 +42,7 @@ public sealed class PanelPainter : IDisposable
         // tarjeta
         FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, 16, Dark ? new Color4(0.13f, 0.13f, 0.15f, 0.94f) : new Color4(0.96f, 0.96f, 0.97f, 0.95f));
         Brush(Fill(0.14f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(0.5, 0.5, f.Width - 0.5, f.Height - 0.5), RadiusX = 16, RadiusY = 16 }, _solid, 1f);
+        if (f.Card is { } cr) { FillRR(cr.X, cr.Y, cr.X + cr.W, cr.Y + cr.H, 14, Fill(0.075f)); Brush(Fill(0.12f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cr.X + 0.5, cr.Y + 0.5, cr.X + cr.W - 0.5, cr.Y + cr.H - 0.5), RadiusX = 14, RadiusY = 14 }, _solid, 1f); }   // la tarjeta del contenido, como en las pestañas de referencia
         for (int i = 0; i < f.Items.Count; i++) DrawWidget(f.Items[i], i == hover);
         _ctx.EndDraw();
     }
@@ -63,6 +64,7 @@ public sealed class PanelPainter : IDisposable
         {
             case WidgetKind.Header:
             {
+                if (w.Glyph == "logo") { DrawLogo(w.Data as string ?? "", x + wd / 2, y + h / 2 + 2, h); break; }
                 bool back = w.Id == "back" || w.Glyph == "back";
                 if (w.Glyph == "section") { Text(w.Text, _small, x + 4, y, wd, h, Fg(0.55f)); break; }
                 if (back) { Glyph("back", x + 12, y + h / 2, 7, Fg(hover ? 1f : 0.8f)); Text(w.Text, _title, x + 28, y, wd - 28, h, Fg()); }
@@ -94,6 +96,7 @@ public sealed class PanelPainter : IDisposable
                 double tx = l + (r - l) * pct; FillCircle(tx, cy, 8, w.Enabled ? new Color4(1, 1, 1, 1) : Fill(0.3f));
                 if (w.Enabled) { Brush(new Color4(0, 0, 0, 0.18f)); _ctx.DrawEllipse(new Ellipse(new Vector2((float)tx, (float)cy), 8, 8), _solid, 0.8f); }
                 Glyph(w.Glyph ?? "sound", x + 20, cy, 8, Fg(dim));
+                if (!string.IsNullOrEmpty(w.Sub)) TextAlign(w.Sub, _small, x + wd - 46, cy - 9, 44, 18, Fg(0.7f * dim), TextAlignment.Trailing);
                 if (!w.Enabled && !string.IsNullOrEmpty(w.Reason)) Text(w.Reason!, _tiny, x + 4, y + 36, wd - 8, 26, Fg(0.6f), vcenter: false);
                 break;
             }
@@ -116,15 +119,20 @@ public sealed class PanelPainter : IDisposable
                 break;
             }
             case WidgetKind.Button:
+            {
                 FillRR(x, y, x + wd, y + h, 8, Fill(hover && w.Enabled ? 0.17f : 0.10f));
-                Text(w.Text, _body, x, y, wd, h, w.Enabled ? Fg() : Fg(0.45f), center: true);
+                var bc = w.Enabled ? Fg() : Fg(0.45f);
+                if (w.Glyph is not null) { double tw = MeasureText(w.Text, _body), gx = x + wd / 2 - tw / 2 - 12; Glyph(w.Glyph, gx, y + h / 2, 7, bc); Text(w.Text, _body, gx + 14, y, tw + 8, h, bc); }
+                else Text(w.Text, _body, x, y, wd, h, bc, center: true);
                 break;
+            }
             case WidgetKind.Note:
             {
                 using var l = _dw.CreateTextLayout(w.Text, _small, (float)wd - 8, (float)h); Brush(Fg(0.6f)); _ctx.DrawTextLayout(new Vector2((float)x + 4, (float)y + 2), l, _solid);
                 break;
             }
             case WidgetKind.Month: DrawMonth(f); break;
+            default: DrawHubWidget(f, hover); break;
         }
     }
 
@@ -201,8 +209,9 @@ public sealed class PanelPainter : IDisposable
             case "lock": Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cx - s * .7, cy - s * .15, cx + s * .7, cy + s * .8), RadiusX = 1.5f, RadiusY = 1.5f }, _solid, 1.3f); { using var a = Arc(cx, cy - s * .15, s * .45, Math.PI, 0); Stroke(a, c, 1.3f); } break;
             case "chevron": Line(cx - s * .35, cy - s * .7, cx + s * .35, cy, c, 1.7f); Line(cx + s * .35, cy, cx - s * .35, cy + s * .7, c, 1.7f); break;
             case "back": Line(cx + s * .35, cy - s * .7, cx - s * .35, cy, c, 1.7f); Line(cx - s * .35, cy, cx + s * .35, cy + s * .7, c, 1.7f); break;
+            default: HubGlyph(id, cx, cy, s, c); break;
         }
     }
 
-    public void Dispose() { _solid.Dispose(); _round.Dispose(); _title.Dispose(); _body.Dispose(); _bodyBold.Dispose(); _small.Dispose(); _tiny.Dispose(); _dw.Dispose(); }
+    public void Dispose() { DisposeHub(); _solid.Dispose(); _round.Dispose(); _title.Dispose(); _body.Dispose(); _bodyBold.Dispose(); _small.Dispose(); _tiny.Dispose(); _dw.Dispose(); }
 }

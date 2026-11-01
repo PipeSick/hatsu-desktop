@@ -38,6 +38,16 @@ public class MonitoringTests
         idle.Reset(); Assert.Equal(0, idle.Total);
     }
 
+    [Fact]
+    public void After_a_pause_the_first_sample_counts_the_bytes_but_never_reports_a_fake_average_speed()
+    {
+        var m = new RateMeter(); m.Sample(0, T0); m.Sample(1000, T0.AddSeconds(1)); m.MarkGap();
+        Assert.Equal(0, m.Sample(1_001_000, T0.AddSeconds(600))); Assert.Equal(1_001_000, m.Total);     // 10 min cerrado: lo acumulado se cuenta, pero 1 MB/600 s no es la velocidad actual
+        Assert.Equal(500, m.Sample(1_001_500, T0.AddSeconds(601)), 1);                                   // y la siguiente ya mide normal
+        var t = new TrafficTracker(); var ad = new AdapterInfo("Wi-Fi", "", "Wi-Fi", null, null); t.Update(new NetCounters(0, 0, ad), T0); t.Update(new NetCounters(100, 0, ad), T0.AddSeconds(1)); t.MarkGap(); t.Update(new NetCounters(5_000_100, 0, ad), T0.AddSeconds(900));
+        Assert.Equal(0, t.DownRate); Assert.Equal(5_000_100, t.SessionDown);
+    }
+
     [Theory]
     [InlineData(748_000, RateUnit.Auto, "748 KB/s")]
     [InlineData(22_000, RateUnit.Auto, "22 KB/s")]

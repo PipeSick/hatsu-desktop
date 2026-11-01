@@ -85,7 +85,13 @@ public sealed class HostController
     private void ReleaseNotchSpace() => _bus.Publish(NotchSettings.RectsTopic, new { rects = Array.Empty<object>() });
 
     /// <summary>Publica el estado inicial (el módulo lo recibe al suscribirse, aunque se conecte más tarde).</summary>
-    public const string BarTopic = "config.bar", BarSetTopic = "config.bar.set";
+    public const string BarTopic = "config.bar", BarSetTopic = "config.bar.set", CommandTopic = "host.cmd";
+    /// <summary>Secciones de Ajustes que se pueden pedir desde el panel de la Barra (cualquier otra se ignora).</summary>
+    public static readonly string[] SettingsSections = ["sound", "system", "network", "disks", "weather"];
+    /// <summary>Cierre ordenado de WinMac completo (lo ejecuta el anfitrión en su hilo de interfaz).</summary>
+    public Action? QuitRequested { get; set; }
+    /// <summary>Abrir la ventana de Ajustes, en una sección o null.</summary>
+    public Action<string?>? SettingsRequested { get; set; }
 
     public void Start() { _bus.Publish(NotchSettings.Topic, _cfg.Notch.ToWire()); _bus.Publish(BarTopic, BarWire(_cfg.Bar)); }
 
@@ -100,7 +106,20 @@ public sealed class HostController
         if (data is not { } d) return;
         // cada módulo cambia SOLO sus propios ajustes y solo por su tópico
         if (module == "notch" && topic == NotchSettings.SetTopic) { try { _cfg.ApplyNotchPatch(d); } catch (Exception e) { _log("[config] parche de la Isla descartado: " + e.Message); } }
+        else if (module == "bar" && topic == CommandTopic) { try { RunCommand(d); } catch (Exception e) { _log("[host] orden de la Barra descartada: " + e.Message); } }
         else if (module == "bar" && topic == BarSetTopic) { try { _cfg.ApplyBarPatch(d); } catch (Exception e) { _log("[config] parche de la Barra descartado: " + e.Message); } }
+    }
+
+    /// <summary>Órdenes de la Barra (solo «quit» y «settings»; nada más). Solo las acepta de la Barra: el canal no es una puerta para otros módulos.</summary>
+    private void RunCommand(JsonElement d)
+    {
+        string? cmd = d.ValueKind == JsonValueKind.Object && d.TryGetProperty("cmd", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null;
+        string? section = d.ValueKind == JsonValueKind.Object && d.TryGetProperty("section", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null;
+        switch (cmd)
+        {
+            case "quit": _log("[host] la Barra pidió cerrar WinMac"); QuitRequested?.Invoke(); break;
+            case "settings": SettingsRequested?.Invoke(section is not null && SettingsSections.Contains(section) ? section : null); break;
+        }
     }
 
     private void OnChanged(HostConfig old, HostConfig @new)

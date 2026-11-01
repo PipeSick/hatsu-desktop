@@ -48,7 +48,7 @@ public sealed class History(int capacity)
 /// </summary>
 public sealed class RateMeter
 {
-    private ulong? _last; private DateTime _lastAt; private double _rate; private double _total;
+    private ulong? _last; private DateTime _lastAt; private double _rate; private double _total; private bool _gap;
     /// <summary>Bytes por segundo entre las dos últimas muestras.</summary>
     public double Rate => _rate;
     /// <summary>Bytes acumulados desde la primera muestra (sesión).</summary>
@@ -60,10 +60,14 @@ public sealed class RateMeter
         double dt = (now - _lastAt).TotalSeconds;
         if (dt <= 0) return _rate;   // misma marca de tiempo: se conserva la velocidad anterior
         if (counter < _last.Value) { _last = counter; _lastAt = now; _rate = 0; return 0; }   // el contador se reinició: se vuelve a empezar sin contar el salto
-        double delta = counter - _last.Value; _total += delta; _rate = delta / dt; _last = counter; _lastAt = now; return _rate;
+        double delta = counter - _last.Value; _total += delta;
+        if (_gap) { _gap = false; _rate = 0; _last = counter; _lastAt = now; return 0; }   // tras una pausa (panel cerrado) el promedio de todo ese tiempo no es una velocidad: se cuenta el acumulado y la velocidad vuelve a medirse desde cero
+        _rate = delta / dt; _last = counter; _lastAt = now; return _rate;
     }
 
-    public void Reset() { _last = null; _rate = 0; _total = 0; }
+    public void Reset() { _last = null; _rate = 0; _total = 0; _gap = false; }
+    /// <summary>Hubo una pausa en las lecturas: la próxima muestra suma lo acumulado pero no calcula velocidad.</summary>
+    public void MarkGap() => _gap = true;
 }
 
 public enum RateUnit { Auto, KBps, MBps, Mbps }

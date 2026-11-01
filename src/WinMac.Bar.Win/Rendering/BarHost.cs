@@ -57,9 +57,9 @@ public sealed partial class BarHost : IDisposable
     /// <summary>true si alguna barra tiene el AppBar registrado.</summary>
     public bool Reserved => _wins.Any(w => w.Registered);
 
-    public BarHost(BarConfig cfg, string? configPath, Action<string> log, bool trackActiveApp = true, WinMac.SystemControl.SystemServices? services = null)
+    public BarHost(BarConfig cfg, string? configPath, Action<string> log, bool trackActiveApp = true, WinMac.SystemControl.SystemServices? services = null, WinMac.Bar.Hub.HubServices? hubServices = null)
     {
-        _cfg = cfg; _cfgPath = configPath; _log = log; InitPanels(services);
+        _cfg = cfg; _cfgPath = configPath; _log = log; InitPanels(services, hubServices);
         _theme = ResolveTheme();
         if (trackActiveApp) _app = new ActiveAppProvider();
         try { _quit = new EventWaitHandle(false, EventResetMode.ManualReset, QuitEventName); } catch (Exception e) { log("No se pudo crear el evento de cierre: " + e.Message); }

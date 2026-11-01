@@ -16,7 +16,7 @@ internal sealed class SettingsWindow : IDisposable
     private const uint BM_GETCHECK = 0xF0, BM_SETCHECK = 0xF1, CB_ADDSTRING = 0x143, CB_GETCURSEL = 0x147, CB_SETCURSEL = 0x14E, LB_ADDSTRING = 0x180, LB_RESETCONTENT = 0x184, LB_SETCURSEL = 0x186, LB_GETCURSEL = 0x188;
     private const uint TBM_GETPOS = 0x400, TBM_SETPOS = 0x405, TBM_SETRANGE = 0x406, TB_ENDTRACK = 8;
     private const int ID_BAR = 200, ID_DOCK = 201, ID_NOTCH = 202, ID_AUTOSTART = 203, ID_POS = 210, ID_GLASS = 211, ID_PLAYER = 212, ID_PATH = 213, ID_LYRICS = 214, ID_PILL = 215, ID_MUSIC = 216, ID_AGENTS = 217, ID_POLL = 218,
-        ID_BARBASE = 300, ID_BGCOMBO = 360, ID_THEMECOMBO = 361, ID_ICS = 362, ID_LIST = 220, ID_UP = 221, ID_DOWN = 222, ID_TOGGLE = 223, ID_LOCAL = 230, ID_CLOSE = 231, ID_GLASSVAL = 240, ID_NOTE = 241;
+        ID_BARBASE = 300, ID_HUBMS = 370, ID_RATE = 371, ID_WCITY = 372, ID_WFAV = 373, ID_WSTATUS = 374, ID_BGCOMBO = 360, ID_THEMECOMBO = 361, ID_ICS = 362, ID_LIST = 220, ID_UP = 221, ID_DOWN = 222, ID_TOGGLE = 223, ID_LOCAL = 230, ID_CLOSE = 231, ID_GLASSVAL = 240, ID_NOTE = 241;
     private const string ClassName = "WinMacSettings";
     /// <summary>Opciones booleanas de la Barra: (campo del parche, texto, lectura, escritura). Un solo lugar; la ventana las pinta y aplica por tabla.</summary>
     private static readonly (string Field, string Text, Func<WinMac.Bar.BarConfig, bool> Get)[] BarToggles =
@@ -27,7 +27,12 @@ internal sealed class SettingsWindow : IDisposable
         ("wifiDetails", "Wi-Fi: desplegar detalle (señal, banda) al tocar una red", b => b.WifiDetails), ("appMenus", "Menús de app activa (experimental)", b => b.AppMenus),
         ("ccWifi", "CC: Wi-Fi", b => b.CcWifi), ("ccBluetooth", "CC: Bluetooth", b => b.CcBluetooth), ("ccSound", "CC: Sonido", b => b.CcSound), ("ccBrightness", "CC: Brillo", b => b.CcBrightness),
         ("ccPower", "CC: Energía", b => b.CcPower), ("ccAppearance", "CC: Apariencia", b => b.CcAppearance), ("ccDisplay", "CC: Pantallas", b => b.CcDisplay), ("ccNotifications", "CC: Notificaciones", b => b.CcNotifications),
+        // 21–24: grupo «Panel WinMac y Tiempo» (se dibujan allí, no en la rejilla del Control Center)
+        ("showHub", "Icono de WinMac (panel con pestañas)", b => b.ShowHub), ("showWeather", "Icono del Tiempo", b => b.ShowWeather), ("weatherFahrenheit", "Fahrenheit", b => b.WeatherFahrenheit),
+        ("weatherAutoLocation", "Usar mi ubicación (Windows pide permiso)", b => b.WeatherAutoLocation),
     ];
+    private const int CcEnd = 21, HubGroupStart = 21;
+    private static readonly string[] RateNames = ["Automática", "KB/s", "MB/s", "Mb/s"], RateValues = ["Auto", "KBps", "MBps", "Mbps"];
     private static readonly string[] BackgroundNames = ["Vidrio", "Transparente"], BackgroundValues = ["Glass", "Transparent"], ThemeNames = ["Sistema", "Claro", "Oscuro"], ThemeValues = ["System", "Light", "Dark"];
     private static readonly string[] PositionNames = ["Centro", "Izquierda", "Derecha"], PlayerNames = ["Spotify", "Feishin", "Otro (indicar ruta)"];
     private static readonly Dictionary<string, string> SectionNames = new()
@@ -47,10 +52,13 @@ internal sealed class SettingsWindow : IDisposable
     private void OnConfigChanged(HostConfig a, HostConfig b) { if (_hwnd != IntPtr.Zero) Native.PostMessage(_hwnd, WM_REFRESH, IntPtr.Zero, IntPtr.Zero); }   // puede llegar de otro hilo
 
     /// <summary>Abre la ventana, o la trae al frente si ya estaba abierta.</summary>
-    public void Show()
+    public void Show() => Show(null);
+
+    /// <param name="section">Sección a destacar (la pide el panel de la Barra según su pestaña activa).</param>
+    public void Show(string? section)
     {
-        if (_hwnd != IntPtr.Zero) { Native.ShowWindow(_hwnd, 9); Native.SetForegroundWindow(_hwnd); Refresh(); return; }
-        try { Build(); Refresh(); Native.ShowWindow(_hwnd, 5); Native.SetForegroundWindow(_hwnd); }
+        if (_hwnd != IntPtr.Zero) { Native.ShowWindow(_hwnd, 9); Native.SetForegroundWindow(_hwnd); Refresh(); FocusSection(section); return; }
+        try { Build(); Refresh(); Native.ShowWindow(_hwnd, 5); Native.SetForegroundWindow(_hwnd); FocusSection(section); }
         catch (Exception e) { _log("[host] no se pudo abrir la ventana de ajustes: " + e.Message); if (_hwnd != IntPtr.Zero) { Native.DestroyWindow(_hwnd); _hwnd = IntPtr.Zero; } }
     }
 
@@ -65,7 +73,7 @@ internal sealed class SettingsWindow : IDisposable
         var cls = new Native.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<Native.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = inst, lpszClassName = ClassName, hbrBackground = (IntPtr)16 /* COLOR_BTNFACE+1 */, hCursor = Native.LoadCursorW(IntPtr.Zero, (IntPtr)32512) };
         Native.RegisterClassEx(ref cls);   // si ya estaba registrada (segunda apertura) falla sin consecuencias
         const uint style = 0x00CA0000;   // WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX: tamaño fijo
-        var r = new Native.RECT { Right = S(1010), Bottom = S(690) }; Native.AdjustWindowRectEx(ref r, style, false, 0);
+        var r = new Native.RECT { Right = S(1010), Bottom = S(790) }; Native.AdjustWindowRectEx(ref r, style, false, 0);
         int sw = Native.GetSystemMetrics(0), sh = Native.GetSystemMetrics(1);
         _hwnd = Native.CreateWindowEx(0, ClassName, "Ajustes de WinMac", style, Math.Max(0, (sw - (r.Right - r.Left)) / 2), Math.Max(0, (sh - (r.Bottom - r.Top)) / 2), r.Right - r.Left, r.Bottom - r.Top, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
@@ -89,7 +97,7 @@ internal sealed class SettingsWindow : IDisposable
         Ctl(ID_UP, "BUTTON", "Subir", WS_TABSTOP, x + 280, y + 298, 160, 26); Ctl(ID_DOWN, "BUTTON", "Bajar", WS_TABSTOP, x + 280, y + 330, 160, 26); Ctl(ID_TOGGLE, "BUTTON", "Mostrar / ocultar", WS_TABSTOP, x + 280, y + 362, 160, 26);
         y += 405;
         Ctl(ID_LOCAL, "BUTTON", "Rutas y datos de la Isla…", WS_TABSTOP, x, y + 4, 220, 28); Ctl(ID_CLOSE, "BUTTON", "Cerrar", WS_TABSTOP, x + w - 110, y + 4, 110, 28);
-        BuildBar(500, 10, 490);
+        BuildBar(500, 10, 490); BuildHubGroup(500, 578, 490);
         Native.SendMessage(_c[ID_GLASS], TBM_SETRANGE, (IntPtr)1, (IntPtr)((100 << 16) | 0));
     }
 
@@ -100,7 +108,20 @@ internal sealed class SettingsWindow : IDisposable
         Ctl(0, "STATIC", "Tema", SS_LEFT, x + 250, y + 26, 50, 20); Combo(ID_THEMECOMBO, ThemeNames, x + 300, y + 22, 140);
         for (int i = 0; i < 13; i++) Ctl(ID_BARBASE + i, "BUTTON", BarToggles[i].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14, y + 58 + i * 26, w - 28, 22);
         Ctl(0, "STATIC", "Archivo .ics del calendario (opcional):", SS_LEFT, x + 14, y + 404, w - 28, 20); Ctl(ID_ICS, "EDIT", "", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 14, y + 426, w - 28, 22);
-        for (int i = 13; i < BarToggles.Length; i++) Ctl(ID_BARBASE + i, "BUTTON", BarToggles[i].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14 + ((i - 13) % 2) * 235, y + 458 + ((i - 13) / 2) * 22, 225, 20);
+        for (int i = 13; i < CcEnd; i++) Ctl(ID_BARBASE + i, "BUTTON", BarToggles[i].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14 + ((i - 13) % 2) * 235, y + 458 + ((i - 13) / 2) * 22, 225, 20);
+    }
+
+    /// <summary>Grupo «Panel WinMac y Tiempo»: iconos, frecuencia de lectura, unidad de red y ciudades. Todo se aplica en vivo por la configuración central.</summary>
+    private void BuildHubGroup(int x, int y, int w)
+    {
+        Ctl(0, "BUTTON", "Panel de WinMac y Tiempo", BS_GROUPBOX, x, y, w, 200);
+        Ctl(ID_BARBASE + 21, "BUTTON", BarToggles[21].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14, y + 22, 280, 22); Ctl(ID_BARBASE + 22, "BUTTON", BarToggles[22].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 300, y + 22, 180, 22);
+        Ctl(0, "STATIC", "Leer sensores cada (ms)", SS_LEFT, x + 14, y + 54, 160, 20); Ctl(ID_HUBMS, "EDIT", "1000", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 180, y + 52, 64, 22);
+        Ctl(0, "STATIC", "Red en", SS_LEFT, x + 270, y + 54, 50, 20); Combo(ID_RATE, RateNames, x + 326, y + 50, 140);
+        Ctl(0, "STATIC", "Ciudad", SS_LEFT, x + 14, y + 86, 60, 20); Ctl(ID_WCITY, "EDIT", "", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 80, y + 84, 386, 22);
+        Ctl(ID_WSTATUS, "STATIC", "", SS_LEFT, x + 80, y + 110, w - 94, 20);
+        Ctl(0, "STATIC", "Otras", SS_LEFT, x + 14, y + 136, 60, 20); Ctl(ID_WFAV, "EDIT", "", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, x + 80, y + 134, 386, 22);
+        Ctl(ID_BARBASE + 23, "BUTTON", BarToggles[23].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 14, y + 166, 110, 22); Ctl(ID_BARBASE + 24, "BUTTON", BarToggles[24].Text, BS_AUTOCHECKBOX | WS_TABSTOP, x + 130, y + 166, 340, 22);
     }
 
     private void Combo(int id, string[] items, int x, int y, int w)
@@ -143,6 +164,9 @@ internal sealed class SettingsWindow : IDisposable
             Native.SendMessage(_c[ID_BGCOMBO], CB_SETCURSEL, (IntPtr)Index(BackgroundValues, bar.Background.ToString()), IntPtr.Zero);
             Native.SendMessage(_c[ID_THEMECOMBO], CB_SETCURSEL, (IntPtr)Index(ThemeValues, bar.Theme.ToString()), IntPtr.Zero);
             SetIfNotFocused(ID_ICS, bar.CalendarIcsPath ?? "");
+            SetIfNotFocused(ID_HUBMS, bar.HubRefreshMs.ToString()); Native.SendMessage(_c[ID_RATE], CB_SETCURSEL, (IntPtr)Index(RateValues, bar.RateUnit.ToString()), IntPtr.Zero);
+            SetIfNotFocused(ID_WCITY, WinMac.Bar.Hub.GeoPoint.Parse(bar.WeatherCity)?.Name ?? ""); SetIfNotFocused(ID_WFAV, string.Join(", ", WinMac.Bar.Hub.GeoPoint.ParseList(bar.WeatherFavorites).Select(g => g.Name)));
+            Native.SetWindowText(_c[ID_WSTATUS], _weatherStatus);
             int sel = (int)Native.SendMessage(_c[ID_LIST], LB_GETCURSEL, IntPtr.Zero, IntPtr.Zero);
             Native.SendMessage(_c[ID_LIST], LB_RESETCONTENT, IntPtr.Zero, IntPtr.Zero);
             foreach (var s in n.Sections) Native.SendMessage(_c[ID_LIST], LB_ADDSTRING, IntPtr.Zero, (s.Enabled ? "✓  " : "      ") + (SectionNames.TryGetValue(s.Id, out var nm) ? nm : s.Id));
@@ -175,6 +199,50 @@ internal sealed class SettingsWindow : IDisposable
         return Native.DefWindowProc(h, msg, w, l);
     }
 
+    private volatile string _weatherStatus = ""; private WinMac.Bar.Hub.OpenMeteoSource? _wx;
+    private WinMac.Bar.Hub.OpenMeteoSource WeatherSource => _wx ??= new WinMac.Bar.Hub.OpenMeteoSource(new HttpClient { Timeout = TimeSpan.FromSeconds(15) });
+
+    /// <summary>Busca la ciudad escrita en el proveedor del tiempo (en segundo plano) y, si la encuentra, la guarda. Si no, NO cambia la ciudad y lo dice.</summary>
+    private async Task ResolveCityAsync(string text)
+    {
+        try
+        {
+            string current = WinMac.Bar.Hub.GeoPoint.Parse(_cfg.Bar.WeatherCity)?.Name ?? ""; if (string.Equals(text, current, StringComparison.CurrentCultureIgnoreCase)) return;
+            if (text.Length == 0) { _cfg.ApplyBarPatch(Patch("weatherCity", null)); _weatherStatus = "Sin ciudad: el Tiempo no hace peticiones."; }
+            else
+            {
+                _weatherStatus = "Buscando…"; PostRefresh(); var r = await CityResolver.ResolveOneAsync(text, WeatherSource, CancellationToken.None).ConfigureAwait(false);
+                if (r.Place is not null) { _cfg.ApplyBarPatch(Patch("weatherCity", r.Place.Serialize())); _weatherStatus = "Ciudad: " + r.Message; } else _weatherStatus = r.Message;
+            }
+        }
+        catch (Exception e) { _weatherStatus = "No se pudo buscar la ciudad"; _log("[host] ciudad: " + e.GetType().Name + ": " + e.Message); }
+        PostRefresh();
+    }
+
+    private async Task ResolveFavoritesAsync(string text)
+    {
+        try
+        {
+            string current = string.Join(", ", WinMac.Bar.Hub.GeoPoint.ParseList(_cfg.Bar.WeatherFavorites).Select(g => g.Name)); if (string.Equals(text, current, StringComparison.CurrentCultureIgnoreCase)) return;
+            var (places, problems) = await CityResolver.ResolveManyAsync(text, WeatherSource, CancellationToken.None).ConfigureAwait(false);
+            _cfg.ApplyBarPatch(Patch("weatherFavorites", places.Count == 0 ? null : WinMac.Bar.Hub.GeoPoint.SerializeList(places)));
+            _weatherStatus = problems.Count == 0 ? _weatherStatus : string.Join(" · ", problems);
+        }
+        catch (Exception e) { _weatherStatus = "No se pudieron buscar las ciudades"; _log("[host] ciudades: " + e.GetType().Name + ": " + e.Message); }
+        PostRefresh();
+    }
+
+    private void PostRefresh() { if (_hwnd != IntPtr.Zero) Native.PostMessage(_hwnd, WM_REFRESH, IntPtr.Zero, IntPtr.Zero); }
+
+    /// <summary>Lleva el foco al primer control de la sección pedida desde el panel de la Barra («sound», «system», «network», «disks» → Panel de WinMac; «weather» → Ciudad).</summary>
+    private void FocusSection(string? section)
+    {
+        if (section is null || _hwnd == IntPtr.Zero) return;
+        int id = section == "weather" ? ID_WCITY : section is "sound" or "system" or "network" or "disks" ? ID_HUBMS : 0;
+        if (id != 0 && _c.TryGetValue(id, out var h)) SetFocus(h);
+    }
+    [DllImport("user32.dll")] private static extern IntPtr SetFocus(IntPtr h);
+
     private static System.Text.Json.JsonElement Patch(string field, object? value) => System.Text.Json.JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [field] = value });
 
     private void OnCommand(int id, int code)
@@ -184,6 +252,10 @@ internal sealed class SettingsWindow : IDisposable
         { var f = BarToggles[id - ID_BARBASE].Field; bool on = Checked(_c[id]); _cfg.ApplyBarPatch(Patch(f, on)); return; }
         switch (id)
         {
+            case ID_HUBMS when code == EN_KILLFOCUS: { if (int.TryParse(TextOf(id).Trim(), out int ms)) _cfg.ApplyBarPatch(Patch("hubRefreshMs", ms)); Refresh(); break; }
+            case ID_RATE when code == CBN_SELCHANGE: { int i = (int)Native.SendMessage(_c[id], CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero); if (i >= 0 && i < RateValues.Length) _cfg.ApplyBarPatch(Patch("rateUnit", RateValues[i])); break; }
+            case ID_WCITY when code == EN_KILLFOCUS: _ = ResolveCityAsync(TextOf(id).Trim()); break;
+            case ID_WFAV when code == EN_KILLFOCUS: _ = ResolveFavoritesAsync(TextOf(id).Trim()); break;
             case ID_BGCOMBO when code == CBN_SELCHANGE: { int i = (int)Native.SendMessage(_c[id], CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero); if (i >= 0 && i < BackgroundValues.Length) _cfg.ApplyBarPatch(Patch("background", BackgroundValues[i])); break; }
             case ID_THEMECOMBO when code == CBN_SELCHANGE: { int i = (int)Native.SendMessage(_c[id], CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero); if (i >= 0 && i < ThemeValues.Length) _cfg.ApplyBarPatch(Patch("theme", ThemeValues[i])); break; }
             case ID_ICS when code == EN_KILLFOCUS: { var t = TextOf(id).Trim(); _cfg.ApplyBarPatch(Patch("calendarIcsPath", t.Length == 0 ? null : t)); break; }

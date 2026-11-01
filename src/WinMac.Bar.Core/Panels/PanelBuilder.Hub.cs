@@ -183,7 +183,7 @@ public static partial class PanelBuilder
         if (snap.Volumes.Count == 0) { w.Add(Note("disks-none", snap.Reason ?? "No se encontraron unidades.")); return; }
         string sel = HubSelection.Volume(snap, c.Hub!.SelectedVolume)!; var vol = snap.Volumes.First(v => v.Letter == sel); var disk = snap.DiskOf(vol);
         w.Add(Cap("cap-pick", "Seleccionar disco"));
-        foreach (var v in snap.Volumes.Take(6)) w.Add(new Widget(WidgetKind.Tile, "disk:" + v.Letter, v.Display, $"{Pct(v.UsedFraction * 100)} usado", On: v.Letter == sel, Glyph: "disk", Col: -1));
+        int vi = 0; foreach (var v in snap.Volumes.Take(6)) w.Add(new Widget(WidgetKind.Tile, "disk:" + v.Letter, v.Display, $"{Pct(v.UsedFraction * 100)} usado", On: v.Letter == sel, Glyph: "disk", Col: vi++ % 2));   // de dos en dos, como las tarjetas de la referencia
         w.Add(Sep("sep-1"));
         w.Add(Cap("cap-use", "Uso del disco"));
         string media = disk is null ? "" : disk.Media switch { DiskMedia.SSD => " · SSD", DiskMedia.HDD => " · HDD", _ => "" };

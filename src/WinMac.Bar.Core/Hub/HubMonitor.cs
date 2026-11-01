@@ -50,6 +50,15 @@ public sealed class HubMonitor
     public DisksSnapshot Disks { get; private set; } = DisksSnapshot.None("Leyendo…");
     public DiskMeters? MetersOf(int diskNumber) => _io.GetValueOrDefault(diskNumber);
 
+    /// <summary>
+    /// Se abrió el panel: empieza una sesión de lectura nueva. Las gráficas parten vacías y la primera muestra tras la pausa no calcula velocidad (el acumulado de la sesión se conserva).
+    /// </summary>
+    public void StartSession()
+    {
+        CpuHistory.Clear(); GpuHistory.Clear(); MemoryHistory.Clear(); Traffic.DownHistory.Clear(); Traffic.UpHistory.Clear(); Traffic.MarkGap();
+        foreach (var d in _io.Values) { d.Read.MarkGap(); d.Write.MarkGap(); d.ReadHistory.Clear(); d.WriteHistory.Clear(); }
+    }
+
     // ───────── Sistema
     public void RefreshSystem()
     {

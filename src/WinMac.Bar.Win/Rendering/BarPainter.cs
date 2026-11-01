@@ -96,6 +96,8 @@ public sealed class BarPainter : IDisposable
                 case BarItemKind.Network: DrawNetwork(x, cy, s.Network.Kind, s.Network.Bars); break;
                 case BarItemKind.Bluetooth: DrawBluetooth(x, cy, s.Bt.On); break;
                 case BarItemKind.ControlCenter: DrawControlCenter(x, cy); break;
+                case BarItemKind.Hub: DrawHubIcon(x + 8, cy); break;
+                case BarItemKind.Weather: DrawWeatherGlyph(x + 8, cy, s.Weather.IconKey); break;
                 case BarItemKind.Volume: DrawVolume(x, cy, s.Volume); break;
                 case BarItemKind.Battery: DrawBattery(x, cy, s.Battery); break;
             }
@@ -128,6 +130,40 @@ public sealed class BarPainter : IDisposable
         s.BeginFigure(P(a0), FigureBegin.Hollow);
         s.AddArc(new ArcSegment { Point = P(a1), Size = new Vortice.Mathematics.Size(r, r), RotationAngle = 0, SweepDirection = SweepDirection.Clockwise, ArcSize = ArcSize.Small });
         s.EndFigure(FigureEnd.Open); s.Close(); return g;
+    }
+
+    /// <summary>El icono único de la aplicación (planeta con anillo, como el logotipo del panel). La identidad es provisional: este dibujo es lo único que cambia al cambiar el logotipo.</summary>
+    private void DrawHubIcon(float cx, float cy)
+    {
+        _ctx.Transform = Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy));
+        using (var back = Arc(cx, cy, 7.4f, Math.PI, Math.PI * 2)) { var sc = new Matrix3x2(1, 0, 0, 0.28f, 0, cy * (1 - 0.28f)); _ctx.Transform = sc * Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy)); Stroke(back, 1.5f); }
+        _ctx.Transform = Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy)); Brush(Fg()); _ctx.FillEllipse(new Ellipse(new Vector2(cx, cy), 4.3f, 4.3f), _solid);
+        using (var front = Arc(cx, cy, 7.4f, 0, Math.PI)) { _ctx.Transform = new Matrix3x2(1, 0, 0, 0.28f, 0, cy * (1 - 0.28f)) * Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy)); Stroke(front, 1.5f); }
+        _ctx.Transform = Matrix3x2.Identity;
+    }
+
+    /// <summary>Icono del Tiempo en la barra: pequeño y reconocible (sol, luna, nube, lluvia…), con los mismos códigos que el panel.</summary>
+    private void DrawWeatherGlyph(float cx, float cy, string key)
+    {
+        var yellow = new Color4(1f, 0.80f, 0.04f, 1f); var blue = new Color4(0.35f, 0.70f, 1f, 1f);
+        void Cloud(float ox, float oy, float k)
+        {
+            Brush(Fg()); _ctx.FillEllipse(new Ellipse(new Vector2(ox - 3.2f * k, oy + 1f * k), 3.4f * k, 3.4f * k), _solid); _ctx.FillEllipse(new Ellipse(new Vector2(ox + 0.5f * k, oy - 1.4f * k), 4.4f * k, 4.4f * k), _solid); _ctx.FillEllipse(new Ellipse(new Vector2(ox + 4f * k, oy + 1.2f * k), 3f * k, 3f * k), _solid);
+            _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(ox - 6.4f * k, oy + 1f * k, ox + 6.8f * k, oy + 4.3f * k), RadiusX = 1.6f * k, RadiusY = 1.6f * k }, _solid);
+        }
+
+        switch (key)
+        {
+            case "clear": Brush(yellow); _ctx.FillEllipse(new Ellipse(new Vector2(cx, cy), 4.2f, 4.2f), _solid); for (int i = 0; i < 8; i++) { double a = i * Math.PI / 4; _ctx.DrawLine(new Vector2(cx + (float)Math.Cos(a) * 6.2f, cy + (float)Math.Sin(a) * 6.2f), new Vector2(cx + (float)Math.Cos(a) * 7.8f, cy + (float)Math.Sin(a) * 7.8f), _solid, 1.3f, _round); } break;
+            case "clear-night": Brush(Fg()); _ctx.FillEllipse(new Ellipse(new Vector2(cx, cy), 5.6f, 5.6f), _solid); Brush(new Color4(0.13f, 0.13f, 0.15f, 1f)); _ctx.FillEllipse(new Ellipse(new Vector2(cx + 2.8f, cy - 2.2f), 4.8f, 4.8f), _solid); break;
+            case "partly": Brush(yellow); _ctx.FillEllipse(new Ellipse(new Vector2(cx - 3f, cy - 3f), 3.6f, 3.6f), _solid); Cloud(cx + 1f, cy + 2f, 0.85f); break;
+            case "partly-night": Brush(Fg(0.85f)); _ctx.FillEllipse(new Ellipse(new Vector2(cx - 3f, cy - 3f), 3.4f, 3.4f), _solid); Cloud(cx + 1f, cy + 2f, 0.85f); break;
+            case "rain": case "drizzle": Cloud(cx, cy - 2.2f, 0.9f); Brush(blue); for (int i = -1; i <= 1; i += 2) _ctx.DrawLine(new Vector2(cx + i * 2.8f + 0.8f, cy + 3.2f), new Vector2(cx + i * 2.8f - 0.6f, cy + 6.4f), _solid, 1.4f, _round); break;
+            case "snow": Cloud(cx, cy - 2.2f, 0.9f); for (int i = -1; i <= 1; i += 2) _ctx.FillEllipse(new Ellipse(new Vector2(cx + i * 2.8f, cy + 4.6f), 1.2f, 1.2f), _solid); break;
+            case "thunder": Cloud(cx, cy - 2.2f, 0.9f); Brush(yellow); _ctx.DrawLine(new Vector2(cx + 0.8f, cy + 2.8f), new Vector2(cx - 1.4f, cy + 5.2f), _solid, 1.6f, _round); _ctx.DrawLine(new Vector2(cx - 1.4f, cy + 5.2f), new Vector2(cx + 1f, cy + 5.2f), _solid, 1.6f, _round); break;
+            case "fog": Cloud(cx, cy - 2.6f, 0.85f); Brush(Fg()); _ctx.DrawLine(new Vector2(cx - 5f, cy + 4f), new Vector2(cx + 5f, cy + 4f), _solid, 1.3f, _round); _ctx.DrawLine(new Vector2(cx - 4f, cy + 6.2f), new Vector2(cx + 4f, cy + 6.2f), _solid, 1.3f, _round); break;
+            default: Cloud(cx, cy, 1f); break;
+        }
     }
 
     private void DrawLogo(float x, float cy)

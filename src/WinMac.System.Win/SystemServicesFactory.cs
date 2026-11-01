@@ -27,6 +27,12 @@ public static class SystemServicesFactory
         Step("Brillo: pantallas controlables", s.Brightness.Read, b => b.Available ? string.Join(" | ", b.Monitors.Select(m => $"{m.Name} {m.Percent}% ({m.Method})")) : "no disponible: " + b.Reason);
         Step("Energía: modo", s.Power.ReadMode, p => p.Available ? PowerModeState.Label(p.Mode) : "no disponible: " + p.Reason);
         Step("Apariencia: tema", s.Appearance.Read, a => a.Available ? (a.Dark ? "oscuro" : "claro") : "no disponible: " + a.Reason);
+        // Medición para la propuesta del Centro de notificaciones: ¿puede una app SIN paquete consultar el estado del lector de notificaciones de Windows? Solo lee el estado: no pide permiso ni lee ninguna notificación.
+        Step("Notificaciones de otras apps (UserNotificationListener: solo el estado, sin pedir permiso ni leer nada)", () =>
+        {
+            try { return "estado de acceso = " + Windows.UI.Notifications.Management.UserNotificationListener.Current.GetAccessStatus(); }
+            catch (Exception e) { return $"no disponible para esta app ({e.GetType().Name}, 0x{e.HResult:X8})"; }
+        }, r => r);
         return lines;
     }
 }

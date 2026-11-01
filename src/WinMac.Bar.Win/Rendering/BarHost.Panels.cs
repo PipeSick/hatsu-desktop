@@ -1,5 +1,7 @@
 using WinMac.Bar.Win.Interop;
+using WinMac.Bar.Hub;
 using WinMac.Bar.Win.Shell;
+using WinMac.Bar.Win.Shell.Hub;
 using WinMac.Calendar;
 using WinMac.SystemControl;
 using WinMac.SystemControl.Win;
@@ -13,6 +15,11 @@ namespace WinMac.Bar.Win.Rendering;
 public sealed partial class BarHost : IPanelUi
 {
     private SystemHub _hub = null!; private PanelOperations _ops = null!; private PopoverWindow? _popover; private PanelContext _pctx = null!; private PanelKind _pkind; private int _anchorX; private bool _alignRight;
+    // ── panel multifunción y Tiempo
+    private HubServices _hubSvc = null!; private IDisposable? _hubOwner; private HubMonitor _hubMon = null!; private SpeedTestRunner _speed = null!; private WeatherService _weather = null!; private HubRuntime _rt = null!;
+    private GeoPoint? _autoPlace; private bool _locating, _locationTried; private DateTime _lastHubTick = DateTime.MinValue, _lastWeatherPoll = DateTime.MinValue; private int _hubTicks;
+    /// <summary>Órdenes al host de WinMac (modo integrado): «settings» (con sección) y «quit». null = la barra corre sola.</summary>
+    public Action<string, string?>? HostCommand { get; set; }
     private BarWindow? _popSource;      // la barra (monitor) donde se abrió el panel desplegable
     private BarWindow? _actionSource;   // la barra donde se hizo el último clic: dueña de los cuadros de diálogo y de los menús
     private readonly Queue<Action> _uiQueue = new(); private readonly object _cfgLock = new(); private BarConfig? _pendingCfg;
@@ -25,10 +32,58 @@ public sealed partial class BarHost : IPanelUi
     /// <summary>Servicios de Windows que usa la barra (los sustituyen las pruebas).</summary>
     public SystemServices Services => _hub.Services;
 
-    private void InitPanels(SystemServices? services)
+    private void InitPanels(SystemServices? services, HubServices? hubServices)
     {
         _hub = new SystemHub(services ?? SystemServicesFactory.CreateReal(), Post, _log);
-        _hub.Changed += OnHubChanged; _ops = new PanelOperations(_hub, this, _log);
+        if (hubServices is null) { var (s, owner) = HubServicesFactory.CreateReal(); _hubSvc = s; _hubOwner = owner; } else _hubSvc = hubServices;
+        void Bg(Action a) => Task.Run(a);
+        _hubMon = new HubMonitor(_hubSvc, Bg, Post, _log, () => DateTime.UtcNow); _speed = new SpeedTestRunner(_hubSvc.SpeedTest, Bg, Post);
+        string cache = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "weather-cache.json");
+        _weather = new WeatherService(_hubSvc.Weather, new WeatherCache(cache), () => DateTime.UtcNow, Bg, Post, _log); _rt = new HubRuntime(_hubMon, _speed, _weather);
+        _hub.Changed += OnHubChanged; _ops = new PanelOperations(_hub, this, _log, rt: _rt);
+        _hubMon.Changed += OnHubPanelDataChanged; _speed.Changed += OnHubPanelDataChanged; _weather.Changed += () => { SetStateAll(); OnHubPanelDataChanged(); };
+        ConfigureWeather();
+    }
+
+    private void OnHubPanelDataChanged() { if (_popover is { IsOpen: true } && _pkind is PanelKind.Hub or PanelKind.Weather) RebuildPanel(); }
+
+    /// <summary>Ciudad y adicionales desde la configuración central. La ubicación automática es OPT-IN: solo si el usuario la activó, se pide una vez por activación, y si Windows no la da se usa la ciudad elegida.</summary>
+    private void ConfigureWeather()
+    {
+        var city = GeoPoint.Parse(_cfg.WeatherCity); var favs = GeoPoint.ParseList(_cfg.WeatherFavorites);
+        if (!_cfg.WeatherAutoLocation) { _autoPlace = null; _locationTried = false; }
+        _weather.Configure(_cfg.WeatherAutoLocation && _autoPlace is not null ? _autoPlace : city, favs);
+        if (_cfg.WeatherAutoLocation && _autoPlace is null && !_locating && !_locationTried && _hubSvc.Location is { } loc)
+        {
+            _locating = true; _locationTried = true;
+            Task.Run(async () =>
+            {
+                GeoPoint? p = null; try { p = await loc.GetAsync(CancellationToken.None).ConfigureAwait(false); } catch (Exception e) { _log("[tiempo] ubicación: " + e.GetType().Name + ": " + e.Message); }
+                Post(() => { _locating = false; _autoPlace = p; if (p is null) _log("[tiempo] la ubicación no está disponible (permiso o servicio de Windows): se usa la ciudad elegida"); ConfigureWeather(); _weather.Refresh(); });
+            });
+        }
+    }
+
+    private HubData MakeHubData() => new(_hubMon, _speed.State, _weather.Current(), _pctx?.Hub?.SelectedVolume, _cfg.Use24Hour);
+
+    /// <summary>Con el panel abierto lee SOLO lo de la pestaña activa, con la frecuencia configurada; con el panel cerrado no se lee nada de esto.</summary>
+    private void RefreshHubTab(bool first)
+    {
+        switch (_pctx.Tab)
+        {
+            case HubTab.Sound: _hub.RefreshAudio(); _hub.RefreshInput(); _hub.RefreshSessions(); break;
+            case HubTab.System: _hubMon.RefreshSystem(); break;
+            case HubTab.Network: _hubMon.RefreshNetwork(withApps: first || _hubTicks % 3 == 0); break;
+            default: _hubMon.RefreshDisks(forceCatalog: false); break;
+        }
+    }
+
+    private void HubTick()
+    {
+        var now = DateTime.UtcNow;
+        if ((now - _lastWeatherPoll).TotalSeconds >= 60) { _lastWeatherPoll = now; _weather.Refresh(); }   // el propio servicio solo pide de verdad cada 15 min
+        if (_popover is not { IsOpen: true } || _pkind != PanelKind.Hub || (now - _lastHubTick).TotalMilliseconds < _cfg.HubRefreshMs) return;
+        _lastHubTick = now; _hubTicks++; RefreshHubTab(first: false);
     }
 
     // ───────────────────────────── hilo de la barra
@@ -49,14 +104,15 @@ public sealed partial class BarHost : IPanelUi
         var vol = a.Available ? new VolumeInfo(true, a.Volume, a.Muted) : VolumeInfo.None;
         var net = _network.Kind == NetKind.Wifi && s.Wifi.Available && s.Wifi.Connected ? _network with { Ssid = s.Wifi.Ssid, Bars = s.Wifi.Bars } : _network;
         var bt = s.Bluetooth.Available ? new BluetoothInfo(true, s.Bluetooth.RadioOn, s.Bluetooth.ConnectedCount) : BluetoothInfo.None;
-        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels);
+        var wx = _weather.Current(); var wbar = wx.Snapshot is { } sn ? new WeatherBarInfo(WeatherCodes.Icon(sn.Main.Code, sn.Main.IsDay), TempFormat.Bar(sn.Main.TempC, _cfg.WeatherFahrenheit)) : WeatherBarInfo.None;
+        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar);
     }
 
     private void OnHubChanged() { SetStateAll(); if (_popover is { IsOpen: true }) RebuildPanel(); }
 
     private void PanelsTick()
     {
-        _popover?.Pump();
+        _popover?.Pump(); HubTick();
         if (_popover is not { IsOpen: true }) return;
         var now = DateTime.UtcNow; if ((now - _lastPanelRefresh).TotalSeconds < 2.5) return;
         _lastPanelRefresh = now; _panelTicks++;
@@ -88,9 +144,9 @@ public sealed partial class BarHost : IPanelUi
 
     private void OpenPanel(BarWindow src, PanelKind kind, int anchorX, bool alignRight)
     {
-        _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log);
+        _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, p => _hubSvc.Icons.GetBgra(p, 32));
         _popSource = src; _pkind = kind; _anchorX = anchorX; _alignRight = alignRight; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
-        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery };
+        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab }; _pctx = _pctx with { Hub = MakeHubData() };
         var model = PanelBuilder.Build(kind, _pctx);
         _popover.Show(model, anchorX, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight);   // se abre en el monitor donde se hizo clic, escalado a SU DPI
         RefreshFor(kind, firstOpen: true);
@@ -105,6 +161,8 @@ public sealed partial class BarHost : IPanelUi
 
     private void RefreshFor(PanelKind kind, bool firstOpen)
     {
+        if (kind == PanelKind.Weather) { _weather.Refresh(); return; }
+        if (kind == PanelKind.Hub) { _hubMon.StartSession(); _hubTicks = 0; _lastHubTick = DateTime.UtcNow; RefreshHubTab(first: true); return; }
         _hub.RefreshAudio();
         if (kind is PanelKind.ControlCenter or PanelKind.Wifi) _hub.RefreshWifi(scan: true);
         if (kind is PanelKind.ControlCenter or PanelKind.Bluetooth) _hub.RefreshBluetooth(true);
@@ -116,7 +174,7 @@ public sealed partial class BarHost : IPanelUi
     private void RebuildPanel()
     {
         if (_popover is not { IsOpen: true }) return;
-        _pctx = _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg };
+        _pctx = _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData() };
         _popover.SetModel(PanelBuilder.Build(_pkind, _pctx));
     }
 
@@ -141,6 +199,44 @@ public sealed partial class BarHost : IPanelUi
     void IPanelUi.HidePanel() => _popover?.Hide();
     void IPanelUi.ShowInfo(string title, string? text) => ShowInfo(title, text);
     void IPanelUi.OpenUri(string uri) => BarNative.ShellExecuteW(IntPtr.Zero, "open", uri, null, null, 1);
+    void IPanelUi.TabChanged(HubTab tab) { _hubTicks = 0; _lastHubTick = DateTime.UtcNow; RefreshHubTab(first: true); }
+    bool IPanelUi.Confirm(string title, string text) => Confirm(title, text);
+
+    void IPanelUi.OpenSettings(string? section)
+    {
+        _popover?.Hide();
+        if (HostCommand is { } hc) hc("settings", section); else ShowInfo("Ajustes", "Los ajustes de WinMac se abren desde WinMac.exe (esta barra se ejecutó por separado).");
+    }
+
+    /// <summary>«Salir» cierra WinMac COMPLETO por el cierre ordenado del host (que cierra Barra, Dock e Isla). Si la barra corre sola, no hay nada más que cerrar que ella misma.</summary>
+    void IPanelUi.QuitWinMac() { _popover?.Hide(); if (HostCommand is { } hc) hc("quit", null); else _quitting = true; }
+
+    void IPanelUi.PatchConfig(object patch)
+    {
+        try
+        {
+            var n = _cfg.ApplyPatch(System.Text.Json.JsonSerializer.SerializeToElement(patch));
+            if (PersistPatch is not null) PersistPatch(patch); else if (_cfgPath is not null) n.TrySave(_cfgPath);
+            lock (_cfgLock) _pendingCfg = n; ApplyPendingConfig();
+        }
+        catch (Exception e) { _log("[bar] no se pudo guardar el ajuste: " + e.GetType().Name + ": " + e.Message); }
+    }
+
+    /// <summary>Menú nativo de selección junto al puntero (dispositivos de audio…). El panel no se cierra mientras está abierto.</summary>
+    void IPanelUi.ShowChoices(string title, IReadOnlyList<Choice> choices, Action<string> onPick)
+    {
+        if (choices.Count == 0 || _popover is null) return;
+        IntPtr menu = BarNative.CreatePopupMenu(); int cmd = 0; IntPtr owner = _popover.Hwnd;
+        try
+        {
+            for (int i = 0; i < choices.Count; i++) BarNative.AppendMenuW(menu, choices[i].Checked ? 0x8u /* MF_CHECKED */ : 0u, (UIntPtr)(uint)(i + 1), choices[i].Text);
+            BarNative.GetCursorPos(out var p); _popover.KeepOpen = true; _modal = true; BarNative.SetForegroundWindow(owner);
+            cmd = BarNative.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, p.X, p.Y, owner, IntPtr.Zero);
+        }
+        finally { _modal = false; _popover.KeepOpen = false; BarNative.DestroyMenu(menu); }
+        BarNative.SetForegroundWindow(owner);
+        if (cmd > 0 && cmd <= choices.Count) onPick(choices[cmd - 1].Id);
+    }
 
     private void OnPanelEvent(PanelEvent e) => _ops.Handle(e);
 
@@ -235,10 +331,11 @@ public sealed partial class BarHost : IPanelUi
         foreach (var w in _wins) w.ApplyConfig(old, c);   // todas las barras comparten la configuración central y la aplican en vivo
         if (old.Theme != c.Theme) SetThemeAll(ResolveTheme());
         if (old.AppMenus != c.AppMenus) { if (c.AppMenus) RefreshAppMenus(); else { _appMenuTops = []; _appMenuLabels = null; } }
+        if (old.WeatherCity != c.WeatherCity || old.WeatherFavorites != c.WeatherFavorites || old.WeatherAutoLocation != c.WeatherAutoLocation) { ConfigureWeather(); _weather.Refresh(); }
         if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind == PanelKind.Calendar && _popover is { IsOpen: true }) LoadEvents();
         _nextClock = DateTime.MinValue; UpdateState(force: false);
         if (_popover is { IsOpen: true }) RebuildPanel();
     }
 
-    private void DisposePanels() { _popover?.Dispose(); _popover = null; }
+    private void DisposePanels() { _popover?.Dispose(); _popover = null; _hubOwner?.Dispose(); _hubOwner = null; }
 }

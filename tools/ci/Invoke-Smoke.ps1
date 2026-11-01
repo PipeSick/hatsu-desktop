@@ -52,6 +52,8 @@ $bar = "$PublishDir/Bar.App/WinMac.Bar.App.exe"
 foreach ($theme in 'light', 'dark') { foreach ($bg in 'glass', 'transparent') {
   Run "Barra offscreen $theme/$bg" $bar @('--render-png', "`"$OutDir\bar-$theme-$bg.png`"", '--theme', $theme, '--bg', $bg, '--scale', '2') 90
 } }
+foreach ($tab in 'sound', 'system', 'network', 'disks') { Run "Panel multifunción $tab (datos de muestra, fuera de pantalla)" $bar @('--render-panel', 'hub', '--tab', $tab, '--out', "`"$OutDir\panel-hub-$tab.png`"", '--scale', '2') 90 }
+Run 'Panel del Tiempo (datos de muestra, fuera de pantalla)' $bar @('--render-panel', 'weather', '--out', "`"$OutDir\panel-weather.png`"", '--scale', '2') 90
 Run 'Barra offscreen light/glass con resalte' $bar @('--render-png', "`"$OutDir\bar-light-glass-hover.png`"", '--theme', 'light', '--bg', 'glass', '--scale', '2', '--hover', '4') 90
 Run 'Barra --status (informativo)' $bar @('--status') 60 -Informational
 Run 'Barra selftest' $bar @('--selftest') 120

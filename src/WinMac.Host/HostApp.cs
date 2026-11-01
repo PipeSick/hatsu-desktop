@@ -75,11 +75,14 @@ internal static class HostApp
         var config = new ConfigService(o.ConfigPath, cfg, log); var controller = new HostController(config, sup, bus, log); controller.Start();   // la Isla recibe sus ajustes al conectar
 
         bool quitting = false; void RequestQuit() => quitting = true;
+        var uiActions = new System.Collections.Concurrent.ConcurrentQueue<Action>();   // lo que llega por el canal (otro hilo) se ejecuta en el hilo de interfaz: las ventanas de Windows no admiten otro
+        controller.QuitRequested = () => uiActions.Enqueue(RequestQuit);
         Tray? tray = null; SettingsWindow? settings = null;
         string exePath = Environment.ProcessPath ?? "WinMac.exe";
         try
         {
             settings = new SettingsWindow(config, () => sup.States, controller.OpenNotchLocalSettings, exePath, log);
+            var win = settings; controller.SettingsRequested = section => uiActions.Enqueue(() => win.Show(section));
             tray = new Tray(() => sup.States, RequestQuit, id => { if (sup.States.TryGetValue(id, out var st) && st == ModuleState.Disabled) config.SetModuleEnabled(id, true); else sup.Restart(id); }, settings.Show, log, showIcon: !o.NoTray);
         }
         catch (Exception e) { log("[host] sin ventana/bandeja: " + e.Message); }
@@ -90,6 +93,7 @@ internal static class HostApp
         // Bucle de mensajes (la bandeja y el cierre de sesión lo necesitan) + vigilancia de la señal de cierre (--quit).
         while (!quitting)
         {
+            while (uiActions.TryDequeue(out var act)) { try { act(); } catch (Exception e) { log("[host] acción de interfaz falló: " + e.Message); } }
             while (Native.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1))
             {
                 if (settings is { IsOpen: true } && Native.IsDialogMessage(settings.Handle, ref msg)) continue;   // Tab y Enter en la ventana de ajustes
