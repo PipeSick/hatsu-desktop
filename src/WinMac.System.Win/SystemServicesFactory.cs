@@ -22,7 +22,7 @@ public static class SystemServicesFactory
 
         Step("Audio: estado", s.Audio.Read, a => a.Available ? $"volumen {a.Volume}%, silencio={a.Muted}, salidas={a.Outputs.Count} ({string.Join(" | ", a.Outputs.Select(o => (o.IsDefault ? "*" : "") + o.Name))})" : "no disponible: " + a.Reason);
         Step("Audio: ¿se puede cambiar la salida? (API no oficial, solo detección)", s.Audio.CanSwitchOutput, r => r.IsOk ? "compatible" : $"{r.Status}: {r.Message}");
-        Step("Wi-Fi: estado (con escaneo)", () => s.Wifi.Read(scan: true), w => w.Available ? $"conectado={w.Connected} ssid={w.Ssid} señal={w.Signal} redes={w.Networks.Count} radio={w.RadioOn}" : "no disponible: " + w.Reason);
+        Step("Wi-Fi: estado (escaneo + espera de 4 s + nueva lectura)", () => { s.Wifi.Read(scan: true); System.Threading.Thread.Sleep(4000); return s.Wifi.Read(scan: false); }, w => w.Available ? $"conectado={w.Connected} ssid={w.Ssid} señal={w.Signal} redes={w.Networks.Count} [{string.Join(", ", w.Networks.Take(5).Select(n => n.Ssid + (n.HasProfile ? "*" : "")))}] radio={w.RadioOn}" : "no disponible: " + w.Reason);
         Step("Bluetooth: estado", () => s.Bluetooth.Read(true), b => b.Available ? $"radio={(b.RadioOn ? "encendida" : "apagada")} dispositivos={b.Devices.Count} conectados={b.ConnectedCount}" : "no disponible: " + b.Reason);
         Step("Brillo: pantallas controlables", s.Brightness.Read, b => b.Available ? string.Join(" | ", b.Monitors.Select(m => $"{m.Name} {m.Percent}% ({m.Method})")) : "no disponible: " + b.Reason);
         Step("Energía: modo", s.Power.ReadMode, p => p.Available ? PowerModeState.Label(p.Mode) : "no disponible: " + p.Reason);
