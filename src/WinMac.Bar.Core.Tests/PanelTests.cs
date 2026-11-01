@@ -223,6 +223,15 @@ public class PanelBuilderTests
     }
 
     [Fact]
+    public void Wifi_denied_by_missing_location_permission_says_so_and_offers_the_privacy_page_instead_of_an_empty_list()
+    {
+        var sys = Nothing with { Wifi = new WifiState(true, false, null, 0, [], "Windows necesita el permiso de ubicación", RadioOn: true) };
+        var m = PanelBuilder.WifiPanel(Ctx(sys));
+        Assert.Contains(m.Widgets, w => w.Id == "reason" && w.Text.Contains("ubicación")); Assert.Contains(m.Widgets, w => w.Id == "open:ms-settings:privacy-location"); Assert.DoesNotContain(m.Widgets, w => w.Id == "none");
+        Assert.Equal("Requiere ubicación", PanelBuilder.Build(PanelKind.ControlCenter, Ctx(sys)).Widgets.Single(w => w.Id == "open:wifi").Sub);
+    }
+
+    [Fact]
     public void The_audio_output_list_is_switchable_only_when_the_unofficial_api_is_compatible_and_offers_restore()
     {
         var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos", false) };

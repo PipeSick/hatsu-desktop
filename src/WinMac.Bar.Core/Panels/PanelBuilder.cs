@@ -44,7 +44,7 @@ public static class PanelBuilder
         var s = c.Sys; var cfg = c.Cfg; var w = new List<Widget> { new(WidgetKind.Header, "title", "Centro de control") };
         int col = 0;
         void Tile(Widget t) { w.Add(t with { Col = col }); col = 1 - col; }
-        if (cfg.CcWifi) Tile(new Widget(WidgetKind.Tile, "open:wifi", "Wi-Fi", BusyOr(c, "wifi", !s.Wifi.Available ? "No disponible" : s.Wifi.Connected ? s.Wifi.Ssid : "Sin conexión"), On: s.Wifi.Available && s.Wifi.Connected, Enabled: s.Wifi.Available, Reason: s.Wifi.Reason, Glyph: "wifi", Bars: s.Wifi.Bars));
+        if (cfg.CcWifi) Tile(new Widget(WidgetKind.Tile, "open:wifi", "Wi-Fi", BusyOr(c, "wifi", !s.Wifi.Available ? "No disponible" : s.Wifi.Connected ? s.Wifi.Ssid : s.Wifi.Reason is not null ? "Requiere ubicación" : "Sin conexión"), On: s.Wifi.Available && s.Wifi.Connected, Enabled: s.Wifi.Available, Reason: s.Wifi.Reason, Glyph: "wifi", Bars: s.Wifi.Bars));
         if (cfg.CcBluetooth) Tile(new Widget(WidgetKind.Tile, "open:bluetooth", "Bluetooth", !s.Bluetooth.Available ? "No disponible" : s.Bluetooth.RadioOn ? (s.Bluetooth.ConnectedCount > 0 ? $"{s.Bluetooth.ConnectedCount} conectado(s)" : "Activado") : "Desactivado", On: s.Bluetooth.Available && s.Bluetooth.RadioOn, Enabled: s.Bluetooth.Available, Reason: s.Bluetooth.Reason, Glyph: "bluetooth"));
         if (cfg.CcAppearance) Tile(new Widget(WidgetKind.Tile, "appearance", "Modo oscuro", s.Appearance.Available ? (s.Appearance.Dark ? "Activado" : "Desactivado") : "No disponible", On: s.Appearance.Available && s.Appearance.Dark, Enabled: s.Appearance.Available, Reason: s.Appearance.Reason, Glyph: "moon"));
         if (cfg.CcDisplay) Tile(new Widget(WidgetKind.Tile, "open:display", "Pantallas", "Duplicar / extender", Glyph: "display"));
@@ -65,6 +65,7 @@ public static class PanelBuilder
         w.Add(new Widget(WidgetKind.Tile, "wifi-radio", "Wi-Fi", BusyOr(c, "wifi-radio", s.RadioOn is null ? "Estado de la radio desconocido" : s.RadioOn == true ? "Activado" : "Desactivado"),
             On: s.RadioOn == true, Enabled: s.RadioOn is not null, Reason: s.RadioOn is null ? "Windows no informa el estado de la radio" : null, Glyph: "wifi", Bars: s.Bars));
         if (s.RadioOn == false) w.Add(new Widget(WidgetKind.Note, "off", "La radio Wi-Fi está desactivada."));
+        else if (s.Reason is not null && s.Networks.Count == 0) { w.Add(new Widget(WidgetKind.Note, "reason", s.Reason)); w.Add(new Widget(WidgetKind.Button, "open:ms-settings:privacy-location", "Abrir permisos de ubicación…")); }
         else
         {
             w.Add(new Widget(WidgetKind.Header, "networks", "Redes", Glyph: "section"));

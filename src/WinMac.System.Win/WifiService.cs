@@ -43,9 +43,12 @@ public sealed class WifiService : IWifiService
         if (!Open(out var h, out var iface, out var problem)) return WifiState.None(problem.Message ?? "Wi-Fi no disponible");
         try
         {
-            if (scan) Native.WlanScan(h, ref iface, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);   // asíncrono: los resultados aparecen en la lectura siguiente
+            uint scanRc = scan ? Native.WlanScan(h, ref iface, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero) : 0;   // asíncrono: los resultados aparecen en la lectura siguiente
             bool? radio = ReadRadioOn(h, iface);
-            var nets = ReadNetworks(h, iface);
+            var nets = ReadNetworks(h, iface, out uint listRc);
+            // Windows 11 exige el permiso de ubicación para ver redes (WLAN devuelve «acceso denegado»): se dice, no se finge una lista vacía.
+            if (listRc == 5 || (scan && scanRc == 5)) return new WifiState(true, false, null, 0, [], LocationReason, radio);
+            if (listRc != 0) return new WifiState(true, false, null, 0, [], $"Wi-Fi: no se pudo leer la lista de redes (error {listRc})", radio);
             var cur = nets.FirstOrDefault(n => n.Connected);
             return new WifiState(true, cur is not null, cur?.Ssid, cur?.Signal ?? 0, nets, RadioOn: radio);
         }
@@ -65,10 +68,14 @@ public sealed class WifiService : IWifiService
         finally { Native.WlanFreeMemory(data); }
     }
 
-    private static IReadOnlyList<WifiNetwork> ReadNetworks(IntPtr h, Guid iface)
+    /// <summary>Motivo mostrado cuando Windows niega las redes por falta del permiso de ubicación (el panel ofrece abrir esa página).</summary>
+    public const string LocationReason = "Windows necesita el permiso de ubicación para mostrar las redes Wi-Fi";
+
+    private static IReadOnlyList<WifiNetwork> ReadNetworks(IntPtr h, Guid iface, out uint rc)
     {
         var result = new List<WifiNetwork>();
-        if (Native.WlanGetAvailableNetworkList(h, ref iface, 0, IntPtr.Zero, out var list) != 0) return result;
+        rc = Native.WlanGetAvailableNetworkList(h, ref iface, 0, IntPtr.Zero, out var list);
+        if (rc != 0) return result;
         try
         {
             int count = Marshal.ReadInt32(list);
