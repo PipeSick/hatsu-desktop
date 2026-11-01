@@ -11,6 +11,9 @@ namespace WinMac.Host.App;
 /// Dibuja la ventana de Ajustes con Direct2D en el estilo de las listas agrupadas de iOS: barra lateral con iconos de color, tarjetas redondeadas, interruptores verdes, controles segmentados,
 /// deslizador y menú de sugerencias. Todo vectorial y propio. Unidades en DIP; el dispositivo ya trae el DPI.
 /// </summary>
+/// <summary>Estado de edición de un campo (lo que el cuadro de entrada nativo contiene): se dibuja aquí mismo porque un control hijo de Windows no se ve sobre una superficie DXGI.</summary>
+internal sealed record EditView(string Id, string Text, int SelStart, int SelEnd, bool CaretOn);
+
 internal sealed class SettingsPainter : IDisposable
 {
     private readonly D2DDevice _dev; private readonly ID2D1DeviceContext _ctx; private readonly IDWriteFactory _dw;
@@ -78,9 +81,8 @@ internal sealed class SettingsPainter : IDisposable
     private static readonly int[] IconColors = [0x8E8E93, 0x0A84FF, 0x30B0C7, 0xAF52DE];
 
     // ───────────────────────────── ventana
-    /// <param name="editingId">Campo cuyo texto muestra el cuadro de edición nativo (no se dibuja su texto aquí).</param>
-    /// <param name="focusedId">Campo con foco (anillo de acento).</param>
-    public void Paint(SettingsController c, double w, double h, string? editingId, string? focusedId, bool clear = true)
+    /// <param name="edit">Campo en edición (texto, selección y cursor se dibujan aquí).</param>
+    public void Paint(SettingsController c, double w, double h, EditView? edit, bool clear = true)
     {
         _ctx.BeginDraw(); if (clear) _ctx.Clear(Bg);
         DrawSidebar(c, h);
@@ -90,7 +92,7 @@ internal sealed class SettingsPainter : IDisposable
             var f = c.Frame;
             _ctx.PushAxisAlignedClip(R(ox, oy, w, h), AntialiasMode.Aliased);
             _ctx.Transform = Matrix3x2.CreateTranslation((float)ox, (float)oy);
-            foreach (var g in f.Groups) DrawGroup(g, f, c, editingId, focusedId);
+            foreach (var g in f.Groups) DrawGroup(g, f, c, edit);
             if (f.MaxScroll > 0.5) { double th = Math.Max(30, SettingsLayout.ViewportH * SettingsLayout.ViewportH / f.ContentHeight), ty = 6 + (SettingsLayout.ViewportH - th - 12) * f.Scroll / f.MaxScroll; RR(cw - 7, ty, 3.5, th, 1.75, Label(0.28f)); }
             DrawSuggestions(c, f);
             _ctx.Transform = Matrix3x2.Identity; _ctx.PopAxisAlignedClip();
@@ -114,7 +116,7 @@ internal sealed class SettingsPainter : IDisposable
         }
     }
 
-    private void DrawGroup(GroupFrame g, PageFrame f, SettingsController c, string? editingId, string? focusedId)
+    private void DrawGroup(GroupFrame g, PageFrame f, SettingsController c, EditView? edit)
     {
         if (!string.IsNullOrEmpty(g.Group.Header)) Text(g.Group.Header!.ToUpperInvariant(), _head, g.X + 16, g.HeaderY + 4, g.W - 32, 24, Secondary);
         RR(g.X, g.Y, g.W, g.H, SettingsLayout.Radius, Card); if (!_dark) RRStroke(g.X, g.Y, g.W, g.H, SettingsLayout.Radius, Sep, 0.6f);
@@ -123,7 +125,7 @@ internal sealed class SettingsPainter : IDisposable
         {
             bool hover = c.Hover is { } hv && hv.Id == r.Row.Id && r.Row.Kind is RowKind.Toggle or RowKind.Button;
             if (hover) { Brush(Label(0.05f)); _ctx.FillRectangle(R(r.X, r.Y, r.X + r.W, r.Y + r.H), _b); }
-            DrawRow(r, c, editingId, focusedId);
+            DrawRow(r, c, edit);
             if (!r.Last) Ln(r.X + 16, r.Y + r.H - 0.5, r.X + r.W, r.Y + r.H - 0.5, Sep, 0.8f);
         }
 
@@ -131,7 +133,7 @@ internal sealed class SettingsPainter : IDisposable
         if (g.FooterH > 0) Text(g.Group.Footer, _sub, g.X + 16, g.FooterY, g.W - 32, g.FooterH, Secondary, wrap: true, top: true);
     }
 
-    private void DrawRow(RowFrame r, SettingsController c, string? editingId, string? focusedId)
+    private void DrawRow(RowFrame r, SettingsController c, EditView? edit)
     {
         var row = r.Row; float dim = row.Enabled ? 1f : 0.42f; double x = r.X + 16, midY = r.Y + r.H / 2;
         bool hasSub = !string.IsNullOrEmpty(row.Subtitle) || (!row.Enabled && !string.IsNullOrEmpty(row.Reason));
@@ -149,7 +151,7 @@ internal sealed class SettingsPainter : IDisposable
                 break;
             }
             case RowKind.Segmented: DrawSegmented(r, dim); break;
-            case RowKind.Field: DrawField(r, row.Id == editingId, row.Id == focusedId, dim); break;
+            case RowKind.Field: DrawField(r, edit is not null && edit.Id == row.Id ? edit : null, dim); break;
             case RowKind.Slider:
             {
                 var (x0, x1, cy) = SettingsLayout.SliderTrack(r); double v = c.Dragging is { } dg && dg.Id == row.Id ? dg.Value : row.Value, px = x0 + (x1 - x0) * v / 100;
@@ -177,13 +179,46 @@ internal sealed class SettingsPainter : IDisposable
         for (int i = 0; i < o.Count; i++) Text(o[i], i == r.Row.Selected ? _bodyBold : _small, s.X + sw * i, s.Y, sw, s.H, Label(dim * (i == r.Row.Selected ? 1f : 0.78f)), center: true);
     }
 
-    private void DrawField(RowFrame r, bool editing, bool focused, float dim)
+    private const double FieldPadX = 11;
+
+    private IDWriteTextLayout Layout(string text, double h) { var l = _dw.CreateTextLayout(text.Length == 0 ? " " : text, _small, 4000, (float)h); l.WordWrapping = WordWrapping.NoWrap; l.ParagraphAlignment = ParagraphAlignment.Center; return l; }
+
+    private static double XOf(IDWriteTextLayout l, string text, int idx)
+    {
+        if (idx <= 0 || text.Length == 0) return 0; idx = Math.Min(idx, text.Length); l.HitTestTextPosition((uint)(idx - 1), true, out float x, out _, out _); return x;
+    }
+
+    /// <summary>Cuánto se desplaza el texto a la izquierda para que el cursor siga a la vista en un campo de ancho <paramref name="fieldW"/>.</summary>
+    public double EditScroll(string text, int caret, double fieldW)
+    {
+        using var l = Layout(text, 30); double inner = fieldW - 2 * FieldPadX; return Math.Max(0, XOf(l, text, caret) - inner + 2);
+    }
+
+    /// <summary>Posición de texto (0…n) más cercana a un clic a <paramref name="xInText"/> DIP del inicio del texto (ya sumado el desplazamiento).</summary>
+    public int IndexAt(string text, double xInText)
+    {
+        if (text.Length == 0) return 0; using var l = Layout(text, 30); var m = l.HitTestPoint((float)Math.Max(0, xInText), 15, out var trailing, out _);
+        return Math.Clamp((int)m.TextPosition + (trailing ? 1 : 0), 0, text.Length);
+    }
+
+    private void DrawField(RowFrame r, EditView? e, float dim)
     {
         var f = SettingsLayout.FieldRect(r); RR(f.X, f.Y, f.W, f.H, 9, new Color4(Field.R, Field.G, Field.B, dim));
-        if (focused) RRStroke(f.X, f.Y, f.W, f.H, 9, Tint, 1.6f);
-        if (editing) return;   // el texto lo pinta el cuadro de edición nativo
-        bool empty = string.IsNullOrEmpty(r.Row.Text);
-        Text(empty ? r.Row.Placeholder : r.Row.Text, _small, f.X + 11, f.Y, f.W - 22, f.H, empty ? Secondary : Label(dim));
+        if (e is null)
+        {
+            bool empty = string.IsNullOrEmpty(r.Row.Text);
+            Text(empty ? r.Row.Placeholder : r.Row.Text, _small, f.X + FieldPadX, f.Y, f.W - 2 * FieldPadX, f.H, empty ? Secondary : Label(dim)); return;
+        }
+
+        RRStroke(f.X, f.Y, f.W, f.H, 9, Tint, 1.6f);
+        double inner = f.W - 2 * FieldPadX, x0 = f.X + FieldPadX; int caret = Math.Clamp(e.SelEnd, 0, e.Text.Length), a = Math.Clamp(Math.Min(e.SelStart, e.SelEnd), 0, e.Text.Length), b = Math.Clamp(Math.Max(e.SelStart, e.SelEnd), 0, e.Text.Length);
+        using var l = Layout(e.Text, f.H); double scroll = Math.Max(0, XOf(l, e.Text, caret) - inner + 2);
+        _ctx.PushAxisAlignedClip(R(x0, f.Y, x0 + inner, f.Y + f.H), AntialiasMode.Aliased);
+        if (e.Text.Length == 0) Text(r.Row.Placeholder, _small, x0, f.Y, inner, f.H, Secondary);
+        if (b > a) { double sx = XOf(l, e.Text, a), ex = XOf(l, e.Text, b); RR(x0 - scroll + sx, f.Y + 6, ex - sx, f.H - 12, 3, new Color4(Tint.R, Tint.G, Tint.B, _dark ? 0.45f : 0.30f)); }
+        if (e.Text.Length > 0) { Brush(Label()); _ctx.DrawTextLayout(new Vector2((float)(x0 - scroll), (float)f.Y), l, _b); }
+        if (e.CaretOn && a == b) { double cx = x0 - scroll + XOf(l, e.Text, caret); Ln(cx, f.Y + 7, cx, f.Y + f.H - 7, Label(), 1.4f); }
+        _ctx.PopAxisAlignedClip();
     }
 
     private void DrawSuggestions(SettingsController c, PageFrame f)

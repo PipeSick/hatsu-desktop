@@ -14,7 +14,7 @@ namespace WinMac.Host.App;
 /// </summary>
 internal sealed class SettingsWindow : IDisposable
 {
-    private const uint WM_PAINT = 0xF, WM_ERASEBKGND = 0x14, WM_CLOSE = 0x10, WM_DESTROY = 2, WM_COMMAND = 0x111, WM_TIMER = 0x113, WM_KEYDOWN = 0x100, WM_CHAR = 0x102, WM_CTLCOLOREDIT = 0x133;
+    private const uint WM_PAINT = 0xF, WM_ERASEBKGND = 0x14, WM_CLOSE = 0x10, WM_DESTROY = 2, WM_COMMAND = 0x111, WM_TIMER = 0x113, WM_KEYDOWN = 0x100, WM_CHAR = 0x102;
     private const uint WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_MOUSEWHEEL = 0x20A, WM_MOUSELEAVE = 0x2A3, WM_DPICHANGED = 0x2E0, WM_KILLFOCUS = 8;
     private const uint WM_REFRESH = Native.WM_APP + 2, WM_SUGGEST = Native.WM_APP + 3, WM_EDITDONE = Native.WM_APP + 4;
     private const uint WS_CHILD = 0x40000000, WS_VISIBLE = 0x10000000, ES_AUTOHSCROLL = 0x80;
@@ -24,7 +24,7 @@ internal sealed class SettingsWindow : IDisposable
 
     private readonly ConfigService _cfg; private readonly Func<IReadOnlyDictionary<string, ModuleState>> _states; private readonly Action<string> _log; private readonly string _exe;
     private readonly Native.WndProc _proc, _editSub; private readonly SettingsController _ctl = new(); private readonly SettingsActions _actions;
-    private IntPtr _hwnd, _edit, _editOld, _editFont, _editBrush; private string? _editId, _editInitial; private bool _editDirty, _tracking, _clickLogged;
+    private IntPtr _hwnd, _edit, _editOld, _editFont; private string? _editId, _editInitial; private bool _editDirty, _tracking, _clickLogged;
     private D2DDevice? _dev; private SettingsPainter? _painter; private IDXGISwapChain1? _swap; private ID2D1Bitmap1? _bmp; private double _scale = 1; private bool _dark; private int _wPx, _hPx;
     public IntPtr Handle => _hwnd;
     public bool IsOpen => _hwnd != IntPtr.Zero;
@@ -106,8 +106,28 @@ internal sealed class SettingsWindow : IDisposable
     private void Render()
     {
         if (_painter is null || _swap is null || _hwnd == IntPtr.Zero) return;
-        try { _painter.Paint(_ctl, SettingsLayout.WinW, SettingsLayout.WinH, _editId, _editId); _swap.Present(1, PresentFlags.None); }
+        try { _painter.Paint(_ctl, SettingsLayout.WinW, SettingsLayout.WinH, CurrentEditView()); _swap.Present(1, PresentFlags.None); }
         catch (Exception e) { _log("[host] ajustes: error al dibujar: " + e.GetType().Name + ": " + e.Message); }
+    }
+
+    private bool _caretOn = true; private double _lastX, _lastY;
+    private static readonly UIntPtr TimerCaret = (UIntPtr)9;
+
+    /// <summary>Lo que contiene el cuadro de entrada nativo, para dibujarlo aquí (un control hijo no se ve sobre una superficie DXGI).</summary>
+    private EditView? CurrentEditView()
+    {
+        if (_edit == IntPtr.Zero || _editId is null) return null;
+        long sel = (long)Native.SendMessage(_edit, 0xB0 /* EM_GETSEL */, IntPtr.Zero, IntPtr.Zero); int a = (int)(sel & 0xFFFF), b = (int)((sel >> 16) & 0xFFFF);
+        return new EditView(_editId, EditText(), a, b, _caretOn);
+    }
+
+    /// <summary>Un clic dentro del campo que ya se edita: coloca el cursor donde se pulsó.</summary>
+    private void PlaceCaretFromClick()
+    {
+        if (_edit == IntPtr.Zero || _editId is null || _painter is null || _ctl.RowOf(_editId) is not { } row) return;
+        var f = SettingsLayout.FieldRect(row); string text = EditText(); long sel = (long)Native.SendMessage(_edit, 0xB0, IntPtr.Zero, IntPtr.Zero); int caret = (int)((sel >> 16) & 0xFFFF);
+        double scroll = _painter.EditScroll(text, caret, f.W), xIn = _lastX - SettingsLayout.SidebarW - f.X - 11 + scroll; int i = _painter.IndexAt(text, xIn);
+        Native.SendMessage(_edit, 0xB1 /* EM_SETSEL */, (IntPtr)i, (IntPtr)i); _caretOn = true; Invalidate();
     }
 
     private void Invalidate() { if (_hwnd != IntPtr.Zero) Native.InvalidateRect(_hwnd, IntPtr.Zero, false); }
@@ -140,7 +160,7 @@ internal sealed class SettingsWindow : IDisposable
                 case WM_LBUTTONDOWN:
                 {
                     if (!_clickLogged) { _clickLogged = true; _log($"[host] ajustes: primer clic recibido en ({X(l):0},{Y(l):0}) con escala {_scale:0.00}"); }
-                    Native.SetCapture(_hwnd); bool hadEdit = _edit != IntPtr.Zero; var e = _ctl.PointerDown(X(l), Y(l));
+                    _lastX = X(l); _lastY = Y(l); Native.SetCapture(_hwnd); bool hadEdit = _edit != IntPtr.Zero; var e = _ctl.PointerDown(_lastX, _lastY);
                     if (e is null && hadEdit && _ctl.Suggestions.Count == 0) EndEdit(commit: true);   // pulsar fuera del campo cierra la edición
                     if (e is not null) HandleEdit(e); Invalidate(); return IntPtr.Zero;
                 }
@@ -162,22 +182,18 @@ internal sealed class SettingsWindow : IDisposable
                     Native.SetWindowPos(_hwnd, IntPtr.Zero, rc.Left, rc.Top, rc.Right - rc.Left, rc.Bottom - rc.Top, 0x0004 | 0x0010 /* NOZORDER | NOACTIVATE */); CreateSurface(); PositionEdit(); Invalidate(); return IntPtr.Zero;
                 }
                 case WM_TIMER when (UIntPtr)(ulong)(long)w == TimerSuggest: Native.KillTimer(_hwnd, TimerSuggest); StartSuggestSearch(); return IntPtr.Zero;
+                case WM_TIMER when (UIntPtr)(ulong)(long)w == TimerCaret: _caretOn = !_caretOn; if (_edit != IntPtr.Zero) Invalidate(); return IntPtr.Zero;
                 case WM_SUGGEST: ApplySuggestResults(); return IntPtr.Zero;
                 case WM_EDITDONE: DestroyEdit(); return IntPtr.Zero;
                 case WM_COMMAND when (int)((long)w & 0xFFFF) == ID_EDIT:
                 {
                     int code = (int)(((long)w >> 16) & 0xFFFF);
-                    if (code == EN_CHANGE && _edit != IntPtr.Zero && Native.GetFocus() == _edit) { _editDirty = true; if (_editId == "hub.city") Native.SetTimer(_hwnd, TimerSuggest, 320, IntPtr.Zero); }
+                    if (code == EN_CHANGE && _edit != IntPtr.Zero && Native.GetFocus() == _edit) { _editDirty = true; _caretOn = true; Invalidate(); if (_editId == "hub.city") Native.SetTimer(_hwnd, TimerSuggest, 320, IntPtr.Zero); }
                     else if (code == EN_KILLFOCUS && _edit != IntPtr.Zero && _ctl.Suggestions.Count == 0) EndEdit(commit: true);
                     else if (code == EN_KILLFOCUS && _edit != IntPtr.Zero) { /* sigue la lista de sugerencias: el clic en una sugerencia se atiende antes (PointerDown) */ _suggestBlur = true; Native.SetTimer(_hwnd, (UIntPtr)8, 180, IntPtr.Zero); }
                     return IntPtr.Zero;
                 }
                 case WM_TIMER when (UIntPtr)(ulong)(long)w == (UIntPtr)8: Native.KillTimer(_hwnd, (UIntPtr)8); if (_suggestBlur && _edit != IntPtr.Zero && Native.GetFocus() != _edit) EndEdit(commit: true); _suggestBlur = false; return IntPtr.Zero;
-                case WM_CTLCOLOREDIT:
-                {
-                    if (_editBrush == IntPtr.Zero) _editBrush = Native.CreateSolidBrush(_dark ? 0x002E2C2Cu : 0x00F3EEEEu);   // COLORREF = 0x00BBGGRR: 2C2C2E / EEEEF3
-                    Native.SetTextColor(w, _dark ? 0x00FFFFFFu : 0x00000000u); Native.SetBkColor(w, _dark ? 0x002E2C2Cu : 0x00F3EEEEu); return _editBrush;
-                }
                 case WM_CLOSE: Native.DestroyWindow(h); return IntPtr.Zero;
                 case WM_DESTROY: DestroyAll(); return IntPtr.Zero;
             }
@@ -192,7 +208,7 @@ internal sealed class SettingsWindow : IDisposable
     {
         switch (e.Kind)
         {
-            case "focus": ShowEdit(e.Id); return;
+            case "focus": if (_edit != IntPtr.Zero && _editId == e.Id) PlaceCaretFromClick(); else ShowEdit(e.Id); return;
             case "suggest": ChooseSuggestion(e.Index); return;
         }
 
@@ -210,16 +226,15 @@ internal sealed class SettingsWindow : IDisposable
         if (_edit == IntPtr.Zero) return;
         Native.SendMessage(_edit, 0x30 /* WM_SETFONT */, _editFont, (IntPtr)1); _editId = id; _editInitial = row.Row.Text ?? ""; Native.SetWindowText(_edit, _editInitial); _editDirty = false;
         _editOld = Native.SetWindowLongPtr(_edit, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(_editSub));
-        PositionEdit(); Native.SetFocus(_edit); Native.SendMessage(_edit, 0xB1 /* EM_SETSEL */, IntPtr.Zero, (IntPtr)(-1)); Invalidate();
+        PositionEdit(); Native.SetFocus(_edit); Native.SendMessage(_edit, 0xB1 /* EM_SETSEL */, IntPtr.Zero, (IntPtr)(-1)); _caretOn = true; Native.SetTimer(_hwnd, TimerCaret, 530, IntPtr.Zero); Invalidate();
     }
 
+    /// <summary>El cuadro nativo solo recibe el teclado (escritura, portapapeles, IME): se deja fuera de la pantalla y el texto se dibuja en el campo.</summary>
     private void PositionEdit()
     {
         if (_edit == IntPtr.Zero || _editId is null) return;
-        var row = _ctl.RowOf(_editId); if (row is null) { Native.ShowWindow(_edit, 0); return; }
-        var f = SettingsLayout.FieldRect(row); double x = SettingsLayout.SidebarW + f.X + 11, y = SettingsLayout.TitleH + f.Y + 6, w = f.W - 22, h = f.H - 12;
-        bool visible = f.Y >= 0 && f.Y + f.H <= SettingsLayout.ViewportH;   // un campo desplazado fuera de la zona visible no deja su cuadro flotando
-        Native.MoveWindow(_edit, S(x), S(y), S(w), S(h), true); Native.ShowWindow(_edit, visible ? 5 : 0);
+        var row = _ctl.RowOf(_editId); if (row is null) return;
+        var f = SettingsLayout.FieldRect(row); Native.MoveWindow(_edit, -S(3000), -S(3000), S(f.W - 22), S(f.H - 12), true);
     }
 
     private string EditText() { var sb = new StringBuilder(520); Native.GetWindowText(_edit, sb, sb.Capacity); return sb.ToString(); }
@@ -228,7 +243,7 @@ internal sealed class SettingsWindow : IDisposable
     private void EndEdit(bool commit)
     {
         if (_edit == IntPtr.Zero || _editId is null) return;
-        string id = _editId, text = EditText(); bool dirty = _editDirty; _editId = null; Native.KillTimer(_hwnd, TimerSuggest);
+        string id = _editId, text = EditText(); bool dirty = _editDirty; _editId = null; Native.KillTimer(_hwnd, TimerSuggest); Native.KillTimer(_hwnd, TimerCaret);
         var old = _edit; _edit = IntPtr.Zero; Native.ShowWindow(old, 0); _dying.Add(old); Native.PostMessage(_hwnd, WM_EDITDONE, IntPtr.Zero, IntPtr.Zero);   // se destruye fuera de su propia notificación
         _ctl.ClearSuggestions(); _suggestCts?.Cancel();
         if (commit && dirty) CommitField(id, text.Trim());
@@ -267,7 +282,9 @@ internal sealed class SettingsWindow : IDisposable
             else if (msg == WM_CHAR && (int)w is VK_RETURN or VK_ESCAPE or VK_TAB) return IntPtr.Zero;   // sin pitidos
         }
         catch (Exception e) { _log("[host] ajustes: error en el campo: " + e.GetType().Name + ": " + e.Message); }
-        return Native.CallWindowProc(_editOld, h, msg, w, l);
+        var res = Native.CallWindowProc(_editOld, h, msg, w, l);
+        if (msg is WM_KEYDOWN or WM_CHAR or 0x101 /* WM_KEYUP */ or 0x302 /* WM_PASTE */ or 0x300 /* WM_CUT */ or 0x303 /* WM_CLEAR */ or 0x7 /* WM_SETFOCUS */) { _caretOn = true; Invalidate(); }   // el cursor y la selección se dibujan en la ventana
+        return res;
     }
 
     // ───────────────────────────── ciudad: autocompletar y resolución
@@ -346,9 +363,8 @@ internal sealed class SettingsWindow : IDisposable
     // ───────────────────────────── cierre
     private void DestroyAll()
     {
-        _suggestCts?.Cancel(); Native.KillTimer(_hwnd, TimerSuggest);
+        _suggestCts?.Cancel(); Native.KillTimer(_hwnd, TimerSuggest); Native.KillTimer(_hwnd, TimerCaret);
         if (_editFont != IntPtr.Zero) { Native.DeleteObject(_editFont); _editFont = IntPtr.Zero; }
-        if (_editBrush != IntPtr.Zero) { Native.DeleteObject(_editBrush); _editBrush = IntPtr.Zero; }
         foreach (var d in _dying) Native.DestroyWindow(d); _dying.Clear(); _edit = IntPtr.Zero; _editId = null; DisposeSurface(); _painter?.Dispose(); _painter = null; _dev?.Dispose(); _dev = null; _hwnd = IntPtr.Zero;
     }
 

@@ -17,11 +17,11 @@ internal static class SettingsOffscreen
         bool dark = !string.Equals(HostOptions.Arg(args, "--theme", "dark"), "light", StringComparison.OrdinalIgnoreCase);
         double scale = double.TryParse(HostOptions.Arg(args, "--scale", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sc) ? sc : 2;
         double scroll = double.TryParse(HostOptions.Arg(args, "--scroll", "0"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sy) ? sy : 0;
-        try { File.WriteAllText(png + ".txt", Render(png, page, dark, scale, scroll, args.Contains("--suggest"), args.Contains("--no-notch"))); return 0; }
+        try { File.WriteAllText(png + ".txt", Render(png, page, dark, scale, scroll, args.Contains("--suggest"), args.Contains("--no-notch"), args.Contains("--edit"))); return 0; }
         catch (Exception e) { try { File.WriteAllText(png + ".txt", "ERROR: " + e); } catch (IOException) { } return 1; }
     }
 
-    public static string Render(string pngPath, string pageId, bool dark, double scale, double scroll, bool suggest, bool noNotch)
+    public static string Render(string pngPath, string pageId, bool dark, double scale, double scroll, bool suggest, bool noNotch, bool edit = false)
     {
         var cfg = new HostConfig { Bar = new WinMac.Bar.BarConfig { WeatherCity = "Molina|-35.1167|-71.2833", WeatherFavorites = "Santiago|-33.45|-70.67;Valparaíso|-33.05|-71.62", ShowSeconds = false }, Notch = new NotchSettings { GlassLevel = 60, LyricsEnabled = true } };
         var states = noNotch ? new Dictionary<string, ModuleState> { ["notch"] = ModuleState.NotInstalled } : new Dictionary<string, ModuleState>();
@@ -31,7 +31,7 @@ internal static class SettingsOffscreen
         int pw = (int)Math.Ceiling(SettingsLayout.WinW * scale), ph = (int)Math.Ceiling(SettingsLayout.WinH * scale);
         using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new SettingsPainter(dev, dark);
         using var target = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale); dev.Context.Target = target;
-        painter.Paint(ctl, SettingsLayout.WinW, SettingsLayout.WinH, null, suggest ? "hub.city" : null);
+        painter.Paint(ctl, SettingsLayout.WinW, SettingsLayout.WinH, suggest ? new EditView("hub.city", "Molina", 6, 6, true) : edit ? new EditView("hub.city", "Molina, Chile", 0, 6, true) : null);   // --suggest y --edit: el campo de ciudad con el cursor o con una selección
         using var cpu = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale, readable: true); cpu.CopyFromBitmap(target);
         var map = cpu.Map(MapOptions.Read); var bgra = new byte[map.Pitch * ph];
         try { Marshal.Copy(map.Bits, bgra, 0, bgra.Length); } finally { cpu.Unmap(); }
