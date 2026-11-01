@@ -170,11 +170,14 @@ public sealed partial class BarHost
             }
 
             if (id.StartsWith("day:") && DateOnly.TryParseExact(id[4..], "yyyy-MM-dd", out var day)) { _pctx = _pctx with { SelectedDay = day }; RebuildPanel(); return; }
-            if (id.StartsWith("net:"))
+            if (id.StartsWith("net:") && _cfg.WifiDetails)   // con detalles activados la fila se despliega (la acción está dentro)
+            { _pctx = _pctx with { ExpandedNet = _pctx.ExpandedNet == id[4..] ? null : id[4..] }; RebuildPanel(); return; }
+            if (id.StartsWith("net:") || id.StartsWith("netact:"))
             {
-                var net = s.Wifi.Networks.FirstOrDefault(n => n.Ssid == id[4..]); if (net is null) return;
-                if (net.Connected) Op(id, "Desconectando…", svc.Wifi.Disconnect, () => _hub.RefreshWifi(true));
-                else Op(id, "Conectando…", () => svc.Wifi.Connect(net.ProfileName ?? "", net.Ssid), () => { _hub.RefreshWifi(true); });
+                string ssid = id[(id.IndexOf(':') + 1)..], busy = "net:" + ssid;
+                var net = s.Wifi.Networks.FirstOrDefault(n => n.Ssid == ssid); if (net is null) return;
+                if (net.Connected) Op(busy, "Desconectando…", svc.Wifi.Disconnect, () => _hub.RefreshWifi(true));
+                else Op(busy, "Conectando…", () => svc.Wifi.Connect(net.ProfileName ?? "", net.Ssid), () => { _hub.RefreshWifi(true); });
                 return;
             }
 

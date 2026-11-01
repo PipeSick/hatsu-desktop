@@ -24,7 +24,7 @@ internal sealed class SettingsWindow : IDisposable
         ("showNetwork", "Wi-Fi / red", b => b.ShowNetwork), ("showVolume", "Volumen", b => b.ShowVolume), ("showBattery", "Batería", b => b.ShowBattery), ("showBatteryPercent", "Porcentaje de batería", b => b.ShowBatteryPercent),
         ("showBluetooth", "Bluetooth", b => b.ShowBluetooth), ("showControlCenter", "Control Center", b => b.ShowControlCenter), ("showSeconds", "Segundos en el reloj", b => b.ShowSeconds), ("showDate", "Fecha junto a la hora", b => b.ShowDate),
         ("use24Hour", "Reloj de 24 horas", b => b.Use24Hour), ("reserveSpace", "Reservar el borde superior", b => b.ReserveSpace), ("confirmDestructive", "Confirmar reiniciar / apagar / cerrar sesión", b => b.ConfirmDestructive),
-        ("wifiDetails", "Wi-Fi: mostrar potencia y banda en la lista", b => b.WifiDetails), ("appMenus", "Menús de app activa (experimental)", b => b.AppMenus),
+        ("wifiDetails", "Wi-Fi: desplegar detalle (señal, banda) al tocar una red", b => b.WifiDetails), ("appMenus", "Menús de app activa (experimental)", b => b.AppMenus),
         ("ccWifi", "CC: Wi-Fi", b => b.CcWifi), ("ccBluetooth", "CC: Bluetooth", b => b.CcBluetooth), ("ccSound", "CC: Sonido", b => b.CcSound), ("ccBrightness", "CC: Brillo", b => b.CcBrightness),
         ("ccPower", "CC: Energía", b => b.CcPower), ("ccAppearance", "CC: Apariencia", b => b.CcAppearance), ("ccDisplay", "CC: Pantallas", b => b.CcDisplay), ("ccNotifications", "CC: Notificaciones", b => b.CcNotifications),
     ];

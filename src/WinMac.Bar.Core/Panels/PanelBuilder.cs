@@ -13,7 +13,7 @@ public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothS
 
 /// <summary>Estado de interfaz de los paneles: mes visible, día elegido, operaciones en curso («Conectando…») y el último error.</summary>
 public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo Battery, DateTime Now, IReadOnlyList<CalendarEvent> Events, int ViewYear, int ViewMonth,
-    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message)
+    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null)
 {
     public static PanelContext Initial(BarConfig cfg, DateTime now) => new(SystemSnapshot.Empty, cfg, BatteryInfo.None, now, [], now.Year, now.Month, null, new Dictionary<string, string>(), null);
 }
@@ -70,13 +70,27 @@ public static class PanelBuilder
         {
             w.Add(new Widget(WidgetKind.Header, "networks", "Redes", Glyph: "section"));
             if (s.Networks.Count == 0) w.Add(new Widget(WidgetKind.Note, "none", "Buscando redes…"));
-            foreach (var n in s.Networks.Take(6))   // el panel no se desplaza: 6 redes caben incluso en 1080p
+            var shown = s.Networks.Take(6).ToList();
+            if (c.Cfg.WifiDetails && c.ExpandedNet is { } ex)   // con una red desplegada caben menos filas; la desplegada siempre se ve
             {
-                string sub = c.Busy.TryGetValue("net:" + n.Ssid, out var b) ? b : n.Connected ? "Conectado · toca para desconectar" : n.HasProfile ? "Red conocida" : n.Secured ? "Requiere contraseña: conéctala desde Configuración" : "Abierta: conéctala desde Configuración";
-                // Con los detalles activados la fila prioriza banda y potencia y usa una etiqueta corta de estado (el panel mide 320 px: un texto largo se corta y se perdería justo lo pedido).
-                if (c.Cfg.WifiDetails && !c.Busy.ContainsKey("net:" + n.Ssid))
-                    sub = string.Join(" · ", new[] { n.BandText, n.RssiDbm is { } r ? $"{r} dBm" : null, n.Connected ? "Conectado" : n.HasProfile ? "Conocida" : n.Secured ? "Con clave" : "Abierta" }.Where(x => x is not null));
-                w.Add(new Widget(WidgetKind.Row, "net:" + n.Ssid, n.Ssid, sub, On: n.Connected, Enabled: n.Connected || n.HasProfile, Bars: n.Bars, Glyph: n.Secured ? "lock" : null));
+                shown = s.Networks.Take(4).ToList();
+                if (shown.All(x => x.Ssid != ex) && s.Networks.FirstOrDefault(x => x.Ssid == ex) is { } found) shown.Add(found);
+            }
+            foreach (var n in shown)   // el panel no se desplaza
+            {
+                bool details = c.Cfg.WifiDetails, open = details && c.ExpandedNet == n.Ssid;
+                string sub = c.Busy.TryGetValue("net:" + n.Ssid, out var b) ? b
+                    : details ? (open ? "▾ " : "▸ ") + (n.Connected ? "Conectado" : n.HasProfile ? "Conocida" : n.Secured ? "Con clave" : "Abierta") + (n.BandText is { } bd ? " · " + bd : "")
+                    : n.Connected ? "Conectado · toca para desconectar" : n.HasProfile ? "Red conocida" : n.Secured ? "Requiere contraseña: conéctala desde Configuración" : "Abierta: conéctala desde Configuración";
+                // Con detalles activados tocar la fila la despliega (acordeón); la acción de conectar/desconectar vive dentro, no se dispara por accidente.
+                w.Add(new Widget(WidgetKind.Row, "net:" + n.Ssid, n.Ssid, sub, On: n.Connected, Enabled: details || n.Connected || n.HasProfile, Bars: n.Bars, Glyph: n.Secured ? "lock" : null));
+                if (!open) continue;
+                w.Add(new Widget(WidgetKind.Note, "d-signal:" + n.Ssid, $"Señal: {n.Signal} %" + (n.RssiDbm is { } r ? $" ({r} dBm)" : "")));
+                if (n.BandText is { } band) w.Add(new Widget(WidgetKind.Note, "d-band:" + n.Ssid, $"Banda: {band}"));
+                w.Add(new Widget(WidgetKind.Note, "d-sec:" + n.Ssid, "Seguridad: " + (n.Secured ? "protegida" : "abierta") + (n.HasProfile ? " · perfil guardado" : "")));
+                if (n.Connected) w.Add(new Widget(WidgetKind.Button, "netact:" + n.Ssid, "Desconectar"));
+                else if (n.HasProfile) w.Add(new Widget(WidgetKind.Button, "netact:" + n.Ssid, "Conectar"));
+                else w.Add(new Widget(WidgetKind.Note, "d-new:" + n.Ssid, "Red nueva: conéctala desde Configuración de Windows."));
             }
         }
 

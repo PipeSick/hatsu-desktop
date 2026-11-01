@@ -232,15 +232,21 @@ public class PanelBuilderTests
     }
 
     [Fact]
-    public void Wifi_signal_and_band_appear_only_when_the_option_is_on_and_band_is_derived_from_the_frequency()
+    public void With_wifi_details_on_a_row_unfolds_into_signal_band_and_security_with_the_action_inside_and_stays_the_old_list_when_off()
     {
-        var nets = new List<WifiNetwork> { new("Casa", 89, true, true, true, "Casa", -57, 5260), new("Vecino", 40, true, false, true, "Vecino", -80, 2437), new("Sin", 40, true, false, true, "Sin") };
+        var nets = new List<WifiNetwork> { new("Casa", 89, true, true, true, "Casa", -57, 5260), new("Vecino", 40, true, false, true, "Vecino", -80, 2437), new("Nueva", 30, true, false, false, null) };
         Assert.Equal(["5 GHz", "2,4 GHz", null], nets.Select(n => n.BandText)); Assert.Equal("6 GHz", (nets[0] with { FrequencyMhz = 6195 }).BandText);
         var sys = Nothing with { Wifi = new WifiState(true, true, "Casa", 89, nets, RadioOn: true) };
-        var off = PanelBuilder.WifiPanel(Ctx(sys)); Assert.DoesNotContain("dBm", off.Widgets.Single(w => w.Id == "net:Casa").Sub);
-        var on = PanelBuilder.WifiPanel(Ctx(sys, new BarConfig { WifiDetails = true }));
-        var casa = on.Widgets.Single(w => w.Id == "net:Casa").Sub; Assert.Equal("5 GHz · -57 dBm · Conectado", casa); Assert.True(casa!.Length <= 30);   // cabe en la fila de 320 px
-        Assert.Equal("2,4 GHz · -80 dBm · Conocida", on.Widgets.Single(w => w.Id == "net:Vecino").Sub); Assert.Equal("Conocida", on.Widgets.Single(w => w.Id == "net:Sin").Sub);   // sin dato de Windows no se inventa
+        var off = PanelBuilder.WifiPanel(Ctx(sys)); Assert.DoesNotContain(off.Widgets, w => w.Id.StartsWith("netact:") || w.Id.StartsWith("d-"));
+        var cfg = new BarConfig { WifiDetails = true };
+        var closed = PanelBuilder.WifiPanel(Ctx(sys, cfg)); Assert.Equal("▸ Conectado · 5 GHz", closed.Widgets.Single(w => w.Id == "net:Casa").Sub); Assert.DoesNotContain(closed.Widgets, w => w.Id.StartsWith("d-"));
+        Assert.True(closed.Widgets.Single(w => w.Id == "net:Nueva").Enabled);   // se puede desplegar aunque no se pueda conectar
+        var open = PanelBuilder.WifiPanel(Ctx(sys, cfg) with { ExpandedNet = "Casa" });
+        Assert.StartsWith("▾", open.Widgets.Single(w => w.Id == "net:Casa").Sub); Assert.Equal("Señal: 89 % (-57 dBm)", open.Widgets.Single(w => w.Id == "d-signal:Casa").Text); Assert.Equal("Banda: 5 GHz", open.Widgets.Single(w => w.Id == "d-band:Casa").Text);
+        Assert.Equal("Desconectar", open.Widgets.Single(w => w.Id == "netact:Casa").Text); Assert.DoesNotContain(open.Widgets, w => w.Id.EndsWith(":Vecino") && w.Id.StartsWith("d-"));   // solo una desplegada
+        var known = PanelBuilder.WifiPanel(Ctx(sys, cfg) with { ExpandedNet = "Vecino" }); Assert.Equal("Conectar", known.Widgets.Single(w => w.Id == "netact:Vecino").Text);
+        var fresh = PanelBuilder.WifiPanel(Ctx(sys, cfg) with { ExpandedNet = "Nueva" }); Assert.DoesNotContain(fresh.Widgets, w => w.Id == "netact:Nueva"); Assert.Contains(fresh.Widgets, w => w.Id == "d-new:Nueva");   // sin perfil no se finge un botón
+        Assert.DoesNotContain(fresh.Widgets, w => w.Id == "d-band:Nueva");   // sin dato de Windows no se inventa
     }
 
     [Fact]
