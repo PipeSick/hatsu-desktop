@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Adaptadores de Windows de los controles del sistema. TFM 19041: incluye la proyección WinRT del SDK (Windows.Devices.Radios/Enumeration/Bluetooth) sin paquetes NuGet. Sin privilegios de administrador. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>WinMac.SystemControl.Win</RootNamespace>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinMac.System.Core\WinMac.System.Core.csproj" />
+  </ItemGroup>
+</Project>
