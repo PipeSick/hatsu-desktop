@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Modelos, contratos y lógica pura de los controles del sistema (volumen, Wi-Fi, Bluetooth, brillo, energía, apariencia, sesión, calendario). Sin Windows: se prueba en Linux. Sin dependencias. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinMac.SystemControl</RootNamespace>
+  </PropertyGroup>
+</Project>

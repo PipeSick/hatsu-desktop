@@ -1,0 +1,65 @@
+namespace WinMac.SystemControl;
+
+// Contratos de los controles. Los adaptadores de Windows (WinMac.System.Win) los implementan; la lógica de interfaz y las pruebas usan dobles.
+// Todos son SÍNCRONOS y pueden tardar (DDC/CI, escaneo Wi-Fi): quien los llama los ejecuta fuera del hilo de interfaz.
+
+public interface IAudioService
+{
+    AudioState Read();
+    ServiceResult SetVolume(int percent);
+    ServiceResult SetMuted(bool muted);
+    /// <summary>Cambia la salida predeterminada. Puede devolver <see cref="ServiceStatus.Unavailable"/> si la API no oficial no es compatible: la interfaz ofrece abrir Configuración.</summary>
+    ServiceResult SetDefaultOutput(string deviceId);
+    /// <summary>¿Se puede cambiar la salida desde WinMac en este equipo? (detección de compatibilidad, sin cambiar nada)</summary>
+    ServiceResult CanSwitchOutput();
+}
+
+public interface IWifiService
+{
+    WifiState Read(bool scan);
+    ServiceResult Connect(string profileName, string ssid);
+    ServiceResult Disconnect();
+    ServiceResult SetRadio(bool on);
+}
+
+public interface IBluetoothService
+{
+    BluetoothState Read();
+    ServiceResult SetRadio(bool on);
+}
+
+public interface IBrightnessService
+{
+    BrightnessState Read();
+    ServiceResult Set(string monitorId, int percent);
+}
+
+public interface IPowerService
+{
+    PowerModeState ReadMode();
+    ServiceResult SetMode(PowerMode mode);
+}
+
+public interface IAppearanceService
+{
+    AppearanceState Read();
+    ServiceResult SetDark(bool dark);
+}
+
+public interface IDisplayService
+{
+    ServiceResult SetTopology(DisplayTopology topology);
+}
+
+public interface ISessionService
+{
+    ServiceResult Run(SystemActionKind action);
+    /// <summary>Cierra a la fuerza el proceso de la ventana en primer plano (con las salvaguardas de <see cref="ForceQuitGuard"/>).</summary>
+    ServiceResult ForceQuitForeground();
+    ServiceResult OpenNotificationCenter();
+}
+
+/// <summary>Todo lo que el Control Center necesita, en un solo punto (se sustituye entero en las pruebas).</summary>
+public sealed record SystemServices(
+    IAudioService Audio, IWifiService Wifi, IBluetoothService Bluetooth, IBrightnessService Brightness,
+    IPowerService Power, IAppearanceService Appearance, IDisplayService Display, ISessionService Session);
