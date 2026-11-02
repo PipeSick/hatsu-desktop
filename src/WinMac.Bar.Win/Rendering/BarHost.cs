@@ -84,7 +84,7 @@ public sealed partial class BarHost : IDisposable
             foreach (var w in _wins.ToArray()) { Guard(w, () => rendered |= w.Frame(dt, selfTest)); needs |= w.NeedsFrames; }
             if (rendered) frames++;
             if (frames >= maxFrames) return 0;
-            if (!needs && !selfTest) BarNative.MsgWaitForMultipleObjectsEx(0, null, 50, BarNative.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);
+            if (!needs && !selfTest) BarNative.MsgWaitForMultipleObjectsEx(0, null, _popover?.Animating == true ? 8u : 50u, BarNative.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);   // entrada/salida del panel lateral: pasos cortos solo mientras dura
         }
     }
 

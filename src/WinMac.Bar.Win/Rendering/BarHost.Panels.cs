@@ -1,5 +1,7 @@
 using WinMac.Bar.Win.Interop;
 using WinMac.Bar.Hub;
+using WinMac.Bar.Notifications;
+using WinMac.Bar.Win.Shell.Notifications;
 using WinMac.Bar.Win.Shell;
 using WinMac.Bar.Win.Shell.Hub;
 using WinMac.Calendar;
@@ -25,6 +27,10 @@ public sealed partial class BarHost : IPanelUi
     private readonly Queue<Action> _uiQueue = new(); private readonly object _cfgLock = new(); private BarConfig? _pendingCfg;
     private IReadOnlyList<AppMenuTop> _appMenuTops = []; private IReadOnlyList<string>? _appMenuLabels; private IntPtr _appMenuWindow;
     private DateTime _lastPanelRefresh = DateTime.MinValue, _lastEvents = DateTime.MinValue; private int _panelTicks;
+    // ── Centro de Notificaciones (una sola fuente y un solo almacén por proceso de barra, compartidos por todos los monitores)
+    private NotificationStore _nc = null!; private WinNotificationSource? _ncSrc; private DateTime _lastNcPoll = DateTime.MinValue;
+    /// <summary>Cada cuánto se relee con el panel abierto cuando Windows no envía el evento de cambios.</summary>
+    private static readonly TimeSpan NcPollEvery = TimeSpan.FromSeconds(4);
 
     /// <summary>Envía un cambio de ajustes al host (modo integrado). null = modo independiente: se guarda en bar.json.</summary>
     public Action<object>? PersistPatch { get; set; }
@@ -40,12 +46,18 @@ public sealed partial class BarHost : IPanelUi
         _hubMon = new HubMonitor(_hubSvc, Bg, Post, _log, () => DateTime.UtcNow); _speed = new SpeedTestRunner(_hubSvc.SpeedTest, Bg, Post);
         string cache = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "weather-cache.json");
         _weather = new WeatherService(_hubSvc.Weather, new WeatherCache(cache), () => DateTime.UtcNow, Bg, Post, _log); _rt = new HubRuntime(_hubMon, _speed, _weather);
-        _hub.Changed += OnHubChanged; _ops = new PanelOperations(_hub, this, _log, rt: _rt);
+        try { _ncSrc = new WinNotificationSource(_log); } catch (Exception e) { _log("[notificaciones] fuente no disponible: " + e.GetType().Name + ": " + e.Message); }
+        _nc = new NotificationStore(_ncSrc, Bg, Post, _log, () => DateTime.UtcNow); _nc.SetEnabled(_cfg.NotificationsFromWindows); _nc.Changed += OnNcChanged;
+        _hub.Changed += OnHubChanged; _ops = new PanelOperations(_hub, this, _log, rt: _rt, nc: _nc);
         _hubMon.Changed += OnHubPanelDataChanged; _speed.Changed += OnHubPanelDataChanged; _weather.Changed += () => { SetStateAll(); OnHubPanelDataChanged(); };
         ConfigureWeather();
     }
 
-    private void OnHubPanelDataChanged() { if (_popover is { IsOpen: true } && _pkind is PanelKind.Hub or PanelKind.Weather) RebuildPanel(); }
+    private void OnHubPanelDataChanged() { if (_popover is { IsOpen: true } && _pkind is PanelKind.Hub or PanelKind.Weather or PanelKind.Notifications) RebuildPanel(); }
+    private void OnNcChanged() { if (_popover is { IsOpen: true } && _pkind == PanelKind.Notifications) RebuildPanel(); }
+
+    /// <summary>Iconos del panel: los de las apps de las notificaciones (en memoria, los entregó Windows al leer) y los de ejecutables (multifunción).</summary>
+    private byte[]? PanelIcon(string key) => key.StartsWith(PanelBuilder.NcIconPrefix, StringComparison.Ordinal) ? _ncSrc?.CachedIcon(key[PanelBuilder.NcIconPrefix.Length..]) : _hubSvc.Icons.GetBgra(key, 32);
 
     /// <summary>Ciudad y adicionales desde la configuración central. La ubicación automática es OPT-IN: solo si el usuario la activó, se pide una vez por activación, y si Windows no la da se usa la ciudad elegida.</summary>
     private void ConfigureWeather()
@@ -114,7 +126,9 @@ public sealed partial class BarHost : IPanelUi
     {
         _popover?.Pump(); HubTick();
         if (_popover is not { IsOpen: true }) return;
-        var now = DateTime.UtcNow; if ((now - _lastPanelRefresh).TotalSeconds < 2.5) return;
+        var now = DateTime.UtcNow;
+        if (_pkind == PanelKind.Notifications && _nc.NeedsPolling && now - _lastNcPoll >= NcPollEvery) { _lastNcPoll = now; _nc.Refresh(); }   // sin evento de Windows: relectura suave, solo con el panel abierto
+        if ((now - _lastPanelRefresh).TotalSeconds < 2.5) return;
         _lastPanelRefresh = now; _panelTicks++;
         switch (_pkind)
         {
@@ -124,7 +138,7 @@ public sealed partial class BarHost : IPanelUi
             case PanelKind.Battery: _battery = SystemProviders.Battery(); _hub.RefreshSlow(); break;
         }
 
-        if (_pkind == PanelKind.Calendar && (now - _lastEvents).TotalSeconds > 60) LoadEvents();
+        if (_pkind is PanelKind.Calendar or PanelKind.Notifications && (now - _lastEvents).TotalSeconds > 60) LoadEvents();
         RebuildPanel();
     }
 
@@ -144,17 +158,37 @@ public sealed partial class BarHost : IPanelUi
 
     private void OpenPanel(BarWindow src, PanelKind kind, int anchorX, bool alignRight)
     {
-        _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, p => _hubSvc.Icons.GetBgra(p, 32));
+        _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
         _popSource = src; _pkind = kind; _anchorX = anchorX; _alignRight = alignRight; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
         _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab }; _pctx = _pctx with { Hub = MakeHubData() };
+        if (kind == PanelKind.Notifications) { OpenNotificationCenter(src); return; }
         var model = PanelBuilder.Build(kind, _pctx);
         _popover.Show(model, anchorX, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight);   // se abre en el monitor donde se hizo clic, escalado a SU DPI
         RefreshFor(kind, firstOpen: true);
     }
 
+    /// <summary>
+    /// Centro de Notificaciones: panel lateral en el borde derecho del monitor de la barra pulsada, a SU DPI, entre la barra y el final del área de trabajo (no tapa la barra ni la de tareas).
+    /// Al abrirse se lee una vez (y se escucha el evento de Windows si existe); el Tiempo usa el servicio compartido (respeta su caché de 15 min: no hay consultas extra a Open-Meteo).
+    /// </summary>
+    private void OpenNotificationCenter(BarWindow src)
+    {
+        _battery = SystemProviders.Battery();
+        double widthDip = NcGeometry.Width(src.MonitorRect.W / src.Scale);
+        var rect = NcGeometry.Place(src.Top + src.Height, src.MonitorRect, src.Info.Work, src.Scale, widthDip);
+        _pctx = _pctx with { Battery = _battery, Nc = new NcView(_nc.State, new HashSet<string>(StringComparer.OrdinalIgnoreCase), widthDip) };
+        _popover!.ShowSide(PanelBuilder.Build(PanelKind.Notifications, _pctx), rect, src.MonitorRect, src.Scale, _theme, _cfg.Background == BarBackground.Glass);
+        _lastNcPoll = DateTime.UtcNow; _nc.Activate(); _weather.Refresh(); LoadEvents();
+    }
+
     private void NavigatePanel(PanelKind kind)
     {
         if (_popover is not { IsOpen: true }) return;
+        if (kind == PanelKind.Notifications && _popSource is { } from && _pkind != PanelKind.Notifications)   // desde el Control Center: se reabre como panel lateral en el mismo monitor
+        {
+            _popover.Hide(); OpenPanel(from, PanelKind.Notifications, 0, alignRight: true); return;
+        }
+
         _pkind = kind; _pctx = _pctx with { Message = null, Busy = new Dictionary<string, string>() };
         _popover.SetModel(PanelBuilder.Build(kind, _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now })); RefreshFor(kind, firstOpen: false);
     }
@@ -174,11 +208,11 @@ public sealed partial class BarHost : IPanelUi
     private void RebuildPanel()
     {
         if (_popover is not { IsOpen: true }) return;
-        _pctx = _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData() };
+        _pctx = _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData(), Nc = _pctx.Nc is { } v ? v with { State = _nc.State } : null };
         _popover.SetModel(PanelBuilder.Build(_pkind, _pctx));
     }
 
-    private void OnPanelClosed() { _popSource = null; foreach (var w in _wins) w.Redraw(); }
+    private void OnPanelClosed() { if (_pkind == PanelKind.Notifications) _nc.Deactivate(); _popSource = null; foreach (var w in _wins) w.Redraw(); }
 
     private void LoadEvents()
     {
@@ -332,10 +366,11 @@ public sealed partial class BarHost : IPanelUi
         if (old.Theme != c.Theme) SetThemeAll(ResolveTheme());
         if (old.AppMenus != c.AppMenus) { if (c.AppMenus) RefreshAppMenus(); else { _appMenuTops = []; _appMenuLabels = null; } }
         if (old.WeatherCity != c.WeatherCity || old.WeatherFavorites != c.WeatherFavorites || old.WeatherAutoLocation != c.WeatherAutoLocation) { ConfigureWeather(); _weather.Refresh(); }
-        if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind == PanelKind.Calendar && _popover is { IsOpen: true }) LoadEvents();
+        if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind is PanelKind.Calendar or PanelKind.Notifications && _popover is { IsOpen: true }) LoadEvents();
+        if (old.NotificationsFromWindows != c.NotificationsFromWindows) { _nc.SetEnabled(c.NotificationsFromWindows); if (c.NotificationsFromWindows && _popover is { IsOpen: true } && _pkind == PanelKind.Notifications && !_nc.Active) _nc.Activate(); }
         _nextClock = DateTime.MinValue; UpdateState(force: false);
         if (_popover is { IsOpen: true }) RebuildPanel();
     }
 
-    private void DisposePanels() { _popover?.Dispose(); _popover = null; _hubOwner?.Dispose(); _hubOwner = null; }
+    private void DisposePanels() { _nc?.Deactivate(); _ncSrc?.Dispose(); _ncSrc = null; _popover?.Dispose(); _popover = null; _hubOwner?.Dispose(); _hubOwner = null; }
 }

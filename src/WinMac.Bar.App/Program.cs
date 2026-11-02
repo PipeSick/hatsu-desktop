@@ -95,9 +95,30 @@ internal static class Program
         var lines = WinMac.SystemControl.Win.SystemServicesFactory.Probe(WinMac.SystemControl.Win.SystemServicesFactory.CreateReal());
         foreach (var l in lines) Log("  " + l);
         HubProbe();
+        NotificationProbe();
         int bad = lines.Count(l => l.StartsWith("[FALLO]"));
         Log(bad == 0 ? "Ningún servicio lanzó excepciones (un servicio «no disponible» es un resultado válido)." : $"{bad} servicio(s) lanzaron excepciones: es un error.");
         return bad == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Centro de Notificaciones en ESTE equipo: permiso, si Windows envía el evento de cambios a WinMac y CUÁNTAS notificaciones y apps hay (solo con el permiso ya concedido).
+    /// No pide permiso, no muestra títulos ni textos y no elimina nada.
+    /// </summary>
+    private static void NotificationProbe()
+    {
+        Log("Centro de Notificaciones (UserNotificationListener; no se pide permiso, no se muestra contenido y no se elimina nada):");
+        using var src = new WinMac.Bar.Win.Shell.Notifications.WinNotificationSource(_ => { });
+        var (access, why) = src.GetAccess(); Log("  permiso: " + access + (why is null ? "" : " · " + why));
+        if (access != WinMac.Bar.Notifications.NotificationAccess.Allowed) { Log("  (sin permiso concedido no se lee nada; el panel ofrece pedirlo)"); return; }
+        try
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew(); var list = src.Read();
+            Log($"  lectura: {list.Count} notificación(es) de {list.Select(n => n.GroupKey).Distinct().Count()} app(s) · {list.Count(n => n.HasIcon)} con icono · {list.Count(n => n.Title is null && n.Body is null)} sin texto · {sw.ElapsedMilliseconds} ms");
+        }
+        catch (Exception e) { Log($"  [FALLO] lectura: {e.GetType().Name} (0x{e.HResult:X8}): {e.Message}"); }
+        bool live = src.StartWatching(() => { }, out var whyNot); src.StopWatching();
+        Log("  evento de cambios: " + (live ? "disponible (el panel se actualiza al llegar una notificación)" : "NO disponible: " + whyNot + " (el panel relee cada 4 s solo mientras está abierto)"));
     }
 
     /// <summary>Qué leen de verdad los monitores del panel en ESTE equipo (discos, memoria, temperaturas): para diagnosticar con datos reales, sin cambiar nada.</summary>

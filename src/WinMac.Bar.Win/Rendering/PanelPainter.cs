@@ -17,6 +17,8 @@ public sealed partial class PanelPainter : IDisposable
     private readonly IDWriteFactory _dw; private readonly IDWriteTextFormat _title, _body, _bodyBold, _small, _tiny;
     private readonly ID2D1SolidColorBrush _solid; private readonly ID2D1StrokeStyle _round;
     public BarTheme Theme { get; set; } = BarTheme.Dark;
+    /// <summary>Fondo de pantalla desenfocado tras el panel lateral (lo crea y libera <see cref="PopoverWindow"/>); null = tarjeta opaca.</summary>
+    public ID2D1Bitmap? Backdrop { get; set; }
     private static readonly Color4 Accent = new(0.04f, 0.52f, 1f, 1f);
 
     public PanelPainter(D2DDevice dev)
@@ -41,9 +43,16 @@ public sealed partial class PanelPainter : IDisposable
     {
         _kind = m.Kind; _ctx.BeginDraw();
         if (clear) _ctx.Clear(new Color4(0, 0, 0, 0));
-        // tarjeta
-        FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, 16, Dark ? new Color4(0.13f, 0.13f, 0.15f, 0.94f) : new Color4(0.96f, 0.96f, 0.97f, 0.95f));
-        Brush(Fill(0.14f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(0.5, 0.5, f.Width - 0.5, f.Height - 0.5), RadiusX = 16, RadiusY = 16 }, _solid, 1f);
+        // tarjeta (el panel lateral, con el vidrio del fondo de pantalla si lo hay y esquinas algo más amplias)
+        float rad = m.Kind == PanelKind.Notifications ? 18 : 16;
+        if (m.Kind == PanelKind.Notifications && Backdrop is { } bd)
+        {
+            using var br = _ctx.CreateBitmapBrush(bd, new BitmapBrushProperties { ExtendModeX = ExtendMode.Clamp, ExtendModeY = ExtendMode.Clamp, InterpolationMode = BitmapInterpolationMode.Linear });
+            _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = R(0.5, 0.5, f.Width - 0.5, f.Height - 0.5), RadiusX = rad, RadiusY = rad }, br);
+            FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, rad, Dark ? new Color4(0.10f, 0.10f, 0.12f, 0.58f) : new Color4(0.97f, 0.97f, 0.98f, 0.62f));
+        }
+        else FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, rad, Dark ? new Color4(0.13f, 0.13f, 0.15f, 0.94f) : new Color4(0.96f, 0.96f, 0.97f, 0.95f));
+        Brush(Fill(0.14f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(0.5, 0.5, f.Width - 0.5, f.Height - 0.5), RadiusX = rad, RadiusY = rad }, _solid, 1f);
         var v = f.View; int i = 0;
         if (v is not null) for (; i < v.From; i++) DrawWidget(f.Items[i], i == hover);   // logotipo, pestañas y título: fijos, sin recorte
         if (v is not null) _ctx.PushAxisAlignedClip(R(0, v.Top, f.Width, v.Bottom), AntialiasMode.Aliased);   // lo desplazado no invade las pestañas ni el pie
@@ -170,6 +179,7 @@ public sealed partial class PanelPainter : IDisposable
                 break;
             }
             case WidgetKind.Month: DrawMonth(f); break;
+            case WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.NcEmpty: DrawNcWidget(f, hover); break;
             default: DrawHubWidget(f, hover); break;
         }
     }

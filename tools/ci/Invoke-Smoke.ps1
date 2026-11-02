@@ -60,6 +60,10 @@ Run 'Panel Discos con altura limitada a 720 DIP, abajo (desplazable)' $bar @('--
 Run 'Panel Sistema a 150 % de DPI en 1080p (centro)' $bar @('--render-panel', 'hub', '--tab', 'system', '--max-height', '672', '--scroll', '120', '--out', "`"$OutDir\panel-hub-system-150dpi-1080p.png`"", '--scale', '1.5') 90
 # Control de las franjas verticales: con --bands se dibujan las dos bandas del fondo sintético de contraste (las que antes aparecían); los PNG normales no las llevan.
 Run 'Panel Sistema con las franjas del fondo de prueba (control)' $bar @('--render-panel', 'hub', '--tab', 'system', '--bands', '--out', "`"$OutDir\panel-hub-system-franjas-control.png`"", '--scale', '2') 90
+# Centro de Notificaciones (datos de MUESTRA, no notificaciones reales): oscuro y claro, el estado antes de activarlo y una pantalla de 1080p a 150 % (≈672 DIP: el centro se desplaza).
+foreach ($theme in 'dark', 'light') { Run "Centro de Notificaciones $theme (datos de muestra, fuera de pantalla)" $bar @('--render-panel', 'notifications', '--theme', $theme, '--out', "`"$OutDir\panel-notifications-$theme.png`"", '--scale', '2') 90 }
+Run 'Centro de Notificaciones sin activar (fuera de pantalla)' $bar @('--render-panel', 'notifications-off', '--out', "`"$OutDir\panel-notifications-off.png`"", '--scale', '2') 90
+Run 'Centro de Notificaciones a 150 % de DPI en 1080p (desplazable)' $bar @('--render-panel', 'notifications', '--max-height', '672', '--out', "`"$OutDir\panel-notifications-150dpi-1080p.png`"", '--scale', '1.5') 90
 # Ajustes de WinMac (ventana estilo iOS): se dibuja FUERA de pantalla con el pintor real. Valida el dibujo, NO el ratón ni el foco.
 $hostExe = "$PublishDir/Host/WinMac.exe"
 function RunSettings($label, $png, $extra) {

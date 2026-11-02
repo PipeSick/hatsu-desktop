@@ -31,7 +31,21 @@ public static class SettingsBuilder
         ("ccPower", "Energía", b => b.CcPower), ("ccAppearance", "Apariencia", b => b.CcAppearance), ("ccDisplay", "Pantallas", b => b.CcDisplay), ("ccNotifications", "Notificaciones", b => b.CcNotifications),
         ("showHub", "Icono de WinMac (panel con pestañas)", b => b.ShowHub), ("showWeather", "Icono del Tiempo", b => b.ShowWeather), ("weatherFahrenheit", "Grados Fahrenheit", b => b.WeatherFahrenheit),
         ("weatherAutoLocation", "Usar mi ubicación", b => b.WeatherAutoLocation),
+        ("notificationCenter", "El reloj abre el Centro de Notificaciones", b => b.NotificationCenter), ("notificationsFromWindows", "Mostrar notificaciones de Windows", b => b.NotificationsFromWindows),
+        ("notifRemoveFromWindows", "Borrar también en Windows", b => b.NotifRemoveFromWindows),
     ];
+
+    public static readonly Dictionary<WinMac.Bar.Notifications.NcWidget, string> NcWidgetNames = new()
+    {
+        [WinMac.Bar.Notifications.NcWidget.Calendar] = "Calendario", [WinMac.Bar.Notifications.NcWidget.Weather] = "Tiempo", [WinMac.Bar.Notifications.NcWidget.Battery] = "Batería",
+    };
+
+    /// <summary>Widgets en el orden de las filas: los activos en su orden y después los inactivos.</summary>
+    public static IReadOnlyList<(WinMac.Bar.Notifications.NcWidget Kind, bool On)> NcWidgetRows(BarConfig bar)
+    {
+        var on = WinMac.Bar.Notifications.NcWidgets.Parse(bar.NcWidgets);
+        return on.Select(k => (k, true)).Concat(Enum.GetValues<WinMac.Bar.Notifications.NcWidget>().Where(k => !on.Contains(k)).Select(k => (k, false))).ToList();
+    }
 
     public static readonly string[] RateNames = ["Auto", "KB/s", "MB/s", "Mb/s"], RateValues = ["Auto", "KBps", "MBps", "Mbps"];
     public static readonly string[] BackgroundNames = ["Vidrio", "Transparente"], BackgroundValues = ["Glass", "Transparent"], ThemeNames = ["Sistema", "Claro", "Oscuro"], ThemeValues = ["System", "Light", "Dark"];
@@ -89,6 +103,18 @@ public static class SettingsBuilder
             ], string.IsNullOrWhiteSpace(input.WeatherStatus) ? "Escribe el nombre y elige de la lista. Si hay varias con el mismo nombre, añade el país: «Molina, Chile»." : input.WeatherStatus),
         ]);
 
+        var wrows = NcWidgetRows(bar); int enabledCount = wrows.Count(r => r.On);
+        var ncPage = new SettingsPage("nc", "Notificaciones", "bell",
+        [
+            new("Centro de Notificaciones", [
+                Bar(25, "Desactivado, el reloj abre el calendario de antes"),
+                Bar(26, "Con el permiso de Windows. Solo en memoria: no se guarda en disco"),
+                Bar(27, "Desactivado, «×» y «Ocultar» solo las ocultan en WinMac durante la sesión"),
+            ], "Las notificaciones que se ven son las que Windows guarda en su centro (Win+N)."),
+            new("Widgets", wrows.Select((r, i) => new SettingsRow(RowKind.Toggle, "nc.w:" + r.Kind.ToString().ToLowerInvariant(), NcWidgetNames[r.Kind], null, r.On,
+                CanUp: r.On && i > 0, CanDown: r.On && i < enabledCount - 1)).ToList(), "La batería solo aparece en equipos con batería. El Tiempo usa la ciudad del panel del Tiempo."),
+        ]);
+
         var rows = new List<SettingsRow>();
         for (int i = 0; i < n.Sections.Count; i++) { var s = n.Sections[i]; rows.Add(new(RowKind.Toggle, "notch.sec:" + i, SectionNames.TryGetValue(s.Id, out var nm) ? nm : s.Id, null, s.Enabled, installed, null, CanUp: installed && i > 0, CanDown: installed && i < n.Sections.Count - 1)); }
         string? why = installed ? null : noNotch; bool custom = n.MusicPlayer == "Custom";
@@ -114,6 +140,6 @@ public static class SettingsBuilder
         var notchPage = new SettingsPage("notch", "Isla", "island", notch);
 
         _bar = null;
-        return [general, barPage, hub, notchPage];
+        return [general, barPage, hub, ncPage, notchPage];
     }
 }

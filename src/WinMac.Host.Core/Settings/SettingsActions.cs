@@ -28,6 +28,20 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             return false;
         }
 
+        if (id.StartsWith("nc.w:", StringComparison.Ordinal) && Enum.TryParse<WinMac.Bar.Notifications.NcWidget>(id[5..], true, out var wk))
+        {
+            var list = WinMac.Bar.Notifications.NcWidgets.Parse((cfg.Current.Bar ?? new BarConfig()).NcWidgets).ToList(); int at = list.IndexOf(wk);
+            switch (e.Kind)
+            {
+                case "toggle": if (e.On && at < 0) list.Add(wk); else if (!e.On && at >= 0) list.RemoveAt(at); break;
+                case "up" when at > 0: (list[at - 1], list[at]) = (list[at], list[at - 1]); break;
+                case "down" when at >= 0 && at < list.Count - 1: (list[at + 1], list[at]) = (list[at], list[at + 1]); break;
+                default: return true;
+            }
+
+            cfg.ApplyBarPatch(Patch("ncWidgets", WinMac.Bar.Notifications.NcWidgets.Serialize(list))); return true;
+        }
+
         switch (id, e.Kind)
         {
             case ("mod:bar", "toggle"): cfg.SetModuleEnabled("bar", e.On); return true;

@@ -60,6 +60,7 @@ internal sealed class SettingsWindow : IDisposable
     private void GoTo(string section)
     {
         if (section is "weather" or "sound" or "system" or "network" or "disks") _ctl.SelectPage("hub");
+        if (section == "notifications") _ctl.SelectPage("nc");
         if (section == "weather" && _ctl.RowOf("hub.city") is { } city)
         {
             double y = city.Y; if (y < 0 || y > SettingsLayout.ViewportH - 120) _ctl.Scroll(y - 40);

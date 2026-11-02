@@ -1,4 +1,6 @@
-# Propuesta técnica: Centro de notificaciones propio (solo propuesta; no implementado)
+# Propuesta técnica: Centro de notificaciones propio (histórico)
+
+> **Implementado:** ver [docs/20-centro-de-notificaciones.md](20-centro-de-notificaciones.md). La sonda de §3 se ejecutó en el PC del usuario y dio `estado de acceso = Allowed` desde la app sin paquete. Este documento queda como registro de la propuesta.
 
 Alcance: separada del resto. **No hay centro de notificaciones todavía**: el mosaico «Notificaciones» del Control Center solo abre el centro nativo de Windows (Win+N).
 

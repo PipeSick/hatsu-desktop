@@ -1,4 +1,5 @@
 using WinMac.Bar.Hub;
+using WinMac.Bar.Notifications;
 using WinMac.Bar.Win.Rendering;
 using WinMac.Dock;
 using WinMac.Dock.Imaging;
@@ -45,6 +46,26 @@ public static class PanelOffscreen
 
     private sealed class NoIcons : IAppIcons { public byte[]? GetBgra(string exePath, int size) => null; }
 
+    /// <summary>Notificaciones de MUESTRA para la captura del Centro de Notificaciones (no se lee nada de Windows).</summary>
+    private sealed class SampleNotifications(DateTimeOffset now) : INotificationSource
+    {
+        public (NotificationAccess Access, string? Reason) GetAccess() => (NotificationAccess.Allowed, null);
+        public Task<NotificationAccess> RequestAccessAsync() => Task.FromResult(NotificationAccess.Allowed);
+        public IReadOnlyList<AppNotification> Read() =>
+        [
+            new(1, "Microsoft.OutlookForWindows", "Outlook", "Ana Pérez", "Te envié el informe del trimestre. ¿Lo revisamos mañana a primera hora antes de la reunión?", now.AddMinutes(-3)),
+            new(2, "Microsoft.OutlookForWindows", "Outlook", "Equipo de soporte", "Tu solicitud #4821 se ha resuelto.", now.AddMinutes(-41)),
+            new(3, "Microsoft.OutlookForWindows", "Outlook", "Boletín", "Novedades de noviembre", now.AddHours(-3)),
+            new(4, "Spotify", "Spotify", "Ahora suena", "Canción de muestra — Artista", now.AddMinutes(-12)),
+            new(5, "Windows.SystemToast.SecurityAndMaintenance", "Seguridad de Windows", "Examen completado", null, now.AddHours(-26)),
+        ];
+        public ServiceResult Remove(uint id) => ServiceResult.Ok;
+        public ServiceResult ClearAll() => ServiceResult.Ok;
+        public ServiceResult OpenApp(string appId) => ServiceResult.Ok;
+        public bool StartWatching(Action changed, out string? why) { why = null; return true; }
+        public void StopWatching() { }
+    }
+
     /// <param name="kind">«hub» o «weather».</param>
     /// <param name="maxHeight">Altura máxima en DIP (como la de una pantalla de 1080p): si el contenido no cabe, se desplaza el centro. Infinito = sin límite.</param>
     /// <param name="scroll">Desplazamiento del contenido en DIP (solo con maxHeight).</param>
@@ -61,7 +82,17 @@ public static class PanelOffscreen
             new AudioSessionsState(true, [new("pid:1", 1, "Spotify", null, 100, false, false, true), new("pid:2", 2, "Discord", null, 100, false, false, true), new("pid:3", 3, "Google Chrome", null, 100, false, false, true), new("pid:4", 4, "Sonidos del sistema", null, 100, false, true, false)]));
         var cfg = new BarConfig { Use24Hour = false };
         var ctx = PanelContext.Initial(cfg, now) with { Sys = snapshot, Tab = tab, Hub = new HubData(mon, new SpeedTestState(SpeedTestStatus.Idle, null, null), weather.Current(), null, false) };
-        var model = kind == "weather" ? PanelBuilder.WeatherPanel(ctx) : PanelBuilder.HubPanel(ctx); var frame = PanelLayout.Compute(model, maxHeight, scroll);
+        PanelModel model;
+        if (kind.StartsWith("notifications", StringComparison.Ordinal))   // «notifications» (con muestra, un grupo desplegado) o «notifications-off» (antes de activarlo)
+        {
+            bool on = kind != "notifications-off"; var local = new DateTimeOffset(new DateTime(2026, 11, 2, 10, 30, 0, DateTimeKind.Local));
+            var store = new NotificationStore(new SampleNotifications(local), a => a(), a => a(), _ => { }, () => now); store.SetEnabled(on); store.Activate();
+            ctx = ctx with { Now = local.LocalDateTime, ViewYear = 2026, ViewMonth = 11, Cfg = cfg with { NotificationsFromWindows = on, Use24Hour = true },
+                Nc = new NcView(store.State, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Microsoft.OutlookForWindows" }, 356) };
+            model = PanelBuilder.NotificationCenter(ctx); if (double.IsInfinity(maxHeight)) maxHeight = 1040;
+        }
+        else model = kind == "weather" ? PanelBuilder.WeatherPanel(ctx) : PanelBuilder.HubPanel(ctx);
+        var frame = PanelLayout.Compute(model, maxHeight, scroll);
         using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new PanelPainter(dev) { Theme = theme };
         int pw = (int)Math.Ceiling(frame.Width * scale), ph = (int)Math.Ceiling(frame.Height * scale); var dockTheme = theme == BarTheme.Dark ? DockTheme.Dark : DockTheme.Light;
         using var under = SyntheticBackdrop.Create(dev, frame.Width, frame.Height, scale, dockTheme, bands); using var target = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale); var c = dev.Context; c.Target = target;
@@ -69,6 +100,6 @@ public static class PanelOffscreen
         painter.Paint(frame, model, -1, clear: false);
         var rgba = BarOffscreen.Readback(dev, target, pw, ph, scale); Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(pngPath))!);
         File.WriteAllBytes(pngPath, PngWriter.EncodeRgba(rgba, pw, ph)); c.Target = null;
-        return $"{pw}x{ph}px, {dev.Description}, {kind} {(kind == "hub" ? tab.ToString() : "")}, tema {theme}, datos de muestra" + (frame.View is { } v ? $", desplazable (contenido {v.ContentHeight:0} DIP, visible {v.Bottom - v.Top:0}, desplazado {v.Offset:0}/{v.MaxOffset:0})" : "");
+        return $"{pw}x{ph}px, {dev.Description}, {kind} {(kind == "hub" ? tab.ToString() : "")}, tema {theme}, datos de muestra (no son notificaciones reales)" + (frame.View is { } v ? $", desplazable (contenido {v.ContentHeight:0} DIP, visible {v.Bottom - v.Top:0}, desplazado {v.Offset:0}/{v.MaxOffset:0})" : "");
     }
 }

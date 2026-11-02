@@ -3,7 +3,10 @@ using Vortice.DCommon;
 using Vortice.Direct2D1;
 using Vortice.DirectComposition;
 using Vortice.DXGI;
+using WinMac.Bar.Notifications;
 using WinMac.Bar.Win.Interop;
+using WinMac.Dock;
+using WinMac.Dock.Imaging;
 using WinMac.Dock.Win.Rendering;
 
 namespace WinMac.Bar.Win.Rendering;
@@ -39,17 +42,95 @@ internal sealed class PopoverWindow : IDisposable
     public void Show(PanelModel model, int anchorXpx, int barBottomPx, PxRect monitor, double scale, BarTheme theme, bool alignRight)
     {
         EnsureWindow(scale); _theme = theme; if (_painter is not null) _painter.Theme = theme;
+        if (_side || _anim is not null) { _anim = null; _side = false; DropBackdrop(); SetOffset(0); }   // un panel normal tras el lateral: sin vidrio ni desplazamiento
         _ctl.SetMaxHeight(MaxHeightDip(monitor, barBottomPx, scale)); _monitor = monitor; _barBottom = barBottomPx; _ctl.SetModel(model); ResizeFor(model);
         var (x, y) = PopoverPlacement.Place(anchorXpx, barBottomPx, _wPx, _hPx, monitor, _scale, alignRight); Position = (x, y);   // siempre entero dentro del monitor de la barra pulsada
         BarNative.SetWindowPos(_hwnd, new IntPtr(-1), x, y, _wPx, _hPx, 0x0040u /* SHOWWINDOW */);
         _open = true; _dirty = true; BarNative.SetForegroundWindow(_hwnd); Render();
     }
 
+    // ───────────────────────────── modo lateral (Centro de Notificaciones)
+    private bool _side, _glass; private IntPtr _prevForeground; private (long Start, bool Opening)? _anim;
+    private readonly WallpaperSource _wall = new(); private ID2D1Bitmap1? _blurred; private string? _blurKey;
+
+    /// <summary>Hay una animación de entrada o salida en curso: el bucle de la barra debe dar fotogramas seguidos hasta que termine.</summary>
+    public bool Animating => _anim is not null;
+
+    /// <summary>
+    /// Abre el panel pegado al borde derecho, en el rectángulo dado (px; <see cref="NcGeometry.Place"/>), con la altura completa y entrada deslizante.
+    /// La animación solo mueve la capa de DirectComposition (no se redibuja en cada fotograma) y se omite si Windows tiene desactivadas las animaciones.
+    /// </summary>
+    public void ShowSide(PanelModel model, PxRect rect, PxRect monitor, double scale, BarTheme theme, bool glass)
+    {
+        EnsureWindow(scale); _theme = theme; if (_painter is not null) _painter.Theme = theme;
+        if (!_open && BarNative.GetForegroundWindow() is var fg && fg != _hwnd) _prevForeground = fg;
+        _side = true; _glass = glass; _monitor = monitor; _barBottom = rect.Y;
+        _ctl.SetMaxHeight(rect.H / scale); _ctl.SetModel(model); ResizeFor(model);
+        int x = rect.Right - _wPx; Position = (x, rect.Y);
+        BuildBackdrop(rect);
+        BarNative.SetWindowPos(_hwnd, new IntPtr(-1), x, rect.Y, _wPx, _hPx, 0x0040u /* SHOWWINDOW */);
+        bool wasOpen = _open; _open = true; _dirty = true; BarNative.SetForegroundWindow(_hwnd);
+        if (!wasOpen && AnimationsOn()) { _anim = (System.Diagnostics.Stopwatch.GetTimestamp(), true); SetOffset(_wPx); } else { _anim = null; SetOffset(0); }
+        Render();
+    }
+
+    /// <summary>Vidrio: el fondo de pantalla tras el panel, desenfocado UNA vez por apertura (no se desenfoca lo que hay detrás en vivo: es caro). Sin fondo disponible, la tarjeta es opaca.</summary>
+    private void BuildBackdrop(PxRect rect)
+    {
+        if (_painter is null || _dev is null) return;
+        if (!_glass) { DropBackdrop(); return; }
+        string key = $"{WallpaperSource.CurrentPath()}|{rect}|{_theme}|{_scale:0.###}";
+        if (key == _blurKey && _blurred is not null) { _painter.Backdrop = _blurred; return; }
+        DropBackdrop();
+        var previous = _dev.Context.Target;
+        try
+        {
+            if (!_wall.Load(_dev.Context) || _wall.Bitmap is null) return;
+            var region = new RectD(rect.X - _monitor.X, rect.Y - _monitor.Y, rect.W, rect.H);
+            var src = WallpaperMapping.SourceRectFor(_wall.Style, _wall.Width, _wall.Height, _monitor.W, _monitor.H, region);
+            var style = GlassStyle.For(_theme == BarTheme.Dark ? DockTheme.Dark : DockTheme.Light) with { BlurSigma = 28 };
+            _blurred = GlassBackdrop.Build(_dev, _wall.Bitmap, src, _wPx / _scale, _hPx / _scale, _scale, style); _blurKey = key; _painter.Backdrop = _blurred;
+        }
+        catch (Exception e) { _log("[panel] vidrio no disponible: " + e.Message); DropBackdrop(); }
+        finally { _dev.Context.Target = previous; }
+    }
+
+    private void DropBackdrop() { if (_painter is not null) _painter.Backdrop = null; _blurred?.Dispose(); _blurred = null; _blurKey = null; }
+
+    private void SetOffset(double px) { if (_visual is null || _dcomp is null) return; _visual.SetOffsetX((float)Math.Round(px)); _dcomp.Commit(); }
+
+    /// <summary>«Mostrar animaciones en Windows» (Accesibilidad → Efectos visuales). Si está apagado, el panel aparece y desaparece sin deslizarse.</summary>
+    private static bool AnimationsOn() { try { return !BarNative.SystemParametersInfoW(0x1042 /* SPI_GETCLIENTAREAANIMATION */, 0, out int on, 0) || on != 0; } catch (Exception) { return true; } }
+
     public void SetModel(PanelModel model) { if (!_open) return; _ctl.SetModel(model); ResizeFor(model); _dirty = true; }
 
-    public void Hide() { if (!_open) return; _open = false; BarNative.ReleaseCapture(); BarNative.ShowWindow(_hwnd, 0); _ctl.PointerLeave(); _onClosed(); }
+    public void Hide()
+    {
+        if (!_open) return; _open = false; BarNative.ReleaseCapture(); _ctl.PointerLeave();
+        bool hadFocus = BarNative.GetForegroundWindow() == _hwnd;
+        if (_side && AnimationsOn() && _visual is not null) _anim = (System.Diagnostics.Stopwatch.GetTimestamp(), false);   // sale deslizándose; la ventana se oculta al terminar
+        else { _anim = null; BarNative.ShowWindow(_hwnd, 0); }
+        if (_side && hadFocus && _prevForeground != IntPtr.Zero && BarNative.IsWindow(_prevForeground)) BarNative.SetForegroundWindow(_prevForeground);   // cerrado con Esc, «×» o el reloj: el foco vuelve a donde estaba
+        _prevForeground = IntPtr.Zero; _onClosed();
+        if (!_side) return;
+        if (_anim is null) { _side = false; DropBackdrop(); }
+    }
 
-    public void Pump() { if (_open && _dirty) Render(); }
+    public void Pump()
+    {
+        if (_anim is { } a)
+        {
+            double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - a.Start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency, dur = a.Opening ? NcGeometry.OpenMs : NcGeometry.CloseMs;
+            SetOffset(NcGeometry.SlideOffset(ms, dur, _wPx, a.Opening));
+            if (ms >= dur)
+            {
+                _anim = null;
+                if (!a.Opening && !_open) { BarNative.ShowWindow(_hwnd, 0); SetOffset(0); _side = false; DropBackdrop(); }
+            }
+        }
+
+        if (_open && _dirty) Render();
+    }
 
     private void EnsureWindow(double scale)
     {
@@ -105,6 +186,7 @@ internal sealed class PopoverWindow : IDisposable
     {
         try
         {
+            if (!_open && (int)msg is WM_MOUSEMOVE or WM_LBUTTONDOWN or WM_LBUTTONUP or WM_MOUSEWHEEL) return IntPtr.Zero;   // saliendo (animación): no responde a clics
             switch ((int)msg)
             {
                 case WM_MOUSEMOVE:
@@ -135,6 +217,6 @@ internal sealed class PopoverWindow : IDisposable
 
     public void Dispose()
     {
-        DisposeSurface(); _painter?.Dispose(); _dev?.Dispose(); if (_hwnd != IntPtr.Zero) { BarNative.DestroyWindow(_hwnd); _hwnd = IntPtr.Zero; }
+        DropBackdrop(); _wall.Dispose(); DisposeSurface(); _painter?.Dispose(); _dev?.Dispose(); if (_hwnd != IntPtr.Zero) { BarNative.DestroyWindow(_hwnd); _hwnd = IntPtr.Zero; }
     }
 }

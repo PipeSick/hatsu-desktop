@@ -9,9 +9,9 @@ public class SettingsModelTests
         SettingsBuilder.Build(new SettingsInput(cfg ?? new HostConfig(), notchInstalled ? new Dictionary<string, ModuleState>() : new Dictionary<string, ModuleState> { ["notch"] = ModuleState.NotInstalled }, false, status));
 
     [Fact]
-    public void There_are_four_pages_row_ids_are_unique_and_every_bar_option_appears_exactly_once()
+    public void There_are_five_pages_row_ids_are_unique_and_every_bar_option_appears_exactly_once()
     {
-        var pages = Pages(); Assert.Equal(["general", "bar", "hub", "notch"], pages.Select(p => p.Id));
+        var pages = Pages(); Assert.Equal(["general", "bar", "hub", "nc", "notch"], pages.Select(p => p.Id));
         var ids = pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).Select(r => r.Id).ToList(); Assert.Equal(ids.Count, ids.Distinct().Count());
         foreach (var t in SettingsBuilder.BarToggles) Assert.Single(ids, i => i == "bar:" + t.Field);   // ningún ajuste de la Barra se pierde en el rediseño
         Assert.Equal(SettingsBuilder.BarToggles.Length, ids.Count(i => i.StartsWith("bar:", StringComparison.Ordinal)));
@@ -107,7 +107,7 @@ public class SettingsControllerTests
     [Fact]
     public void The_sidebar_changes_page_resets_scroll_and_keeps_the_page_across_refreshes()
     {
-        var c = Make(); var r = SettingsLayout.SideItemRect(3); c.PointerDown(r.X + 10, r.Y + 10); c.PointerUp(r.X + 10, r.Y + 10); Assert.Equal("notch", c.Page!.Id);
+        var c = Make(); var r = SettingsLayout.SideItemRect(4); c.PointerDown(r.X + 10, r.Y + 10); c.PointerUp(r.X + 10, r.Y + 10); Assert.Equal("notch", c.Page!.Id);
         Assert.True(c.Scroll(120)); Assert.Equal(120, c.ScrollOffset, 3);
         c.SetPages(SettingsBuilder.Build(new SettingsInput(new HostConfig { Bar = new BarConfig { ShowDate = false } }, new Dictionary<string, ModuleState>(), false))); Assert.Equal("notch", c.Page!.Id); Assert.Equal(120, c.ScrollOffset, 3);   // un refresco no te saca de la página ni del punto donde estabas
         var r0 = SettingsLayout.SideItemRect(0); c.PointerDown(r0.X + 5, r0.Y + 5); c.PointerUp(r0.X + 5, r0.Y + 5); Assert.Equal("general", c.Page!.Id); Assert.Equal(0, c.ScrollOffset);
@@ -145,6 +145,23 @@ public class SettingsActionsTests
     {
         string f = Path.Combine(Path.GetTempPath(), "winmac-settings-" + Guid.NewGuid().ToString("N") + ".json"); var cfg = new ConfigService(f, new HostConfig()); var calls = new List<string>();
         return (new SettingsActions(cfg, () => calls.Add("local"), on => calls.Add("autostart:" + on)), cfg, calls, f);
+    }
+
+    [Fact]
+    public void Notification_center_widgets_can_be_turned_off_on_and_reordered()
+    {
+        var (a, cfg, _, f) = Make();
+        try
+        {
+            Assert.True(a.Apply(new SettingsEdit("nc.w:weather", "toggle", On: false))); Assert.Equal("calendar,battery", cfg.Current.Bar!.NcWidgets);
+            Assert.True(a.Apply(new SettingsEdit("nc.w:battery", "up"))); Assert.Equal("battery,calendar", cfg.Current.Bar!.NcWidgets);
+            Assert.True(a.Apply(new SettingsEdit("nc.w:weather", "toggle", On: true))); Assert.Equal("battery,calendar,weather", cfg.Current.Bar!.NcWidgets);
+            Assert.True(a.Apply(new SettingsEdit("nc.w:weather", "down"))); Assert.Equal("battery,calendar,weather", cfg.Current.Bar!.NcWidgets);   // ya es el último: no cambia
+            Assert.True(a.Apply(new SettingsEdit("bar:notificationsFromWindows", "toggle", On: true))); Assert.True(cfg.Current.Bar!.NotificationsFromWindows);
+            var rows = SettingsBuilder.Build(new SettingsInput(cfg.Current, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "nc").Groups[1].Rows;
+            Assert.Equal(["nc.w:battery", "nc.w:calendar", "nc.w:weather"], rows.Select(r => r.Id)); Assert.False(rows[0].CanUp); Assert.True(rows[0].CanDown); Assert.False(rows[2].CanDown);
+        }
+        finally { File.Delete(f); }
     }
 
     [Fact]

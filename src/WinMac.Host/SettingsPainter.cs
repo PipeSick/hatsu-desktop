@@ -71,6 +71,7 @@ internal sealed class SettingsPainter : IDisposable
             case "bar": RRStroke(cx - s, cy - s * .62, s * 2, s * 1.24, 3, c, 1.6f); Ln(cx - s * .7, cy - s * .22, cx + s * .7, cy - s * .22, c, 1.6f); break;
             case "globe": Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), (float)s, (float)s), _b, 1.5f); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), (float)(s * .42), (float)s), _b, 1.3f); Ln(cx - s, cy, cx + s, cy, c, 1.3f); break;
             case "island": RR(cx - s * .95, cy - s * .38, s * 1.9, s * .76, s * .38, c); break;
+            case "bell": RRStroke(cx - s * .62, cy - s * .78, s * 1.24, s * 1.3, s * .55, c, 1.6f); Ln(cx - s * .9, cy + s * .5, cx + s * .9, cy + s * .5, c, 1.6f); Dot(cx, cy + s * .82, 1.4, c); break;
             case "chevron": Ln(cx - s * .3, cy - s * .62, cx + s * .3, cy, c, 1.8f); Ln(cx + s * .3, cy, cx - s * .3, cy + s * .62, c, 1.8f); break;
             case "up": Ln(cx - s * .55, cy + s * .25, cx, cy - s * .3, c, 1.8f); Ln(cx, cy - s * .3, cx + s * .55, cy + s * .25, c, 1.8f); break;
             case "down": Ln(cx - s * .55, cy - s * .25, cx, cy + s * .3, c, 1.8f); Ln(cx, cy + s * .3, cx + s * .55, cy - s * .25, c, 1.8f); break;

@@ -13,4 +13,5 @@ Estado: **Fase 1** (validación de tecnologías). No hay producto utilizable tod
 - Dock funcional (iconos reales, anclado, ventanas, menús): [`docs/10-dock-funcional.md`](docs/10-dock-funcional.md)
 - Host de WinMac (F1: supervisor, IPC local, guía de validación): [`docs/15-f1-resultados.md`](docs/15-f1-resultados.md) · alcance: [`docs/14-f1-alcance-minimo.md`](docs/14-f1-alcance-minimo.md)
 - Barra superior (diseño, alternativas y limitaciones): [`docs/12-barra-superior.md`](docs/12-barra-superior.md)
+- Centro de Notificaciones (panel lateral con notificaciones reales de Windows y widgets; APIs, límites y cómo probarlo): [`docs/20-centro-de-notificaciones.md`](docs/20-centro-de-notificaciones.md)
 - Calibración visual contra macOS Tahoe: [`docs/08-calibracion-visual.md`](docs/08-calibracion-visual.md) · herramienta: `tools/calibration/calibracion.html` · pendiente de Windows físico: [`docs/PENDIENTE-WINDOWS-FISICO.md`](docs/PENDIENTE-WINDOWS-FISICO.md)

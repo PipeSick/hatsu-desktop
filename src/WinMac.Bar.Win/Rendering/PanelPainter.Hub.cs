@@ -28,7 +28,7 @@ public sealed partial class PanelPainter
     private void DisposeHub()
     {
         if (_fontsReady) { _big.Dispose(); _huge.Dispose(); _cap.Dispose(); _boldSmall.Dispose(); _boldTiny.Dispose(); _stat.Dispose(); } _dash?.Dispose();
-        foreach (var b in _icons.Values) b?.Dispose(); _icons.Clear();
+        foreach (var b in _icons.Values) b?.Dispose(); _icons.Clear(); DisposeNc();
     }
 
     private static Color4 Named(string? name) => name switch
