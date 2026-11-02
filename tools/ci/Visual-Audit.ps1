@@ -202,7 +202,7 @@ Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App',
 Note ''; Note '## Líneas de registro relevantes'; Note '```'
 if (Test-Path $barLog) { Select-String -Path $barLog -Pattern '\[(isla|launchpad|spotlight|menús)\]' | Select-Object -Last 40 | ForEach-Object { Note ($_.Line -replace '^\S+ ', '') } }
 if (Test-Path $hostLog) { Select-String -Path $hostLog -Pattern '\[(notch|bar|dock)\] (Crashed|Failed|sin latido|terminó)' | ForEach-Object { Note $_.Line } }
-if (Test-Path $barLog) { Select-String -Path $barLog -Pattern '\[panel\]|\[menús\] (clic|abrir|«)|CIERRE INESPERADO' -Context 0, 12 | Select-Object -Last 30 | ForEach-Object { Note $_.Line; if ($_.Line -match 'CIERRE') { $_.Context.PostContext | ForEach-Object { Note "    $_" } } } }
+if (Test-Path $barLog) { Select-String -Path $barLog -Pattern '\[panel\]|\[menús\] (clic|abrir|«)|CIERRE INESPERADO|ERROR' -Context 0, 14 | Select-Object -Last 30 | ForEach-Object { Note $_.Line; if ($_.Line -match 'CIERRE|ERROR') { $_.Context.PostContext | ForEach-Object { Note "    $_" } } } }
 Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = '.NET Runtime', 'Application Error'; StartTime = $t0 } -MaxEvents 6 -ErrorAction SilentlyContinue |
   Where-Object { $_.Message -match 'WinMac' } | ForEach-Object { $m = $_.Message; if ($m.Length -gt 3000) { $m = $m.Substring(0, 3000) }; Note "evento $($_.ProviderName): $m" }
 Note '```'

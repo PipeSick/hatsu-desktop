@@ -212,7 +212,7 @@ internal sealed class PopoverWindow : IDisposable
                 case WM_LBUTTONUP: { BarNative.ReleaseCapture(); var ev = _ctl.PointerUp(X(l), Y(l)); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero; }
                 case 0x205 /* WM_RBUTTONUP */: { var ev = _ctl.RightClick(X(l), Y(l)); if (ev is not null) _onEvent(ev); return IntPtr.Zero; }   // menú de una app en segundo plano
                 case WM_ACTIVATE when ((long)w & 0xFFFF) == 0 && _open && !KeepOpen:   // perdió el foco: como un menú
-                    if (FocusDiag is not null) { var fg = BarNative.GetForegroundWindow(); var sb = new System.Text.StringBuilder(64); BarNative.GetClassNameW(l, sb, 64); BarNative.GetWindowThreadProcessId(l, out uint lp); FocusDiag($"[panel] se cierra al perder el foco: lo toma {sb} (pid {lp}) tras {(Environment.TickCount64 - _shownAt)} ms"); }
+                    if (FocusDiag is not null) { var fg = BarNative.GetForegroundWindow(); var sb = new System.Text.StringBuilder(64); BarNative.GetClassNameW(fg, sb, 64); BarNative.GetWindowThreadProcessId(fg, out uint lp); FocusDiag($"[panel] se cierra al perder el foco: primer plano ahora {sb} (pid {lp}, la barra es {Environment.ProcessId}) tras {(Environment.TickCount64 - _shownAt)} ms; {Environment.StackTrace.Split('\n').Skip(1).Take(14).Aggregate("", (a, s) => a + " ← " + s.Trim().Replace("at WinMac.", ""))}"); }
                     Hide(); return IntPtr.Zero;
                 case WM_KEYDOWN when (int)w == 0x1B: Hide(); return IntPtr.Zero;
                 case 0x2E0 /* WM_DPICHANGED */: return IntPtr.Zero;   // el tamaño y el escalado del panel los fija Show() según el monitor de destino: Windows no debe redimensionarlo por su cuenta al moverlo entre monitores
