@@ -4,6 +4,7 @@ name: ci
 on:
   push:
     branches: ["claude/**", "main"]
+    paths-ignore: ["docs/**", "*.md"]   # solo documentación: no lanza (ni cancela) una validación
   pull_request:
   workflow_dispatch:
 
