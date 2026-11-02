@@ -103,8 +103,8 @@ public sealed partial class BarHost
     {
         try
         {
-            if (it.App is { } app) return _lpIcons?.TryGet(new IconRequest(app.Identity, null, 64));
-            if (it.Kind is SpotKind.File or SpotKind.Folder or SpotKind.Path) return _lpIcons?.TryGet(new IconRequest(AppIdentity.FromExe(it.Target, it.Title), null, 64));
+            if (it.App is { } app) return LauncherIcon(app);   // el mismo icono (y la misma caché) que Launchpad
+            if (it.Kind is SpotKind.File or SpotKind.Folder or SpotKind.Path) return _lpIcons?.TryGet(new IconRequest(AppIdentity.FromExe(it.Target, it.Title), null, LauncherIconSize));
         }
         catch (Exception) { }
         return null;

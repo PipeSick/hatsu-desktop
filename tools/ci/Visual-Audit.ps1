@@ -162,6 +162,9 @@ Note ''
 & $bar --launchpad | Out-Null
 if (WaitFor { [Au]::Visible('WinMacLaunchpad') } 10) {
   Start-Sleep -Milliseconds 1500   # fundido de entrada y primeros iconos
+  Shot '11a-launchpad-1s' "Launchpad 1,5 s después de abrir (iconos que ya estaban)"
+  $null = WaitFor { LogHas $barLog 'iconos (3 s después)' } 6; Start-Sleep -Milliseconds 300
+  Note "  - $(((Select-String -Path $barLog -SimpleMatch '[launchpad] iconos' | Select-Object -Last 2 | ForEach-Object { $_.Line -replace '^\S+ ', '' }) -join ' / '))"
   Shot '11-launchpad' "Launchpad: página principal (ventana $([Au]::RectOf('WinMacLaunchpad')))"
   Shot '11b-launchpad-iconos' 'Detalle a tamaño real de la cuadrícula (iconos y nombres)' ($sc.X + [int]($sc.Width * 0.08)) ($sc.Y + [int]($sc.Height * 0.18)) 520 300
   Shot '11c-launchpad-busqueda-vacia' 'Detalle del campo de búsqueda' ($cx - 200) $sc.Y 400 140

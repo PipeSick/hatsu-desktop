@@ -80,7 +80,7 @@ public sealed partial class BarHost
                 _catalogReading = false;
                 if (error is not null) { _log("[launchpad] no se pudo leer la lista de apps: " + error); return; }
                 bool changed = _catalog.Update(list, DateTime.UtcNow);
-                if (changed) { _log($"[launchpad] índice de apps: {_catalog.Apps.Count} (de {list.Count} entradas de Windows)"); PushLaunchpadApps(); }
+                if (changed) { _log($"[launchpad] índice de apps: {_catalog.Apps.Count} (de {list.Count} entradas de Windows)"); PushLaunchpadApps(); PrefetchLauncherIcons(); }
             });
         });
     }
@@ -107,6 +107,8 @@ public sealed partial class BarHost
             var (mon, scale) = CursorMonitor();
             _lp.Show(mon, scale, AnimationsEnabled());
             _log($"[launchpad] abierto ({why}): {_catalog.Apps.Count} apps");
+            LogLauncherIcons("al abrir");
+            Task.Delay(3000).ContinueWith(_ => Post(() => { if (_lp?.IsOpen == true) LogLauncherIcons("3 s después"); }));
         }
         catch (Exception e)
         {
@@ -144,17 +146,39 @@ public sealed partial class BarHost
         try { _lprefs.Save(_lprefsPath); } catch (Exception e) { _log("[launchpad] no se pudieron guardar las preferencias: " + e.GetType().Name); }
     }
 
+    /// <summary>Tamaño único de los iconos de Launchpad y Spotlight: una sola carga y una sola caché (en disco) por app; Spotlight los dibuja reducidos.</summary>
+    private const int LauncherIconSize = 128;
+    private int _iconFailLogs;
+
     private Apps.IconService CreateLauncherIcons()
     {
         var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "icon-cache-launcher");
-        var svc = new Apps.IconService(new ShellIconProvider(), new Apps.IconCache(1024, dir));
-        svc.Loaded += _ => Post(() => _lp?.Invalidate());
+        // 4 hilos: cada carga usa su propio hilo STA del Shell (no bloquea la interfaz); con 2 la primera página tardaba varios segundos.
+        var svc = new Apps.IconService(new ShellIconProvider(), new Apps.IconCache(1024, dir), workers: 4);
+        svc.Loaded += _ => Post(() => { _lp?.Invalidate(); _spot?.Refresh(); });
+        svc.Failed += (r, why) => { if (Interlocked.Increment(ref _iconFailLogs) <= 25) _log($"[launchpad] sin icono real para «{r.App.DisplayName}» ({r.App.Aumid ?? r.App.ExePath}): {why}"); };
         return svc;
+    }
+
+    /// <summary>Precarga en segundo plano los iconos de TODO el índice en cuanto se lee (y quedan en la caché de disco): al abrir Launchpad ya están, o llegan enseguida.</summary>
+    private void PrefetchLauncherIcons()
+    {
+        _lpIcons ??= CreateLauncherIcons();
+        foreach (var a in _lprefs.Arrange(_catalog.Apps)) LauncherIcon(a);   // TryGet encola lo que falte; lo que ya está en memoria o disco no cuesta nada
     }
 
     private IconBitmap? LauncherIcon(InstalledApp app)
     {
-        try { return _lpIcons?.TryGet(new IconRequest(app.Identity, null, 128)); } catch (Exception) { return null; }
+        try { return _lpIcons?.TryGet(new IconRequest(app.Identity, null, LauncherIconSize)); } catch (Exception) { return null; }
+    }
+
+    /// <summary>Diagnóstico: de las apps de la página visible, cuántas tienen ya su icono REAL (la inicial de reemplazo no cuenta).</summary>
+    private void LogLauncherIcons(string when)
+    {
+        if (_lp is null || _lpIcons is null) return;
+        var page = _lp.Controller.PageItems; int real = page.Count(a => LauncherIcon(a) is not null);
+        var st = _lpIcons.Stats;
+        _log($"[launchpad] iconos ({when}): {real} reales de {page.Count} en la página; servicio: {st.Loaded} cargados, {st.DiskHits} de disco, {st.Failed + st.Rejected} sin icono, {st.TimedOut} agotados, {st.Pending} pendientes");
     }
 
     private static (PxRect Monitor, double Scale) CursorMonitor()
