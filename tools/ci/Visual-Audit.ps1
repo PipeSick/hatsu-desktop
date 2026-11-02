@@ -23,6 +23,7 @@ public static class Au {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RC r);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
@@ -204,8 +205,53 @@ Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force 
 Start-Sleep -Milliseconds 1500
 $capAfter = @(Get-ChildItem $shotsDir -Filter 'Captura *' -ErrorAction SilentlyContinue)
 Note "  - archivos nuevos en la carpeta de capturas: $($capAfter.Count - $capBefore) ($((($capAfter | ForEach-Object { $_.Name + ' ' + $_.Length + ' B' }) -join '; ')))"
-if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[captura]' | Select-Object -Last 6 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
-Expand; $null = ClickTab 'captures'; Shot '33-galeria-tras-capturar' 'Galería de la Isla con las capturas recién hechas por WinMac' ($cx - 330) $sc.Y 660 560; Collapse
+if (Test-Path $barLog) { Select-String -Path $barLog -Pattern '\[captura\]|Captura \w+: |No hay ninguna barra' | Select-Object -Last 14 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
+
+# ── 1d. Editor de capturas (docs/26): se abre sobre la región recién guardada; rectángulo, flecha y texto con el ratón y el teclado; «Guardar» crea una copia
+Note ''; Note '### Editor de capturas'
+$src = Get-ChildItem $shotsDir -Filter 'Captura *' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'editada' } | Sort-Object LastWriteTime | Select-Object -First 1
+if ($src) {
+  & $bar --edit $src.FullName | Out-Null
+  if (WaitFor { [Au]::Visible('WinMacCaptureEditor') } 10) {
+    $null = WaitFor { LogHas $barLog '[editor] diag' } 5; Start-Sleep -Milliseconds 800
+    $ed = (Select-String -Path $barLog -SimpleMatch '[editor] diag' | Select-Object -Last 1).Line
+    function EdBtn([string]$id) { $m = [regex]::Match($ed, '(?:^|\s|\|)' + [regex]::Escape($id) + '@(-?\d+),(-?\d+)'); if ($m.Success) { return @([int]$m.Groups[1].Value, [int]$m.Groups[2].Value) }; return $null }
+    $er = [Au]::RectOf('WinMacCaptureEditor'); Note "  - ventana del editor: $er"
+    Shot '34-editor-abierto' 'Editor de capturas recién abierto sobre la región guardada (barra de herramientas como la del mockup)'
+    $m = [regex]::Match($er, '(-?\d+),(-?\d+) (\d+)x(\d+)'); $ex = [int]$m.Groups[1].Value; $ey = [int]$m.Groups[2].Value; $ew = [int]$m.Groups[3].Value; $eh = [int]$m.Groups[4].Value
+    $mx = $ex + [int]($ew / 2); $my = $ey + [int]($eh / 2)
+    if ($b = EdBtn 'rect') { [Au]::Click($b[0], $b[1]); Start-Sleep -Milliseconds 300; [Au]::Glide($mx - 150, $my - 70, 5); [Au]::Down(); [Au]::Glide($mx - 20, $my + 30, 12); [Au]::Up(); Start-Sleep -Milliseconds 300 }
+    if ($b = EdBtn 'arrow') { [Au]::Click($b[0], $b[1]); Start-Sleep -Milliseconds 300; [Au]::Glide($mx + 140, $my + 90, 5); [Au]::Down(); [Au]::Glide($mx, $my - 10, 12); [Au]::Up(); Start-Sleep -Milliseconds 300 }
+    if ($b = EdBtn 'highlight') { [Au]::Click($b[0], $b[1]); Start-Sleep -Milliseconds 300; [Au]::Glide($mx + 30, $my - 90, 5); [Au]::Down(); [Au]::Glide($mx + 170, $my - 60, 10); [Au]::Up(); Start-Sleep -Milliseconds 300 }
+    if ($b = EdBtn 'text') { [Au]::Click($b[0], $b[1]); Start-Sleep -Milliseconds 300; [Au]::Click($mx - 140, $my + 60); Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait('Hola WinMac'); Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait('{ENTER}'); Start-Sleep -Milliseconds 400 }
+    Shot '35-editor-anotaciones' 'Editor con rectángulo, flecha, resaltado y texto hechos con el ratón y el teclado'
+    if ($b = EdBtn 'save') { [Au]::Click($b[0], $b[1]) }
+    $edited = WaitFor { @(Get-ChildItem $shotsDir -Filter '*(editada)*' -ErrorAction SilentlyContinue).Count -ge 1 } 8
+    Note "  - copia editada guardada: $edited ($((Get-ChildItem $shotsDir -Filter '*(editada)*' -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + ' ' + $_.Length + ' B' }) -join '; ')); original intacto: $((Get-Item $src.FullName).Length -eq $src.Length)"
+    Start-Sleep -Milliseconds 600; Shot '36-editor-guardado' 'Editor tras «Guardar»: la barra de estado confirma la copia (el original no cambia)'
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); $closed = WaitFor { -not [Au]::Visible('WinMacCaptureEditor') } 5; Note "  - editor cerrado con Esc tras guardar: $closed"
+  } else { Note '- **34-editor**: la ventana del editor no apareció' }
+  if (Test-Path $barLog) { Select-String -Path $barLog -Pattern '\[editor\]' | Where-Object { $_.Line -notmatch 'diag' } | Select-Object -Last 8 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
+} else { Note '- **34-editor**: no hay ninguna captura de WinMac para editar' }
+Expand; $null = ClickTab 'captures'; Shot '33-galeria-tras-capturar' 'Galería de la Isla con las capturas recién hechas por WinMac' ($cx - 330) $sc.Y 660 560
+# Galería completa: «Ver todas» con el ratón, búsqueda con el teclado, selección de la primera, vista ampliada
+$gm = [regex]::Match((TabsLine), 'gallery@(\d+),(\d+)')
+if ($gm.Success) {
+  [Au]::Click([int]$gm.Groups[1].Value, [int]$gm.Groups[2].Value)
+  $gOk = WaitFor { (Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch ' gallery items=').Count -ge 1 } 8; Start-Sleep -Milliseconds 900
+  function GalLine { (Get-Content $pillLog | Select-String -SimpleMatch ' gallery items=' | Select-Object -Last 1).Line }
+  Note "  - galería abierta: $gOk · $((GalLine) -replace '^\S+ ', '')"
+  Shot '37-galeria-completa' 'Galería completa: miniaturas de la carpeta de capturas, orden, búsqueda y panel de detalles'
+  $sm = [regex]::Match((GalLine), 'search@(-?\d+),(-?\d+)')
+  if ($sm.Success) { [Au]::Click([int]$sm.Groups[1].Value, [int]$sm.Groups[2].Value); Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait('Captura'); Start-Sleep -Milliseconds 1200 }
+  $fm = [regex]::Match((GalLine), 'first@(-?\d+),(-?\d+)')
+  if ($fm.Success) { [Au]::Click([int]$fm.Groups[1].Value, [int]$fm.Groups[2].Value); Start-Sleep -Milliseconds 1200 }
+  Note "  - tras buscar «Captura» y elegir la primera: $((GalLine) -replace '^\S+ ', '')"
+  Shot '38-galeria-busqueda-seleccion' 'Galería: búsqueda «Captura» y una captura seleccionada con sus acciones reales (abrir, editar, copiar, renombrar, eliminar)'
+  if ($fm.Success) { [Au]::Click([int]$fm.Groups[1].Value, [int]$fm.Groups[2].Value); Start-Sleep -Milliseconds 120; [Au]::Click([int]$fm.Groups[1].Value, [int]$fm.Groups[2].Value); Start-Sleep -Milliseconds 1200; Shot '39-galeria-vista-ampliada' 'Galería: vista ampliada de la captura (doble clic; clic o Esc la cierra)'; [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 400 }
+  $gw = [Au]::FindWindow($null, 'Capturas ' + [char]0x2014 + ' WinMac'); if ($gw -ne [IntPtr]::Zero) { $null = [Au]::PostMessage($gw, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) }; Start-Sleep -Milliseconds 600   # WM_CLOSE solo a la galería
+} else { Note '  - botón «Ver todas» no encontrado en el registro de la Isla' }
+Collapse
 if (Test-Path $pillLog) { Note ''; Note '### Registro de la Isla (lo que mostró y el tamaño pedido a su ventana, DIP)'; Note '```'; Get-Content $pillLog | ForEach-Object { Note $_ }; Note '```' }
 
 # ── 2. Global Menu con el Bloc de notas real

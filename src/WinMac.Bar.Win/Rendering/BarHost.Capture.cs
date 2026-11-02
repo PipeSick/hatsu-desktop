@@ -18,13 +18,62 @@ public sealed partial class BarHost
     private readonly List<GlobalHotkey> _captureKeys = [];
     private readonly Dictionary<string, EventWaitHandle> _captureEvents = [];
     private CaptureOverlay? _overlay;
+    private CaptureEditor? _editor;
+    private EventWaitHandle? _editEvent;
+    private volatile string? _editRequest;
+    public static string EditEventName => @"Local\WinMac.Bar.Capture.edit";
+    /// <summary>Where <c>--edit &lt;path&gt;</c> leaves the path for the running bar (per user, in LocalAppData).</summary>
+    public static string EditRequestFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "edit-request.txt");
     private bool _captureKeysOn;
 
     private void StartCapture()
     {
         foreach (var m in CaptureModes)
             try { _captureEvents[m] = new EventWaitHandle(false, EventResetMode.AutoReset, CaptureEventName(m)); } catch (Exception e) { _log("[captura] sin evento " + m + ": " + e.Message); }
+        try { _editEvent = new EventWaitHandle(false, EventResetMode.AutoReset, EditEventName); } catch (Exception e) { _log("[editor] sin evento: " + e.Message); }
         ApplyCaptureConfig();
+    }
+
+    /// <summary>The Island asked to edit a capture (topic <c>capture.edit</c>, only WinMac's modules reach the pipe). Raised on a worker thread.</summary>
+    public void RequestEdit(string? path) { if (!string.IsNullOrWhiteSpace(path)) _editRequest = path; }
+
+    /// <summary>Only real image files the user can read; nothing else is ever opened from a request.</summary>
+    private static bool Editable(string path)
+    {
+        try
+        {
+            if (!Path.IsPathFullyQualified(path) || Path.GetExtension(path).ToLowerInvariant() is not (".png" or ".jpg" or ".jpeg" or ".bmp")) return false;
+            var fi = new FileInfo(path); return fi.Exists && fi.Length is > 0 and < 256L * 1024 * 1024;
+        }
+        catch (Exception) { return false; }
+    }
+
+    public void OpenEditor(string path, string why)
+    {
+        if (!Editable(path)) { _log("[editor] petición rechazada (no es una imagen local legible)"); return; }
+        if (_editor is not null) { _editor.Dispose(); _editor = null; }
+        Task.Run(async () =>
+        {
+            try
+            {
+                var (px, w, h) = await CaptureEditor.LoadAsync(path).ConfigureAwait(false);
+                Post(() =>
+                {
+                    try
+                    {
+                        _editor = CaptureEditor.Open(path, px, w, h, CopyImage, () => { _editor = null; _log("[editor] cerrado"); }, _log);
+                        _log($"[editor] abierto ({why}): {Path.GetFileName(path)} {w}x{h}");
+                        if (MenuDiagOn)
+                        {
+                            var o = new Interop.BarNative.POINT(); Interop.BarNative.ClientToScreen(_editor.Handle, ref o);   // screen px, to click like a user
+                            _log("[editor] diag " + string.Join(" | ", _editor.Buttons.Select(b => $"{b.Id}@{o.X + (int)((b.Rect.Left + b.Rect.Right) / 2)},{o.Y + (int)((b.Rect.Top + b.Rect.Bottom) / 2)}")));
+                        }
+                    }
+                    catch (Exception e) { _log("[editor] no se pudo abrir: " + e.GetType().Name + ": " + e.Message); }
+                });
+            }
+            catch (Exception e) { _log("[editor] imagen ilegible: " + e.GetType().Name + ": " + e.Message); }
+        });
     }
 
     private void ApplyCaptureConfig()
@@ -40,15 +89,21 @@ public sealed partial class BarHost
 
     private void CaptureTick()
     {
+        if (_editRequest is { } req) { _editRequest = null; OpenEditor(req, "Isla"); }
+        if (_editEvent?.WaitOne(0) == true)
+            try { var p = File.ReadAllText(EditRequestFile).Trim(); File.Delete(EditRequestFile); OpenEditor(p, "orden externa"); } catch (Exception e) { _log("[editor] petición ilegible: " + e.Message); }
         foreach (var (m, ev) in _captureEvents)
             if (ev.WaitOne(0))
+            {
+                _log("[captura] petición: " + m);
                 BeginCapture(m switch { "window" or "toolbar" => CaptureMode.Window, "screen" => CaptureMode.Monitor, "all" => CaptureMode.AllMonitors, _ => CaptureMode.Region }, "orden externa " + m);
+            }
     }
 
     /// <summary>Freezes the screen and shows the overlay in the given mode (the toolbar lets the user switch). Only one at a time.</summary>
     public void BeginCapture(CaptureMode mode, string why)
     {
-        if (_overlay is not null) return;
+        if (_overlay is not null) { _log("[captura] ya hay una captura abierta (" + why + ")"); return; }
         try
         {
             _lp?.Hide(); _spot?.Hide(); _popover?.Hide();   // our own panels are not part of what the user wants to capture
@@ -112,5 +167,6 @@ public sealed partial class BarHost
         foreach (var k in _captureKeys) k.Dispose(); _captureKeys.Clear();
         foreach (var e in _captureEvents.Values) e.Dispose(); _captureEvents.Clear();
         EndCapture();
+        _editEvent?.Dispose(); _editEvent = null; _editor?.Dispose(); _editor = null;
     }
 }

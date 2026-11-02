@@ -62,6 +62,11 @@ internal static class Program
             if (args.Contains("--quit")) return Quit();
             if (args.Contains("--launchpad")) return Signal(WinMac.Bar.Win.Rendering.BarHost.LaunchpadEventName, "Launchpad");
             if (args.Contains("--spotlight")) return Signal(WinMac.Bar.Win.Rendering.BarHost.SpotlightEventName, "Spotlight");
+            if (Arg(args, "--edit") is string ep)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(BarHost.EditRequestFile)!); File.WriteAllText(BarHost.EditRequestFile, Path.GetFullPath(ep));
+                return Signal(BarHost.EditEventName, "Editar captura");
+            }
             if (Arg(args, "--capture") is string cm) return Signal(WinMac.Bar.Win.Rendering.BarHost.CaptureEventName(cm.ToLowerInvariant()), "Captura " + cm);
             if (args.Contains("--selftest-system")) return SystemProbe();
             if (args.Contains("--selftest-monitors")) return MonitorProbe();
@@ -89,6 +94,7 @@ internal static class Program
             link.Subscribe("config.bar", d => { try { if (d is { } e && System.Text.Json.JsonSerializer.Deserialize<BarConfig>(e.GetRawText(), BarConfig.Wire) is { } c) host.ApplyConfig(c.Sanitize()); } catch (Exception ex) { Log("Ajustes de la barra ilegibles: " + ex.Message); } });
             host.PersistPatch = patch => link.Event("config.bar.set", patch);
             // La Isla (NotchWin): la barra le cuenta los cambios de volumen y brillo y las notificaciones nuevas, según lo que pida en sus ajustes centrales.
+            link.Subscribe("capture.edit", d => { if (d is { ValueKind: System.Text.Json.JsonValueKind.Object } e && e.TryGetProperty("path", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.String) host.RequestEdit(p.GetString()); });
             link.Subscribe("config.notch", d => host.ApplyNotchOptions(WinMac.Bar.Notch.NotchFeedOptions.Parse(d)));
             host.NotchEvent = payload => link.Event(WinMac.Bar.Notch.NotchFeed.Topic, payload);
             host.NotchActivity = payload => link.Event("notch.activity", payload);   // API interna de actividades de la Isla (docs/25)
