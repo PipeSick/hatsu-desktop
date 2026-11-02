@@ -32,20 +32,20 @@ internal sealed class CaptureOverlay : IDisposable
     private CaptureMode _mode; private int _px, _py; private (int X, int Y)? _dragFrom; private bool _closed;
 
     public CaptureOverlay(byte[] frame, CaptureRect screen, IReadOnlyList<CaptureMonitor> monitors, IReadOnlyList<CaptureWindow> windows, CaptureMode mode,
-        Action<CaptureRect, CaptureMode, string?> done, Action cancel, Action<string> log)
+        Action<CaptureRect, CaptureMode, string?> done, Action cancel, Action<string> log, bool record = false)
     {
+        _record = record;
         _frame = frame; _screen = screen; _monitors = monitors; _windows = windows; _mode = mode; _done = done; _cancel = cancel; _log = log; _proc = WndProcImpl;
     }
 
+    private readonly bool _record;
     public CaptureMode Mode => _mode;
     /// <summary>Toolbar buttons on screen (px), for the CI to click like a user.</summary>
     public IReadOnlyList<(CaptureMode Mode, CaptureRect Rect)> ToolbarButtons { get; private set; } = [];
 
     public void Show()
     {
-        var cls = new BarNative.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<BarNative.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = BarNative.GetModuleHandle(null), lpszClassName = "WinMacCapture", hCursor = BarNative.LoadCursor(IntPtr.Zero, 32515 /* IDC_CROSS */) };
-        BarNative.RegisterClassEx(ref cls);
-        _hwnd = BarNative.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, "WinMacCapture", "WinMac captura", WS_POPUP, _screen.X, _screen.Y, _screen.W, _screen.H, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
+        _hwnd = InstanceWindows.Create("WinMacCapture", 32515 /* IDC_CROSS */, _proc, WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, "WinMac captura", WS_POPUP, _screen.X, _screen.Y, _screen.W, _screen.H);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("No se pudo crear la ventana de captura: " + Marshal.GetLastWin32Error());
         _dev = new D2DDevice(); _ctx = _dev.Context; _dev.SetDpi(1.0);   // 1 DIP = 1 physical px: the virtual screen can mix DPIs
         _b = _ctx.CreateSolidColorBrush(new Color4(1, 1, 1, 1));
@@ -129,7 +129,9 @@ internal sealed class CaptureOverlay : IDisposable
             buttons.Add((modes[i], new CaptureRect((int)(bx + _screen.X), (int)(by + _screen.Y), (int)bw, (int)bw)));
         }
 
-        string name = _mode switch { CaptureMode.Monitor => "Capturar pantalla", CaptureMode.AllMonitors => "Todas las pantallas", CaptureMode.Window => "Capturar ventana", _ => "Capturar región" };
+        string name = _record
+            ? _mode switch { CaptureMode.Monitor => "Grabar pantalla", CaptureMode.AllMonitors => "Grabar todas", CaptureMode.Window => "Grabar ventana", _ => "Grabar región" }
+            : _mode switch { CaptureMode.Monitor => "Capturar pantalla", CaptureMode.AllMonitors => "Todas las pantallas", CaptureMode.Window => "Capturar ventana", _ => "Capturar región" };
         using (var l = _dw!.CreateTextLayout(name, _label!, textW, h)) { Brush(1, 1, 1, 0.95f); _ctx.DrawTextLayout(new Vector2(x + pad + 4 * (bw + 6 * s) + 10 * s, y + (h - l.Metrics.Height) / 2), l, _b!); }
         using (var l = _dw.CreateTextLayout("Esc", _label!, 60, h)) { Brush(1, 1, 1, 0.6f); _ctx.DrawTextLayout(new Vector2(x + w - 42 * s, y + (h - l.Metrics.Height) / 2), l, _b!); }
         ToolbarButtons = buttons;
@@ -215,6 +217,6 @@ internal sealed class CaptureOverlay : IDisposable
         _closed = true;
         _frozen?.Dispose(); _target?.Dispose(); _visual?.Dispose(); _dtarget?.Dispose(); _dcomp?.Dispose(); _swap?.Dispose();
         _label?.Dispose(); _dw?.Dispose(); _b?.Dispose(); _dev?.Dispose();
-        if (_hwnd != IntPtr.Zero) { BarNative.DestroyWindow(_hwnd); _hwnd = IntPtr.Zero; }
+        if (_hwnd != IntPtr.Zero) { BarNative.DestroyWindow(_hwnd); InstanceWindows.Forget(_hwnd); _hwnd = IntPtr.Zero; }
     }
 }

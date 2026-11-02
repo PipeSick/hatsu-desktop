@@ -61,10 +61,8 @@ internal sealed class CaptureEditor : IDisposable
 
     private void Create()
     {
-        var cls = new BarNative.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<BarNative.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = BarNative.GetModuleHandle(null), lpszClassName = "WinMacCaptureEditor", hCursor = BarNative.LoadCursor(IntPtr.Zero, 32512) };
-        BarNative.RegisterClassEx(ref cls);
         BarNative.GetCursorPos(out var c);
-        _hwnd = BarNative.CreateWindowEx(0, "WinMacCaptureEditor", "Editar captura — " + System.IO.Path.GetFileName(_path), WS_OVERLAPPEDWINDOW, c.X - 200, c.Y - 200, 400, 300, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
+        _hwnd = InstanceWindows.Create("WinMacCaptureEditor", 32512, _proc, 0, "Editar captura — " + System.IO.Path.GetFileName(_path), WS_OVERLAPPEDWINDOW, c.X - 200, c.Y - 200, 400, 300);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("No se pudo crear la ventana del editor: " + Marshal.GetLastWin32Error());
         _scale = Math.Max(1, BarNative.GetDpiForWindow(_hwnd)) / 96f;
         // 80 % of the monitor where it opens, never bigger than needed for the image at 100 %
@@ -410,7 +408,7 @@ internal sealed class CaptureEditor : IDisposable
         if (_disposed) return; _disposed = true;
         foreach (var f in _textFormats.Values) f.Dispose(); _textFormats.Clear();
         _image?.Dispose(); if (_ctx is not null) _ctx.Target = null; _target?.Dispose(); _swap?.Dispose(); _round?.Dispose(); _ui?.Dispose(); _dw?.Dispose(); _b?.Dispose(); _dev?.Dispose();
-        if (_hwnd != IntPtr.Zero) { BarNative.DestroyWindow(_hwnd); _hwnd = IntPtr.Zero; }
+        if (_hwnd != IntPtr.Zero) { BarNative.DestroyWindow(_hwnd); InstanceWindows.Forget(_hwnd); _hwnd = IntPtr.Zero; }
     }
 }
 
