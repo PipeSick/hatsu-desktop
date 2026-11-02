@@ -52,6 +52,7 @@ public sealed partial class BarHost
     {
         if (!Editable(path)) { _log("[editor] petición rechazada (no es una imagen local legible)"); return; }
         if (_editor is not null) { _editor.Dispose(); _editor = null; }
+        CollapseIsland();
         Task.Run(async () =>
         {
             try
@@ -107,9 +108,25 @@ public sealed partial class BarHost
     }
 
     /// <summary>Freezes the screen and shows the overlay in the given mode (the toolbar lets the user switch). Only one at a time.</summary>
-    public void BeginCapture(CaptureMode mode, string why, bool record = false)
+    /// <summary>Sends a command to the Island (topic notch.cmd over WinMac's pipe); null when the bar runs on its own.</summary>
+    public Action<object>? NotchCommand { get; set; }
+
+    /// <summary>The Island is open (its reserved space is taller than the collapsed pill).</summary>
+    private bool IslandOpen() => Holes.Any(h => h.H > 80);
+
+    /// <summary>Closes the open Island first: it is «always on top» and would cover the overlay or the editor and take their clicks. True if it had to.</summary>
+    private bool CollapseIsland()
+    {
+        if (!IslandOpen() || NotchCommand is null) return false;
+        NotchCommand(new { cmd = "collapse" }); _log("[captura] la Isla estaba abierta: se cierra antes"); return true;
+    }
+
+    public void BeginCapture(CaptureMode mode, string why, bool record = false) => BeginCapture(mode, why, record, waited: false);
+
+    private void BeginCapture(CaptureMode mode, string why, bool record, bool waited)
     {
         if (_overlay is not null) { _log("[captura] ya hay una captura abierta (" + why + ")"); return; }
+        if (!waited && CollapseIsland()) { Task.Delay(450).ContinueWith(_ => Post(() => BeginCapture(mode, why, record, waited: true))); return; }   // its closing animation must not be in the frozen frame
         try
         {
             _lp?.Hide(); _spot?.Hide(); _popover?.Hide();   // our own panels are not part of what the user wants to capture
