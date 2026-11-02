@@ -95,6 +95,7 @@ internal static class HostApp
         {
             settings.ExtensionList = () => extCatalog.List().Select(e => (e, e.Manifest is { } m ? extHost.StatusOf(m.Id) : "")).ToList();
             settings.ExtensionOps = new ExtensionOps(extCatalog, extHost, settings.Refresh);
+            controller.HotkeysChanged = settings.Refresh;
             settings.ClearClipboard = () => { bus.Emit(NotchSettings.CommandTopic, new { cmd = "clear-clipboard" }); log("[host] historial del portapapeles borrado desde Ajustes"); };
         }
 

@@ -95,3 +95,20 @@ public class SpotClipboardTests
         Assert.Equal(SpotCommandKind.Reveal, ctl.Key(0x0D, true, false).Command.Kind);  // Ctrl+Intro: copy as plain text
     }
 }
+
+public class HotkeyAuditTests
+{
+    [Fact]
+    public void DuplicatesWindowsCombosAndRejectedKeysAreReported()
+    {
+        var r = HotkeyAudit.Check([
+            new HotkeyInfo("Ctrl+Mayús+4", "Capturar región", "Barra", true),
+            new HotkeyInfo("Ctrl+Mayús+4", "Otra cosa", "Barra", true),
+            new HotkeyInfo("Alt+Espacio", "Spotlight", "Barra", true),
+            new HotkeyInfo("Ctrl+Mayús+6", "Grabar", "Barra", false),
+            new HotkeyInfo("Ctrl+Espacio", "Spotlight", "Barra", true),
+        ]);
+        Assert.Contains("también lo usa", r[0].Problem); Assert.Contains("Menú de ventana", r[2].Problem);
+        Assert.Contains("no se puede saber cuál", r[3].Problem); Assert.Null(r[4].Problem);
+    }
+}

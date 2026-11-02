@@ -90,6 +90,8 @@ public sealed class HostController
     public static readonly string[] SettingsSections = ["sound", "system", "network", "disks", "weather"];
     /// <summary>Cierre ordenado de WinMac completo (lo ejecuta el anfitrión en su hilo de interfaz).</summary>
     public Action? QuitRequested { get; set; }
+    /// <summary>The bar reported the real state of its shortcuts (Settings redraws).</summary>
+    public Action? HotkeysChanged { get; set; }
     /// <summary>Abrir la ventana de Ajustes, en una sección o null.</summary>
     public Action<string?>? SettingsRequested { get; set; }
 
@@ -107,6 +109,7 @@ public sealed class HostController
         // cada módulo cambia SOLO sus propios ajustes y solo por su tópico
         if (module == "notch" && topic == NotchSettings.SetTopic) { try { _cfg.ApplyNotchPatch(d); } catch (Exception e) { _log("[config] parche de la Isla descartado: " + e.Message); } }
         else if (module == "bar" && topic == CommandTopic) { try { RunCommand(d); } catch (Exception e) { _log("[host] orden de la Barra descartada: " + e.Message); } }
+        else if (module == "bar" && topic == "bar.hotkeys") { HotkeyStatus.Set(d); HotkeysChanged?.Invoke(); }
         else if (module == "bar" && topic == BarSetTopic) { try { _cfg.ApplyBarPatch(d); } catch (Exception e) { _log("[config] parche de la Barra descartado: " + e.Message); } }
     }
 
@@ -134,3 +137,27 @@ public sealed class HostController
             }
     }
 }
+
+/// <summary>Last state of WinMac's global shortcuts as the bar reported it (keys, purpose, module, accepted by Windows, problem). Thread-safe.</summary>
+public static class HotkeyStatus
+{
+    public sealed record Item(string Keys, string Purpose, string Module, bool Registered, string? Problem);
+    private static IReadOnlyList<Item> _items = [];
+    private static readonly object Gate = new();
+
+    public static IReadOnlyList<Item> Items { get { lock (Gate) return _items; } }
+
+    public static void Set(JsonElement d)
+    {
+        var list = new List<Item>();
+        if (d.ValueKind == JsonValueKind.Object && d.TryGetProperty("items", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            foreach (var e in arr.EnumerateArray().Take(32))
+            {
+                string? S(string n) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+                if (S("keys") is { Length: > 0 and <= 40 } k && S("purpose") is { Length: <= 60 } p)
+                    list.Add(new Item(k, p, S("module") ?? "", e.TryGetProperty("registered", out var r) && r.ValueKind == JsonValueKind.True, S("problem") is { Length: <= 200 } pr ? pr : null));
+            }
+        lock (Gate) _items = list;
+    }
+}
+

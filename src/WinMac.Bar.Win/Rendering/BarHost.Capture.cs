@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using WinMac.Bar.Capture;
 using WinMac.Bar.Win.Capture;
+using WinMac.Bar.Launcher;
 using WinMac.Bar.Win.Launcher;
 
 namespace WinMac.Bar.Win.Rendering;
@@ -78,20 +79,44 @@ public sealed partial class BarHost
         });
     }
 
+    private string? _captureModsOn;
+    private readonly List<(GlobalHotkey Key, HotkeyInfo Info)> _captureKeyInfo = [];
+
     private void ApplyCaptureConfig()
     {
-        if (_cfg.CaptureHotkeys == _captureKeysOn) return;
-        foreach (var k in _captureKeys) k.Dispose(); _captureKeys.Clear(); _captureKeysOn = _cfg.CaptureHotkeys;
-        if (!_cfg.CaptureHotkeys) { _log("[captura] atajos desactivados"); return; }
-        const uint cs = GlobalHotkey.ModCtrl | GlobalHotkey.ModShift;
-        _captureKeys.Add(new GlobalHotkey(cs, 0x33, () => Post(() => BeginCapture(CaptureMode.Monitor, "atajo")), _log, "Ctrl+Mayús+3 (pantalla)"));
-        _captureKeys.Add(new GlobalHotkey(cs, 0x34, () => Post(() => BeginCapture(CaptureMode.Region, "atajo")), _log, "Ctrl+Mayús+4 (región)"));
-        _captureKeys.Add(new GlobalHotkey(cs, 0x35, () => Post(() => BeginCapture(CaptureMode.Window, "atajo")), _log, "Ctrl+Mayús+5 (barra de captura)"));
-        _captureKeys.Add(new GlobalHotkey(cs, 0x36, () => Post(() => ToggleRecording(CaptureMode.Region, "atajo")), _log, "Ctrl+Mayús+6 (grabar / detener)"));
+        if (_cfg.CaptureHotkeys == _captureKeysOn && (!_cfg.CaptureHotkeys || _cfg.CaptureModifiers == _captureModsOn)) return;
+        foreach (var k in _captureKeys) k.Dispose(); _captureKeys.Clear(); _captureKeyInfo.Clear(); _captureKeysOn = _cfg.CaptureHotkeys; _captureModsOn = _cfg.CaptureModifiers;
+        if (!_cfg.CaptureHotkeys) { _log("[captura] atajos desactivados"); ReportHotkeys(); return; }
+        uint mods = _cfg.CaptureModifiers switch { "CtrlAlt" => GlobalHotkey.ModCtrl | GlobalHotkey.ModAlt, "AltShift" => GlobalHotkey.ModAlt | GlobalHotkey.ModShift, _ => GlobalHotkey.ModCtrl | GlobalHotkey.ModShift };
+        string m = HotkeyAudit.CaptureModifierName(_cfg.CaptureModifiers);
+        void Add(uint vk, string digit, string purpose, Action run)
+        {
+            var k = new GlobalHotkey(mods, vk, () => Post(run), _log, $"{m}+{digit} ({purpose})");
+            _captureKeys.Add(k); _captureKeyInfo.Add((k, new HotkeyInfo($"{m}+{digit}", purpose, "Barra · Capturas", k.Registered)));
+        }
+        Add(0x33, "3", "Capturar pantalla", () => BeginCapture(CaptureMode.Monitor, "atajo"));
+        Add(0x34, "4", "Capturar región", () => BeginCapture(CaptureMode.Region, "atajo"));
+        Add(0x35, "5", "Barra de captura", () => BeginCapture(CaptureMode.Window, "atajo"));
+        Add(0x36, "6", "Grabar / detener", () => ToggleRecording(CaptureMode.Region, "atajo"));
+        ReportHotkeys();
     }
+
+    /// <summary>The real state of every WinMac shortcut, sent to the host so Settings can show it (docs/27). Also after Spotlight's shortcut changes.</summary>
+    internal void ReportHotkeys()
+    {
+        var list = _captureKeyInfo.Select(k => k.Info).ToList();
+        if (SpotlightHotkeyInfo() is { } s) list.Add(s);
+        if (_cfg.LaunchpadOnWinKey) list.Add(new HotkeyInfo("Win (sola)", "Launchpad", "Barra · Launchpad", true));
+        var checkedList = HotkeyAudit.Check(list);
+        foreach (var k in checkedList.Where(k => k.Problem is not null)) _log($"[atajos] {k.Keys} ({k.Purpose}): {k.Problem}");
+        ModuleEvent?.Invoke("bar.hotkeys", new { items = checkedList.Select(k => new { keys = k.Keys, purpose = k.Purpose, module = k.Module, registered = k.Registered, problem = k.Problem }).ToArray() });
+    }
+
+    private DateTime _hkReportAgain = DateTime.UtcNow.AddSeconds(4);
 
     private void CaptureTick()
     {
+        if (_hkReportAgain != default && DateTime.UtcNow > _hkReportAgain) { _hkReportAgain = default; ReportHotkeys(); }   // once more when the link to the host is surely up
         RecordTick();
         if (_editRequest is { } req) { _editRequest = null; OpenEditor(req, "Isla"); }
         if (_editEvent?.WaitOne(0) == true)

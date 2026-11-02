@@ -475,7 +475,7 @@ public sealed partial class BarHost : IPanelUi
         if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind is PanelKind.Calendar or PanelKind.Notifications && _popover is { IsOpen: true }) LoadEvents();
         if (old.LaunchpadOnWinKey != c.LaunchpadOnWinKey) ApplyLauncherConfig();
         if (old.SpotlightHotkey != c.SpotlightHotkey) ApplySpotlightConfig();
-        if (old.CaptureHotkeys != c.CaptureHotkeys) ApplyCaptureConfig();
+        if (old.CaptureHotkeys != c.CaptureHotkeys || old.CaptureModifiers != c.CaptureModifiers) ApplyCaptureConfig();
         if (old.ShowTrayIcons != c.ShowTrayIcons) { if (c.ShowTrayIcons) StartTray(); else StopTray(); }
         if (old.NotificationsFromWindows != c.NotificationsFromWindows) { _nc.SetEnabled(c.NotificationsFromWindows); if (c.NotificationsFromWindows && _popover is { IsOpen: true } && _pkind == PanelKind.Notifications && !_nc.Active) _nc.Activate(); }
         _nextClock = DateTime.MinValue; UpdateState(force: false);

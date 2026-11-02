@@ -68,6 +68,26 @@ public static class SettingsBuilder
         ["activity"] = "En curso", ["captures"] = "Capturas", ["history"] = "Historial",
     };
 
+    private static List<SettingsRow> HotkeyRows(BarConfig bar)
+    {
+        var rows = new List<SettingsRow>
+        {
+            new(RowKind.Segmented, "bar.capmods", "Modificadores de las capturas", "Con 3 pantalla · 4 región · 5 barra de captura · 6 grabar", Options: WinMac.Bar.Launcher.HotkeyAudit.CaptureModifierNames,
+                Selected: Math.Max(0, Array.IndexOf(WinMac.Bar.Launcher.HotkeyAudit.CaptureModifierIds, bar.CaptureModifiers)), Enabled: bar.CaptureHotkeys, Reason: bar.CaptureHotkeys ? null : "Atajos de capturas desactivados"),
+        };
+        var items = HotkeyStatus.Items;
+        if (items.Count == 0) rows.Add(new(RowKind.Info, "bar.keys.none", "La Barra todavía no ha informado de sus atajos (se muestra al arrancar)."));
+        for (int i = 0; i < items.Count; i++)
+        {
+            var k = items[i];
+            string state = k.Problem is { } p ? (k.Registered ? "⚠ " : "✗ ") + p : "✓ activo";
+            rows.Add(new(RowKind.Info, "bar.key:" + i, $"{k.Keys} — {k.Purpose} ({k.Module}): {state}"));
+        }
+
+        rows.Add(new(RowKind.Button, "bar.keysreset", "Restaurar los atajos predeterminados"));
+        return rows;
+    }
+
     private static int Index(string[] arr, string v) => Math.Max(0, Array.FindIndex(arr, x => string.Equals(x, v, StringComparison.OrdinalIgnoreCase)));
     private static SettingsRow Bar(int i, string? subtitle = null, string? title = null) => new(RowKind.Toggle, "bar:" + BarToggles[i].Field, title ?? BarToggles[i].Text, subtitle, BarToggles[i].Get(_bar!));
     [ThreadStatic] private static BarConfig? _bar;   // solo durante Build (evita pasar el parámetro por cada fila)
@@ -104,6 +124,7 @@ public static class SettingsBuilder
                 Bar(32),
                 new(RowKind.Field, "bar.capdir", "Carpeta", Text: bar.CaptureFolder ?? "", Placeholder: "Imágenes\\Capturas de pantalla"),
             ], "Las capturas se guardan en esa carpeta y aparecen en la galería de la Isla. Las grabaciones (solo vídeo, nunca el micrófono) van a Vídeos\\Screen Recordings."),
+            new("Atajos de teclado", HotkeyRows(bar), "Estado real: lo que Windows aceptó al registrarlos. Windows no dice qué programa tiene un atajo rechazado, y los atajos que otra app usa solo dentro de su ventana no se pueden detectar."),
             new("Spotlight Pro y espacios de trabajo", [
                 new(RowKind.Info, "bar.spotpro", "En Spotlight: acciones de WinMac, «ip», «red», «ping …» y «dns …» (solo con Intro), «ssh usuario@equipo», «> …» (nunca se ejecuta: abre la terminal o lo copia), «20% de 150»."),
                 new(RowKind.Info, "bar.scripts", "Scripts propios: %APPDATA%\\WinMac\\spotlight-scripts.json. Se ejecutan con doble Intro y tus permisos, nunca elevados."),

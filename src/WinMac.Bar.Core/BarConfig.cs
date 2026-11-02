@@ -82,6 +82,8 @@ public sealed record BarConfig
     public bool CaptureCopyToClipboard { get; init; } = false;
     /// <summary>Carpeta de destino; vacía = la de capturas de Windows («Imágenes\Capturas de pantalla»), la misma que lee la galería de la Isla.</summary>
     public string? CaptureFolder { get; init; }
+    /// <summary>Modificadores de los atajos de captura (con 3, 4, 5 y 6): CtrlShift (por defecto), CtrlAlt o AltShift.</summary>
+    public string CaptureModifiers { get; init; } = "CtrlShift";
 
     /// <summary>Iconos de la bandeja de Windows (apps en segundo plano) en la barra. WinMac recibe los iconos como lo hace la bandeja y se los reenvía a Explorer.</summary>
     public bool ShowTrayIcons { get; init; } = true;
@@ -103,6 +105,7 @@ public sealed record BarConfig
     public BarConfig Sanitize() => this with
     {
         Language = Language == "en" ? "en" : "es",
+        CaptureModifiers = Launcher.HotkeyAudit.CaptureModifierIds.Contains(CaptureModifiers) ? CaptureModifiers : "CtrlShift",
         CenterGap = double.IsFinite(CenterGap) ? Math.Clamp(CenterGap, 0, 0.6) : 0.30,
         CalendarIcsPath = string.IsNullOrWhiteSpace(CalendarIcsPath) ? null : CalendarIcsPath.Trim().Trim('"'),
         HubRefreshMs = Math.Clamp(HubRefreshMs, 500, 10_000),

@@ -32,10 +32,14 @@ public sealed partial class BarHost
     {
         if (_spotKeyKind == _cfg.SpotlightHotkey) return;
         _spotKey?.Dispose(); _spotKey = null; _spotKeyKind = _cfg.SpotlightHotkey;
-        if (_cfg.SpotlightHotkey == SpotlightHotkey.Off) { _log("[spotlight] atajo desactivado"); return; }
+        if (_cfg.SpotlightHotkey == SpotlightHotkey.Off) { _log("[spotlight] atajo desactivado"); ReportHotkeys(); return; }
         var (mods, name) = _cfg.SpotlightHotkey == SpotlightHotkey.CtrlSpace ? (GlobalHotkey.ModCtrl, "Ctrl+Espacio") : (GlobalHotkey.ModAlt, "Alt+Espacio");
         _spotKey = new GlobalHotkey(mods, 0x20, () => Post(() => ToggleSpotlight("atajo")), _log, name);
+        ReportHotkeys();
     }
+
+    private HotkeyInfo? SpotlightHotkeyInfo() => _cfg.SpotlightHotkey == SpotlightHotkey.Off || _spotKey is null ? null
+        : new HotkeyInfo(_cfg.SpotlightHotkey == SpotlightHotkey.CtrlSpace ? "Ctrl+Espacio" : "Alt+Espacio", "Spotlight", "Barra · Spotlight", _spotKey.Registered);
 
     private void SpotlightTick()
     {
