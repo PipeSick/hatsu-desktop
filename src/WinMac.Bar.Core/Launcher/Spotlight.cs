@@ -5,17 +5,27 @@ namespace WinMac.Bar.Launcher;
 
 public enum SpotlightHotkey { AltSpace, CtrlSpace, Off }
 
-public enum SpotKind { Calc, Convert, App, Setting, Folder, File, Path }
+public enum SpotKind { Calc, Convert, App, Setting, Folder, File, Path, Action, Tool, Command, Script }
 
 /// <summary>Un resultado de Spotlight. <see cref="Target"/>: el Id de la app, la ruta, el URI <c>ms-settings:</c> o el valor a copiar.</summary>
 public sealed record SpotItem(SpotKind Kind, string Title, string? Subtitle, string Target, InstalledApp? App = null)
 {
+    /// <summary>Needs a second Enter (user scripts).</summary>
+    public bool Confirm { get; init; }
+    public string? Arguments { get; init; }
+    /// <summary>Extra lines for the preview pane (e.g. a tool's result, filled when it finishes).</summary>
+    public IReadOnlyList<string>? Details { get; init; }
+
     public string Section => Kind switch
     {
         SpotKind.Calc or SpotKind.Convert => "Calculadora",
         SpotKind.App => "Aplicaciones",
         SpotKind.Setting => "Configuración",
         SpotKind.Folder or SpotKind.Path => "Carpetas y rutas",
+        SpotKind.Action => "WinMac",
+        SpotKind.Tool => "Herramientas",
+        SpotKind.Command => "Terminal",
+        SpotKind.Script => "Scripts",
         _ => "Archivos",
     };
 }
@@ -151,10 +161,14 @@ public static class SpotlightEngine
     public const int Strong = 550, Weak = 300;
 
     public static IReadOnlyList<SpotItem> Query(string text, IReadOnlyList<InstalledApp> apps, IReadOnlyDictionary<string, int>? usage,
-        IReadOnlyList<(string Name, string Path)> folders, IReadOnlyList<SpotItem> files, Func<string, bool>? pathExists = null)
+        IReadOnlyList<(string Name, string Path)> folders, IReadOnlyList<SpotItem> files, Func<string, bool>? pathExists = null,
+        bool recording = false, IReadOnlyList<SpotScript>? scripts = null)
     {
         var q = text.Trim(); var list = new List<SpotItem>();
         if (q.Length == 0) return list;
+        list.AddRange(SpotPro.Tools(q));
+        if (q.StartsWith('>')) return list.Take(MaxResults).ToList();   // «> …» is for the terminal only
+        if (SpotPro.PercentOf(q) is { } pc) { var r = SpotCalculator.Format(pc); list.Add(new SpotItem(SpotKind.Calc, r, q + " =", r)); }
         if (SpotCalculator.Evaluate(q) is { } v) { var r = SpotCalculator.Format(v); list.Add(new SpotItem(SpotKind.Calc, r, q + " =", r)); }
         if (SpotConverter.Convert(q) is { } c) list.Add(new SpotItem(SpotKind.Convert, c.Result, c.Expression, c.Result));
         if (LooksLikePath(q) && pathExists is not null)
@@ -167,6 +181,8 @@ public static class SpotlightEngine
         var ranked = new List<(int Score, int Order, SpotItem Item)>();
         ranked.AddRange(AppMatcher.Search(apps, q, usage, 5).Select(a => (AppMatcher.Score(q, a.Name) + 1, 0, new SpotItem(SpotKind.App, a.Name, "Aplicación", a.Id, a))));
         ranked.AddRange(SpotSettings.Search(q).OrderByDescending(x => x.Score).Take(2).Select(x => (x.Score, 1, x.Item)));
+        ranked.AddRange(SpotPro.SearchActions(q, recording).OrderByDescending(x => x.Score).Take(3).Select(x => (x.Score, 1, x.Item)));
+        if (scripts is { Count: > 0 }) ranked.AddRange(SpotPro.SearchScripts(q, scripts).Take(2).Select(s => (AppMatcher.Score(q, s.Title), 3, s)));
         ranked.AddRange(folders.Select(f => (f, s: AppMatcher.Score(q, f.Name))).Where(x => x.s >= 400).OrderByDescending(x => x.s).Take(2)
             .Select(x => (x.s, 2, new SpotItem(SpotKind.Folder, x.f.Name, x.f.Path, x.f.Path))));
         // Relevancia: si hay coincidencias fuertes (exacta, empieza por, palabra, iniciales), las débiles (letras sueltas en orden) no se muestran.
@@ -209,21 +225,33 @@ public readonly record struct SpotCommand(SpotCommandKind Kind, SpotItem? Item =
 /// <summary>Teclado y ratón de Spotlight: escribir, ↑/↓, Intro (abrir), Ctrl+Intro (mostrar en el Explorador), Esc (borrar y cerrar), clic en un resultado. Puro.</summary>
 public sealed class SpotlightController
 {
-    public const double Width = 680, FieldH = 56, RowH = 46;
+    public const double Width = 900, ListW = 540, FieldH = 56, RowH = 46, MinRows = 5;
     public string Query { get; private set; } = "";
     public IReadOnlyList<SpotItem> Results { get; private set; } = [];
     public int Selected { get; private set; } = -1;
     public int Hover { get; private set; } = -1;
+    /// <summary>The result waiting for its confirming Enter (user scripts), or -1.</summary>
+    public int Pending { get; private set; } = -1;
 
-    public double Height => FieldH + (Results.Count == 0 ? 0 : 8 + Results.Count * RowH + 8);
-    public LpRect Row(int i) => new(8, FieldH + 8 + i * RowH, Width - 16, RowH);
+    /// <summary>List on the left, preview pane on the right (docs/27); room for the preview even with few results.</summary>
+    public double Height => FieldH + (Results.Count == 0 ? 0 : 8 + Math.Max(Results.Count, MinRows) * RowH + 8);
+    public LpRect Row(int i) => new(8, FieldH + 8 + i * RowH, ListW - 16, RowH);
+    public LpRect PreviewRect => new(ListW, FieldH + 8, Width - ListW - 8, Height - FieldH - 16);
+    public SpotItem? Current => Selected >= 0 && Selected < Results.Count ? Results[Selected] : null;
 
-    public void Reset() { Query = ""; Results = []; Selected = -1; Hover = -1; }
+    public void Reset() { Query = ""; Results = []; Selected = -1; Hover = -1; Pending = -1; }
+
+    /// <summary>A provider finished (ping, DNS…): replace that result in place, keeping the selection.</summary>
+    public void Update(SpotItem item)
+    {
+        var l = Results.ToList(); int i = l.FindIndex(r => r.Target == item.Target);
+        if (i < 0) return; l[i] = item; Results = l;
+    }
 
     public void SetResults(IReadOnlyList<SpotItem> results)
     {
         string? keep = Selected >= 0 && Selected < Results.Count ? Results[Selected].Target : null;
-        Results = results; int i = keep is null ? -1 : results.ToList().FindIndex(r => r.Target == keep);
+        Results = results; Pending = -1; int i = keep is null ? -1 : results.ToList().FindIndex(r => r.Target == keep);
         Selected = results.Count == 0 ? -1 : i >= 0 ? i : 0;
     }
 
@@ -231,7 +259,7 @@ public sealed class SpotlightController
     public bool Char(char c)
     {
         if (char.IsControl(c) || Query.Length >= 200) return false;
-        Query += c; return true;
+        Query += c; Pending = -1; return true;
     }
 
     public (SpotCommand Command, bool TextChanged) Key(int vk, bool ctrl)
@@ -243,11 +271,13 @@ public sealed class SpotlightController
                 if (Query.Length == 0) return (SpotCommand.None, false);
                 if (ctrl) { var t = Query.TrimEnd(); int sp = t.LastIndexOf(' '); Query = sp < 0 ? "" : t[..(sp + 1)]; } else Query = Query[..^1];
                 return (SpotCommand.Redraw, true);
-            case 0x26: if (Results.Count > 0) Selected = Selected <= 0 ? Results.Count - 1 : Selected - 1; return (SpotCommand.Redraw, false);
-            case 0x28: if (Results.Count > 0) Selected = Selected >= Results.Count - 1 ? 0 : Selected + 1; return (SpotCommand.Redraw, false);
+            case 0x26: Pending = -1; if (Results.Count > 0) Selected = Selected <= 0 ? Results.Count - 1 : Selected - 1; return (SpotCommand.Redraw, false);
+            case 0x28: Pending = -1; if (Results.Count > 0) Selected = Selected >= Results.Count - 1 ? 0 : Selected + 1; return (SpotCommand.Redraw, false);
             case 0x0D:
                 if (Selected < 0 || Selected >= Results.Count) return (SpotCommand.None, false);
                 var it = Results[Selected];
+                if (it.Confirm && Pending != Selected) { Pending = Selected; return (SpotCommand.Redraw, false); }   // first Enter only asks
+                Pending = -1;
                 return (new SpotCommand(ctrl && it.Kind is SpotKind.File or SpotKind.Folder or SpotKind.Path ? SpotCommandKind.Reveal : SpotCommandKind.Open, it), false);
         }
 
@@ -256,7 +286,12 @@ public sealed class SpotlightController
 
     public SpotCommand PointerMove(double x, double y) { int h = RowAt(x, y); if (h == Hover) return SpotCommand.None; Hover = h; return SpotCommand.Redraw; }
 
-    public SpotCommand Click(double x, double y) { int r = RowAt(x, y); return r >= 0 ? new SpotCommand(SpotCommandKind.Open, Results[r]) : SpotCommand.None; }
+    public SpotCommand Click(double x, double y)
+    {
+        int r = RowAt(x, y); if (r < 0) return SpotCommand.None;
+        if (Results[r].Confirm && Pending != r) { Selected = r; Pending = r; return SpotCommand.Redraw; }
+        Pending = -1; return new SpotCommand(SpotCommandKind.Open, Results[r]);
+    }
 
     private int RowAt(double x, double y) { for (int i = 0; i < Results.Count; i++) if (Row(i).Contains(x, y)) return i; return -1; }
 }

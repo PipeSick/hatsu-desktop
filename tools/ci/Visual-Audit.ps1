@@ -152,7 +152,7 @@ function NotchWide { (NotchW) -gt 300 }
 function TabsLine { if (Test-Path $pillLog) { (Select-String -Path $pillLog -SimpleMatch ' tabs ' | Select-Object -Last 1).Line } else { '' } }
 function ClickTab([string]$id) { $m = [regex]::Match((TabsLine), [regex]::Escape($id) + '@(\d+),(\d+)'); if ($m.Success) { [Au]::Click([int]$m.Groups[1].Value, [int]$m.Groups[2].Value); Start-Sleep -Milliseconds 900; return $true }; Note "  - pestaña «$id» no encontrada en el registro"; return $false }
 function Expand { if (-not (NotchWide)) { [Au]::Click($cx, $sc.Y + 12); $null = WaitFor { NotchWide } 4; Start-Sleep -Milliseconds 900 } }
-function Collapse { if (NotchWide) { [Au]::Click($cx, $sc.Y + 14); $null = WaitFor { -not (NotchWide) } 4; [Au]::Glide($sc.X + 60, $sc.Y + [int]($sc.Height * 0.6), 4); Start-Sleep -Milliseconds 900 } }
+function Collapse { if (NotchWide) { $km = [regex]::Match((TabsLine), 'collapse@(\d+),(\d+)'); if ($km.Success) { [Au]::Click([int]$km.Groups[1].Value, [int]$km.Groups[2].Value) } else { [Au]::Click($cx, $sc.Y + 14) }; $null = WaitFor { -not (NotchWide) } 4; [Au]::Glide($sc.X + 60, $sc.Y + [int]($sc.Height * 0.6), 4); Start-Sleep -Milliseconds 900 } }
 $null = WaitFor { LogHas $barLog 'música de prueba enviada' } 10; Start-Sleep -Milliseconds 800
 IslaShot '20-isla-compacta-musica-prueba' 'Isla compacta con la música de PRUEBA (API interna; sin pista real en el runner)'
 Expand
@@ -234,6 +234,30 @@ if ($src) {
   } else { Note '- **34-editor**: la ventana del editor no apareció' }
   if (Test-Path $barLog) { Select-String -Path $barLog -Pattern '\[editor\]' | Where-Object { $_.Line -notmatch 'diag' } | Select-Object -Last 8 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
 } else { Note '- **34-editor**: no hay ninguna captura de WinMac para editar' }
+
+# ── 1e. Grabación de pantalla (docs/26): elegida por el usuario en la superposición, indicador visible, detener con un clic; solo vídeo, sin micrófono
+Note ''; Note '### Grabación de pantalla'
+& $bar --record screen | Out-Null
+if (WaitFor { [Au]::Visible('WinMacCapture') } 8) {
+  Start-Sleep -Milliseconds 500; Shot '40-grabacion-elegir' 'Grabación: la misma superposición, con «Grabar pantalla» (nada se graba hasta hacer clic)'
+  [Au]::Click(500, 300)
+  $recOk = WaitFor { (LogHas $barLog '[grabación] iniciada') -or (LogHas $barLog '[grabación] no se pudo iniciar') } 10
+  if (LogHas $barLog '[grabación] iniciada') {
+    Start-Sleep -Milliseconds 2500; Shot '41-grabando-indicador' 'Grabando: indicador rojo con el tiempo (excluido del vídeo) y la actividad en la Isla'
+    Expand; $null = ClickTab 'activity'; Shot '41b-isla-grabando' 'Centro de actividades: «Grabando la pantalla» con el tiempo transcurrido' ($cx - 330) $sc.Y 660 560; Collapse
+    Start-Sleep -Milliseconds 1500
+    $im = [regex]::Match(((Select-String -Path $barLog -SimpleMatch '[grabación] diag indicador@' | Select-Object -Last 1).Line), 'indicador@(-?\d+),(-?\d+)')
+    if ($im.Success) { [Au]::Click([int]$im.Groups[1].Value, [int]$im.Groups[2].Value) } else { & $bar --record stop | Out-Null }
+    $saved = WaitFor { LogHas $barLog '[grabación] guardada' } 20
+    Note "  - detenida con un clic en el indicador y guardada: $saved"
+    $mp4 = Get-ChildItem (Join-Path ([Environment]::GetFolderPath('MyVideos')) 'Screen Recordings') -Filter '*.mp4' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+    if ($mp4) { Note "  - archivo: $($mp4.Name) ($($mp4.Length) B)" }
+    $pm = [regex]::Match(((Select-String -Path $barLog -SimpleMatch '[grabación] muestra ' | Select-Object -Last 1).Line), 'muestra (.+)$')
+    if ($pm.Success -and (Test-Path $pm.Groups[1].Value)) { try { $img = [System.Drawing.Image]::FromFile($pm.Groups[1].Value); $img.Save((Join-Path $OutDir '42-grabacion-fotograma.png'), [System.Drawing.Imaging.ImageFormat]::Png); $img.Dispose(); Note '- **42-grabacion-fotograma.png**: fotograma sacado del MP4 grabado (comprueba orientación y contenido)' } catch { Note "  - no se pudo convertir el fotograma: $_" } }
+    Expand; $null = ClickTab 'history'; Shot '43-historial-grabacion' 'Historial: la grabación terminada con su archivo' ($cx - 330) $sc.Y 660 560; Collapse
+  } else { Note '  - la grabación no se pudo iniciar en este equipo (ver registro)' }
+} else { Note '- **40-grabacion**: la superposición no apareció' }
+if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[grabación]' | Where-Object { $_.Line -notmatch 'diag|muestra' } | Select-Object -Last 8 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
 Expand; $null = ClickTab 'captures'; Shot '33-galeria-tras-capturar' 'Galería de la Isla con las capturas recién hechas por WinMac' ($cx - 330) $sc.Y 660 560
 # Galería completa: «Ver todas» con el ratón, búsqueda con el teclado, selección de la primera, vista ampliada
 $gm = [regex]::Match((TabsLine), 'gallery@(\d+),(\d+)')
@@ -243,9 +267,9 @@ if ($gm.Success) {
   function GalLine { (Get-Content $pillLog | Select-String -SimpleMatch ' gallery items=' | Select-Object -Last 1).Line }
   Note "  - galería abierta: $gOk · $((GalLine) -replace '^\S+ ', '')"
   Shot '37-galeria-completa' 'Galería completa: miniaturas de la carpeta de capturas, orden, búsqueda y panel de detalles'
+  $fm = [regex]::Match((GalLine), 'first@(-?\d+),(-?\d+)')   # antes de escribir: tras la búsqueda el contenedor aún no está en el registro
   $sm = [regex]::Match((GalLine), 'search@(-?\d+),(-?\d+)')
   if ($sm.Success) { [Au]::Click([int]$sm.Groups[1].Value, [int]$sm.Groups[2].Value); Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait('Captura'); Start-Sleep -Milliseconds 1200 }
-  $fm = [regex]::Match((GalLine), 'first@(-?\d+),(-?\d+)')
   if ($fm.Success) { [Au]::Click([int]$fm.Groups[1].Value, [int]$fm.Groups[2].Value); Start-Sleep -Milliseconds 1200 }
   Note "  - tras buscar «Captura» y elegir la primera: $((GalLine) -replace '^\S+ ', '')"
   Shot '38-galeria-busqueda-seleccion' 'Galería: búsqueda «Captura» y una captura seleccionada con sus acciones reales (abrir, editar, copiar, renombrar, eliminar)'
@@ -328,14 +352,28 @@ if (WaitFor { [Au]::Visible('WinMacLaunchpad') } 10) {
 # ── 4. Spotlight
 Note ''
 function SpotOpen { & $bar --spotlight | Out-Null; return (WaitFor { [Au]::Visible('WinMacSpotlight') } 10) }
-function SpotShot([string]$name, [string]$what) { Shot $name "$what (ventana $([Au]::RectOf('WinMacSpotlight')))"; Shot ($name + 'b') "$($what): detalle" ($cx - 400) ($sc.Y + [int]($sc.Height * 0.18)) 800 520 }
+function SpotShot([string]$name, [string]$what) { Shot $name "$what (ventana $([Au]::RectOf('WinMacSpotlight')))"; Shot ($name + 'b') "$($what): detalle" ($cx - 470) ($sc.Y + [int]($sc.Height * 0.18)) 940 560 }
 if (SpotOpen) {
   Start-Sleep -Milliseconds 500; SpotShot '13-spotlight-inicial' 'Spotlight recién abierto'
   [System.Windows.Forms.SendKeys]::SendWait('notepad'); Start-Sleep -Milliseconds 900; SpotShot '14-spotlight-app' 'Spotlight buscando «notepad»'
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
   [System.Windows.Forms.SendKeys]::SendWait('12*12'); Start-Sleep -Milliseconds 700; SpotShot '15-spotlight-12x12' 'Spotlight con «12*12»'
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
-  [System.Windows.Forms.SendKeys]::SendWait('con'); Start-Sleep -Milliseconds 1200; SpotShot '16-spotlight-resultados' 'Spotlight con «con»: varias secciones de resultados'
+  [System.Windows.Forms.SendKeys]::SendWait('con'); Start-Sleep -Milliseconds 1200; SpotShot '16-spotlight-resultados' 'Spotlight con «con»: varias secciones de resultados y vista previa'
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
+  # Spotlight Pro (docs/27): acciones de WinMac, herramientas (solo con Intro), «> comando» que nunca se ejecuta, porcentajes
+  [System.Windows.Forms.SendKeys]::SendWait('captura'); Start-Sleep -Milliseconds 900; SpotShot '17-spotlight-acciones' 'Spotlight Pro: acciones de WinMac (capturar, grabar) con su vista previa'
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
+  [System.Windows.Forms.SendKeys]::SendWait('ip'); Start-Sleep -Milliseconds 900; SpotShot '18-spotlight-ip' 'Spotlight Pro: dirección IP local (dato real del equipo, sin tráfico de red)'
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
+  [System.Windows.Forms.SendKeys]::SendWait('ping 127.0.0.1'); Start-Sleep -Milliseconds 900; SpotShot '19a-spotlight-ping-antes' 'Spotlight Pro: «ping» ofrecido; no se ejecuta al escribir'
+  [System.Windows.Forms.SendKeys]::SendWait('{ENTER}'); $null = WaitFor { LogHas $barLog '[spotlight] herramienta ping terminada' } 10; Start-Sleep -Milliseconds 500
+  SpotShot '19b-spotlight-ping-resultado' 'Spotlight Pro: resultado real del ping tras pulsar Intro'
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
+  [System.Windows.Forms.SendKeys]::SendWait('> del /s prueba'); Start-Sleep -Milliseconds 900; SpotShot '19c-spotlight-comando' 'Spotlight Pro: «> …» solo ofrece abrir una terminal o copiar el texto (nunca lo ejecuta)'
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
+  [System.Windows.Forms.SendKeys]::SendWait('20% de 150'); Start-Sleep -Milliseconds 700; SpotShot '19d-spotlight-porcentaje' 'Spotlight Pro: «20% de 150»'
+  if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[spotlight] herramienta' | Select-Object -Last 3 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
 } else { Note '- **13-spotlight**: NO capturado (la ventana no apareció)' }
 Start-Sleep -Milliseconds 600

@@ -163,14 +163,42 @@ internal sealed class SpotlightWindow : IDisposable
                 else if (i == _ctl.Hover) { Brush(new Color4(1, 1, 1, 0.08f)); _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = R(r.X, r.Y, r.W, r.H), RadiusX = 8, RadiusY = 8 }, _solid!); }
                 DrawItemIcon(it, new LpRect(r.X + 10, r.Y + 7, 32, 32));
                 Brush(new Color4(1, 1, 1, 0.96f));
-                using (var l = _dw.CreateTextLayout(it.Title, _title!, (float)(r.W - 200), 20)) _ctx.DrawTextLayout(new Vector2((float)(r.X + 52), (float)(r.Y + (it.Subtitle is null ? 13 : 5))), l, _solid!);
-                if (it.Subtitle is not null) { Brush(new Color4(1, 1, 1, i == _ctl.Selected ? 0.8f : 0.55f)); using var l = _dw.CreateTextLayout(it.Subtitle, _sub!, (float)(r.W - 200), 16); _ctx.DrawTextLayout(new Vector2((float)(r.X + 52), (float)(r.Y + 25)), l, _solid!); }
-                if (it.Section != lastSection) { Brush(new Color4(1, 1, 1, i == _ctl.Selected ? 0.85f : 0.45f)); using var l = _dw.CreateTextLayout(it.Section, _section!, 130, 16); _ctx.DrawTextLayout(new Vector2((float)(r.X + r.W - 142), (float)(r.Y + 15)), l, _solid!); lastSection = it.Section; }
+                using (var l = _dw.CreateTextLayout(it.Title, _title!, (float)(r.W - 160), 20)) _ctx.DrawTextLayout(new Vector2((float)(r.X + 52), (float)(r.Y + (it.Subtitle is null ? 13 : 5))), l, _solid!);
+                if (it.Subtitle is not null) { Brush(new Color4(1, 1, 1, i == _ctl.Selected ? 0.8f : 0.55f)); using var l = _dw.CreateTextLayout(it.Subtitle, _sub!, (float)(r.W - 160), 16); _ctx.DrawTextLayout(new Vector2((float)(r.X + 52), (float)(r.Y + 25)), l, _solid!); }
+                if (it.Section != lastSection) { Brush(new Color4(1, 1, 1, i == _ctl.Selected ? 0.85f : 0.45f)); using var l = _dw.CreateTextLayout(it.Section, _section!, 100, 16); _ctx.DrawTextLayout(new Vector2((float)(r.X + r.W - 104), (float)(r.Y + 15)), l, _solid!); lastSection = it.Section; }
             }
 
+            DrawPreview();
             _ctx.EndDraw(); _dcomp.Commit(); _swap.Present(1, PresentFlags.None); _dirty = false;
         }
         catch (Exception e) { _log("[spotlight] dibujo: " + e.GetType().Name + ": " + e.Message); _dirty = false; }
+    }
+
+    /// <summary>Spotlight Pro (docs/27): preview of the selected result on the right — icon, name, details and the keys that act on it.</summary>
+    private void DrawPreview()
+    {
+        if (_ctl.Current is not { } it || _dw is null) return;
+        var p = _ctl.PreviewRect;
+        Brush(new Color4(1, 1, 1, 0.10f)); _ctx!.FillRectangle(R(p.X, p.Y, 1, p.H), _solid!);
+        float x = (float)(p.X + 20), w = (float)(p.W - 36), y = (float)(p.Y + 14);
+        DrawItemIcon(it, new LpRect(x, y, 56, 56)); y += 68;
+        Brush(new Color4(1, 1, 1, 0.96f));
+        using (var l = _dw.CreateTextLayout(it.Title, _title!, w, 60)) { l.WordWrapping = WordWrapping.Wrap; _ctx.DrawTextLayout(new Vector2(x, y), l, _solid!); y += l.Metrics.Height + 4; }
+        Brush(new Color4(1, 1, 1, 0.5f));
+        using (var l = _dw.CreateTextLayout(it.Section, _sub!, w, 18)) { _ctx.DrawTextLayout(new Vector2(x, y), l, _solid!); y += 24; }
+        var (lines, keys) = SpotPro.Preview(it);
+        foreach (var line in lines.Take(8))
+        {
+            Brush(new Color4(1, 1, 1, 0.78f));
+            using var l = _dw.CreateTextLayout(line, _sub!, w, 40); l.WordWrapping = WordWrapping.Wrap;
+            if (y + l.Metrics.Height > p.Y + p.H - 30) break;
+            _ctx.DrawTextLayout(new Vector2(x, y), l, _solid!); y += l.Metrics.Height + 3;
+        }
+
+        bool pending = _ctl.Pending >= 0 && _ctl.Pending == _ctl.Selected;
+        string hint = pending ? "Pulsa Intro otra vez para ejecutar (Esc o escribir cancela)" : keys;
+        Brush(pending ? new Color4(1f, 0.62f, 0.04f, 1) : new Color4(1, 1, 1, 0.5f));
+        using (var l = _dw.CreateTextLayout(hint, _sub!, w, 36)) { l.WordWrapping = WordWrapping.Wrap; _ctx.DrawTextLayout(new Vector2(x, (float)(p.Y + p.H - l.Metrics.Height - 6)), l, _solid!); }
     }
 
     private void DrawItemIcon(SpotItem it, LpRect r)

@@ -53,7 +53,7 @@ public sealed partial class BarHost
             _lpIcons ??= CreateLauncherIcons();
             _spot ??= new SpotlightWindow(OnSpotlightCommand, _log) { Icons = SpotIcon };
             if (_catalogDirty || _catalog.UpdatedUtc is null || DateTime.UtcNow - _catalog.UpdatedUtc > CatalogMaxAge) RefreshCatalog();
-            _folders = FileSearch.Folders();
+            _folders = FileSearch.Folders(); LoadScripts();
             if (_cfg.SpotlightFiles) Task.Run(() => { var r = FileSearch.Recent(); Post(() => _recent = r); }); else _recent = [];
             var (mon, scale) = CursorMonitor();
             _spot.Show(mon, scale);
@@ -69,6 +69,9 @@ public sealed partial class BarHost
         switch (c.Kind)
         {
             case SpotCommandKind.Close: _spot.Hide(); return;
+            case SpotCommandKind.Open when c.Item is { Kind: SpotKind.Action or SpotKind.Tool or SpotKind.Command or SpotKind.Script } pro:
+                if (!OpenPro(pro)) _spot.Hide(); else _spot.Refresh();
+                return;
             case SpotCommandKind.Open when c.Item is { } it: _spot.Hide(); Open(it, reveal: false); return;
             case SpotCommandKind.Reveal when c.Item is { } it: _spot.Hide(); Open(it, reveal: true); return;
         }
@@ -80,9 +83,9 @@ public sealed partial class BarHost
     private void Search(string q)
     {
         if (_spot is null) return;
-        int gen = ++_spotGen;
+        int gen = ++_spotGen; _toolCts?.Cancel();   // a new search cancels a running ping/DNS
         var recent = _cfg.SpotlightFiles ? SpotlightEngine.MatchRecent(q, _recent) : [];
-        IReadOnlyList<SpotItem> Local(IReadOnlyList<SpotItem> files) => SpotlightEngine.Query(q, _catalog.Apps, _lprefs.Usage, _folders, files, p => Directory.Exists(p) || File.Exists(p));
+        IReadOnlyList<SpotItem> Local(IReadOnlyList<SpotItem> files) => FillLocalTools(SpotlightEngine.Query(q, _catalog.Apps, _lprefs.Usage, _folders, files, p => Directory.Exists(p) || File.Exists(p), IsRecording, _scripts));
         _spot.Controller.SetResults(Local(recent)); _spot.Refresh();
         if (!_cfg.SpotlightFiles || _searchBroken || q.Trim().Length < 3) return;
         Task.Run(async () =>
