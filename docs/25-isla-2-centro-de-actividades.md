@@ -38,3 +38,28 @@ extensiones, Spotlight Pro.
 **Datos de prueba en el CI:** se marcan como tales en la interfaz («Datos de prueba»). Siempre que es posible se usan caminos reales:
 archivos PNG reales en la carpeta de capturas, un archivo `.crdownload` real en Descargas, texto real en el portapapeles; solo la música
 (sin reproductor en el runner) llega como actividad de prueba por la API interna.
+
+
+## Resultado de la fase 1 (run 41480265034, commit 7d14f5b · NotchWin 02c2613)
+
+| Elemento | Estado | Evidencia |
+|---|---|---|
+| Modelo de actividades, almacén, API interna `notch.activity` | **Implementado y probado** (NotchWin.Core: 124 pruebas, 15 nuevas de actividades/IPC/letras) | CI Linux y Windows |
+| Pestañas En curso · Capturas · Portapapeles · Descargas · Historial | **Implementado**, navegación real con el ratón en el CI | capturas 21, 22, 25–29 |
+| Encabezado multimedia (portada, título, artista, progreso, línea de la letra, controles solo reales) | **Implementado**; en el CI solo con música **simulada** (sin reproductor: «Datos de prueba», sin controles) | 21, 25 |
+| Galería de capturas (carpeta de capturas de Windows, miniaturas pequeñas, abrir/copiar/mostrar/eliminar a la Papelera) | **Implementado y probado con archivos reales** | 26 |
+| Descargas como actividades (archivo .crdownload real) y en el historial al terminar | **Implementado y probado** | 23, 25, 28, 29 |
+| Captura guardada en la Isla compacta (miniatura) | **Implementado y probado** (archivo real nuevo en la carpeta) | 24 |
+| Portapapeles | Existente, reutilizado (texto real) | 27 |
+| Letras sincronizadas | **Sin cambios**; regla de la Isla compacta probada (pausa, reanudación, cambio de canción, interrupciones); línea actual en el encabezado (solo lectura) | pruebas `LyricsRegressionTests`; no verificable en el CI sin reproductor |
+| Grabación, motor de capturas, pausar/cancelar descargas | **Pendiente** (sin fuente o sin API universal) | — |
+
+Comparación con el mockup: misma organización (encabezado multimedia, barra de pestañas con la seleccionada como píldora con nombre, lista de
+actividades con progreso y acciones, galería 3×2 con «Hoy/Ayer hh:mm», historial). Diferencias:
+- la píldora de la pestaña seleccionada sale gris y no azul (el estilo del botón de WinUI se impone; pendiente);
+- con 12 pestañas activadas, las no seleccionadas son solo iconos (el mockup tiene 5 con nombre);
+- el encabezado no tiene botones anterior/pausa/siguiente con datos de prueba (a propósito);
+- la Isla compacta con música real muestra la pista o la letra como siempre (no se cambió para no tocar las letras).
+
+Problemas corregidos durante la auditoría: conflicto de nombres con System.Diagnostics (compilación), pestañas sin nombre, icono repetido,
+«…» en la descarga compacta, auditoría que capturaba la pestaña equivocada.

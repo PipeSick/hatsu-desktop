@@ -44,6 +44,13 @@ P0, P1, P3, P4 y P5 corregidos y verificados con capturas reales; P2 no es un de
 f567e5f, 4e3982b, fae2bb8/3d4673d, cefedf1 (más los de diagnóstico). Diagnóstico solo-CI disponible: WINMAC_MENU_DIAG (posiciones, apertura de paneles y quién toma el foco,
 barras de menús accesibles), «CIERRE INESPERADO» y «ERROR» en bar.log, crash.log de NotchWin.
 
+## WinMac 2.0 — fase 1 (docs/25)
+Centro de actividades en la Isla: modelo `NotchWin.Core/Activities` (almacén, API interna `notch.activity`, `CompactPolicy` con la regla de las
+letras intacta, `CaptureLibrary`), interfaz `NotchWindow.Activities.cs` + XAML (encabezado multimedia, pestañas En curso/Capturas/Historial),
+fuentes reales en `App.Activities.cs`. Auditoría visual secciones 20–29 en `Visual-Audit.ps1`. NotchWin fijado en 02c2613.
+**Letras sincronizadas: NO tocar** (petición expresa del usuario); el código de letras está en NotchWindow.Extras.cs y Core/Lyrics.
+Pendiente: píldora azul de la pestaña seleccionada (sale gris), motor de capturas (siguiente fase: WinMac Screenshot).
+
 ## Siguiente paso exacto
 1. Validación manual en el PC (lista en docs/24). P6–P8 son decisiones de diseño pendientes de que el usuario decida.
 2. Validación manual en el PC (docs/21 §5, docs/22, docs/23).
