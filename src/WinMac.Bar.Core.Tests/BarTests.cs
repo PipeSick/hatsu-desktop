@@ -247,7 +247,7 @@ public class YieldRegionsTests
     [Fact]
     public void Parse_caps_the_number_of_rects()
     {
-        var many = string.Join(",", Enumerable.Range(0, 50).Select(i => $"{{\"x\":{i},\"y\":0,\"w\":5,\"h\":5}}"));
+        var many = string.Join(",", Enumerable.Range(0, 100).Select(i => $"{{\"x\":{i},\"y\":0,\"w\":5,\"h\":5}}"));
         Assert.Equal(YieldRegions.MaxRects, YieldRegions.Parse(J("{\"rects\":[" + many + "]}")).Count);
     }
 
