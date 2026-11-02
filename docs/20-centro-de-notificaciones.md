@@ -9,7 +9,7 @@ Sustituye a la propuesta de [docs/19](19-notificaciones-propuesta.md). En el PC 
 |---|---|
 | Permiso (`GetAccessStatus`) | **Allowed** |
 | Lectura (`GetNotificationsAsync`) | **funciona sin paquete**: 20 notificaciones de 5 apps en 281 ms, todas con texto |
-| Iconos solo con `AppDisplayInfo.GetLogo` | 4 de 20: las apps Win32 no dan logo. Desde ese día se recurre también al icono del Shell para su AUMID (`shell:AppsFolder\AUMID`), sin medir aún |
+| Iconos | solo con `AppDisplayInfo.GetLogo`: 4 de 20 (las apps Win32 no dan logo). Con el icono del Shell para su AUMID como respaldo (`44741f6`): **19 de 20**, lectura en 414 ms |
 | Evento `NotificationChanged` | **no disponible** para la app sin paquete: `COMException 0x80070490` (elemento no encontrado). El panel relee cada 4 s **solo mientras está abierto** |
 
 ## Capturas (dibujo real, datos de MUESTRA)
