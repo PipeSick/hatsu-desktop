@@ -49,8 +49,13 @@ internal sealed class PopoverWindow : IDisposable
         _ctl.SetMaxHeight(MaxHeightDip(monitor, barBottomPx, scale)); _monitor = monitor; _barBottom = barBottomPx; _ctl.SetModel(model); ResizeFor(model);
         var (x, y) = PopoverPlacement.Place(anchorXpx, barBottomPx, _wPx, _hPx, monitor, _scale, alignRight); Position = (x, y);   // siempre entero dentro del monitor de la barra pulsada
         BarNative.SetWindowPos(_hwnd, new IntPtr(-1), x, y, _wPx, _hPx, 0x0040u /* SHOWWINDOW */);
-        _open = true; _dirty = true; BarNative.SetForegroundWindow(_hwnd); Render();
+        _open = true; _dirty = true; _shownAt = Environment.TickCount64; bool fgOk = BarNative.SetForegroundWindow(_hwnd); Render();
+        FocusDiag?.Invoke($"[panel] {model.Kind} abierto en {x},{y} ({_wPx}x{_hPx}); primer plano concedido: {fgOk}");
     }
+
+    /// <summary>Diagnóstico (CI, WINMAC_MENU_DIAG): por qué se abre y se cierra un panel. null = sin registro.</summary>
+    internal Action<string>? FocusDiag { get; set; }
+    private long _shownAt;
 
     // ───────────────────────────── modo lateral (Centro de Notificaciones)
     private bool _side, _glass; private IntPtr _prevForeground; private (long Start, bool Opening)? _anim;
@@ -206,7 +211,9 @@ internal sealed class PopoverWindow : IDisposable
                 case WM_LBUTTONDOWN: { BarNative.SetCapture(_hwnd); var ev = _ctl.PointerDown(X(l), Y(l)); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero; }
                 case WM_LBUTTONUP: { BarNative.ReleaseCapture(); var ev = _ctl.PointerUp(X(l), Y(l)); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero; }
                 case 0x205 /* WM_RBUTTONUP */: { var ev = _ctl.RightClick(X(l), Y(l)); if (ev is not null) _onEvent(ev); return IntPtr.Zero; }   // menú de una app en segundo plano
-                case WM_ACTIVATE when ((long)w & 0xFFFF) == 0 && _open && !KeepOpen: Hide(); return IntPtr.Zero;   // perdió el foco: como un menú
+                case WM_ACTIVATE when ((long)w & 0xFFFF) == 0 && _open && !KeepOpen:   // perdió el foco: como un menú
+                    if (FocusDiag is not null) { var fg = BarNative.GetForegroundWindow(); var sb = new System.Text.StringBuilder(64); BarNative.GetClassNameW(l, sb, 64); BarNative.GetWindowThreadProcessId(l, out uint lp); FocusDiag($"[panel] se cierra al perder el foco: lo toma {sb} (pid {lp}) tras {(Environment.TickCount64 - _shownAt)} ms"); }
+                    Hide(); return IntPtr.Zero;
                 case WM_KEYDOWN when (int)w == 0x1B: Hide(); return IntPtr.Zero;
                 case 0x2E0 /* WM_DPICHANGED */: return IntPtr.Zero;   // el tamaño y el escalado del panel los fija Show() según el monitor de destino: Windows no debe redimensionarlo por su cuenta al moverlo entre monitores
             }

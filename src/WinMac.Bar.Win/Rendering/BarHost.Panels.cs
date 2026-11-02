@@ -392,6 +392,7 @@ public sealed partial class BarHost : IPanelUi
 
     private void ShowAppMenu(BarWindow src, int index, BarItemFrame? item)
     {
+        if (MenuDiagOn) _log($"[menús] clic en el menú {index} (hay {_appMenus.Tops.Count}, Win32 {_appMenuTops.Count}, ventana {(_appMenuWindow == IntPtr.Zero ? "ninguna" : "sí")}, panel abierto {_popover?.IsOpen == true} {_pkind})");
         if (index < 0 || index >= _appMenus.Tops.Count || _appMenuWindow == IntPtr.Zero) return;
         if (_popover is { IsOpen: true } && _pkind == PanelKind.AppMenu && _amTopIndex == index) { _popover.Hide(); return; }   // segundo clic: cerrar
         _popover?.Hide();
@@ -406,6 +407,7 @@ public sealed partial class BarHost : IPanelUi
         var tree = WinMac.Bar.Win.Menus.AppMenuReader.ReadWin32(app, _appMenuTops[index].SubMenu, _appMenuTops[index].Index, top.Text);
         if (tree is null)
         {
+            if (MenuDiagOn) _log($"[menús] «{top.Text}»: árbol ilegible → menú nativo de la app");
             // La app dibuja sus menús o no respondió a tiempo: se usa SU menú nativo (el mismo de su ventana), que sí sabe dibujarse.
             IntPtr prev = BarNative.GetForegroundWindow(); _modal = true;
             try { var r = AppMenuService.Show(src.Hwnd, app, _appMenuTops[index], x, y); if (!r.IsOk) _log("[bar] menú de la app: " + r.Message); }
@@ -415,6 +417,7 @@ public sealed partial class BarHost : IPanelUi
 
         _amTop = tree; _amPath = []; _amTopIndex = index;
         _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
+        if (MenuDiagOn) { _popover.FocusDiag = _log; _log($"[menús] abrir «{top.Text}»: árbol con {tree.Children?.Count ?? 0} entradas"); }
         _popSource = src; _pkind = PanelKind.AppMenu;
         var model = WinMac.Bar.Menus.AppMenuPanel.Build(tree, _amPath);
         _popover.Show(model, x + (int)Math.Round(model.Width * src.Scale / 2), y, src.MonitorRect, src.Scale, _theme, alignRight: false);
