@@ -25,15 +25,14 @@ nunca tocar resolución, monitores, red, audio ni reiniciar el PC del usuario; d
 | 1. Isla: volumen, brillo, notificaciones, prioridades | sí | sí (NotchWin CI + Build-Local) | 18 (NotchWin) + 7 (WinMac) | run de 4d8c7d3: integración en verde (barra real → host → Isla real con secuencia de muestra) | teclas de volumen/brillo, notificación real, aspecto |
 | 2. Launchpad + tecla Windows | sí | sí | 19 | 11/11 (índice real de 126 apps, abrir, «notepad»+Intro, Esc) | tecla Windows física, varias pantallas |
 | 3. Spotlight | sí | sí | 22 | 6/6 (12*12 → 144, notepad, Esc). Windows Search NO disponible en el runner (0x80041820): solo recientes | atajo físico, Windows Search con archivos reales |
-| 4. Global Menu (opción A) | sí | sí | 5 | la prueba falló por un error del TEST (clave «appMenus» en vez de «AppMenus» en bar.json); corregido en el último commit, verificar | clic en Bloc de notas, Paint, VS Code |
+| 4. Global Menu (opción A) | sí | sí | 5 | run de 8b65a09 en verde (barra real descubre los menús del Bloc de notas) | clic en Bloc de notas, Paint, VS Code |
 
 Commits principales: NotchWin 14c374b, 58d14d9, e810ec0, 5bb75b9, 7b87512; WinMac c529e5c, 9a50ec4, 4a0b889, 21c9540, c4ad5ec, 1cca724, 4d8c7d3 y el de este traspaso.
 
 Causa de los cierres de la Isla en el CI: `AppWindow.IsShownInSwitchers = false` lanza NotImplementedException en Windows Server 2025 (código ANTERIOR a esta sesión); ahora se tolera (NotchWin 7b87512). NotchWin escribe `%LOCALAPPDATA%\NotchWin\crash.log` si se cierra.
 
 ## Siguiente paso exacto
-1. Comprobar el run del último commit: job «captura real de los iconos de la bandeja» → línea «Global Menu: los menús del Bloc de notas…» en PASS.
-   Si falla, mirar las líneas `[menús]` del bar.log impresas en ese job (Win32 vs Automation).
+1. CI completo en verde en 8b65a09 (run 41399566962: los 5 jobs). Nada pendiente en el CI.
 2. Validación manual en el PC (docs/21 §5, docs/22, docs/23).
 3. Mejoras posibles: submenús con estilo propio para apps UI Automation; Win11 «No molestar» (sin API documentada).
 

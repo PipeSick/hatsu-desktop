@@ -1,6 +1,6 @@
 # Estado de la sesión (traspaso para la siguiente conversación)
 
-Actualizado 2026-11-02. Léelo primero si retomas el trabajo tras un `/clear`.
+Actualizado 2026-11-02. Léelo primero si retomas el trabajo tras un `/clear`. **El estado más reciente (Isla informativa, Launchpad, Spotlight, Global Menu) está en `docs/CLAUDE_HANDOFF.md`.**
 
 ## Repos y ramas
 - **WinMac:** `PipeSick/win11-macos`, rama `claude/relaxed-turing-cijzko`.
