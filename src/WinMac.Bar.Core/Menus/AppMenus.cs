@@ -23,6 +23,18 @@ public sealed record AppMenuEntry(string Text, int Command, bool Enabled = true,
     }
 }
 
+/// <summary>
+/// Qué barra de menús accesible (UI Automation) es la de la APP. Windows expone también el menú de sistema de la ventana (el de la barra de título: Restaurar, Mover,
+/// Cerrar…) como una <c>MenuBar</c> con el identificador estándar <c>SystemMenuBar</c>; no es un menú de la app y no debe aparecer en la barra (se veía «Terminal  System»).
+/// Solo se descarta ese identificador: cualquier otra barra de menús se conserva.
+/// </summary>
+public static class AppMenuFilter
+{
+    public const string SystemMenuBarId = "SystemMenuBar";
+
+    public static bool IsAppMenuBar(string? automationId) => !string.Equals(automationId?.Trim(), SystemMenuBarId, StringComparison.OrdinalIgnoreCase);
+}
+
 /// <summary>Menús de la app activa: su nombre, de dónde salen y los de nivel superior (con su árbol si se pudo leer).</summary>
 public sealed record AppMenus(AppMenuSource Source, IReadOnlyList<AppMenuEntry> Tops)
 {
