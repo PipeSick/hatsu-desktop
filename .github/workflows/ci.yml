@@ -117,6 +117,31 @@ jobs:
         shell: pwsh
         run: ./tools/ci/Write-Summary.ps1 -SmokeDir smoke -SmokeUrl "${{ steps.up_smoke.outputs.artifact-url }}" -SheetUrl "${{ steps.up_sheet.outputs.artifact-url }}" -BinUrl "${{ needs.windows-build.outputs.bin_url }}" -Sha "${{ github.sha }}"
 
+  windows-tray-capture:
+    name: Windows · captura real de los iconos de la bandeja en la barra
+    needs: windows-build
+    runs-on: windows-latest
+    # Prueba visual aislada: barra REAL + tres procesos de prueba con Shell_NotifyIcon + captura de la pantalla real. Informativa: no bloquea el resto del CI.
+    continue-on-error: true
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: winmac-binarios-${{ github.sha }}
+          path: ci-publish
+      - name: Barra real con tres iconos de bandeja y captura de pantalla
+        shell: pwsh
+        run: ./tools/ci/Test-TrayCapture.ps1 -PublishDir ci-publish -OutDir tray-capture
+      - name: Subir la captura (winmac-tray-icons-real.png) y el informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmac-tray-icons-real-${{ github.sha }}
+          path: tray-capture
+          retention-days: 14
+          if-no-files-found: warn
+
   windows-integracion:
     name: Windows · integración con NotchWin (Build-Local, WinUI 3, arranque bajo el host)
     runs-on: windows-latest

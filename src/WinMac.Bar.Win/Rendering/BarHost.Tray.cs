@@ -19,10 +19,21 @@ public sealed partial class BarHost
         try
         {
             _trayHost = new TrayHost(_log);
-            _trayHost.Message += m => Post(() => { if (_trayStore.Apply(m)) SetStateAll(); });   // el estado solo se toca en el hilo de la barra
+            _trayHost.Message += m => Post(() => { if (_trayStore.Apply(m)) { SetStateAll(); TrayDiag(); } });   // el estado solo se toca en el hilo de la barra
             _trayHost.Start();
         }
         catch (Exception e) { _log("[bandeja] no arrancó: " + e.GetType().Name + ": " + e.Message); _trayHost = null; }
+    }
+
+    /// <summary>
+    /// Solo con WINMAC_TRAY_DIAG=1 (la prueba visual del CI): anota en bar.log los iconos visibles con su texto, para comprobar el estado interno de ESTA barra.
+    /// Apagado por defecto: en uso normal no se registra el texto de los iconos de las apps.
+    /// </summary>
+    private static readonly bool TrayDiagOn = Environment.GetEnvironmentVariable("WINMAC_TRAY_DIAG") == "1";
+    private void TrayDiag()
+    {
+        if (!TrayDiagOn) return;
+        var v = _trayStore.Visible; _log($"[bandeja] visibles ({v.Count}): " + string.Join(" | ", v.Select(i => i.Tip)));
     }
 
     private void StopTray()
