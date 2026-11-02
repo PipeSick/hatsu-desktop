@@ -106,6 +106,13 @@ QuitHost $r
 Check 'Cierre ordenado: el host termina' $r.Proc.HasExited
 Check 'Cierre ordenado: no queda ningún proceso (host, Barra, Dock, Isla)' (WaitFor { (Alive) -eq 0 } 15) ("quedan: $(Alive)")
 if ($script:fails -gt 0 -or -not $notchRunning) { Get-Content $r.Log -Tail 40 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  host.log> $_" } }
+# Diagnóstico de un cierre de la Isla: su propio registro de excepciones y los eventos de Windows (.NET Runtime / Application Error) de NotchWin.App.
+$crash = Join-Path $env:LOCALAPPDATA 'NotchWin\crash.log'
+if (Test-Path $crash) { Get-Content $crash -TotalCount 60 | ForEach-Object { Write-Host "  crash.log> $_" } }
+if (LogHas $r.Log '[notch] Crashed') {
+  Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = '.NET Runtime', 'Application Error'; StartTime = (Get-Date).AddMinutes(-15) } -MaxEvents 3 -ErrorAction SilentlyContinue |
+    ForEach-Object { $m = $_.Message; if ($m.Length -gt 2500) { $m = $m.Substring(0, 2500) }; Write-Host "  evento $($_.ProviderName)> $m" }
+}
 Cleanup
 
 # 3b. Isla «no instalada» (ejecutable inexistente): WinMac sigue y lo dice
