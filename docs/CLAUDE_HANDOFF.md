@@ -35,12 +35,12 @@ Causa de los cierres de la Isla en el CI: `AppWindow.IsShownInSwitchers = false`
 Capturas reales del runner con WinMac completo (`tools/ci/Visual-Audit.ps1`, artefacto `auditoria-visual-<sha>`; las PNG también van en el registro como
 `AUDIT_PNG|nombre|base64` y se pueden decodificar descargando el registro del job con `curl -sL https://api.github.com/repos/PipeSick/win11-macos/actions/jobs/<id>/logs`).
 Correcto a ojo: Isla (cerrada, volumen, silencio, brillo, notificación, regreso, expandida), Launchpad (fondo, cuadrícula, búsqueda), Spotlight (todos los estados), menús en la barra.
-Problemas (sin corregir, a decidir con el usuario): **P1 el desplegable de Global Menu no se abre**; P2 la Isla expandida no se cerró con ratón simulado; P3 iconos de Launchpad
+Problemas (sin corregir, a decidir con el usuario): **P0 la píldora de la Isla puede quedarse atascada (temporizador que vence antes de hora; CI intermitente en rojo por esto)**; **P1 el desplegable de Global Menu no se abre**; P2 la Isla expandida no se cerró con ratón simulado; P3 iconos de Launchpad
 lentos o ausentes; P4 «System» de Windows Terminal como menú; P5 coincidencias flojas en Spotlight; P6–P8 decisiones de diseño (Isla negra con barra clara, Launchpad tapa la barra,
 Dock sobre la barra de tareas).
 
 ## Siguiente paso exacto
-1. Decidir con el usuario qué corregir de la auditoría visual (docs/24); empezar por P1 (Global Menu) y P3 (iconos de Launchpad).
+1. Decidir con el usuario qué corregir de la auditoría visual (docs/24); empezar por P0 (Isla atascada, arreglo de una línea descrito en docs/24), P1 (Global Menu) y P3 (iconos de Launchpad).
 2. Validación manual en el PC (docs/21 §5, docs/22, docs/23).
 3. Mejoras posibles: submenús con estilo propio para apps UI Automation; Win11 «No molestar» (sin API documentada).
 

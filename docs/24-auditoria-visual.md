@@ -26,6 +26,12 @@ con WinMac completo (host + Barra + Dock + Isla de `dist/WinMac`). Revisadas una
 
 ## Problemas detectados (por gravedad)
 
+- **P0 · Isla: la píldora puede quedarse atascada en una notificación (funcional, intermitente).** En el run 41458868288 (commit 840535c) la notificación reanudada tras la
+  interrupción del volumen nunca terminó: no llegó «pill none» y falló la comprobación «al terminar vuelve al contenido habitual» (en los runs anteriores pasó).
+  Causa probable (leyendo el código): el temporizador de la Isla (`DispatcherQueueTimer`) puede dispararse unos milisegundos antes de la hora; `PillArbiter.Tick()` ve que aún no
+  ha vencido y no hace nada, y nadie vuelve a programar el temporizador. Arreglo propuesto (una línea, sin cambiar el comportamiento): en el `Tick` del temporizador de
+  `NotchWindow.Pill.cs`, si después de `_pill.Tick()` sigue habiendo un elemento, volver a llamar a `ScheduleTick()`. **No aplicado** (auditoría sin correcciones).
+
 - **P1 · Global Menu: el desplegable no se abre (funcional, grave).** Con el Bloc de notas activo, la barra muestra sus 5 menús Win32 y la etiqueta pulsada queda resaltada,
   pero no aparece ningún desplegable (ni el de WinMac ni el nativo) y no hay error en `bar.log`. Se repite en los 5 menús, también con la Isla ya cerrada (09-menu-5-Help).
   La prueba anterior del CI solo comprobaba que se descubrían los menús, no que se abrieran. Hipótesis a investigar: el panel se abre y se cierra en el acto
