@@ -32,6 +32,7 @@ public sealed partial class BarHost
 
     private void StartLauncher()
     {
+        InitMenuDiag();
         _lprefsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "launcher.json");
         _lprefs = LauncherPrefs.Load(_lprefsPath);
         try { _lpEvent = new EventWaitHandle(false, EventResetMode.AutoReset, LaunchpadEventName); } catch (Exception e) { _log("[launchpad] sin evento de apertura: " + e.Message); }

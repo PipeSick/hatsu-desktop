@@ -81,6 +81,9 @@ internal static class AppMenuReader
     private const int UIA_ControlTypePropertyId = 30003, UIA_MenuBarControlTypeId = 50010, UIA_MenuItemControlTypeId = 50011, UIA_ExpandCollapsePatternId = 10005, UIA_InvokePatternId = 10000;
     private const int TreeScopeChildren = 2, TreeScopeDescendants = 4;
 
+    /// <summary>Diagnóstico (CI, WINMAC_MENU_DIAG): qué barras de menús accesibles tiene la ventana.</summary>
+    public static Action<string>? Diag { get; set; }
+
     /// <summary>Nombres de los menús de nivel superior de la barra de menús accesible de la ventana. Vacío si no tiene. Se llama fuera del hilo de la barra (puede tardar).</summary>
     public static IReadOnlyList<string> ReadAutomation(IntPtr hwnd) => WithMenuItems(hwnd, items => items.Select(i => i.Name).ToList()) ?? [];
 
@@ -109,7 +112,12 @@ internal static class AppMenuReader
             if (root.FindAll(TreeScopeDescendants, barCond, out var bars) != 0 || bars is null) return default;
             bars.get_Length(out int nb); IUIAutomationElement? bar = null;
             for (int b = 0; b < nb && b < 8 && bar is null; b++)   // la primera barra de menús que sea de la app (no el menú de sistema de la barra de título)
-                if (bars.GetElement(b, out var cand) == 0 && cand is not null && cand.get_CurrentAutomationId(out var aid) == 0 && WinMac.Bar.Menus.AppMenuFilter.IsAppMenuBar(aid)) bar = cand;
+            {
+                if (bars.GetElement(b, out var cand) != 0 || cand is null) continue;
+                cand.get_CurrentAutomationId(out var aid); cand.get_CurrentName(out var bn); cand.get_CurrentClassName(out var bc);
+                Diag?.Invoke($"[menús] barra accesible {b + 1}/{nb}: id «{aid}», nombre «{bn}», clase «{bc}»");
+                if (WinMac.Bar.Menus.AppMenuFilter.IsAppMenuBar(aid)) bar = cand;
+            }
             if (bar is null) return default;
             if (uia.CreatePropertyCondition(UIA_ControlTypePropertyId, UIA_MenuItemControlTypeId, out var itemCond) != 0) return default;
             if (bar.FindAll(TreeScopeChildren, itemCond, out var arr) != 0 || arr is null) return default;
@@ -150,6 +158,7 @@ internal static class AppMenuReader
         [PreserveSig] int get_CurrentName([MarshalAs(UnmanagedType.BStr)] out string? name);
         void _CurrentAcceleratorKey(); void _CurrentAccessKey(); void _CurrentHasKeyboardFocus(); void _CurrentIsKeyboardFocusable(); void _CurrentIsEnabled();
         [PreserveSig] int get_CurrentAutomationId([MarshalAs(UnmanagedType.BStr)] out string? id);
+        [PreserveSig] int get_CurrentClassName([MarshalAs(UnmanagedType.BStr)] out string? cls);
     }
 
     [ComImport, Guid("14314595-b4bc-4055-95f2-58f2e42c9855"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

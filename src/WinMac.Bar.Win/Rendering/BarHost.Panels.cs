@@ -428,6 +428,7 @@ public sealed partial class BarHost : IPanelUi
     /// con el ratón como un usuario. Sin la variable no se registra nada.
     /// </summary>
     private static readonly bool MenuDiagOn = Environment.GetEnvironmentVariable("WINMAC_MENU_DIAG") == "1";
+    private void InitMenuDiag() { if (MenuDiagOn) WinMac.Bar.Win.Menus.AppMenuReader.Diag = _log; }
     private string? _menuDiagLast; private DateTime _menuDiagAt;
     private void MenuDiag()
     {
