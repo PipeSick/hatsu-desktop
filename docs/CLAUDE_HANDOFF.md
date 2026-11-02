@@ -51,6 +51,12 @@ fuentes reales en `App.Activities.cs`. Auditoría visual secciones 20–29 en `V
 **Letras sincronizadas: NO tocar** (petición expresa del usuario); el código de letras está en NotchWindow.Extras.cs y Core/Lyrics.
 Pendiente: píldora azul de la pestaña seleccionada (sale gris), motor de capturas (siguiente fase: WinMac Screenshot).
 
+## WinMac 2.0 completo — plan en curso (petición del usuario, orden de ejecución sin pausas)
+1. Correcciones de la Isla (pestaña azul, navegación adaptable)  2. WinMac Screenshot (región/ventana/pantalla/monitor/todos, galería, editor)
+3. Multimedia y actividades reales  4. Grabación  5. Spotlight Pro  6. Portapapeles avanzado  7. Workspace Manager  8. Extensiones
+9. Configuración unificada  10. Refinamiento visual  11. Auditoría integral  12. Optimización  13. Distribución (sin publicar nada).
+Prioridad absoluta: NO tocar las letras sincronizadas (NotchWindow.Extras.cs, Core/Lyrics). Estado de cada etapa: ver la tabla de abajo (se actualiza).
+
 ## Siguiente paso exacto
 1. Validación manual en el PC (lista en docs/24). P6–P8 son decisiones de diseño pendientes de que el usuario decida.
 2. Validación manual en el PC (docs/21 §5, docs/22, docs/23).
