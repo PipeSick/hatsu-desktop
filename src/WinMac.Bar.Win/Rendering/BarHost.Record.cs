@@ -28,7 +28,8 @@ public sealed partial class BarHost
     {
         EndCapture();
         if (_recorder is not null || _recStarting) return;
-        _recStarting = true;
+        _recStarting = true; var t0 = System.Diagnostics.Stopwatch.StartNew();
+        _log($"[grabación] preparando {area.W}x{area.H}");
         var mon = CaptureGeometry.MonitorAt(monitors, area.X + area.W / 2, area.Y + area.H / 2) ?? monitors.FirstOrDefault(m => m.Primary) ?? new CaptureMonitor(area, 1, true);
         Task.Run(async () =>
         {
@@ -40,7 +41,7 @@ public sealed partial class BarHost
                     _recStarting = false; _recorder = rec;
                     try { _recIndicator = new RecordingIndicator(() => Post(() => StopRecording("indicador")), _log); _recIndicator.Show(mon); }
                     catch (Exception e) { _log("[grabación] sin indicador visible, se detiene: " + e.Message); StopRecording("sin indicador"); return; }   // never record without a visible indicator
-                    _log($"[grabación] iniciada: {Path.GetFileName(rec.Path)} ({rec.Rect.W}x{rec.Rect.H}, {ScreenRecorder.Fps} fps, sin audio)");
+                    _log($"[grabación] iniciada: {Path.GetFileName(rec.Path)} ({rec.Rect.W}x{rec.Rect.H}, {ScreenRecorder.Fps} fps, sin audio) en {t0.ElapsedMilliseconds} ms");
                     if (MenuDiagOn) _log($"[grabación] diag indicador@{_recIndicator.Bounds.X + _recIndicator.Bounds.W / 2},{_recIndicator.Bounds.Y + _recIndicator.Bounds.H / 2}");
                     RecordingActivity();
                 });

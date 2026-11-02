@@ -261,7 +261,7 @@ Note ''; Note '### Grabación de pantalla'
 if (WaitFor { [Au]::Visible('WinMacCapture') } 8) {
   Start-Sleep -Milliseconds 500; Shot '40-grabacion-elegir' 'Grabación: la misma superposición, con «Grabar pantalla» (nada se graba hasta hacer clic)'
   [Au]::Click(500, 300)
-  $recOk = WaitFor { (LogHas $barLog '[grabación] iniciada') -or (LogHas $barLog '[grabación] no se pudo iniciar') } 10
+  $recOk = WaitFor { (LogHas $barLog '[grabación] iniciada') -or (LogHas $barLog '[grabación] no se pudo iniciar') } 30
   if (LogHas $barLog '[grabación] iniciada') {
     Start-Sleep -Milliseconds 2500; Shot '41-grabando-indicador' 'Grabando: indicador rojo con el tiempo (excluido del vídeo) y la actividad en la Isla'
     Expand; $null = ClickTab 'activity'; Shot '41b-isla-grabando' 'Centro de actividades: «Grabando la pantalla» con el tiempo transcurrido' ($cx - 330) $sc.Y 660 560; Collapse
@@ -275,7 +275,7 @@ if (WaitFor { [Au]::Visible('WinMacCapture') } 8) {
     $pm = [regex]::Match(((Select-String -Path $barLog -SimpleMatch '[grabación] muestra ' | Select-Object -Last 1).Line), 'muestra (.+)$')
     if ($pm.Success -and (Test-Path $pm.Groups[1].Value)) { try { $img = [System.Drawing.Image]::FromFile($pm.Groups[1].Value); $img.Save((Join-Path $OutDir '42-grabacion-fotograma.png'), [System.Drawing.Imaging.ImageFormat]::Png); $img.Dispose(); Note '- **42-grabacion-fotograma.png**: fotograma sacado del MP4 grabado (comprueba orientación y contenido)' } catch { Note "  - no se pudo convertir el fotograma: $_" } }
     Expand; $null = ClickTab 'history'; Shot '43-historial-grabacion' 'Historial: la grabación terminada con su archivo' ($cx - 330) $sc.Y 660 560; Collapse
-  } else { Note '  - la grabación no se pudo iniciar en este equipo (ver registro)' }
+  } else { Note '  - la grabación no se pudo iniciar en este equipo (ver registro)'; & $bar --record stop | Out-Null }   # nunca dejarla grabando
 } else { Note '- **40-grabacion**: la superposición no apareció' }
 if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[grabación]' | Where-Object { $_.Line -notmatch 'diag|muestra' } | Select-Object -Last 8 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
 

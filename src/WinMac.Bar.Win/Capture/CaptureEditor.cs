@@ -88,7 +88,7 @@ internal sealed class CaptureEditor : IDisposable
         unsafe { fixed (byte* p = _px) _image = _ctx.CreateBitmap(new SizeI(_doc.Width, _doc.Height), (IntPtr)p, (uint)(_doc.Width * 4), new BitmapProperties1(new Vortice.DCommon.PixelFormat(Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96, 96)); }
         _strokeWidth = EditDocument.DefaultWidth(_doc.Width, _doc.Height);
         BarNative.ShowWindow(_hwnd, 5); BarNative.SetForegroundWindow(_hwnd);
-        Render();
+        Render(); Render();   // the first frame decides one or two toolbar rows; the second draws (and records the buttons) with that layout
     }
 
     private float _strokeWidth = 4;

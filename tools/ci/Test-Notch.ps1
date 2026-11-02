@@ -106,6 +106,11 @@ QuitHost $r
 Check 'Cierre ordenado: el host termina' $r.Proc.HasExited
 Check 'Cierre ordenado: no queda ningún proceso (host, Barra, Dock, Isla)' (WaitFor { (Alive) -eq 0 } 15) ("quedan: $(Alive)")
 if ($script:fails -gt 0 -or -not $notchRunning) { Get-Content $r.Log -Tail 40 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  host.log> $_" } }
+if ($script:fails -gt 0) {
+  # Diagnóstico de bloqueos («sin latido»): las últimas líneas de la Barra y de la Isla (sin contenido del usuario)
+  $bl = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'; if (Test-Path $bl) { Get-Content $bl -Tail 40 | ForEach-Object { Write-Host "  bar.log> $_" } }
+  $cl = Join-Path $env:LOCALAPPDATA 'NotchWin\crash.log'; if (Test-Path $cl) { Get-Content $cl -Tail 30 | ForEach-Object { Write-Host "  notch-crash> $_" } }
+}
 # Diagnóstico de un cierre de la Isla: su propio registro de excepciones y los eventos de Windows (.NET Runtime / Application Error) de NotchWin.App.
 $crash = Join-Path $env:LOCALAPPDATA 'NotchWin\crash.log'
 if (Test-Path $crash) { Get-Content $crash -TotalCount 60 | ForEach-Object { Write-Host "  crash.log> $_" } }

@@ -27,7 +27,8 @@ $z = [IO.Compression.ZipFile]::Open($zip, 'Create')
 try {
   foreach ($f in (Get-ChildItem $DistDir -Recurse -File | Sort-Object FullName)) {
     $rel = 'WinMac/' + $f.FullName.Substring((Resolve-Path $DistDir).Path.Length + 1).Replace('\', '/')
-    $e = [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($z, $f.FullName, $rel, [IO.Compression.CompressionLevel]::Optimal); $e.LastWriteTime = [DateTimeOffset]$when
+    $e = $z.CreateEntry($rel, [IO.Compression.CompressionLevel]::Optimal); $e.LastWriteTime = [DateTimeOffset]$when   # la fecha antes de escribir (luego no se puede)
+    $out = $e.Open(); $in = [IO.File]::OpenRead($f.FullName); try { $in.CopyTo($out) } finally { $in.Dispose(); $out.Dispose() }
   }
 } finally { $z.Dispose() }
 $h = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
