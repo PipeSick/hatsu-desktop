@@ -51,6 +51,8 @@ public static class Au {
     var e = FindWindowEx(main, IntPtr.Zero, "Edit", null); if (e == IntPtr.Zero) e = FindWindowEx(main, IntPtr.Zero, "RichEditD2DPT", null); if (e == IntPtr.Zero) return "(sin control de texto)";
     int n = (int)SendMessage(e, 0x0E, IntPtr.Zero, IntPtr.Zero); var sb = new StringBuilder(n + 1); SendMessage(e, 0x0D, (IntPtr)(n + 1), sb); return sb.ToString();
   }
+  public static void Down() { mouse_event(2, 0, 0, 0, IntPtr.Zero); }
+  public static void Up() { mouse_event(4, 0, 0, 0, IntPtr.Zero); }
   public static void Click(int x, int y) { SetCursorPos(x, y); System.Threading.Thread.Sleep(120); mouse_event(2, 0, 0, 0, IntPtr.Zero); mouse_event(4, 0, 0, 0, IntPtr.Zero); }
   public static bool Visible(string cls) { var h = FindWindow(cls, null); return h != IntPtr.Zero && IsWindowVisible(h); }
   public static string RectOf(string cls) { var h = FindWindow(cls, null); if (h == IntPtr.Zero) return "(no existe)"; RC r; GetWindowRect(h, out r); return r.L + "," + r.T + " " + (r.R - r.L) + "x" + (r.B - r.T); }
@@ -175,6 +177,35 @@ if (ClickTab 'history') { Shot '29-centro-historial' 'Sección «Historial»: la
 if (Test-Path $pillLog) { Note "  - pestañas: $(TabsLine)" }
 Collapse
 Remove-Item (Join-Path $dlDir 'Descarga de prueba.iso*') -ErrorAction SilentlyContinue
+
+# ── 1c. WinMac Screenshot (docs/26): overlay REAL sobre la pantalla congelada; región arrastrando con el ratón, ventana, pantalla completa
+Note ''; Note '### WinMac Screenshot'
+$capBefore = @(Get-ChildItem $shotsDir -Filter 'Captura *' -ErrorAction SilentlyContinue).Count
+function Saved([int]$n) { WaitFor { (Select-String -Path $barLog -SimpleMatch '[captura] guardada' -ErrorAction SilentlyContinue).Count -ge $n } 8 }
+$np2 = Start-Process notepad.exe -PassThru; Start-Sleep -Milliseconds 1500
+& $bar --capture region | Out-Null
+if (WaitFor { [Au]::Visible('WinMacCapture') } 8) {
+  Start-Sleep -Milliseconds 500; [Au]::Glide(260, 220, 5); Start-Sleep -Milliseconds 200; [Au]::Down(); [Au]::Glide(700, 520, 20); Start-Sleep -Milliseconds 400
+  Shot '30-captura-region-seleccionando' 'Captura de región: pantalla congelada y atenuada, selección con su tamaño en píxeles y la barra de modos'
+  [Au]::Up(); Note "  - región guardada: $(Saved 1)"
+} else { Note '- **30-captura-region**: la ventana de captura no apareció' }
+Start-Sleep -Milliseconds 800
+& $bar --capture window | Out-Null
+if (WaitFor { [Au]::Visible('WinMacCapture') } 8) {
+  $nr = if ($np2.MainWindowHandle -ne [IntPtr]::Zero) { [Au]::RectOf('Notepad') } else { '' }
+  [Au]::Glide(400, 300, 10); Start-Sleep -Milliseconds 500
+  Shot '31-captura-ventana' 'Captura de ventana: la ventana bajo el cursor resaltada con su título y tamaño'
+  [Au]::Click(400, 300); Note "  - ventana guardada: $(Saved 2)"
+}
+Start-Sleep -Milliseconds 800
+& $bar --capture screen | Out-Null
+if (WaitFor { [Au]::Visible('WinMacCapture') } 8) { Start-Sleep -Milliseconds 400; Shot '32-captura-pantalla' 'Captura de pantalla completa (modo monitor): todo el monitor seleccionado'; [Au]::Click(500, 300); Note "  - pantalla guardada: $(Saved 3)" }
+Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 1500
+$capAfter = @(Get-ChildItem $shotsDir -Filter 'Captura *' -ErrorAction SilentlyContinue)
+Note "  - archivos nuevos en la carpeta de capturas: $($capAfter.Count - $capBefore) ($((($capAfter | ForEach-Object { $_.Name + ' ' + $_.Length + ' B' }) -join '; ')))"
+if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[captura]' | Select-Object -Last 6 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
+Expand; $null = ClickTab 'captures'; Shot '33-galeria-tras-capturar' 'Galería de la Isla con las capturas recién hechas por WinMac' ($cx - 330) $sc.Y 660 560; Collapse
 if (Test-Path $pillLog) { Note ''; Note '### Registro de la Isla (lo que mostró y el tamaño pedido a su ventana, DIP)'; Note '```'; Get-Content $pillLog | ForEach-Object { Note $_ }; Note '```' }
 
 # ── 2. Global Menu con el Bloc de notas real
