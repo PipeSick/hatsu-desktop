@@ -154,8 +154,9 @@ public sealed partial class BarHost
     private Apps.IconService CreateLauncherIcons()
     {
         var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "icon-cache-launcher");
-        // 4 hilos: cada carga usa su propio hilo STA del Shell (no bloquea la interfaz); con 2 la primera página tardaba varios segundos.
-        var svc = new Apps.IconService(new ShellIconProvider(), new Apps.IconCache(1024, dir), workers: 4);
+        // 2 hilos (como el Dock): cada carga bloquea dos hilos del grupo (la tarea y el hilo STA del Shell). Con 4 y la precarga de todo el índice el grupo se agotaba
+        // y el canal con el host no podía contestar al latido: el host reiniciaba la barra (visto en el CI). La rapidez viene de la precarga y de la caché en disco.
+        var svc = new Apps.IconService(new ShellIconProvider(), new Apps.IconCache(1024, dir), workers: 2);
         svc.Loaded += _ => Post(() => { _lp?.Invalidate(); _spot?.Refresh(); });
         svc.Failed += (r, why) => { if (Interlocked.Increment(ref _iconFailLogs) <= 25) _log($"[launchpad] sin icono real para «{r.App.DisplayName}» ({r.App.Aumid ?? r.App.ExePath}): {why}"); };
         return svc;

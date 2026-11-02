@@ -39,6 +39,8 @@ internal static class Program
         try { var dir = Path.Combine(DataDir, "logs"); Directory.CreateDirectory(dir); _log = new StreamWriter(Path.Combine(dir, "bar.log"), true); } catch { }
         // Un cierre inesperado deja su causa en bar.log (solo la excepción y su pila; nada del usuario).
         AppDomain.CurrentDomain.UnhandledException += (_, e) => { try { Log("CIERRE INESPERADO: " + e.ExceptionObject); } catch { } };
+        // El canal con el host (latido) corre en el grupo de hilos: un mínimo holgado evita que trabajos que bloquean hilos (iconos del Shell, WMI) lo dejen sin hilo.
+        ThreadPool.GetMinThreads(out int wt, out int io); ThreadPool.SetMinThreads(Math.Max(wt, 16), Math.Max(io, 8));
         try
         {
             if (Arg(args, "--render-png") is string png)
