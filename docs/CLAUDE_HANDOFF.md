@@ -57,6 +57,23 @@ Pendiente: píldora azul de la pestaña seleccionada (sale gris), motor de captu
 9. Configuración unificada  10. Refinamiento visual  11. Auditoría integral  12. Optimización  13. Distribución (sin publicar nada).
 Prioridad absoluta: NO tocar las letras sincronizadas (NotchWindow.Extras.cs, Core/Lyrics). Estado de cada etapa: ver la tabla de abajo (se actualiza).
 
+### Estado de las etapas (actualizado al subir cada cambio)
+| Etapa | Estado | Dónde | Evidencia CI |
+|---|---|---|---|
+| 1 Isla: pestaña azul, 6 visibles + «Más» | VALIDADO EN CI | NotchWindow.Sections.cs (TabLook, MaxPrimaryTabs) | capturas 25–29 (run 41486008568) |
+| 2 Capturas región/ventana/pantalla/todas | VALIDADO EN CI (1 monitor; multimonitor SIMULADO en pruebas) | Bar.Core/Capture, Bar.Win/Capture, BarHost.Capture.cs | 30–32 (run 41506791846); bug «2.ª captura cuelga la barra» corregido (InstanceWindows) |
+| 2 Galería completa (buscar, ordenar, multiselección, ampliar, renombrar, papelera) | VALIDADO EN CI (abrir, buscar, seleccionar, ampliar) | notch-win Views/GalleryWindow.cs, Core CaptureLibrary | 37–39 |
+| 2 Editor (recortar, lápiz, flecha, rect., texto, resaltar, deshacer, copiar, guardar copia, guardar como) | Dibujo VALIDADO EN CI; guardar: corregido en 75d1558, PENDIENTE de verificar | Bar.Core/Capture/CaptureEdit.cs, Bar.Win/Capture/CaptureEditor.cs | 34–36 |
+| 3 Descargas: velocidad medida y origen; álbum en el encabezado | IMPLEMENTADO + PROBADO (unidad); sin ETA (el total no se conoce) | notch-win DownloadTracker, GsmtcMediaProvider | — |
+| 4 Grabación MP4 sin audio, indicador excluido del vídeo, actividad en la Isla | IMPLEMENTADO; PENDIENTE de CI (el run anterior no llegó por el reinicio de la barra) | ScreenRecorder.cs, RecordingIndicator.cs, BarHost.Record.cs | 40–43 |
+| 5 Spotlight Pro (acciones, IP/red, ping/DNS con Intro, SSH, «> …» nunca ejecuta, scripts con doble Intro, %, vista previa) | VALIDADO EN CI (ping real 127.0.0.1) | Bar.Core/Launcher/SpotPro.cs, BarHost.SpotPro.cs, SpotlightWindow.DrawPreview | 16–19d |
+| 6 Portapapeles: secretos, exclusiones, límite, persistencia DPAPI opcional | IMPLEMENTADO + PROBADO (unidad); NO VERIFICADO en CI | notch-win Core/Clipboard/ClipboardPrivacy.cs, App.Clipboard.cs; host NotchSettings.Clipboard* | — |
+| 7 Workspace Manager | IMPLEMENTADO + PROBADO (geometría simulada); PENDIENTE de CI | Bar.Core/Workspaces, Bar.Win/Workspaces, BarHost.Workspaces.cs | 44–46 |
+| 8–13 | PENDIENTE | — | — |
+
+Notas: los diálogos modales en el hilo de la barra detienen su latido y el host la reinicia → nunca usar MessageBox/GetSaveFileName en ese hilo.
+Órdenes de prueba de la barra: `--capture region|window|screen|all`, `--record region|window|screen|stop`, `--edit <ruta>`, `--workspace save|restore|side|grid`.
+
 ## Siguiente paso exacto
 1. Validación manual en el PC (lista en docs/24). P6–P8 son decisiones de diseño pendientes de que el usuario decida.
 2. Validación manual en el PC (docs/21 §5, docs/22, docs/23).
