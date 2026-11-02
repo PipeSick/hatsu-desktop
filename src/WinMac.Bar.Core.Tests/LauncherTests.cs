@@ -268,3 +268,43 @@ public class SpotlightTests
         Assert.Equal(SpotCommandKind.Redraw, c.Key(0x1B, false).Command.Kind); Assert.Equal(SpotCommandKind.Close, c.Key(0x1B, false).Command.Kind);
     }
 }
+
+public class AppMenuTests
+{
+    private static readonly WinMac.Bar.Menus.AppMenuEntry File = new("Archivo", 0, Children:
+    [
+        new("Nuevo", 101, Shortcut: "Ctrl+N"), new("Abrir…", 102, Shortcut: "Ctrl+O"), WinMac.Bar.Menus.AppMenuEntry.Sep,
+        new("Recientes", 0, Children: [new("informe.txt", 201), new("notas.txt", 202, Enabled: false)]),
+        new("Ajuste de línea", 103, Checked: true), WinMac.Bar.Menus.AppMenuEntry.Sep, new("Salir", 104, Enabled: false), WinMac.Bar.Menus.AppMenuEntry.Sep,
+    ]);
+
+    [Theory]
+    [InlineData("&Abrir…\tCtrl+O", "Abrir…", "Ctrl+O")] [InlineData("Guardar &como...", "Guardar como...", null)] [InlineData("Tom && Jerry\t", "Tom & Jerry", null)]
+    public void LabelsAndShortcutsComeFromTheRealMenuText(string raw, string label, string? sc)
+    {
+        var (l, s) = WinMac.Bar.Menus.AppMenuEntry.ParseLabel(raw); Assert.Equal(label, l); Assert.Equal(sc, s);
+    }
+
+    [Fact]
+    public void PanelShowsShortcutsChecksDisabledSeparatorsAndSubmenus()
+    {
+        var p = WinMac.Bar.Menus.AppMenuPanel.Build(File, []);
+        Assert.Equal(PanelKind.AppMenu, p.Kind);
+        Assert.Equal(["Nuevo", "Abrir…", "", "Recientes", "Ajuste de línea", "", "Salir"], p.Widgets.Select(w => w.Kind == WidgetKind.Separator ? "" : w.Text));   // sin separador al final
+        Assert.Equal("Ctrl+N", p.Widgets[0].Sub); Assert.Equal("›", p.Widgets[3].Sub); Assert.True(p.Widgets[4].On); Assert.False(p.Widgets[6].Enabled);
+    }
+
+    [Fact]
+    public void ClickRunsCommandsOpensSubmenusAndIgnoresDisabled()
+    {
+        Assert.Equal(102, WinMac.Bar.Menus.AppMenuPanel.Click(File, [], "am:1").Command);
+        var (cmd, path) = WinMac.Bar.Menus.AppMenuPanel.Click(File, [], "am:3"); Assert.Equal(0, cmd); Assert.Equal([3], path!);
+        var sub = WinMac.Bar.Menus.AppMenuPanel.Build(File, path!);
+        Assert.Equal("back", sub.Widgets[0].Id); Assert.Equal("Recientes", sub.Widgets[0].Text);
+        Assert.Equal(201, WinMac.Bar.Menus.AppMenuPanel.Click(File, path!, "am:0").Command);
+        Assert.Equal(0, WinMac.Bar.Menus.AppMenuPanel.Click(File, path!, "am:1").Command);   // deshabilitada: no se ejecuta
+        Assert.Equal(0, WinMac.Bar.Menus.AppMenuPanel.Click(File, [], "am:6").Command);
+        Assert.Equal(0, WinMac.Bar.Menus.AppMenuPanel.Click(File, [], "am:99").Command);
+        Assert.Null(new WinMac.Bar.Menus.AppMenus(WinMac.Bar.Menus.AppMenuSource.None, []).Labels);   // sin menús: nada inventado
+    }
+}

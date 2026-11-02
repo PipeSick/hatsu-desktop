@@ -280,6 +280,7 @@ public sealed partial class BarHost : IPanelUi
     {
         if (_pkind == PanelKind.AppleMenu) { AppleAction(e); return; }
         if (_pkind == PanelKind.Tray) { TrayPanelAction(e); return; }
+        if (_pkind == PanelKind.AppMenu) { AppMenuAction(e); return; }
         _ops.Handle(e);
     }
 
@@ -343,25 +344,92 @@ public sealed partial class BarHost : IPanelUi
         lock (_cfgLock) _pendingCfg = n; ApplyPendingConfig();   // se aplica ya; si el host la devuelve igual, no hay cambio
     }
 
-    // ───────────────────────────── menús de la app activa (EXPERIMENTAL)
+    // ───────────────────────────── menús de la app activa (Global Menu, opción A; docs/23)
+    // Se leen FUERA del hilo de la barra (una app colgada no la congela) y se guardan por ventana unos segundos. Los menús originales siguen en la app.
+    private WinMac.Bar.Menus.AppMenus _appMenus = WinMac.Bar.Menus.AppMenus.Empty; private int _appMenuGen; private string? _appMenuName;
+    private WinMac.Bar.Menus.AppMenuEntry? _amTop; private IReadOnlyList<int> _amPath = []; private int _amTopIndex = -1;
+    private readonly Dictionary<IntPtr, (DateTime At, WinMac.Bar.Menus.AppMenus Menus)> _appMenuCache = [];
+
     private void RefreshAppMenus()
     {
-        if (!_cfg.AppMenus) { _appMenuTops = []; _appMenuLabels = null; return; }
+        if (!_cfg.AppMenus) { ClearAppMenus(); return; }
         var h = BarNative.GetForegroundWindow(); if (h == IntPtr.Zero) return;
         BarNative.GetWindowThreadProcessId(h, out uint pid); if (pid == (uint)Environment.ProcessId) return;   // un clic en la propia barra no cambia los menús
         var cls = AppMenuService.ClassOf(h);
-        if (cls is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd") { _appMenuTops = []; _appMenuLabels = null; return; }
-        var tops = AppMenuService.Read(h); _appMenuTops = tops; _appMenuWindow = h; _appMenuLabels = tops.Count > 0 ? tops.Select(t => t.Text).ToList() : null;
+        if (cls is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd") { ClearAppMenus(); return; }
+        _appMenuWindow = h; int gen = ++_appMenuGen;
+        if (_appMenuCache.TryGetValue(h, out var c) && DateTime.UtcNow - c.At < TimeSpan.FromSeconds(8)) { SetAppMenus(c.Menus); return; }
+        var tops = AppMenuService.Read(h);   // solo lectura de la barra de menús Win32 (rápida, sin mensajes a la app)
+        if (tops.Count > 0) { SetAppMenus(Cache(h, new(WinMac.Bar.Menus.AppMenuSource.Win32, tops.Select(t => new WinMac.Bar.Menus.AppMenuEntry(t.Text, 0, Children: null)).ToList()))); return; }
+        SetAppMenus(WinMac.Bar.Menus.AppMenus.Empty);
+        Task.Run(() =>   // UI Automation puede tardar (árboles grandes): en segundo plano, con tope
+        {
+            var t = Task.Run(() => WinMac.Bar.Win.Menus.AppMenuReader.ReadAutomation(h));
+            var names = t.Wait(TimeSpan.FromSeconds(2)) ? t.Result : [];
+            Post(() =>
+            {
+                var menus = names.Count == 0 ? WinMac.Bar.Menus.AppMenus.Empty : new WinMac.Bar.Menus.AppMenus(WinMac.Bar.Menus.AppMenuSource.Automation, names.Select(n => new WinMac.Bar.Menus.AppMenuEntry(n, 0)).ToList());
+                Cache(h, menus);
+                if (gen == _appMenuGen) { SetAppMenus(menus); UpdateState(force: true); }
+            });
+        });
     }
+
+    private WinMac.Bar.Menus.AppMenus Cache(IntPtr h, WinMac.Bar.Menus.AppMenus m)
+    {
+        if (_appMenuCache.Count > 64) _appMenuCache.Clear();
+        _appMenuCache[h] = (DateTime.UtcNow, m); return m;
+    }
+
+    private void SetAppMenus(WinMac.Bar.Menus.AppMenus m)
+    {
+        _appMenus = m; _appMenuTops = m.Source == WinMac.Bar.Menus.AppMenuSource.Win32 ? AppMenuService.Read(_appMenuWindow) : []; _appMenuLabels = m.Labels;
+        string name = _app?.Name ?? "";
+        if (name != _appMenuName || m.Tops.Count > 0) { _appMenuName = name; _log($"[menús] {name}: {(m.Tops.Count == 0 ? "sin menús" : $"{m.Tops.Count} menús ({m.Source}): " + string.Join(", ", m.Tops.Select(t => t.Text)))}"); }
+    }
+
+    private void ClearAppMenus() { _appMenus = WinMac.Bar.Menus.AppMenus.Empty; _appMenuTops = []; _appMenuLabels = null; }
 
     private void ShowAppMenu(BarWindow src, int index, BarItemFrame? item)
     {
-        if (index < 0 || index >= _appMenuTops.Count || _appMenuWindow == IntPtr.Zero) return;
+        if (index < 0 || index >= _appMenus.Tops.Count || _appMenuWindow == IntPtr.Zero) return;
+        if (_popover is { IsOpen: true } && _pkind == PanelKind.AppMenu && _amTopIndex == index) { _popover.Hide(); return; }   // segundo clic: cerrar
         _popover?.Hide();
-        int x = src.Left + (int)((item?.X ?? 0) * src.Scale), y = src.Top + src.Height; IntPtr prev = BarNative.GetForegroundWindow();
-        _modal = true;
-        try { var r = AppMenuService.Show(src.Hwnd, _appMenuWindow, _appMenuTops[index], x, y); if (!r.IsOk) _log("[bar] menú de la app: " + r.Message); }
-        finally { _modal = false; if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev)) BarNative.SetForegroundWindow(prev); }
+        int x = src.Left + (int)((item?.X ?? 0) * src.Scale), y = src.Top + src.Height; var app = _appMenuWindow; var top = _appMenus.Tops[index];
+        if (_appMenus.Source == WinMac.Bar.Menus.AppMenuSource.Automation)
+        {
+            Task.Run(() => { if (!WinMac.Bar.Win.Menus.AppMenuReader.ExpandAutomation(app, index, top.Text)) _log("[menús] la app no abrió su menú «" + top.Text + "»"); });
+            return;
+        }
+
+        if (index >= _appMenuTops.Count) return;
+        var tree = WinMac.Bar.Win.Menus.AppMenuReader.ReadWin32(app, _appMenuTops[index].SubMenu, _appMenuTops[index].Index, top.Text);
+        if (tree is null)
+        {
+            // La app dibuja sus menús o no respondió a tiempo: se usa SU menú nativo (el mismo de su ventana), que sí sabe dibujarse.
+            IntPtr prev = BarNative.GetForegroundWindow(); _modal = true;
+            try { var r = AppMenuService.Show(src.Hwnd, app, _appMenuTops[index], x, y); if (!r.IsOk) _log("[bar] menú de la app: " + r.Message); }
+            finally { _modal = false; if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev)) BarNative.SetForegroundWindow(prev); }
+            return;
+        }
+
+        _amTop = tree; _amPath = []; _amTopIndex = index;
+        _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
+        _popSource = src; _pkind = PanelKind.AppMenu;
+        var model = WinMac.Bar.Menus.AppMenuPanel.Build(tree, _amPath);
+        _popover.Show(model, x + (int)Math.Round(model.Width * src.Scale / 2), y, src.MonitorRect, src.Scale, _theme, alignRight: false);
+    }
+
+    private void AppMenuAction(PanelEvent e)
+    {
+        if (_amTop is null || _popover is null) return;
+        if (e.Id == "back") { if (_amPath.Count > 0) { _amPath = _amPath.Take(_amPath.Count - 1).ToList(); _popover.SetModel(WinMac.Bar.Menus.AppMenuPanel.Build(_amTop, _amPath)); } return; }
+        var (cmd, open) = WinMac.Bar.Menus.AppMenuPanel.Click(_amTop, _amPath, e.Id);
+        if (open is not null) { _amPath = open; _popover.SetModel(WinMac.Bar.Menus.AppMenuPanel.Build(_amTop, _amPath)); return; }
+        if (cmd <= 0) return;
+        var app = _appMenuWindow; _popover.Hide(); _amTopIndex = -1;
+        WinMac.Bar.Win.Menus.AppMenuReader.Run(app, cmd);
+        _log("[menús] orden " + cmd + " enviada a la app");
     }
 
     // ───────────────────────────── configuración central en vivo
@@ -375,7 +443,7 @@ public sealed partial class BarHost : IPanelUi
         var old = _cfg; _cfg = c;
         foreach (var w in _wins) w.ApplyConfig(old, c);   // todas las barras comparten la configuración central y la aplican en vivo
         if (old.Theme != c.Theme) SetThemeAll(ResolveTheme());
-        if (old.AppMenus != c.AppMenus) { if (c.AppMenus) RefreshAppMenus(); else { _appMenuTops = []; _appMenuLabels = null; } }
+        if (old.AppMenus != c.AppMenus) { if (c.AppMenus) RefreshAppMenus(); else ClearAppMenus(); }
         if (old.WeatherCity != c.WeatherCity || old.WeatherFavorites != c.WeatherFavorites || old.WeatherAutoLocation != c.WeatherAutoLocation) { ConfigureWeather(); _weather.Refresh(); }
         if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind is PanelKind.Calendar or PanelKind.Notifications && _popover is { IsOpen: true }) LoadEvents();
         if (old.LaunchpadOnWinKey != c.LaunchpadOnWinKey) ApplyLauncherConfig();

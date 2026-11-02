@@ -46,7 +46,7 @@ public sealed partial class PanelPainter : IDisposable
         _kind = m.Kind; _ctx.BeginDraw();
         if (clear) _ctx.Clear(new Color4(0, 0, 0, 0));
         // tarjeta (el panel lateral, con el vidrio del fondo de pantalla si lo hay y esquinas algo más amplias)
-        float rad = m.Kind == PanelKind.Notifications ? 18 : m.Kind == PanelKind.AppleMenu ? 10 : 16;
+        float rad = m.Kind == PanelKind.Notifications ? 18 : m.Kind is PanelKind.AppleMenu or PanelKind.AppMenu ? 10 : 16;
         if (m.Kind == PanelKind.Notifications && Backdrop is { } bd)
         {
             using var br = _ctx.CreateBitmapBrush(bd, new BitmapBrushProperties { ExtendModeX = ExtendMode.Clamp, ExtendModeY = ExtendMode.Clamp, InterpolationMode = BitmapInterpolationMode.Linear });
@@ -202,7 +202,7 @@ public sealed partial class PanelPainter : IDisposable
                 }
                 break;
             }
-            case WidgetKind.Separator when _kind == PanelKind.AppleMenu: Line(x + 8, y + h / 2, x + wd - 8, y + h / 2, Fill(0.16f), 1f); break;
+            case WidgetKind.Separator when _kind is PanelKind.AppleMenu or PanelKind.AppMenu: Line(x + 8, y + h / 2, x + wd - 8, y + h / 2, Fill(0.16f), 1f); break;
             case WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.NcEmpty: DrawNcWidget(f, hover); break;
             default: DrawHubWidget(f, hover); break;
         }
