@@ -61,7 +61,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
         _taskbarCreated = BarNative.RegisterWindowMessageW("TaskbarCreated");   // Explorer se reinició: hay que volver a registrar el AppBar
         _dev = new D2DDevice(); Diagnostics = _dev.Description;
         uint dpi = BarNative.GetDpiForWindow(Hwnd); _scale = dpi >= 48 ? dpi / 96.0 : Info.Scale; _dev.SetDpi(_scale);   // la ventana nace en el origen de SU monitor: su DPI es el de ese monitor
-        _painter = new BarPainter(_dev, _m) { Theme = _theme, Background = _host.Config.Background };
+        _painter = new BarPainter(_dev, _m) { Theme = _theme, Background = _host.Config.Background, TrayIconProvider = Shell.Tray.TrayIconPixels.Read };
         Ctl.Measure = (t, b) => _painter.Measure(t, b);
         Metrics(); Ctl.SetWidth(_monitor.Width / _scale);
         CreateSurface(); PlaceWindow(); BuildBackdrop();
@@ -261,7 +261,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
                 case WM_MOUSEACTIVATE: return (IntPtr)3;   // MA_NOACTIVATE: un clic en la barra no roba el foco a la app activa
                 case WM_MOUSEMOVE: { double x = (short)((long)l & 0xFFFF) / _scale, y = (short)(((long)l >> 16) & 0xFFFF) / _scale; _px = x; _py = y; Ctl.SetPointer(x, y); return IntPtr.Zero; }
                 case WM_LBUTTONUP: { double x = (short)((long)l & 0xFFFF) / _scale; _host.OnBarAction(this, Ctl.OnClick(x), Ctl.ItemAt(x)); _force = true; return IntPtr.Zero; }
-                case WM_RBUTTONUP: _host.OnBarAction(this, new BarAction(BarActionKind.ShowMenu), null); _force = true; return IntPtr.Zero;
+                case WM_RBUTTONUP: { double x = (short)((long)l & 0xFFFF) / _scale; var a = Ctl.OnRightClick(x); _host.OnBarAction(this, a, a.Kind == BarActionKind.TrayRightClick ? Ctl.ItemAt(x) : null); _force = true; return IntPtr.Zero; }   // en un icono de bandeja, su menú; en el resto, el de WinMac
                 case WM_APP_BAR:
                     if ((long)w == BarNative.ABN_POSCHANGED && _registered) { PlaceWindow(); _force = true; }
                     else if ((long)w == BarNative.ABN_FULLSCREENAPP) BarNative.SetWindowPos(Hwnd, (long)l != 0 ? new IntPtr(1) /* HWND_BOTTOM */ : new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE|NOMOVE|NOACTIVATE */);

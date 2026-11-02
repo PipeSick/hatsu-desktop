@@ -117,14 +117,14 @@ public sealed partial class BarHost : IPanelUi
         var net = _network.Kind == NetKind.Wifi && s.Wifi.Available && s.Wifi.Connected ? _network with { Ssid = s.Wifi.Ssid, Bars = s.Wifi.Bars } : _network;
         var bt = s.Bluetooth.Available ? new BluetoothInfo(true, s.Bluetooth.RadioOn, s.Bluetooth.ConnectedCount) : BluetoothInfo.None;
         var wx = _weather.Current(); var wbar = wx.Snapshot is { } sn ? new WeatherBarInfo(WeatherCodes.Icon(sn.Main.Code, sn.Main.IsDay), TempFormat.Bar(sn.Main.TempC, _cfg.WeatherFahrenheit)) : WeatherBarInfo.None;
-        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar);
+        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar, _cfg.ShowTrayIcons ? _trayStore.Visible : null);
     }
 
     private void OnHubChanged() { SetStateAll(); if (_popover is { IsOpen: true }) RebuildPanel(); }
 
     private void PanelsTick()
     {
-        _popover?.Pump(); HubTick();
+        _popover?.Pump(); HubTick(); TrayTick();
         if (_popover is not { IsOpen: true }) return;
         var now = DateTime.UtcNow;
         if (_pkind == PanelKind.Notifications && _nc.NeedsPolling && now - _lastNcPoll >= NcPollEvery) { _lastNcPoll = now; _nc.Refresh(); }   // sin evento de Windows: relectura suave, solo con el panel abierto
@@ -369,6 +369,7 @@ public sealed partial class BarHost : IPanelUi
         if (old.AppMenus != c.AppMenus) { if (c.AppMenus) RefreshAppMenus(); else { _appMenuTops = []; _appMenuLabels = null; } }
         if (old.WeatherCity != c.WeatherCity || old.WeatherFavorites != c.WeatherFavorites || old.WeatherAutoLocation != c.WeatherAutoLocation) { ConfigureWeather(); _weather.Refresh(); }
         if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind is PanelKind.Calendar or PanelKind.Notifications && _popover is { IsOpen: true }) LoadEvents();
+        if (old.ShowTrayIcons != c.ShowTrayIcons) { if (c.ShowTrayIcons) StartTray(); else StopTray(); }
         if (old.NotificationsFromWindows != c.NotificationsFromWindows) { _nc.SetEnabled(c.NotificationsFromWindows); if (c.NotificationsFromWindows && _popover is { IsOpen: true } && _pkind == PanelKind.Notifications && !_nc.Active) _nc.Activate(); }
         _nextClock = DateTime.MinValue; UpdateState(force: false);
         if (_popover is { IsOpen: true }) RebuildPanel();

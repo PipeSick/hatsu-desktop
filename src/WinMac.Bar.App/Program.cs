@@ -96,9 +96,21 @@ internal static class Program
         foreach (var l in lines) Log("  " + l);
         HubProbe();
         NotificationProbe();
+        TrayProbe();
         int bad = lines.Count(l => l.StartsWith("[FALLO]"));
         Log(bad == 0 ? "Ningún servicio lanzó excepciones (un servicio «no disponible» es un resultado válido)." : $"{bad} servicio(s) lanzaron excepciones: es un error.");
         return bad == 0 ? 0 : 1;
+    }
+
+    /// <summary>Bandeja: ¿encuentra Windows la ventana de bandeja de WinMac (y no la de Explorer)? ¿cuántos iconos llegan al pedir a las apps que los registren? Explorer sigue recibiéndolo todo.</summary>
+    private static void TrayProbe()
+    {
+        Log("Iconos de apps en segundo plano (bandeja; se reenvía todo a Explorer, no se quita nada):");
+        var store = new WinMac.Bar.Tray.TrayIconStore(); var gate = new object();
+        using var tray = new WinMac.Bar.Win.Shell.Tray.TrayHost(_ => { });
+        tray.Message += m => { lock (gate) store.Apply(m); };
+        tray.Start(); Thread.Sleep(3000);
+        lock (gate) Log($"  ventana de bandeja: {(tray.IsPrimary ? "las apps la encuentran" : "las apps encuentran antes la de Explorer")} · Explorer {(tray.ExplorerFound ? "encontrado" : "NO encontrado")} · {tray.MessagesSeen} mensaje(s) · {store.Visible.Count} icono(s) visibles de {store.Count}");
     }
 
     /// <summary>

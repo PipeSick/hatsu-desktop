@@ -69,6 +69,7 @@ public sealed partial class BarHost : IDisposable
     public int Run(int maxFrames = int.MaxValue, bool selfTest = false)
     {
         CreateHub();
+        StartTray();
         Reconcile(initial: true);
         ApplyPendingConfig();   // una configuración que llegó del host antes de que existieran las ventanas
         var clock = Stopwatch.StartNew(); double last = 0; int frames = 0;
@@ -251,6 +252,8 @@ public sealed partial class BarHost : IDisposable
                 case BarActionKind.ShowMenu: ShowAppleMenu(src, item); break;
                 case BarActionKind.OpenPanel: OpenPanelFromBar(src, a, item); break;
                 case BarActionKind.ShowAppMenu: ShowAppMenu(src, a.Index, item); break;
+                case BarActionKind.TrayClick: TrayClickOn(src, a, item, WinMac.Bar.Tray.TrayButton.Left); break;
+                case BarActionKind.TrayRightClick: TrayClickOn(src, a, item, WinMac.Bar.Tray.TrayButton.Right); break;
             }
         }
         catch (Exception e) { _log($"Acción {a.Kind} falló: {e.GetType().Name}: {e.Message}"); }
@@ -260,6 +263,7 @@ public sealed partial class BarHost : IDisposable
 
     public void Dispose()
     {
+        StopTray();
         DisposePanels();
         foreach (var w in _wins) { try { w.Dispose(); } catch (Exception) { /* seguimos liberando las demás */ } }
         _wins.Clear();

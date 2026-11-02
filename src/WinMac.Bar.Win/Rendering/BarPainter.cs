@@ -20,6 +20,30 @@ public sealed class BarPainter : IDisposable
     public BarTheme Theme { get; set; } = BarTheme.Dark;
     public BarBackground Background { get; set; } = BarBackground.Glass;
 
+    /// <summary>Píxeles de un icono de la bandeja (HICON de la app) como BGRA premultiplicado; null si ya no existe.</summary>
+    public Func<uint, (int W, int H, byte[] Bgra)?>? TrayIconProvider { get; set; }
+    private readonly Dictionary<uint, ID2D1Bitmap?> _tray = [];
+
+    /// <summary>Icono de la bandeja escalado a 16 DIP, como los demás iconos de la barra. Se convierte una vez por icono (cambia cuando la app lo cambia).</summary>
+    private void DrawTray(float x, float cy, uint hicon)
+    {
+        if (!_tray.TryGetValue(hicon, out var bmp))
+        {
+            if (_tray.Count > 96) { foreach (var b in _tray.Values) b?.Dispose(); _tray.Clear(); }
+            bmp = null;
+            try
+            {
+                if (TrayIconProvider?.Invoke(hicon) is { } px)
+                    unsafe { fixed (byte* p = px.Bgra) bmp = _ctx.CreateBitmap(new Vortice.Mathematics.SizeI(px.W, px.H), (IntPtr)p, (uint)(px.W * 4), new BitmapProperties1(new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96, 96)); }
+            }
+            catch (Exception) { bmp = null; }
+            _tray[hicon] = bmp;
+        }
+
+        if (bmp is null) { Brush(Fg(0.5f)); _ctx.FillEllipse(new Ellipse(new Vector2(x + 8, cy), 3, 3), _solid); return; }   // sin imagen legible: un punto discreto
+        _ctx.DrawBitmap(bmp, new RawRectF(x, cy - 8, x + 16, cy + 8), 1f, BitmapInterpolationMode.Linear, null);
+    }
+
     public BarPainter(D2DDevice dev, BarMetrics m)
     {
         _dev = dev; _ctx = dev.Context; _m = m;
@@ -100,6 +124,12 @@ public sealed class BarPainter : IDisposable
                 case BarItemKind.Weather: DrawWeatherGlyph(x + 8, cy, s.Weather.IconKey); break;
                 case BarItemKind.Volume: DrawVolume(x, cy, s.Volume); break;
                 case BarItemKind.Battery: DrawBattery(x, cy, s.Battery); break;
+                case BarItemKind.TrayIcon:
+                {
+                    string key = f.Item.Id[BarModel.TrayKeyPrefix.Length..];
+                    foreach (var t in s.Tray) if (t.Key == key) { DrawTray(x, cy, t.Icon); break; }
+                    break;
+                }
             }
             x += (float)(f.Item.GlyphWidth + (string.IsNullOrEmpty(f.Item.Text) ? 0 : _m.GlyphTextGap));
         }
@@ -248,5 +278,5 @@ public sealed class BarPainter : IDisposable
         _ctx.FillEllipse(new Ellipse(new Vector2(x + 4.5f, cy + 3.5f), 1.9f, 1.9f), _solid);
     }
 
-    public void Dispose() { _solid.Dispose(); _round.Dispose(); _regular.Dispose(); _bold.Dispose(); _logo.Dispose(); _dw.Dispose(); }
+    public void Dispose() { foreach (var b in _tray.Values) b?.Dispose(); _tray.Clear(); _solid.Dispose(); _round.Dispose(); _regular.Dispose(); _bold.Dispose(); _logo.Dispose(); _dw.Dispose(); }
 }

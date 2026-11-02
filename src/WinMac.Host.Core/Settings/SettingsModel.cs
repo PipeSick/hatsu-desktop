@@ -33,6 +33,7 @@ public static class SettingsBuilder
         ("weatherAutoLocation", "Usar mi ubicación", b => b.WeatherAutoLocation),
         ("notificationCenter", "El reloj abre el Centro de Notificaciones", b => b.NotificationCenter), ("notificationsFromWindows", "Mostrar notificaciones de Windows", b => b.NotificationsFromWindows),
         ("notifRemoveFromWindows", "Borrar también en Windows", b => b.NotifRemoveFromWindows),
+        ("showTrayIcons", "Iconos de apps en segundo plano", b => b.ShowTrayIcons),
     ];
 
     public static readonly Dictionary<WinMac.Bar.Notifications.NcWidget, string> NcWidgetNames = new()
@@ -83,7 +84,7 @@ public static class SettingsBuilder
                 new(RowKind.Segmented, "bar.bg", "Fondo", Options: SettingsBuilder.BackgroundNames, Selected: Index(BackgroundValues, bar.Background.ToString())),
                 new(RowKind.Segmented, "bar.theme", "Tema", Options: ThemeNames, Selected: Index(ThemeValues, bar.Theme.ToString())),
             ]),
-            new("Elementos", [Bar(0), Bar(1), Bar(2), Bar(3), Bar(4), Bar(5), Bar(6), Bar(7), Bar(8)]),
+            new("Elementos", [Bar(0), Bar(1), Bar(2), Bar(3), Bar(4), Bar(5), Bar(6), Bar(7), Bar(8), Bar(28, "Los de la bandeja de Windows; siguen también en la barra de tareas")]),
             new("Comportamiento", [Bar(9, "El resto de ventanas no se superpone a la barra"), Bar(10), Bar(11), Bar(12, "Solo apps con menú estándar de Windows")]),
             new("Calendario", [new(RowKind.Field, "bar.ics", "Archivo .ics", Text: bar.CalendarIcsPath ?? "", Placeholder: "Sin archivo")], "Opcional. Solo lectura: el calendario muestra los eventos del archivo."),
             new("Control Center", [Bar(13), Bar(14), Bar(15), Bar(16), Bar(17), Bar(18), Bar(19), Bar(20)], "Qué controles aparecen en el panel de la Barra."),
