@@ -315,6 +315,15 @@ public class AppMenuFilterTests
     [InlineData("SystemMenuBar", false)] [InlineData("systemmenubar", false)] [InlineData(" SystemMenuBar ", false)]
     [InlineData("MenuBar", true)] [InlineData("", true)] [InlineData(null, true)] [InlineData("MainMenu", true)] [InlineData("SystemMenuBarExtra", true)]
     public void OnlyTheTitleBarSystemMenuIsDiscarded(string? id, bool keep) => Assert.Equal(keep, WinMac.Bar.Menus.AppMenuFilter.IsAppMenuBar(id));
+
+    [Theory]
+    [InlineData("MenuBar", "System", 1, false)]       // Windows Terminal, medido en el CI
+    [InlineData("MenuBar", "Sistema", 1, false)]      // Windows en español
+    [InlineData("MenuBar", "Application", 5, true)]   // barra de menús real (Bloc de notas por MSAA)
+    [InlineData("MenuBar", "System", 4, true)]        // una app con un menú llamado así pero con varios menús: se conserva
+    [InlineData("MainMenu", "Menu", 1, true)]         // una app con un único menú real: se conserva
+    public void SystemMenuBarIsRecognisedByItsRealSignature(string id, string name, int items, bool keep) =>
+        Assert.Equal(keep, WinMac.Bar.Menus.AppMenuFilter.IsAppMenuBar(id, name, items));
 }
 
 public class SpotlightRelevanceTests

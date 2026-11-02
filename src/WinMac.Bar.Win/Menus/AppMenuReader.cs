@@ -116,7 +116,9 @@ internal static class AppMenuReader
                 if (bars.GetElement(b, out var cand) != 0 || cand is null) continue;
                 cand.get_CurrentAutomationId(out var aid); cand.get_CurrentName(out var bn); cand.get_CurrentClassName(out var bc);
                 Diag?.Invoke($"[menús] barra accesible {b + 1}/{nb}: id «{aid}», nombre «{bn}», clase «{bc}»");
-                if (WinMac.Bar.Menus.AppMenuFilter.IsAppMenuBar(aid)) bar = cand;
+                int count = -1;
+                if (uia.CreatePropertyCondition(UIA_ControlTypePropertyId, UIA_MenuItemControlTypeId, out var ic) == 0 && cand.FindAll(TreeScopeChildren, ic, out var kids) == 0 && kids is not null) kids.get_Length(out count);
+                if (WinMac.Bar.Menus.AppMenuFilter.IsAppMenuBar(aid, bn, count)) bar = cand;
             }
             if (bar is null) return default;
             if (uia.CreatePropertyCondition(UIA_ControlTypePropertyId, UIA_MenuItemControlTypeId, out var itemCond) != 0) return default;
