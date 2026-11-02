@@ -22,4 +22,14 @@ nunca tocar resolución, monitores, red, audio ni reiniciar el PC del usuario; d
 | Etapa | Estado | Commits | CI |
 |---|---|---|---|
 | 0. Captura de la bandeja (sesión anterior) | cerrada a nivel de CI (run 75: 3 de 3 iconos en el desplegable real) | d309ed9 | verde |
-| 1. Isla informativa | implementada + pruebas | NotchWin 14c374b, 58d14d9; WinMac (este commit) | ver último run |
+| 1. Isla informativa (docs/21) | implementada + pruebas; arreglado un cierre al arrancar visto en el CI | NotchWin 14c374b, 58d14d9, e810ec0; WinMac c529e5c, 9a50ec4 | run 76 falló por ese cierre; verificar el siguiente |
+| 2. Launchpad + tecla Windows (docs/22) | implementado + pruebas + prueba real en CI (`Test-Launchpad.ps1`, job windows-tray-capture) | 4a0b889 | verificar |
+| 3. Spotlight (docs/22) | implementado + pruebas + prueba real en CI (mismo script) | 21c9540 | verificar |
+| 4. Global Menu (opción A) | en curso: ya existía `AppMenuService` (menús Win32) y el ajuste «appMenus» | — | — |
+
+## Dónde está cada cosa (nuevo en esta sesión)
+- Isla: `notch-win/src/NotchWin.Core/Pill/` (árbitro, formato), `NotchWindow.Pill.cs`; barra: `BarHost.Notch.cs`, `AudioService.Watch.cs`, `BrightnessService.Watch.cs`, `Bar.Core/Notch/NotchFeed.cs`.
+- Launchpad/Spotlight: `Apps.Core/Catalog/` (índice, búsqueda, preferencias), `Apps.Win/AppsFolderReader.cs` (lectura + lanzador), `Bar.Core/Launcher/` (tecla Windows, controladores, motor de Spotlight),
+  `Bar.Win/Launcher/` (gancho, atajo, ventanas, Windows Search), `BarHost.Launcher.cs`, `BarHost.Spotlight.cs`.
+- Ajustes nuevos: `NotchSettings.Pill*`, `BarConfig.LaunchpadOnWinKey/SpotlightHotkey/SpotlightFiles` (página de ajustes del host).
+- Pruebas solo-CI: variable `WINMAC_PILL_SELFTEST` (Isla), `WinMac.Bar.App --launchpad/--spotlight` (abrir desde fuera).
