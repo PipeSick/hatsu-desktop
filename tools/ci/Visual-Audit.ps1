@@ -43,6 +43,14 @@ public static class Au {
       SendInput(1, i, Marshal.SizeOf(typeof(IN))); System.Threading.Thread.Sleep(15);
     }
   }
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr p, IntPtr a, string c, string t);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, StringBuilder l);
+  [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, IntPtr l);
+  /// Texto del documento del Bloc de notas clásico (su control Edit), para comprobar que una orden del menú se ejecutó de verdad.
+  public static string NotepadText(IntPtr main) {
+    var e = FindWindowEx(main, IntPtr.Zero, "Edit", null); if (e == IntPtr.Zero) e = FindWindowEx(main, IntPtr.Zero, "RichEditD2DPT", null); if (e == IntPtr.Zero) return "(sin control de texto)";
+    int n = (int)SendMessage(e, 0x0E, IntPtr.Zero, IntPtr.Zero); var sb = new StringBuilder(n + 1); SendMessage(e, 0x0D, (IntPtr)(n + 1), sb); return sb.ToString();
+  }
   public static void Click(int x, int y) { SetCursorPos(x, y); System.Threading.Thread.Sleep(120); mouse_event(2, 0, 0, 0, IntPtr.Zero); mouse_event(4, 0, 0, 0, IntPtr.Zero); }
   public static bool Visible(string cls) { var h = FindWindow(cls, null); return h != IntPtr.Zero && IsWindowVisible(h); }
   public static string RectOf(string cls) { var h = FindWindow(cls, null); if (h == IntPtr.Zero) return "(no existe)"; RC r; GetWindowRect(h, out r); return r.L + "," + r.T + " " + (r.R - r.L) + "x" + (r.B - r.T); }
@@ -161,6 +169,22 @@ foreach ($lb in $labels) {
   if ([Au]::GetForegroundWindow() -ne $np.MainWindowHandle -and $np.MainWindowHandle -ne [IntPtr]::Zero) { [Au]::SetForegroundWindow($np.MainWindowHandle) | Out-Null; Start-Sleep -Milliseconds 500 }
 }
 if (-not $subDone) { Note '- **10-submenu**: no hay submenús en los menús de esta app (o no se pudieron abrir)' }
+
+# Interacción real: «Edit» → «Time/Date» (o «Hora y fecha») desde el desplegable de WinMac; el Bloc de notas debe insertar la fecha en su documento.
+$before = [Au]::NotepadText($np.MainWindowHandle)
+$edit = $labels | Where-Object { $_.Text -match '^(Edit|Edición)$' } | Select-Object -First 1
+if ($edit -and $np.MainWindowHandle -ne [IntPtr]::Zero) {
+  [Au]::SetForegroundWindow($np.MainWindowHandle) | Out-Null; Start-Sleep -Milliseconds 700
+  $cur = [regex]::Matches((MenuDiagLine), 'AppMenu:([^@|]+)@(\d+),(\d+)') | Where-Object { $_.Groups[1].Value.Trim() -eq $edit.Text } | Select-Object -Last 1
+  if ($cur) { [Au]::Click([int]$cur.Groups[2].Value, [int]$cur.Groups[3].Value); Start-Sleep -Milliseconds 900 }
+  $rows = [regex]::Matches((MenuDiagLine), 'fila:([^:]+):([^@|]*)@(\d+),(\d+)') | ForEach-Object { [pscustomobject]@{ Text = $_.Groups[2].Value.Trim(); X = [int]$_.Groups[3].Value; Y = [int]$_.Groups[4].Value } }
+  $td = $rows | Where-Object { $_.Text -match 'Time/Date|Hora y fecha|Fecha' } | Select-Object -First 1
+  Shot '09x-menu-edit-antes-de-elegir' 'Menú «Edit» abierto: se elegirá «Time/Date»' $sc.X $sc.Y 600 560
+  if ($td) { [Au]::Click($td.X, $td.Y); Start-Sleep -Milliseconds 900 }
+  $after = [Au]::NotepadText($np.MainWindowHandle)
+  Note "  - interacción: «$($td.Text)» elegido en el desplegable de WinMac → texto del Bloc de notas antes «$before», después «$after» → $(if ($after.Length -gt $before.Length) { 'LA ORDEN SE EJECUTÓ' } else { 'la orden NO se ejecutó' })"
+  Shot '09y-menu-orden-ejecutada' 'Bloc de notas tras elegir «Time/Date» en el desplegable de WinMac' $sc.X $sc.Y 700 400
+}
 Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 800
 
