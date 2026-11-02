@@ -37,6 +37,8 @@ internal static class Program
     {
         try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }
         try { var dir = Path.Combine(DataDir, "logs"); Directory.CreateDirectory(dir); _log = new StreamWriter(Path.Combine(dir, "bar.log"), true); } catch { }
+        // Un cierre inesperado deja su causa en bar.log (solo la excepción y su pila; nada del usuario).
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => { try { Log("CIERRE INESPERADO: " + e.ExceptionObject); } catch { } };
         try
         {
             if (Arg(args, "--render-png") is string png)

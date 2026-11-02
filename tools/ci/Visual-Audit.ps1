@@ -139,7 +139,14 @@ Note "  - etiquetas de menú en la barra: $(($labels | ForEach-Object { "$($_.Te
 $subDone = $false; $i = 0
 foreach ($lb in $labels) {
   $i++
+  # La posición se relee justo antes de cada clic (si la barra cambia el nombre de la app, las etiquetas se desplazan) y el Bloc de notas vuelve al frente.
+  if ($np.MainWindowHandle -ne [IntPtr]::Zero) { [Au]::SetForegroundWindow($np.MainWindowHandle) | Out-Null; Start-Sleep -Milliseconds 700 }
+  $cur = [regex]::Matches((MenuDiagLine), 'AppMenu:([^@|]+)@(\d+),(\d+)') | Where-Object { $_.Groups[1].Value.Trim() -eq $lb.Text } | Select-Object -Last 1
+  if ($cur) { $lb = [pscustomobject]@{ Text = $lb.Text; X = [int]$cur.Groups[2].Value; Y = [int]$cur.Groups[3].Value } }
+  $barPid = (Get-Process -Name 'WinMac.Bar.App' -ErrorAction SilentlyContinue | Select-Object -First 1).Id
   [Au]::Click($lb.X, $lb.Y); Start-Sleep -Milliseconds 900
+  $barPid2 = (Get-Process -Name 'WinMac.Bar.App' -ErrorAction SilentlyContinue | Select-Object -First 1).Id
+  Note "  - clic en «$($lb.Text)» en ($($lb.X),$($lb.Y)); proceso de la barra antes $barPid, después $barPid2$(if ($barPid -ne $barPid2) { ' → LA BARRA SE REINICIÓ' })"
   $rows = [regex]::Matches((MenuDiagLine), 'fila:([^:]+):([^@|]*)@(\d+),(\d+)') | ForEach-Object { [pscustomobject]@{ Id = $_.Groups[1].Value; Text = $_.Groups[2].Value.Trim(); X = [int]$_.Groups[3].Value; Y = [int]$_.Groups[4].Value } }
   $safe = ($lb.Text -replace '[^\w]', '')
   Shot ("09-menu-{0}-{1}" -f $i, $safe) "Menú «$($lb.Text)» desplegado con el estilo de WinMac" ([Math]::Max($sc.X, $lb.X - 60)) $sc.Y 520 560
@@ -194,7 +201,10 @@ Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App',
 # ── Registros útiles
 Note ''; Note '## Líneas de registro relevantes'; Note '```'
 if (Test-Path $barLog) { Select-String -Path $barLog -Pattern '\[(isla|launchpad|spotlight|menús)\]' | Select-Object -Last 40 | ForEach-Object { Note ($_.Line -replace '^\S+ ', '') } }
-if (Test-Path $hostLog) { Select-String -Path $hostLog -Pattern '\[notch\] (Crashed|Failed|sin latido)' | ForEach-Object { Note $_.Line } }
+if (Test-Path $hostLog) { Select-String -Path $hostLog -Pattern '\[(notch|bar|dock)\] (Crashed|Failed|sin latido|terminó)' | ForEach-Object { Note $_.Line } }
+if (Test-Path $barLog) { Select-String -Path $barLog -Pattern '\[panel\]|\[menús\] (clic|abrir|«)|CIERRE INESPERADO' -Context 0, 12 | Select-Object -Last 30 | ForEach-Object { Note $_.Line; if ($_.Line -match 'CIERRE') { $_.Context.PostContext | ForEach-Object { Note "    $_" } } } }
+Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = '.NET Runtime', 'Application Error'; StartTime = $t0 } -MaxEvents 6 -ErrorAction SilentlyContinue |
+  Where-Object { $_.Message -match 'WinMac' } | ForEach-Object { $m = $_.Message; if ($m.Length -gt 3000) { $m = $m.Substring(0, 3000) }; Note "evento $($_.ProviderName): $m" }
 Note '```'
 
 Note ''; Note '## Limitaciones de captura del runner'
