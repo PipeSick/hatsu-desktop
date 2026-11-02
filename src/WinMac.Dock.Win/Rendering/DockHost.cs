@@ -57,7 +57,7 @@ public sealed class DockHost : IDisposable
         if (demo) _icons = new NoIconSource();        // los íconos de demostración (letras) son solo para pruebas automatizadas y --demo
         else
         {
-            _appIcons = new AppIconSource(); _icons = _appIcons;
+            _appIcons = new AppIconSource(log: _log); _icons = _appIcons;
             _thumbs = new WindowThumbnails { Log = log }; _ctl.ThumbAspect = _thumbs.Aspect;
             _tracker = new WindowTracker(); _actions = new WindowActions(_tracker) { Log = log }; _tracker.Changed += RefreshItems;
             try { _quit = new EventWaitHandle(false, EventResetMode.ManualReset, DockDefaults.QuitEventName); } catch (Exception e) { log("No se pudo crear el evento de cierre: " + e.Message); }

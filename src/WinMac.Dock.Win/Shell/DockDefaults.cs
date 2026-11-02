@@ -45,10 +45,11 @@ public sealed class AppIconSource : IIconSource, IDisposable
     private int _dirty;
     public const int RequestSize = 256;
 
-    public AppIconSource(string? cacheDir = null, IIconProvider? provider = null)
+    public AppIconSource(string? cacheDir = null, IIconProvider? provider = null, Action<string>? log = null)
     {
         Service = new IconService(provider ?? new ShellIconProvider(), new IconCache(512, cacheDir ?? DockDefaults.IconCachePath));
         Service.Loaded += _ => Interlocked.Exchange(ref _dirty, 1);
+        if (log is not null) Service.Failed += (r, why) => log($"[dock] sin icono para {r.App.Id} ({r.App.DisplayName}): {why}; se usa el mosaico de reemplazo");
     }
 
     /// <summary>True (una sola vez) si llegó algún icono nuevo desde la última consulta: hay que repintar.</summary>
