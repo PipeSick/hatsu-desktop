@@ -74,8 +74,10 @@ internal sealed class CaptureEditor : IDisposable
         // 80 % of the monitor where it opens, never bigger than needed for the image at 100 %
         var mon = ScreenGrabber.Monitors().FirstOrDefault(m => m.Bounds.Contains(c.X, c.Y)) ?? ScreenGrabber.Monitors().FirstOrDefault(m => m.Primary);
         var area = mon?.Bounds ?? new CaptureRect(0, 0, 1280, 800);
-        int ww = (int)Math.Min(area.W * 0.8, Math.Max(760 * _scale, _doc.Width + 80 * _scale)), wh = (int)Math.Min(area.H * 0.8, Math.Max(520 * _scale, _doc.Height + 160 * _scale));
-        BarNative.SetWindowPos(_hwnd, IntPtr.Zero, area.X + (area.W - ww) / 2, area.Y + (area.H - wh) / 2, ww, wh, 0x0004 | 0x0040);
+        // Between WinMac's top bar and its Dock (about 40 and 130 px at 100 %): the toolbar and the status line are never covered
+        int top = area.Y + (int)(44 * _scale), bottom = area.Bottom - (int)(140 * _scale), room = Math.Max((int)(360 * _scale), bottom - top);
+        int ww = (int)Math.Min(area.W * 0.86, Math.Max(760 * _scale, _doc.Width + 80 * _scale)), wh = (int)Math.Min(room, Math.Max(520 * _scale, _doc.Height + 160 * _scale));
+        BarNative.SetWindowPos(_hwnd, IntPtr.Zero, area.X + (area.W - ww) / 2, top + (room - wh) / 2, ww, wh, 0x0004 | 0x0040);
 
         _dev = new D2DDevice(); _ctx = _dev.Context; _dev.SetDpi(1.0);
         _b = _ctx.CreateSolidColorBrush(new Color4(1, 1, 1, 1));
