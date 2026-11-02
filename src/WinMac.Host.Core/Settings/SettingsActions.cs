@@ -50,6 +50,8 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("autostart", "toggle"): setAutostart(e.On); cfg.SetAutostartFlag(e.On); return true;
             case ("bar.bg", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.BackgroundValues.Length: cfg.ApplyBarPatch(Patch("background", SettingsBuilder.BackgroundValues[e.Index])); return true;
             case ("bar.theme", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.ThemeValues.Length: cfg.ApplyBarPatch(Patch("theme", SettingsBuilder.ThemeValues[e.Index])); return true;
+            case ("bar.capfmt", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.CaptureFormatValues.Length: cfg.ApplyBarPatch(Patch("captureFormat", SettingsBuilder.CaptureFormatValues[e.Index])); return true;
+            case ("bar.capdir", "text"): { var t = (e.Text ?? "").Trim().Trim('"'); cfg.ApplyBarPatch(Patch("captureFolder", t.Length == 0 ? null : t)); return true; }
             case ("bar.spot", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.SpotKeyValues.Length: cfg.ApplyBarPatch(Patch("spotlightHotkey", SettingsBuilder.SpotKeyValues[e.Index])); return true;
             case ("hub.rate", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.RateValues.Length: cfg.ApplyBarPatch(Patch("rateUnit", SettingsBuilder.RateValues[e.Index])); return true;
             case ("bar.ics", "text"): { var t = (e.Text ?? "").Trim(); cfg.ApplyBarPatch(Patch("calendarIcsPath", t.Length == 0 ? null : t)); return true; }

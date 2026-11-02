@@ -72,6 +72,17 @@ public sealed record BarConfig
     /// <summary>Spotlight busca también archivos: recientes de Windows y, si el servicio Windows Search responde, el índice de Windows (sin indexar nada por su cuenta).</summary>
     public bool SpotlightFiles { get; init; } = true;
 
+    // ── Capturas (docs/26)
+    /// <summary>Atajos Ctrl+Mayús+3 (pantalla), +4 (región) y +5 (barra de captura). Mientras WinMac está abierto tienen prioridad sobre la misma combinación en
+    /// las apps; si otro programa ya los registró, Windows los rechaza y se dice en el registro y en Ajustes.</summary>
+    public bool CaptureHotkeys { get; init; } = true;
+    /// <summary>Formato del archivo: Png (sin pérdida, por defecto) o Jpg.</summary>
+    public string CaptureFormat { get; init; } = "Png";
+    /// <summary>Además de guardar, copiar la imagen al portapapeles.</summary>
+    public bool CaptureCopyToClipboard { get; init; } = false;
+    /// <summary>Carpeta de destino; vacía = la de capturas de Windows («Imágenes\Capturas de pantalla»), la misma que lee la galería de la Isla.</summary>
+    public string? CaptureFolder { get; init; }
+
     /// <summary>Iconos de la bandeja de Windows (apps en segundo plano) en la barra. WinMac recibe los iconos como lo hace la bandeja y se los reenvía a Explorer.</summary>
     public bool ShowTrayIcons { get; init; } = true;
 

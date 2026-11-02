@@ -36,7 +36,10 @@ public static class SettingsBuilder
         ("showTrayIcons", "Iconos de apps en segundo plano", b => b.ShowTrayIcons),
         ("launchpadOnWinKey", "La tecla Windows abre Launchpad", b => b.LaunchpadOnWinKey),
         ("spotlightFiles", "Buscar también archivos", b => b.SpotlightFiles),
+        ("captureHotkeys", "Atajos Ctrl+Mayús+3 / 4 / 5", b => b.CaptureHotkeys),
+        ("captureCopyToClipboard", "Copiar también al portapapeles", b => b.CaptureCopyToClipboard),
     ];
+    public static readonly string[] CaptureFormatNames = ["PNG", "JPG"], CaptureFormatValues = ["Png", "Jpg"];
     public static readonly string[] SpotKeyNames = ["Alt+Espacio", "Ctrl+Espacio", "Desactivado"], SpotKeyValues = ["AltSpace", "CtrlSpace", "Off"];
 
     public static readonly Dictionary<WinMac.Bar.Notifications.NcWidget, string> NcWidgetNames = new()
@@ -91,6 +94,12 @@ public static class SettingsBuilder
             new("Elementos", [Bar(0), Bar(1), Bar(2), Bar(3), Bar(4), Bar(5), Bar(6), Bar(7), Bar(8), Bar(28, "Los de la bandeja de Windows; siguen también en la barra de tareas")]),
             new("Comportamiento", [Bar(9, "El resto de ventanas no se superpone a la barra"), Bar(10), Bar(11), Bar(12, "Apps con menú de Windows o accesible; los menús originales siguen en la app")]),
             new("Launchpad", [Bar(29, "Solo al pulsarla sola; los atajos con Windows siguen igual. Ctrl+Esc abre el menú Inicio")], "Desactivado, la tecla Windows vuelve a abrir el menú Inicio."),
+            new("Capturas", [
+                Bar(31, "3: pantalla · 4: región · 5: barra de captura. Si otro programa ya los usa, Windows los rechaza"),
+                new(RowKind.Segmented, "bar.capfmt", "Formato", Options: CaptureFormatNames, Selected: Index(CaptureFormatValues, bar.CaptureFormat)),
+                Bar(32),
+                new(RowKind.Field, "bar.capdir", "Carpeta", Text: bar.CaptureFolder ?? "", Placeholder: "Imágenes\\Capturas de pantalla"),
+            ], "Las capturas se guardan en esa carpeta y aparecen en la galería de la Isla."),
             new("Spotlight", [
                 new(RowKind.Segmented, "bar.spot", "Atajo", Options: SpotKeyNames, Selected: Index(SpotKeyValues, bar.SpotlightHotkey.ToString())),
                 Bar(30, "Recientes de Windows y el índice de Windows Search; no indexa nada por su cuenta"),

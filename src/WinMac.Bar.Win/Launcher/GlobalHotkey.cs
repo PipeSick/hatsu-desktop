@@ -8,7 +8,7 @@ namespace WinMac.Bar.Win.Launcher;
 /// </summary>
 internal sealed class GlobalHotkey : IDisposable
 {
-    public const uint ModAlt = 1, ModCtrl = 2, ModNoRepeat = 0x4000;
+    public const uint ModAlt = 1, ModCtrl = 2, ModShift = 4, ModNoRepeat = 0x4000;
     private const int WM_HOTKEY = 0x312, WM_QUIT = 0x12;
     private Thread? _thread; private uint _threadId;
 
