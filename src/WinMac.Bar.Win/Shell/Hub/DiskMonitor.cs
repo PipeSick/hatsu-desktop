@@ -38,7 +38,7 @@ internal sealed class DiskMonitor : IDiskMonitor, IDisposable
                 int hs = Wmi.I32(o["HealthStatus"], 5); string? health = hs switch { 0 => "Saludable", 1 => "Advertencia", 2 => "Con fallos", _ => null };
                 var rel = smart.GetValueOrDefault(number); string bus = BusName(Wmi.I32(o["BusType"]));
                 var sq = rel?.Temp is null || rel.Hours is null || rel.Wear is null ? StorageQuery.Read(number, bus == "NVMe") : null;   // lo que WMI no entrega, se le pide al propio disco
-                double? temp = rel?.Temp ?? sq?.TempC, wear = sq?.WearPercent ?? rel?.Wear;   // el registro del propio disco manda: WMI puede dar «0» sin dato real long? hours = rel?.Hours ?? sq?.Hours;
+                double? temp = rel?.Temp ?? sq?.TempC, wear = sq?.WearPercent ?? rel?.Wear; long? hours = rel?.Hours ?? sq?.Hours;   // desgaste: manda el registro del propio disco (WMI puede dar «0» sin dato real)
                 string? why = temp is null && hours is null && wear is null ? (sq?.Why ?? smartWhy) : null;
                 physical.Add(new PhysicalRec(number, Wmi.Str(o["FriendlyName"]), Wmi.I32(o["MediaType"]) switch { 3 => "HDD", 4 => "SSD", _ => null }, bus, Wmi.U64(o["Size"]),
                     new SmartInfo(health, temp, hours, wear, sq?.ReadBytes, sq?.WrittenBytes, why, incidents.GetValueOrDefault(number))));

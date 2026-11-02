@@ -141,7 +141,7 @@ public static class StorageResponse
         var problems = new List<string>();
         int kelvin = r[d + 1] | (r[d + 2] << 8);
         double? temp = null;
-        if (kelvin is > 273 and < 423) temp = Math.Round(kelvin - 273.15, 1);   // el disco da kelvin enteros: sin redondear salía «32,85000000000002» else problems.Add("temperatura compuesta fuera de rango plausible (" + Num(kelvin) + " K): se descarta");
+        if (kelvin is > 273 and < 423) temp = kelvin - 273.15; else problems.Add("temperatura compuesta fuera de rango plausible (" + Num(kelvin) + " K): se descarta");
         int wearRaw = r[d + 5];
         if (wearRaw > 100) problems.Add("porcentaje usado " + Num(wearRaw) + " (> 100): se limita a 100");
         double? wear = Math.Min(wearRaw, 100);
