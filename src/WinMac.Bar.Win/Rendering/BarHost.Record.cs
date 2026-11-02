@@ -83,7 +83,13 @@ public sealed partial class BarHost
                 NotchActivity?.Invoke(new { op = "finish", activity = new { id = "grabacion", state = "completed" } });
             }
             catch (Exception e) { _log("[grabación] no se pudo cerrar el archivo: " + e.GetType().Name + ": " + e.Message); NotchActivity?.Invoke(new { op = "finish", activity = new { id = "grabacion", state = "failed" } }); }
-            finally { r.Dispose(); }
+            finally
+            {
+                r.Dispose();
+                // Each frame was a few MB in the large-object heap: give that memory back now instead of whenever a full GC happens (measured in CI: 670 MB after a recording)
+                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(2, GCCollectionMode.Forced, blocking: false, compacting: true);
+            }
         });
     }
 

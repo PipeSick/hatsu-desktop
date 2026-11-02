@@ -1,2 +1,2 @@
 # Commit de PipeSick/notch-win (rama claude/relaxed-turing-cijzko, basada en claude/winmac-integration) que el CI de WinMac compila para validar la integración. Actualizar al publicar cambios de NotchWin.
-f95c4c606766f6a3fb583135d1a0448bdcceffb7
+acf10e8b7cb0a3f3f0c2f7d2486195cbe1036557
