@@ -37,6 +37,9 @@ public interface IPanelUi
 /// </summary>
 public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> log, TimeSpan? notificationDelay = null, HubRuntime? rt = null, Notifications.NotificationStore? nc = null)
 {
+    /// <summary>El brillo que pidió el usuario desde la barra se aplicó de verdad (porcentaje, pantalla): la Isla lo muestra. Los monitores DDC/CI no avisan de cambios por sí solos.</summary>
+    public event Action<int, string>? BrightnessApplied;
+
     private readonly TimeSpan _notifyDelay = notificationDelay ?? TimeSpan.FromMilliseconds(250);
 
     private void SetMessage(string? m) => ui.Ctx = ui.Ctx with { Message = m };
@@ -221,7 +224,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
             var mon = hub.Snapshot.Brightness.Monitors.ToList(); if (mon.Count == 0) return;
             hub.Patch(s => s with { Brightness = s.Brightness with { Monitors = s.Brightness.Monitors.Select(m => m with { Percent = v }).ToList() } });
             hub.SetLatest("brightness", v, p => { ServiceResult last = ServiceResult.Ok; foreach (var m in mon) { last = svc.Brightness.Set(m.Id, p); if (!last.IsOk) break; } return last; },
-                r => { if (!r.IsOk) SetMessage(r.Message); if (commit || !r.IsOk) hub.RefreshBrightness(true); ui.Rebuild(); });
+                r => { if (!r.IsOk) SetMessage(r.Message); else BrightnessApplied?.Invoke(v, mon.Count == 1 ? mon[0].Name : "Pantallas"); if (commit || !r.IsOk) hub.RefreshBrightness(true); ui.Rebuild(); });
         }
 
         ui.Rebuild();

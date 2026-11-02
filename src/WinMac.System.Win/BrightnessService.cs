@@ -7,7 +7,7 @@ namespace WinMac.SystemControl.Win;
 /// (<c>root\wmi</c>). Cada pantalla se muestra solo si responde; las que no soportan el control quedan fuera con su motivo. El panel interno NO se ha podido probar en un portátil.
 /// Las llamadas pueden tardar cientos de ms: se hacen siempre fuera del hilo de interfaz.
 /// </summary>
-public sealed class BrightnessService : IBrightnessService
+public sealed partial class BrightnessService : IBrightnessService
 {
     private const uint McCapsBrightness = 0x2;
 

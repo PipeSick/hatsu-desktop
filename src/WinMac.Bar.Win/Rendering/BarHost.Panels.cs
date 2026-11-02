@@ -127,7 +127,7 @@ public sealed partial class BarHost : IPanelUi
 
     private void PanelsTick()
     {
-        _popover?.Pump(); HubTick(); TrayTick();
+        _popover?.Pump(); HubTick(); TrayTick(); NotchTick();
         if (_popover is not { IsOpen: true }) return;
         var now = DateTime.UtcNow;
         if (_pkind == PanelKind.Notifications && _nc.NeedsPolling && now - _lastNcPoll >= NcPollEvery) { _lastNcPoll = now; _nc.Refresh(); }   // sin evento de Windows: relectura suave, solo con el panel abierto

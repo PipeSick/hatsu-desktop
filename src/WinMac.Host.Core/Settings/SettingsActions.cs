@@ -62,6 +62,12 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("notch.agents", "toggle"): cfg.UpdateNotch(n => n with { AgentsEnabled = e.On }); return true;
             case ("notch.lyrics", "toggle"): cfg.UpdateNotch(n => n with { LyricsEnabled = e.On, LyricsInPill = e.On && n.LyricsInPill }); return true;
             case ("notch.pill", "toggle"): cfg.UpdateNotch(n => n with { LyricsInPill = e.On }); return true;
+            case ("notch.pillvol", "toggle"): cfg.UpdateNotch(n => n with { PillVolume = e.On }); return true;
+            case ("notch.pillbright", "toggle"): cfg.UpdateNotch(n => n with { PillBrightness = e.On }); return true;
+            case ("notch.pillnotif", "toggle"): cfg.UpdateNotch(n => n with { PillNotifications = e.On }); return true;
+            case ("notch.pillanim", "toggle"): cfg.UpdateNotch(n => n with { PillAnimations = e.On }); return true;
+            case ("notch.hudsec", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int hs)) cfg.UpdateNotch(n => n with { PillHudSeconds = hs }); return true;
+            case ("notch.notifsec", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int ns)) cfg.UpdateNotch(n => n with { PillNotifySeconds = ns }); return true;
             case ("notch.local", "button"): openLocal(); return true;
         }
 

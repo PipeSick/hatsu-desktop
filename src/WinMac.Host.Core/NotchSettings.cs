@@ -30,6 +30,13 @@ public sealed record NotchSettings
     public bool LyricsEnabled { get; init; }
     public bool LyricsInPill { get; init; }
     public int PollIntervalSeconds { get; init; } = 30;
+    // Lo que la Isla cerrada muestra un momento (lo detecta la barra y lo reenvía; ver docs/21-isla-informativa.md)
+    public bool PillVolume { get; init; } = true;
+    public bool PillBrightness { get; init; } = true;
+    public bool PillNotifications { get; init; } = true;
+    public int PillHudSeconds { get; init; } = 2;
+    public int PillNotifySeconds { get; init; } = 5;
+    public bool PillAnimations { get; init; } = true;
 
     public static IReadOnlyList<NotchSection> DefaultSections() => SectionIds.Select(id => new NotchSection(id, id != CameraId)).ToList();
 
@@ -51,6 +58,8 @@ public sealed record NotchSettings
         MusicPlayer = Players.FirstOrDefault(p => string.Equals(p, MusicPlayer, StringComparison.OrdinalIgnoreCase)) ?? "Spotify",
         CustomPlayerPath = string.IsNullOrWhiteSpace(CustomPlayerPath) ? null : CustomPlayerPath.Trim().Trim('"'),
         PollIntervalSeconds = Math.Clamp(PollIntervalSeconds, 5, 3600),
+        PillHudSeconds = Math.Clamp(PillHudSeconds, 1, 10),
+        PillNotifySeconds = Math.Clamp(PillNotifySeconds, 2, 30),
     };
 
     /// <summary>Aplica un parche JSON (camelCase, solo los campos presentes). Lo desconocido o inválido se ignora campo a campo.</summary>
@@ -72,6 +81,12 @@ public sealed record NotchSettings
                 case "lyricsenabled" when IsBool(v): n = n with { LyricsEnabled = v.GetBoolean() }; break;
                 case "lyricsinpill" when IsBool(v): n = n with { LyricsInPill = v.GetBoolean() }; break;
                 case "pollintervalseconds" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int s): n = n with { PollIntervalSeconds = s }; break;
+                case "pillvolume" when IsBool(v): n = n with { PillVolume = v.GetBoolean() }; break;
+                case "pillbrightness" when IsBool(v): n = n with { PillBrightness = v.GetBoolean() }; break;
+                case "pillnotifications" when IsBool(v): n = n with { PillNotifications = v.GetBoolean() }; break;
+                case "pillanimations" when IsBool(v): n = n with { PillAnimations = v.GetBoolean() }; break;
+                case "pillhudseconds" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int hs): n = n with { PillHudSeconds = hs }; break;
+                case "pillnotifyseconds" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int ns): n = n with { PillNotifySeconds = ns }; break;
                 case "sections" when v.ValueKind == JsonValueKind.Array:
                     var list = new List<NotchSection>();
                     foreach (var item in v.EnumerateArray())
@@ -102,6 +117,7 @@ public sealed record NotchSettings
     {
         position = Position, glassLevel = GlassLevel, sections = Sections.Select(s => new { id = s.Id, enabled = s.Enabled }).ToArray(), musicEnabled = MusicEnabled, agentsEnabled = AgentsEnabled,
         musicPlayer = MusicPlayer, customPlayerPath = CustomPlayerPath, lyricsEnabled = LyricsEnabled, lyricsInPill = LyricsInPill, pollIntervalSeconds = PollIntervalSeconds,
+        pillVolume = PillVolume, pillBrightness = PillBrightness, pillNotifications = PillNotifications, pillHudSeconds = PillHudSeconds, pillNotifySeconds = PillNotifySeconds, pillAnimations = PillAnimations,
     };
 
     /// <summary>

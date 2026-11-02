@@ -261,6 +261,7 @@ public sealed partial class BarHost : IDisposable
 
     public void Dispose()
     {
+        StopNotchFeed();
         StopTray();
         DisposePanels();
         foreach (var w in _wins) { try { w.Dispose(); } catch (Exception) { /* seguimos liberando las demás */ } }

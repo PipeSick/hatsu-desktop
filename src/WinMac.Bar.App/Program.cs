@@ -81,6 +81,9 @@ internal static class Program
             // Ajustes centrales: el host es la única fuente de verdad. Llegan retenidos al conectar y tras cada cambio; los cambios hechos desde la barra se piden al host.
             link.Subscribe("config.bar", d => { try { if (d is { } e && System.Text.Json.JsonSerializer.Deserialize<BarConfig>(e.GetRawText(), BarConfig.Wire) is { } c) host.ApplyConfig(c.Sanitize()); } catch (Exception ex) { Log("Ajustes de la barra ilegibles: " + ex.Message); } });
             host.PersistPatch = patch => link.Event("config.bar.set", patch);
+            // La Isla (NotchWin): la barra le cuenta los cambios de volumen y brillo y las notificaciones nuevas, según lo que pida en sus ajustes centrales.
+            link.Subscribe("config.notch", d => host.ApplyNotchOptions(WinMac.Bar.Notch.NotchFeedOptions.Parse(d)));
+            host.NotchEvent = payload => link.Event(WinMac.Bar.Notch.NotchFeed.Topic, payload);
             host.HostCommand = (cmd, section) => link.Event("host.cmd", new { cmd, section });   // «Ajustes» y «Salir» del panel: las ejecuta el host (cierre ordenado)
             link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
         Log("Barra superior iniciada. Cierra con «WinMac.Bar.App --quit» o desde su menú (clic derecho).");

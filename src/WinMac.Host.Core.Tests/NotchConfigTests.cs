@@ -524,3 +524,36 @@ public class BarCommandTests
         finally { File.Delete(file); }
     }
 }
+
+public class NotchPillSettingsTests
+{
+    private static JsonElement J(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+    [Fact]
+    public void Pill_options_default_on_travel_on_the_wire_and_are_clamped()
+    {
+        var n = new NotchSettings(); Assert.True(n.PillVolume && n.PillBrightness && n.PillNotifications && n.PillAnimations); Assert.Equal(2, n.PillHudSeconds); Assert.Equal(5, n.PillNotifySeconds);
+        var p = n.ApplyPatch(J("{\"pillVolume\":false,\"pillHudSeconds\":60,\"pillNotifySeconds\":1,\"pillAnimations\":\"no\"}"));
+        Assert.False(p.PillVolume); Assert.Equal(10, p.PillHudSeconds); Assert.Equal(2, p.PillNotifySeconds); Assert.True(p.PillAnimations);
+        var wire = JsonDocument.Parse(JsonSerializer.Serialize(p.ToWire())).RootElement;
+        Assert.False(wire.GetProperty("pillVolume").GetBoolean()); Assert.Equal(10, wire.GetProperty("pillHudSeconds").GetInt32()); Assert.True(wire.GetProperty("pillNotifications").GetBoolean());
+        Assert.False(WinMac.Host.ConfigService.SameNotch(n, p));   // a change here is published to the notch
+    }
+
+    [Fact]
+    public void Settings_page_has_the_closed_notch_group_and_its_edits_are_saved()
+    {
+        string f = Path.Combine(Path.GetTempPath(), "winmac-pill-" + Guid.NewGuid().ToString("N") + ".json"); var cfg = new ConfigService(f, new HostConfig());
+        try
+        {
+            var a = new SettingsActions(cfg, () => { }, _ => { });
+            var group = SettingsBuilder.Build(new SettingsInput(cfg.Current, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "notch").Groups.Single(g => g.Header == "Notch cerrado");
+            Assert.Equal(["notch.pillvol", "notch.pillbright", "notch.pillnotif", "notch.hudsec", "notch.notifsec", "notch.pillanim"], group.Rows.Select(r => r.Id));
+            Assert.True(a.Apply(new SettingsEdit("notch.pillnotif", "toggle", On: false))); Assert.False(cfg.Current.Notch!.PillNotifications);
+            Assert.True(a.Apply(new SettingsEdit("notch.hudsec", "text", Text: " 4 "))); Assert.Equal(4, cfg.Current.Notch!.PillHudSeconds);
+            Assert.True(a.Apply(new SettingsEdit("notch.notifsec", "text", Text: "abc"))); Assert.Equal(5, cfg.Current.Notch!.PillNotifySeconds);
+            Assert.True(a.Apply(new SettingsEdit("notch.pillanim", "toggle", On: false))); Assert.False(cfg.Current.Notch!.PillAnimations);
+        }
+        finally { File.Delete(f); }
+    }
+}

@@ -132,6 +132,14 @@ public static class SettingsBuilder
             new(RowKind.Toggle, "notch.lyrics", "Letras sincronizadas", "Envía título y artista a NetEase para buscar la letra", n.LyricsEnabled, installed, why),
             new(RowKind.Toggle, "notch.pill", "Letra en el notch cerrado", null, n.LyricsInPill, installed && n.LyricsEnabled, installed && !n.LyricsEnabled ? "Activa las letras sincronizadas" : why),
         ]));
+        notch.Add(new("Notch cerrado", [
+            new(RowKind.Toggle, "notch.pillvol", "Volumen", "Muestra el nivel al subir, bajar o silenciar", n.PillVolume, installed, why),
+            new(RowKind.Toggle, "notch.pillbright", "Brillo", "Pantalla integrada y el deslizador de la barra (los monitores externos no avisan)", n.PillBrightness, installed, why),
+            new(RowKind.Toggle, "notch.pillnotif", "Notificaciones", "Las de Windows; requiere «Mostrar notificaciones de Windows» en la barra", n.PillNotifications, installed, why),
+            new(RowKind.Field, "notch.hudsec", "Indicadores durante (s)", Enabled: installed, Reason: why, Text: n.PillHudSeconds.ToString(), Placeholder: "2"),
+            new(RowKind.Field, "notch.notifsec", "Notificaciones durante (s)", Enabled: installed, Reason: why, Text: n.PillNotifySeconds.ToString(), Placeholder: "5"),
+            new(RowKind.Toggle, "notch.pillanim", "Animaciones", "La píldora crece y vuelve con una transición", n.PillAnimations, installed, why),
+        ], "Lo que el notch muestra un momento sin abrirse."));
         notch.Add(new("Agentes de IA", [
             new(RowKind.Toggle, "notch.agents", "Agentes de IA", "Estado de tus agentes en el notch", n.AgentsEnabled, installed, why),
             new(RowKind.Field, "notch.poll", "Actualizar cada (s)", Enabled: installed, Reason: why, Text: n.PollIntervalSeconds.ToString(), Placeholder: "30"),
