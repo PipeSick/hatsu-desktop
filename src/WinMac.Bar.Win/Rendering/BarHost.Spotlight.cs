@@ -196,7 +196,7 @@ public sealed partial class BarHost
                 items.Add(new SpotItem(SpotKind.Clipboard, prev.Length > 70 ? prev[..69] + "…" : prev, (pinned ? "★ Fijado · " : "") + (kind == "image" ? "Imagen copiada" : "Texto copiado") + (when.Length > 0 ? " · " + when : ""), "clip:" + id)
                     { Arguments = kind, Details = prev.Length > 70 ? [prev] : null });
             }
-        if (MenuDiagOn) _log($"[spotlight] portapapeles: {items.Count} resultado(s), pestaña activa en la Isla: {(d.TryGetProperty("enabled", out var en) ? en.ToString() : "?")}");   // SOLO CI: el número, nunca el contenido
+        if (MenuDiagOn) _log($"[spotlight] portapapeles: {items.Count} resultado(s), pestaña activa en la Isla: {(d.TryGetProperty("enabled", out var en) ? en.ToString() : "?")}, entradas en la Isla: {(d.TryGetProperty("total", out var tt) ? tt.ToString() : "?")}");   // SOLO CI: el número, nunca el contenido
         Post(() => { _clipItems = items; if (_spot is { IsOpen: true } s) Search(s.Controller.Query, askClipboard: false); });
     }
 
