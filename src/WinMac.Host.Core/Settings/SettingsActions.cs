@@ -69,6 +69,9 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("notch.pillbright", "toggle"): cfg.UpdateNotch(n => n with { PillBrightness = e.On }); return true;
             case ("notch.pillnotif", "toggle"): cfg.UpdateNotch(n => n with { PillNotifications = e.On }); return true;
             case ("notch.pillanim", "toggle"): cfg.UpdateNotch(n => n with { PillAnimations = e.On }); return true;
+            case ("notch.clipsecrets", "toggle"): cfg.UpdateNotch(n => n with { ClipboardSkipSecrets = e.On }); return true;
+            case ("notch.clippersist", "toggle"): cfg.UpdateNotch(n => n with { ClipboardPersist = e.On }); return true;
+            case ("notch.cliplimit", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int cl)) cfg.UpdateNotch(n => n with { ClipboardLimit = cl }); return true;
             case ("notch.hudsec", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int hs)) cfg.UpdateNotch(n => n with { PillHudSeconds = hs }); return true;
             case ("notch.notifsec", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int ns)) cfg.UpdateNotch(n => n with { PillNotifySeconds = ns }); return true;
             case ("notch.local", "button"): openLocal(); return true;

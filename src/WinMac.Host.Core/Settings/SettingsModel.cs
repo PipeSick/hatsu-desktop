@@ -158,6 +158,11 @@ public static class SettingsBuilder
             new(RowKind.Field, "notch.notifsec", "Notificaciones durante (s)", Enabled: installed, Reason: why, Text: n.PillNotifySeconds.ToString(), Placeholder: "5"),
             new(RowKind.Toggle, "notch.pillanim", "Animaciones", "La píldora crece y vuelve con una transición", n.PillAnimations, installed, why),
         ], "Lo que el notch muestra un momento sin abrirse."));
+        notch.Add(new("Portapapeles", [
+            new(RowKind.Field, "notch.cliplimit", "Elementos en el historial", Enabled: installed, Reason: why, Text: n.ClipboardLimit.ToString(), Placeholder: "50"),
+            new(RowKind.Toggle, "notch.clipsecrets", "No guardar contraseñas ni claves", "Detecta claves privadas, tokens y contraseñas generadas; ignora siempre a los gestores de contraseñas", n.ClipboardSkipSecrets, installed, why),
+            new(RowKind.Toggle, "notch.clippersist", "Conservar al reiniciar", "Cifrado para tu usuario de Windows (DPAPI); al desactivarlo se borra el archivo", n.ClipboardPersist, installed, why),
+        ], "Solo en este equipo: el historial nunca se sincroniza ni se registra."));
         notch.Add(new("Agentes de IA", [
             new(RowKind.Toggle, "notch.agents", "Agentes de IA", "Estado de tus agentes en el notch", n.AgentsEnabled, installed, why),
             new(RowKind.Field, "notch.poll", "Actualizar cada (s)", Enabled: installed, Reason: why, Text: n.PollIntervalSeconds.ToString(), Placeholder: "30"),

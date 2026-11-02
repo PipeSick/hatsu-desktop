@@ -38,6 +38,10 @@ public sealed record NotchSettings
     public int PillHudSeconds { get; init; } = 2;
     public int PillNotifySeconds { get; init; } = 5;
     public bool PillAnimations { get; init; } = true;
+    // Portapapeles (docs/28): sin persistencia por defecto; las contraseñas y claves detectables no se guardan; apps excluidas (gestores de contraseñas)
+    public int ClipboardLimit { get; init; } = 50;
+    public bool ClipboardPersist { get; init; }
+    public bool ClipboardSkipSecrets { get; init; } = true;
 
     public static IReadOnlyList<NotchSection> DefaultSections() => SectionIds.Select(id => new NotchSection(id, id != CameraId)).ToList();
 
@@ -61,6 +65,7 @@ public sealed record NotchSettings
         PollIntervalSeconds = Math.Clamp(PollIntervalSeconds, 5, 3600),
         PillHudSeconds = Math.Clamp(PillHudSeconds, 1, 10),
         PillNotifySeconds = Math.Clamp(PillNotifySeconds, 2, 30),
+        ClipboardLimit = Math.Clamp(ClipboardLimit, 5, 500),
     };
 
     /// <summary>Aplica un parche JSON (camelCase, solo los campos presentes). Lo desconocido o inválido se ignora campo a campo.</summary>
@@ -88,6 +93,9 @@ public sealed record NotchSettings
                 case "pillanimations" when IsBool(v): n = n with { PillAnimations = v.GetBoolean() }; break;
                 case "pillhudseconds" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int hs): n = n with { PillHudSeconds = hs }; break;
                 case "pillnotifyseconds" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int ns): n = n with { PillNotifySeconds = ns }; break;
+                case "clipboardlimit" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int cl): n = n with { ClipboardLimit = cl }; break;
+                case "clipboardpersist" when IsBool(v): n = n with { ClipboardPersist = v.GetBoolean() }; break;
+                case "clipboardskipsecrets" when IsBool(v): n = n with { ClipboardSkipSecrets = v.GetBoolean() }; break;
                 case "sections" when v.ValueKind == JsonValueKind.Array:
                     var list = new List<NotchSection>();
                     foreach (var item in v.EnumerateArray())
@@ -119,6 +127,7 @@ public sealed record NotchSettings
         position = Position, glassLevel = GlassLevel, sections = Sections.Select(s => new { id = s.Id, enabled = s.Enabled }).ToArray(), musicEnabled = MusicEnabled, agentsEnabled = AgentsEnabled,
         musicPlayer = MusicPlayer, customPlayerPath = CustomPlayerPath, lyricsEnabled = LyricsEnabled, lyricsInPill = LyricsInPill, pollIntervalSeconds = PollIntervalSeconds,
         pillVolume = PillVolume, pillBrightness = PillBrightness, pillNotifications = PillNotifications, pillHudSeconds = PillHudSeconds, pillNotifySeconds = PillNotifySeconds, pillAnimations = PillAnimations,
+        clipboardLimit = ClipboardLimit, clipboardPersist = ClipboardPersist, clipboardSkipSecrets = ClipboardSkipSecrets,
     };
 
     /// <summary>
