@@ -37,6 +37,27 @@ Memoria gestionada durante las 20 grabaciones: montón 26,4 → 29,7 MB, en uso 
 **Criterio**: tras 20 grabaciones, en reposo, Working Set dentro de ±5 % del inicial y montón gestionado sin tendencia: cumplido (145 MB frente a 143,5 MB).
 Cierre del archivo tras detener: 224–328 ms de media. CPU durante la grabación (1024×768, 15 fps, WARP): 16–22 % de un núcleo.
 
+### Segunda causa: memoria nativa a la espera de finalizadores
+Con lo anterior, la memoria gestionada quedó plana, pero la privada todavía podía saltar (run 41528267129: 110–122 MB durante 15 grabaciones, 212 MB a las 20) y un
+GC completo de diagnóstico la devolvía **exactamente** al valor inicial (116 MB). Era la canalización de Media Foundation (búferes del codificador) que pertenece a
+objetos WinRT cuyos envoltorios .NET solo la sueltan al finalizarse. Correcciones: el fotograma de muestra ya no se obtiene decodificando el MP4 con
+`Windows.Media.Editing` (ahora es una miniatura de 320 px tomada de los propios fotogramas; además la CPU de grabación bajó de ~20 % a ~12 % y el cierre del archivo de
+~320 a ~110 ms) y, al terminar, se sueltan las referencias nativas de `MediaStreamSource`, `MediaTranscoder` y el resultado de preparación. Nada de GC forzado.
+
 ## 2. Estabilidad
-Ver la sección «Estabilidad prolongada» del informe automático de cada run (ciclos de Isla, capturas, editor, grabación, Spotlight, cuadrícula y una
-extensión cerrada a la fuerza).
+Prueba prolongada en cada run (`Visual-Audit.ps1`, sección 1i): 6 ciclos de abrir/cerrar la Isla ×3 y cambiar de pestaña, captura de pantalla, abrir y cerrar el
+editor, grabación de 2 s, Spotlight (abrir, escribir, cerrar), cuadrícula de ventanas y, en el ciclo 3, **cerrar a la fuerza un proceso de extensión**.
+
+| Run | Duración | Reinicios / latidos perdidos | Errores en bar.log | Spotlight (orden → visible) | Extensión cerrada |
+|---|---|---|---|---|---|
+| 41520038459 | 99 s | 0 | 1 (no identificado en ese run) | 221 ms media, 234 máx. | reiniciada sola (1/3) y reconectada |
+| 41525142172 | 121 s | 0 | 0 | 232 ms, 331 máx. | reiniciada y reconectada |
+| 41528267129 | 95 s | 0 | 1: «Windows Search no disponible» (limitación del runner) | 190 ms, 203 máx. | reiniciada y reconectada |
+
+Los reinicios por «sin latido» vistos antes en Test-Notch (run 41510942250) **no se han vuelto a reproducir** en 6 runs posteriores. Sí se identificó y corrigió una
+causa real de bloqueo de la Barra: los diálogos modales (MessageBox, Guardar como) en su hilo detenían su latido y el host la reiniciaba; ahora no hay ninguno en
+ese hilo. La otra causa de reinicio corregida: el procedimiento de ventana de la primera superposición de captura, ya liberado, que colgaba la segunda captura.
+
+## 3. Teclado en la Isla
+Validado con pulsaciones reales (run 41528267129): clic ⇒ «teclado activado primer-plano=True» ⇒ → cambia de sección ⇒ Esc la cierra. En el run 41525142172 falló
+la prueba, no la Isla: no comprobaba que la Isla estuviera cerrada antes del clic y ese clic pudo cerrarla en vez de abrirla. Ahora lo comprueba y lo registra.
