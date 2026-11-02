@@ -44,6 +44,27 @@ objetos WinRT cuyos envoltorios .NET solo la sueltan al finalizarse. Correccione
 `Windows.Media.Editing` (ahora es una miniatura de 320 px tomada de los propios fotogramas; además la CPU de grabación bajó de ~20 % a ~12 % y el cierre del archivo de
 ~320 a ~110 ms) y, al terminar, se sueltan las referencias nativas de `MediaStreamSource`, `MediaTranscoder` y el resultado de preparación. Nada de GC forzado.
 
+### Resultado final (run 41530008821: reutilización + miniatura propia + liberación nativa)
+| Momento | Working Set (MB) | Privada (MB) | CPU (% núcleo) | Hilos | Handles | GDI | USER |
+|---|---|---|---|---|---|---|---|
+| reposo inicial | 217,3 | 116,0 | 0,0 | 41 | 1151 | 14 | 47 |
+| +1 grabación | 215,0 | 115,2 | 5,0 | 41 | 1135 | 14 | 47 |
+| +3 | 214,6 | 117,4 | 13,1 | 40 | 1149 | 14 | 47 |
+| +5 | 214,2 | 114,2 | 9,3 | 39 | 1164 | 14 | 48 |
+| +10 | 218,1 | 120,9 | 10,4 | 37 | 1213 | 14 | 48 |
+| +15 | 209,6 | 121,9 | 12,2 | 37 | 1257 | 14 | 48 |
+| +20 | 191,2 | 131,7 | 9,8 | 37 | 1299 | 14 | 48 |
+| 20 s de reposo | 187,4 | 131,6 | 0,5 | 30 | 1278 | 14 | 42 |
+| tras una cancelada | 188,9 | 136,4 | 5,5 | 31 | 1272 | 14 | 41 |
+| tras una fallida (simulada) | 188,9 | 137,2 | 1,1 | 31 | 1272 | 14 | 41 |
+| otros 20 s de reposo | 175,9 | 133,8 | 0,9 | 28 | 1251 | 14 | 38 |
+| GC completo (solo diagnóstico) | 156,7 | 112,1 | — | 29 | 1029 | 14 | 38 |
+
+Conclusión: en 20 grabaciones la privada varía de 116 a 132 MB (+16 MB como máximo, antes +96 MB) y un GC completo la devuelve por debajo del valor inicial: **no hay
+retención**. GDI constante (14), hilos y USER vuelven a su nivel; los handles suben ~100 y bajan con el GC (los mantienen objetos pendientes de recoger).
+20/20 grabaciones guardadas, cierre del archivo 111 ms de media, 0 fotogramas saltados, 2 búferes como máximo. Criterio aplicado: tras 20 grabaciones, el Working Set en reposo
+no supera el inicial y la privada queda dentro del +15 % sin tendencia creciente sostenida: **cumplido**.
+
 ## 2. Estabilidad
 Prueba prolongada en cada run (`Visual-Audit.ps1`, sección 1i): 6 ciclos de abrir/cerrar la Isla ×3 y cambiar de pestaña, captura de pantalla, abrir y cerrar el
 editor, grabación de 2 s, Spotlight (abrir, escribir, cerrar), cuadrícula de ventanas y, en el ciclo 3, **cerrar a la fuerza un proceso de extensión**.
