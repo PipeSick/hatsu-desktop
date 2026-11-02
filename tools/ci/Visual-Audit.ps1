@@ -461,6 +461,9 @@ if (SpotOpen) {
   [System.Windows.Forms.SendKeys]::SendWait('> del /s prueba'); Start-Sleep -Milliseconds 900; SpotShot '19c-spotlight-comando' 'Spotlight Pro: «> …» solo ofrece abrir una terminal o copiar el texto (nunca lo ejecuta)'
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
   [System.Windows.Forms.SendKeys]::SendWait('20% de 150'); Start-Sleep -Milliseconds 700; SpotShot '19d-spotlight-porcentaje' 'Spotlight Pro: «20% de 150»'
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
+  [System.Windows.Forms.SendKeys]::SendWait('portapapeles'); Start-Sleep -Milliseconds 1200; SpotShot '19e-spotlight-portapapeles' 'Spotlight Pro: historial del portapapeles de la Isla (solo lo admitido por la privacidad)'
+  [System.Windows.Forms.SendKeys]::SendWait('{TAB}'); Start-Sleep -Milliseconds 300; SpotShot '19f-spotlight-tab' 'Spotlight Pro: Tab mueve la selección (la vista previa la sigue)'
   if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[spotlight] herramienta' | Select-Object -Last 3 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
 } else { Note '- **13-spotlight**: NO capturado (la ventana no apareció)' }

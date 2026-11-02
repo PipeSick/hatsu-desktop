@@ -144,6 +144,10 @@ public static partial class SpotPro
             case SpotKind.Action: lines.Add("Acción de WinMac"); keys = "Intro ejecutar"; break;
             case SpotKind.Tool: lines.AddRange(it.Details ?? []); keys = it.Target.StartsWith("tool:ping", StringComparison.Ordinal) || it.Target.StartsWith("tool:dns", StringComparison.Ordinal) ? "Intro ejecutar · Intro de nuevo copia el resultado" : "Intro copiar"; break;
             case SpotKind.Command: lines.Add(it.Subtitle ?? ""); keys = "Intro"; break;
+            case SpotKind.Clipboard:
+                lines.Add(it.Subtitle ?? ""); if (it.Details is { Count: > 0 } cd) lines.AddRange(cd);
+                keys = it.Arguments == "image" ? "Intro copiar la imagen · Ctrl+Supr quitar del historial" : "Intro copiar · Ctrl+Intro copiar sin formato · Ctrl+Supr quitar del historial";
+                return (lines.Where(l => l.Length > 0).ToList(), keys);
             case SpotKind.Script: lines.Add(it.Target); if (it.Arguments is { Length: > 0 } args) lines.Add("Argumentos: " + args); lines.Add("Se ejecuta con tus permisos, nunca elevado"); keys = "Intro dos veces para ejecutar"; break;
             default: keys = "Intro";
             break;

@@ -5,7 +5,7 @@ namespace WinMac.Bar.Launcher;
 
 public enum SpotlightHotkey { AltSpace, CtrlSpace, Off }
 
-public enum SpotKind { Calc, Convert, App, Setting, Folder, File, Path, Action, Tool, Command, Script }
+public enum SpotKind { Calc, Convert, App, Setting, Folder, File, Path, Action, Tool, Command, Script, Clipboard }
 
 /// <summary>Un resultado de Spotlight. <see cref="Target"/>: el Id de la app, la ruta, el URI <c>ms-settings:</c> o el valor a copiar.</summary>
 public sealed record SpotItem(SpotKind Kind, string Title, string? Subtitle, string Target, InstalledApp? App = null)
@@ -26,6 +26,7 @@ public sealed record SpotItem(SpotKind Kind, string Title, string? Subtitle, str
         SpotKind.Tool => "Herramientas",
         SpotKind.Command => "Terminal",
         SpotKind.Script => "Scripts",
+        SpotKind.Clipboard => "Portapapeles",
         _ => "Archivos",
     };
 }
@@ -162,7 +163,7 @@ public static class SpotlightEngine
 
     public static IReadOnlyList<SpotItem> Query(string text, IReadOnlyList<InstalledApp> apps, IReadOnlyDictionary<string, int>? usage,
         IReadOnlyList<(string Name, string Path)> folders, IReadOnlyList<SpotItem> files, Func<string, bool>? pathExists = null,
-        bool recording = false, IReadOnlyList<SpotScript>? scripts = null, IReadOnlyList<string>? workspaces = null)
+        bool recording = false, IReadOnlyList<SpotScript>? scripts = null, IReadOnlyList<string>? workspaces = null, IReadOnlyList<SpotItem>? clipboard = null)
     {
         var q = text.Trim(); var list = new List<SpotItem>();
         if (q.Length == 0) return list;
@@ -190,6 +191,12 @@ public static class SpotlightEngine
         int best = ranked.Count == 0 ? -1 : ranked.Max(x => x.Score);
         if (best >= Strong) ranked.RemoveAll(x => x.Score < Weak);
         list.AddRange(ranked.OrderByDescending(x => x.Score).ThenBy(x => x.Order).Select(x => x.Item));
+        // Clipboard (from the Island, already filtered by its privacy rules): «portapapeles» / «cb …» show it first; otherwise up to 3 matches after the rest
+        if (clipboard is { Count: > 0 })
+        {
+            bool asked = q.Equals("portapapeles", StringComparison.OrdinalIgnoreCase) || q.Equals("clipboard", StringComparison.OrdinalIgnoreCase) || q.StartsWith("cb ", StringComparison.OrdinalIgnoreCase);
+            if (asked) list.InsertRange(0, clipboard.Take(MaxResults)); else list.AddRange(clipboard.Take(3));
+        }
         list.AddRange(files.Where(f => !list.Any(l => string.Equals(l.Target, f.Target, StringComparison.OrdinalIgnoreCase))).Take(4));
         return list.Take(MaxResults).ToList();
     }
@@ -216,7 +223,7 @@ public static class SpotlightEngine
             .Select(x => new SpotItem(SpotKind.File, x.r.Name, "Reciente", x.r.LinkPath)).ToList();
 }
 
-public enum SpotCommandKind { None, Redraw, Close, Open, Reveal }
+public enum SpotCommandKind { None, Redraw, Close, Open, Reveal, Delete }
 
 public readonly record struct SpotCommand(SpotCommandKind Kind, SpotItem? Item = null)
 {
@@ -263,7 +270,9 @@ public sealed class SpotlightController
         Query += c; Pending = -1; return true;
     }
 
-    public (SpotCommand Command, bool TextChanged) Key(int vk, bool ctrl)
+    public (SpotCommand Command, bool TextChanged) Key(int vk, bool ctrl) => Key(vk, ctrl, shift: false);
+
+    public (SpotCommand Command, bool TextChanged) Key(int vk, bool ctrl, bool shift)
     {
         switch (vk)
         {
@@ -272,6 +281,12 @@ public sealed class SpotlightController
                 if (Query.Length == 0) return (SpotCommand.None, false);
                 if (ctrl) { var t = Query.TrimEnd(); int sp = t.LastIndexOf(' '); Query = sp < 0 ? "" : t[..(sp + 1)]; } else Query = Query[..^1];
                 return (SpotCommand.Redraw, true);
+            case 0x09:   // Tab / Mayús+Tab: same as ↓ / ↑ (focus stays in the field)
+                Pending = -1; if (Results.Count == 0) return (SpotCommand.None, false);
+                Selected = shift ? (Selected <= 0 ? Results.Count - 1 : Selected - 1) : (Selected >= Results.Count - 1 ? 0 : Selected + 1);
+                return (SpotCommand.Redraw, false);
+            case 0x2E when ctrl && Selected >= 0 && Selected < Results.Count && Results[Selected].Kind == SpotKind.Clipboard:
+                return (new SpotCommand(SpotCommandKind.Delete, Results[Selected]), false);
             case 0x26: Pending = -1; if (Results.Count > 0) Selected = Selected <= 0 ? Results.Count - 1 : Selected - 1; return (SpotCommand.Redraw, false);
             case 0x28: Pending = -1; if (Results.Count > 0) Selected = Selected >= Results.Count - 1 ? 0 : Selected + 1; return (SpotCommand.Redraw, false);
             case 0x0D:
@@ -279,7 +294,7 @@ public sealed class SpotlightController
                 var it = Results[Selected];
                 if (it.Confirm && Pending != Selected) { Pending = Selected; return (SpotCommand.Redraw, false); }   // first Enter only asks
                 Pending = -1;
-                return (new SpotCommand(ctrl && it.Kind is SpotKind.File or SpotKind.Folder or SpotKind.Path ? SpotCommandKind.Reveal : SpotCommandKind.Open, it), false);
+                return (new SpotCommand(ctrl && it.Kind is SpotKind.File or SpotKind.Folder or SpotKind.Path or SpotKind.Clipboard ? SpotCommandKind.Reveal : SpotCommandKind.Open, it), false);
         }
 
         return (SpotCommand.None, false);

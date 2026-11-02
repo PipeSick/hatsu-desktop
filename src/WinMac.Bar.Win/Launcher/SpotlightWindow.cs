@@ -243,8 +243,8 @@ internal sealed class SpotlightWindow : IDisposable
                 case WM_LBUTTONUP: { var c = _ctl.Click(X(l), Y(l)); if (c.Kind != SpotCommandKind.None) _onCommand(c, false); return IntPtr.Zero; }
                 case WM_KEYDOWN or WM_SYSKEYDOWN:
                 {
-                    bool ctrl = (BarNative.GetKeyState(0x11) & 0x8000) != 0;
-                    var (c, changed) = _ctl.Key((int)w, ctrl); _dirty = true;
+                    bool ctrl = (BarNative.GetKeyState(0x11) & 0x8000) != 0, shift = (BarNative.GetKeyState(0x10) & 0x8000) != 0;
+                    var (c, changed) = _ctl.Key((int)w, ctrl, shift); _dirty = true;
                     if (c.Kind != SpotCommandKind.None || changed) _onCommand(c, changed);
                     return IntPtr.Zero;
                 }

@@ -53,7 +53,7 @@ public sealed partial class BarHost
             _lpIcons ??= CreateLauncherIcons();
             _spot ??= new SpotlightWindow(OnSpotlightCommand, _log) { Icons = SpotIcon };
             if (_catalogDirty || _catalog.UpdatedUtc is null || DateTime.UtcNow - _catalog.UpdatedUtc > CatalogMaxAge) RefreshCatalog();
-            _folders = FileSearch.Folders(); LoadScripts();
+            _folders = FileSearch.Folders(); LoadScripts(); _clipItems = [];
             if (_cfg.SpotlightFiles) Task.Run(() => { var r = FileSearch.Recent(); Post(() => _recent = r); }); else _recent = [];
             var (mon, scale) = CursorMonitor();
             _spot.Show(mon, scale);
@@ -69,6 +69,9 @@ public sealed partial class BarHost
         switch (c.Kind)
         {
             case SpotCommandKind.Close: _spot.Hide(); return;
+            case SpotCommandKind.Open when c.Item is { Kind: SpotKind.Clipboard } cb: ClipAction(cb, "copy"); _spot.Hide(); return;
+            case SpotCommandKind.Reveal when c.Item is { Kind: SpotKind.Clipboard } cb: ClipAction(cb, "plain"); _spot.Hide(); return;
+            case SpotCommandKind.Delete when c.Item is { Kind: SpotKind.Clipboard } cb: ClipAction(cb, "delete"); _clipItems = _clipItems.Where(i => i.Target != cb.Target).ToList(); Search(_spot.Controller.Query, askClipboard: false); return;
             case SpotCommandKind.Open when c.Item is { Kind: SpotKind.Action or SpotKind.Tool or SpotKind.Command or SpotKind.Script } pro:
                 if (!OpenPro(pro)) _spot.Hide(); else _spot.Refresh();
                 return;
@@ -80,12 +83,15 @@ public sealed partial class BarHost
     }
 
     /// <summary>Lo local (apps, calculadora, Configuración, carpetas, recientes) al instante; Windows Search después, si la búsqueda no cambió entretanto.</summary>
-    private void Search(string q)
+    private void Search(string q) => Search(q, askClipboard: true);
+
+    private void Search(string q, bool askClipboard)
     {
         if (_spot is null) return;
         int gen = ++_spotGen; _toolCts?.Cancel();   // a new search cancels a running ping/DNS
+        if (askClipboard) AskClipboard(q);
         var recent = _cfg.SpotlightFiles ? SpotlightEngine.MatchRecent(q, _recent) : [];
-        IReadOnlyList<SpotItem> Local(IReadOnlyList<SpotItem> files) => FillLocalTools(SpotlightEngine.Query(q, _catalog.Apps, _lprefs.Usage, _folders, files, p => Directory.Exists(p) || File.Exists(p), IsRecording, _scripts, _wsNames));
+        IReadOnlyList<SpotItem> Local(IReadOnlyList<SpotItem> files) => FillLocalTools(SpotlightEngine.Query(q, _catalog.Apps, _lprefs.Usage, _folders, files, p => Directory.Exists(p) || File.Exists(p), IsRecording, _scripts, _wsNames, _clipItems));
         _spot.Controller.SetResults(Local(recent)); _spot.Refresh();
         if (!_cfg.SpotlightFiles || _searchBroken || q.Trim().Length < 3) return;
         Task.Run(async () =>
@@ -157,4 +163,37 @@ public sealed partial class BarHost
     [DllImport("kernel32.dll")] private static extern IntPtr GlobalLock(IntPtr h);
     [DllImport("kernel32.dll")] private static extern bool GlobalUnlock(IntPtr h);
     [DllImport("kernel32.dll")] private static extern IntPtr GlobalFree(IntPtr h);
+
+    // ── Portapapeles (docs/28): lo consulta a la Isla por el canal interno; solo vistas previas de lo que su historial ya admitió
+    public Action<string, object>? ModuleEvent { get; set; }
+    private IReadOnlyList<SpotItem> _clipItems = []; private long _clipReq;
+
+    private void AskClipboard(string q)
+    {
+        if (ModuleEvent is null) return;
+        var t = q.Trim();
+        if (t.Length < 2) { _clipItems = []; return; }
+        long req = Interlocked.Increment(ref _clipReq);
+        ModuleEvent("clip.query", new { req, q = t });
+    }
+
+    /// <summary>Answer from the Island (worker thread). Ignored if the search changed meanwhile; never logged.</summary>
+    public void OnClipResults(System.Text.Json.JsonElement d)
+    {
+        if (d.ValueKind != System.Text.Json.JsonValueKind.Object || !d.TryGetProperty("req", out var r) || !r.TryGetInt64(out long req) || req != Interlocked.Read(ref _clipReq)) return;
+        var items = new List<SpotItem>();
+        if (d.TryGetProperty("items", out var arr) && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
+            foreach (var e in arr.EnumerateArray().Take(20))
+            {
+                string? id = e.TryGetProperty("id", out var i) ? i.GetString() : null, kind = e.TryGetProperty("kind", out var k) ? k.GetString() : null, prev = e.TryGetProperty("preview", out var p) ? p.GetString() : null;
+                if (id is not { Length: 32 } || prev is null) continue;
+                bool pinned = e.TryGetProperty("pinned", out var pn) && pn.ValueKind == System.Text.Json.JsonValueKind.True;
+                string when = e.TryGetProperty("at", out var at) && at.TryGetDateTimeOffset(out var dt) ? dt.ToLocalTime().ToString("dd/MM HH:mm") : "";
+                items.Add(new SpotItem(SpotKind.Clipboard, prev.Length > 70 ? prev[..69] + "…" : prev, (pinned ? "★ Fijado · " : "") + (kind == "image" ? "Imagen copiada" : "Texto copiado") + (when.Length > 0 ? " · " + when : ""), "clip:" + id)
+                    { Arguments = kind, Details = prev.Length > 70 ? [prev] : null });
+            }
+        Post(() => { _clipItems = items; if (_spot is { IsOpen: true } s) Search(s.Controller.Query, askClipboard: false); });
+    }
+
+    private void ClipAction(SpotItem it, string op) { if (ModuleEvent is { } ev && it.Target.StartsWith("clip:", StringComparison.Ordinal)) { ev("clip.action", new { id = it.Target[5..], op }); _log("[spotlight] portapapeles: " + op); } }
 }

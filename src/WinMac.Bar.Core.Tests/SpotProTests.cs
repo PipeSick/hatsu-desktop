@@ -68,3 +68,30 @@ public class SpotProTests
         Assert.Contains("C:\\x\\setup.exe", lines);
     }
 }
+
+public class SpotClipboardTests
+{
+    private static readonly SpotItem[] Clip = [new(SpotKind.Clipboard, "Lista de la compra", "Texto copiado", "clip:" + new string('a', 32)) { Arguments = "text" }];
+
+    [Fact]
+    public void AskingForTheClipboardShowsItFirstOtherwiseAfterTheRest()
+    {
+        Assert.Equal(SpotKind.Clipboard, SpotlightEngine.Query("portapapeles", [], null, [], [], clipboard: Clip)[0].Kind);
+        Assert.Equal(SpotKind.Clipboard, SpotlightEngine.Query("cb lista", [], null, [], [], clipboard: Clip)[0].Kind);
+        Assert.Contains(SpotlightEngine.Query("lista", [], null, [], [], clipboard: Clip), i => i.Kind == SpotKind.Clipboard);
+    }
+
+    [Fact]
+    public void TabMovesAndCtrlDeleteOnlyRemovesClipboardEntries()
+    {
+        var ctl = new SpotlightController();
+        ctl.SetResults([new SpotItem(SpotKind.Calc, "4", "2+2 =", "4"), Clip[0]]);
+        Assert.Equal(0, ctl.Selected);
+        ctl.Key(0x09, false, false); Assert.Equal(1, ctl.Selected);
+        ctl.Key(0x09, false, true); Assert.Equal(0, ctl.Selected);
+        Assert.Equal(SpotCommandKind.None, ctl.Key(0x2E, true, false).Command.Kind);   // a calculator result is not deletable
+        ctl.Key(0x09, false, false);
+        Assert.Equal(SpotCommandKind.Delete, ctl.Key(0x2E, true, false).Command.Kind);
+        Assert.Equal(SpotCommandKind.Reveal, ctl.Key(0x0D, true, false).Command.Kind);  // Ctrl+Intro: copy as plain text
+    }
+}

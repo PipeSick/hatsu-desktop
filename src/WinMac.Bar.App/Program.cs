@@ -100,7 +100,9 @@ internal static class Program
             link.Subscribe("config.notch", d => host.ApplyNotchOptions(WinMac.Bar.Notch.NotchFeedOptions.Parse(d)));
             host.NotchEvent = payload => link.Event(WinMac.Bar.Notch.NotchFeed.Topic, payload);
             host.NotchActivity = payload => link.Event("notch.activity", payload);
-            host.NotchCommand = payload => link.Event("notch.cmd", payload);   // p. ej. cerrar la Isla abierta antes de capturar   // API interna de actividades de la Isla (docs/25)
+            host.NotchCommand = payload => link.Event("notch.cmd", payload);
+            host.ModuleEvent = (topic, payload) => link.Event(topic, payload);
+            link.Subscribe("clip.results", d => { if (d is { } e) host.OnClipResults(e); });   // p. ej. cerrar la Isla abierta antes de capturar   // API interna de actividades de la Isla (docs/25)
             host.HostCommand = (cmd, section) => link.Event("host.cmd", new { cmd, section });   // «Ajustes» y «Salir» del panel: las ejecuta el host (cierre ordenado)
             link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
         Log("Barra superior iniciada. Cierra con «WinMac.Bar.App --quit» o desde su menú (clic derecho).");
