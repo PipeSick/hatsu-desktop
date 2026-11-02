@@ -91,6 +91,16 @@ Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App',
 $d = Join-Path ([IO.Path]::GetTempPath()) ('winmac-audit-' + [Guid]::NewGuid().ToString('N').Substring(0, 6)); New-Item -ItemType Directory -Force -Path $d | Out-Null
 @{ modules = @{ bar = @{ enabled = $true; args = @('--no-config', '--no-reserve') }; dock = @{ enabled = $true; args = @('--no-config') } }; bar = @{ appMenus = $true } } | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
 $pillLog = Join-Path $OutDir 'isla-registro.log'; Remove-Item $pillLog -ErrorAction SilentlyContinue
+# WinMac 2.0 — datos de PRUEBA por caminos reales: PNG reales en la carpeta de capturas de Windows (la galería los lee de disco).
+$shotsDir = Join-Path ([Environment]::GetFolderPath('MyPictures')) 'Screenshots'; New-Item -ItemType Directory -Force -Path $shotsDir | Out-Null
+$dlDir = Join-Path $env:USERPROFILE 'Downloads'; New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
+function TestPng([string]$path, [int]$n, [string]$label) {
+  $b = New-Object System.Drawing.Bitmap 960, 540; $g = [System.Drawing.Graphics]::FromImage($b)
+  $hues = @(@(30, 60, 160), @(20, 110, 190), @(90, 40, 150), @(25, 140, 120), @(170, 80, 40), @(60, 60, 70))
+  $c1 = $hues[$n % $hues.Count]; $br = New-Object System.Drawing.Drawing2D.LinearGradientBrush (New-Object System.Drawing.Point 0, 0), (New-Object System.Drawing.Point 960, 540), ([System.Drawing.Color]::FromArgb(255, $c1[0], $c1[1], $c1[2])), ([System.Drawing.Color]::FromArgb(255, 10, 12, 30))
+  $g.FillRectangle($br, 0, 0, 960, 540); $f = New-Object System.Drawing.Font 'Segoe UI', 40; $g.DrawString($label, $f, [System.Drawing.Brushes]::White, 40, 220); $g.Dispose(); $b.Save($path, [System.Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
+}
+for ($k = 1; $k -le 5; $k++) { $p = Join-Path $shotsDir "captura-de-prueba-$k.png"; TestPng $p $k "Captura de prueba $k"; (Get-Item $p).LastWriteTime = (Get-Date).AddHours(-6 * $k) }
 $barLog = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'; Remove-Item $barLog -ErrorAction SilentlyContinue
 $env:WINMAC_PILL_SELFTEST = $pillLog; $env:WINMAC_MENU_DIAG = '1'
 $hostLog = Join-Path $d 'host.log'; $hostExe = Join-Path $DistDir 'WinMac.exe'; $bar = Join-Path $DistDir 'WinMac.Bar.App.exe'
@@ -132,6 +142,38 @@ if (-not $collapsed) {
   if (-not $c2) { [Au]::Click($cx, $sc.Y + 12); Start-Sleep -Milliseconds 1200; Note "  - P2: cerrada con otro clic: $(NotchW) px" }
 }
 [Au]::Glide($sc.X + 60, $sc.Y + [int]($sc.Height * 0.6), 2); Start-Sleep -Milliseconds 800
+
+# ── 1b. WinMac 2.0: Isla compacta y Centro de actividades (docs/25)
+Note ''; Note '### WinMac 2.0 — Isla compacta y Centro de actividades'
+function NotchWide { (NotchW) -gt 300 }
+function TabsLine { if (Test-Path $pillLog) { (Select-String -Path $pillLog -SimpleMatch ' tabs ' | Select-Object -Last 1).Line } else { '' } }
+function ClickTab([string]$id) { $m = [regex]::Match((TabsLine), [regex]::Escape($id) + '@(\d+),(\d+)'); if ($m.Success) { [Au]::Click([int]$m.Groups[1].Value, [int]$m.Groups[2].Value); Start-Sleep -Milliseconds 900; return $true }; Note "  - pestaña «$id» no encontrada en el registro"; return $false }
+function Expand { if (-not (NotchWide)) { [Au]::Click($cx, $sc.Y + 12); $null = WaitFor { NotchWide } 4; Start-Sleep -Milliseconds 900 } }
+function Collapse { if (NotchWide) { [Au]::Click($cx, $sc.Y + 14); $null = WaitFor { -not (NotchWide) } 4; [Au]::Glide($sc.X + 60, $sc.Y + [int]($sc.Height * 0.6), 4); Start-Sleep -Milliseconds 900 } }
+$null = WaitFor { LogHas $barLog 'música de prueba enviada' } 10; Start-Sleep -Milliseconds 800
+IslaShot '20-isla-compacta-musica-prueba' 'Isla compacta con la música de PRUEBA (API interna; sin pista real en el runner)'
+Expand
+Shot '21-centro-en-curso-musica' 'Isla expandida: encabezado multimedia (Datos de prueba, sin controles) y «En curso»' ($cx - 330) $sc.Y 660 520
+if (ClickTab 'history') { Shot '22-centro-historial-vacio' 'Estado vacío: «Historial» sin elementos' ($cx - 330) $sc.Y 660 520 }
+Collapse
+$dl = Join-Path $dlDir 'Descarga de prueba.iso.crdownload'; $fs = [IO.File]::Open($dl, 'Create'); $fs.Write((New-Object byte[] (3MB)), 0, 3MB); $fs.Flush()
+$null = WaitFor { (NotchW) -ge 290 } 6; Start-Sleep -Milliseconds 1500
+IslaShot '23-isla-compacta-descarga' 'Isla compacta con una descarga en curso (archivo .crdownload real en Descargas)'
+$newShot = Join-Path $shotsDir 'captura-de-prueba-nueva.png'; TestPng $newShot 0 'Captura de prueba nueva'
+if (WaitFor { LogHas $pillLog 'pill Capture' } 8) { Start-Sleep -Milliseconds 500; IslaShot '24-isla-captura-guardada' 'Captura guardada: miniatura en la Isla (archivo nuevo en la carpeta de capturas)' } else { Note '- **24-isla-captura-guardada**: NO capturada' }
+Set-Clipboard -Value 'Texto de prueba del portapapeles (CI)'; Start-Sleep -Milliseconds 400; Set-Clipboard -Value 'https://github.com/PipeSick/win11-macos'
+Start-Sleep -Milliseconds 2600
+Expand
+Shot '25-centro-varias-actividades' 'Centro de actividades: música de prueba, descarga en curso (y captura en el historial)' ($cx - 330) $sc.Y 660 560
+Shot '25b-barra-e-isla-expandida' 'Pantalla completa: barra superior con la Isla expandida'
+foreach ($t in @(@('captures', '26-centro-capturas', 'Sección «Capturas»: galería de la carpeta de capturas'), @('clipboard', '27-centro-portapapeles', 'Sección «Portapapeles»'), @('downloads', '28-centro-descargas', 'Sección «Descargas»'))) {
+  if (ClickTab $t[0]) { Shot $t[1] $t[2] ($cx - 330) $sc.Y 660 560 }
+}
+$fs.Dispose(); Rename-Item $dl 'Descarga de prueba.iso' -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 2600
+if (ClickTab 'history') { Shot '29-centro-historial' 'Sección «Historial»: la captura y la descarga terminada' ($cx - 330) $sc.Y 660 560 }
+if (Test-Path $pillLog) { Note "  - pestañas: $(TabsLine)" }
+Collapse
+Remove-Item (Join-Path $dlDir 'Descarga de prueba.iso*') -ErrorAction SilentlyContinue
 if (Test-Path $pillLog) { Note ''; Note '### Registro de la Isla (lo que mostró y el tamaño pedido a su ventana, DIP)'; Note '```'; Get-Content $pillLog | ForEach-Object { Note $_ }; Note '```' }
 
 # ── 2. Global Menu con el Bloc de notas real

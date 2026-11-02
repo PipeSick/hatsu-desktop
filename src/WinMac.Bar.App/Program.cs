@@ -90,6 +90,7 @@ internal static class Program
             // La Isla (NotchWin): la barra le cuenta los cambios de volumen y brillo y las notificaciones nuevas, según lo que pida en sus ajustes centrales.
             link.Subscribe("config.notch", d => host.ApplyNotchOptions(WinMac.Bar.Notch.NotchFeedOptions.Parse(d)));
             host.NotchEvent = payload => link.Event(WinMac.Bar.Notch.NotchFeed.Topic, payload);
+            host.NotchActivity = payload => link.Event("notch.activity", payload);   // API interna de actividades de la Isla (docs/25)
             host.HostCommand = (cmd, section) => link.Event("host.cmd", new { cmd, section });   // «Ajustes» y «Salir» del panel: las ejecuta el host (cierre ordenado)
             link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
         Log("Barra superior iniciada. Cierra con «WinMac.Bar.App --quit» o desde su menú (clic derecho).");

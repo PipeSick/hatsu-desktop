@@ -28,6 +28,9 @@ public sealed partial class BarHost
     /// <summary>Envía un evento a la Isla (lo pone Program en modo integrado). Se llama desde cualquier hilo.</summary>
     public Action<object>? NotchEvent { get; set; }
 
+    /// <summary>API INTERNA de actividades de la Isla (tópico notch.activity, solo por la tubería del host). docs/25.</summary>
+    public Action<object>? NotchActivity { get; set; }
+
     /// <summary>Ajustes centrales de la Isla (tópico retenido): qué quiere recibir.</summary>
     public void ApplyNotchOptions(NotchFeedOptions o) { _notchOpts = o; if (!o.Notifications) Post(_notchTracker.Reset); }
 
@@ -85,6 +88,13 @@ public sealed partial class BarHost
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(12)).ConfigureAwait(false);   // la Isla arranca y se enlaza
+            // WinMac 2.0: música de PRUEBA por la API interna (el runner no tiene reproductor). Marcada como prueba: la Isla lo dice y no muestra controles.
+            try
+            {
+                NotchActivity?.Invoke(new { op = "upsert", activity = new { id = "prueba-musica", kind = "media", title = "Canción de prueba", subtitle = "Artista de prueba · datos del CI", progress = 0.32, test = true } });
+                _log("[isla] prueba: música de prueba enviada por la API de actividades");
+            }
+            catch (Exception e) { _log("[isla] prueba: actividad: " + e.GetType().Name); }
             void S(string what, object o) { _log("[isla] prueba: " + what); Send(o); }
             S("volumen 40→65", NotchFeed.Volume(40, false, "Altavoces de prueba")); await Task.Delay(250).ConfigureAwait(false);
             Send(NotchFeed.Volume(45, false, "Altavoces de prueba")); await Task.Delay(250).ConfigureAwait(false);
