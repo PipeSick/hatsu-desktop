@@ -35,7 +35,9 @@ public static class SettingsBuilder
         ("notifRemoveFromWindows", "Borrar también en Windows", b => b.NotifRemoveFromWindows),
         ("showTrayIcons", "Iconos de apps en segundo plano", b => b.ShowTrayIcons),
         ("launchpadOnWinKey", "La tecla Windows abre Launchpad", b => b.LaunchpadOnWinKey),
+        ("spotlightFiles", "Buscar también archivos", b => b.SpotlightFiles),
     ];
+    public static readonly string[] SpotKeyNames = ["Alt+Espacio", "Ctrl+Espacio", "Desactivado"], SpotKeyValues = ["AltSpace", "CtrlSpace", "Off"];
 
     public static readonly Dictionary<WinMac.Bar.Notifications.NcWidget, string> NcWidgetNames = new()
     {
@@ -88,6 +90,10 @@ public static class SettingsBuilder
             new("Elementos", [Bar(0), Bar(1), Bar(2), Bar(3), Bar(4), Bar(5), Bar(6), Bar(7), Bar(8), Bar(28, "Los de la bandeja de Windows; siguen también en la barra de tareas")]),
             new("Comportamiento", [Bar(9, "El resto de ventanas no se superpone a la barra"), Bar(10), Bar(11), Bar(12, "Solo apps con menú estándar de Windows")]),
             new("Launchpad", [Bar(29, "Solo al pulsarla sola; los atajos con Windows siguen igual. Ctrl+Esc abre el menú Inicio")], "Desactivado, la tecla Windows vuelve a abrir el menú Inicio."),
+            new("Spotlight", [
+                new(RowKind.Segmented, "bar.spot", "Atajo", Options: SpotKeyNames, Selected: Index(SpotKeyValues, bar.SpotlightHotkey.ToString())),
+                Bar(30, "Recientes de Windows y el índice de Windows Search; no indexa nada por su cuenta"),
+            ], "Alt+Espacio sustituye al menú de ventana de Windows mientras WinMac está abierto."),
             new("Calendario", [new(RowKind.Field, "bar.ics", "Archivo .ics", Text: bar.CalendarIcsPath ?? "", Placeholder: "Sin archivo")], "Opcional. Solo lectura: el calendario muestra los eventos del archivo."),
             new("Control Center", [Bar(13), Bar(14), Bar(15), Bar(16), Bar(17), Bar(18), Bar(19), Bar(20)], "Qué controles aparecen en el panel de la Barra."),
         ]);

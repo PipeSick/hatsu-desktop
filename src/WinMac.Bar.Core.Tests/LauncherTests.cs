@@ -195,3 +195,76 @@ public class LaunchpadControllerTests
         p.UnhideAll(); p.ResetOrder(); Assert.Equal(apps.Select(a => a.Id), p.Arrange(apps).Select(a => a.Id));
     }
 }
+
+public class SpotlightTests
+{
+    private static readonly InstalledApp[] Apps = [new("calc", "Calculadora", AppKind.Packaged), new("np", "Bloc de notas", AppKind.Win32), new("code", "Visual Studio Code", AppKind.Win32)];
+    private static readonly (string, string)[] Folders = [("Descargas", @"C:\Users\a\Downloads"), ("Documentos", @"C:\Users\a\Documents")];
+
+    [Theory]
+    [InlineData("2+2", 4)] [InlineData("2 + 3 * 4", 14)] [InlineData("(2+3)*4", 20)] [InlineData("2^10", 1024)] [InlineData("10/4", 2.5)] [InlineData("1,5*2", 3)]
+    [InlineData("-3+5", 2)] [InlineData("50%*200", 100)] [InlineData("7×6", 42)] [InlineData("9÷3", 3)]
+    public void CalculatorEvaluates(string expr, double expected) => Assert.Equal(expected, SpotCalculator.Evaluate(expr)!.Value, 9);
+
+    [Theory]
+    [InlineData("1/0")] [InlineData("2+")] [InlineData("(2")] [InlineData("abc")] [InlineData("2 2")] [InlineData("notepad.exe")] [InlineData("rm -rf /")]
+    public void CalculatorRejectsAnythingElse(string expr) => Assert.Null(SpotCalculator.Evaluate(expr));
+
+    [Fact]
+    public void ConversionsCoverTheBasics()
+    {
+        Assert.Equal("6,2137 mi", SpotConverter.Convert("10 km en mi")!.Value.Result);
+        Assert.Equal("212 °F", SpotConverter.Convert("100 c to f")!.Value.Result);
+        Assert.Equal("2.048 MB", SpotConverter.Convert("2 gb en mb")!.Value.Result);
+        Assert.Null(SpotConverter.Convert("10 km en kg"));   // dimensiones distintas
+        Assert.Null(SpotConverter.Convert("hola mundo"));
+    }
+
+    [Fact]
+    public void QueryMixesSourcesAppsComeFromTheSharedIndex()
+    {
+        var r = SpotlightEngine.Query("calc", Apps, null, Folders, []);
+        Assert.Equal(SpotKind.App, r[0].Kind); Assert.Same(Apps[0], r[0].App);
+        var m = SpotlightEngine.Query("12*12", Apps, null, Folders, []);
+        Assert.Equal("144", m[0].Title); Assert.Equal(SpotKind.Calc, m[0].Kind);
+        var s = SpotlightEngine.Query("bluetooth", Apps, null, Folders, []);
+        Assert.Contains(s, i => i.Kind == SpotKind.Setting && i.Target == "ms-settings:bluetooth");
+        Assert.Contains(SpotlightEngine.Query("descar", Apps, null, Folders, []), i => i.Kind == SpotKind.Folder && i.Target.EndsWith("Downloads"));
+        Assert.Contains(SpotlightEngine.Query("resolucion", Apps, null, Folders, []), i => i.Target == "ms-settings:display");   // por palabra clave
+        Assert.Empty(SpotlightEngine.Query("   ", Apps, null, Folders, []));
+    }
+
+    [Fact]
+    public void PathsOnlyWhenTheyExistAndExecutablesAreRevealedNotRun()
+    {
+        Assert.Contains(SpotlightEngine.Query(@"C:\Windows", Apps, null, Folders, [], p => p == @"C:\Windows"), i => i.Kind == SpotKind.Path);
+        Assert.DoesNotContain(SpotlightEngine.Query(@"C:\NoExiste", Apps, null, Folders, [], _ => false), i => i.Kind == SpotKind.Path);
+        Assert.True(SpotlightEngine.IsExecutable(@"C:\x\setup.EXE")); Assert.True(SpotlightEngine.IsExecutable("a.ps1")); Assert.False(SpotlightEngine.IsExecutable("informe.docx"));
+        Assert.Equal((Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\x").Replace('/', '\\'), SpotlightEngine.ExpandPath("~\\x"));
+    }
+
+    [Fact]
+    public void RecentFilesMatchByNameNewestFirst()
+    {
+        var now = DateTime.UtcNow;
+        var r = SpotlightEngine.MatchRecent("informe", [("Informe anual.docx", "a.lnk", now.AddDays(-3)), ("Informe trimestral.xlsx", "b.lnk", now), ("Fotos", "c.lnk", now)]);
+        Assert.Equal(["Informe trimestral.xlsx", "Informe anual.docx"], r.Select(i => i.Title));
+        Assert.Empty(SpotlightEngine.MatchRecent("i", [("Informe", "a.lnk", now)]));
+    }
+
+    [Fact]
+    public void ControllerKeyboard()
+    {
+        var c = new SpotlightController();
+        foreach (var ch in "blo") Assert.True(c.Char(ch));
+        c.SetResults(SpotlightEngine.Query(c.Query, Apps, null, Folders, []));
+        Assert.Equal(0, c.Selected);
+        var (cmd, _) = c.Key(0x0D, false); Assert.Equal(SpotCommandKind.Open, cmd.Kind); Assert.Equal("np", cmd.Item!.Target);
+        c.Key(0x28, false); Assert.Equal(c.Results.Count > 1 ? 1 : 0, c.Selected);
+        Assert.True(c.Key(0x08, true).TextChanged); Assert.Equal("", c.Query);   // Ctrl+Retroceso borra la palabra
+        foreach (var ch in "doc") c.Char(ch);
+        c.SetResults(SpotlightEngine.Query(c.Query, Apps, null, Folders, []));
+        Assert.Equal(SpotCommandKind.Reveal, c.Key(0x0D, true).Command.Kind);   // Ctrl+Intro: mostrar la carpeta en el Explorador
+        Assert.Equal(SpotCommandKind.Redraw, c.Key(0x1B, false).Command.Kind); Assert.Equal(SpotCommandKind.Close, c.Key(0x1B, false).Command.Kind);
+    }
+}

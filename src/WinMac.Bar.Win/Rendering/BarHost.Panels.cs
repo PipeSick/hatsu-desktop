@@ -127,7 +127,7 @@ public sealed partial class BarHost : IPanelUi
 
     private void PanelsTick()
     {
-        _popover?.Pump(); HubTick(); TrayTick(); NotchTick(); LauncherTick();
+        _popover?.Pump(); HubTick(); TrayTick(); NotchTick(); LauncherTick(); SpotlightTick();
         if (_popover is not { IsOpen: true }) return;
         var now = DateTime.UtcNow;
         if (_pkind == PanelKind.Notifications && _nc.NeedsPolling && now - _lastNcPoll >= NcPollEvery) { _lastNcPoll = now; _nc.Refresh(); }   // sin evento de Windows: relectura suave, solo con el panel abierto
@@ -379,6 +379,7 @@ public sealed partial class BarHost : IPanelUi
         if (old.WeatherCity != c.WeatherCity || old.WeatherFavorites != c.WeatherFavorites || old.WeatherAutoLocation != c.WeatherAutoLocation) { ConfigureWeather(); _weather.Refresh(); }
         if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind is PanelKind.Calendar or PanelKind.Notifications && _popover is { IsOpen: true }) LoadEvents();
         if (old.LaunchpadOnWinKey != c.LaunchpadOnWinKey) ApplyLauncherConfig();
+        if (old.SpotlightHotkey != c.SpotlightHotkey) ApplySpotlightConfig();
         if (old.ShowTrayIcons != c.ShowTrayIcons) { if (c.ShowTrayIcons) StartTray(); else StopTray(); }
         if (old.NotificationsFromWindows != c.NotificationsFromWindows) { _nc.SetEnabled(c.NotificationsFromWindows); if (c.NotificationsFromWindows && _popover is { IsOpen: true } && _pkind == PanelKind.Notifications && !_nc.Active) _nc.Activate(); }
         _nextClock = DateTime.MinValue; UpdateState(force: false);

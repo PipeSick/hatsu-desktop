@@ -8,6 +8,7 @@ WinMac se distribuye bajo **Apache-2.0** (ver `LICENSE`). Este archivo lista lo 
 | Vortice.Direct2D1, Vortice.Direct3D11, Vortice.DirectComposition, Vortice.DXGI | 3.8.3 | MIT | Bindings .NET de DirectX (render) |
 | Vortice.DirectX, Vortice.Mathematics | 3.8.3 / 2.1.0 | MIT | Dependencias transitivas de las anteriores |
 | SharpGen.Runtime, SharpGen.Runtime.COM | 2.4.2-beta | MIT | Dependencias transitivas |
+| System.Data.OleDb (Microsoft) | 9.0.0 | MIT | Spotlight: consultas al índice de Windows Search (proveedor del propio Windows) |
 | Runtime de .NET (si se publica autocontenido) | 10.x | MIT (y licencias propias de componentes del runtime) | Ejecución |
 
 ## Solo compilación y pruebas (no se distribuyen)

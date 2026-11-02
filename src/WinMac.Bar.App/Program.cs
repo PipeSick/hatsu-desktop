@@ -57,6 +57,7 @@ internal static class Program
             if (args.Contains("--status")) return Status();
             if (args.Contains("--quit")) return Quit();
             if (args.Contains("--launchpad")) return Signal(WinMac.Bar.Win.Rendering.BarHost.LaunchpadEventName, "Launchpad");
+            if (args.Contains("--spotlight")) return Signal(WinMac.Bar.Win.Rendering.BarHost.SpotlightEventName, "Spotlight");
             if (args.Contains("--selftest-system")) return SystemProbe();
             if (args.Contains("--selftest-monitors")) return MonitorProbe();
             if (args.Contains("--selftest")) return SelfTest(appBar: false);

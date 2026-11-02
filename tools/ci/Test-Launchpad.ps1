@@ -23,6 +23,7 @@ public static class Lp {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RC r);
   public struct RC { public int L, T, R, B; }
   public static bool Visible() { var h = FindWindow("WinMacLaunchpad", null); return h != IntPtr.Zero && IsWindowVisible(h); }
+  public static bool SpotVisible() { var h = FindWindow("WinMacSpotlight", null); return h != IntPtr.Zero && IsWindowVisible(h); }
   public static bool Foreground() { var h = FindWindow("WinMacLaunchpad", null); return h != IntPtr.Zero && GetForegroundWindow() == h; }
   public static string Rect() { var h = FindWindow("WinMacLaunchpad", null); RC r; GetWindowRect(h, out r); return r.L + "," + r.T + "," + (r.R - r.L) + "x" + (r.B - r.T); }
 }
@@ -68,6 +69,31 @@ Check 'Esc cierra Launchpad' ($again -and (WaitFor { -not [Lp]::Visible() } 5))
 & $bar --launchpad | Out-Null; $null = WaitFor { [Lp]::Visible() } 10
 & $bar --launchpad | Out-Null
 Check 'Pedirlo otra vez lo cierra (como la tecla Windows en macOS)' (WaitFor { -not [Lp]::Visible() } 5)
+
+# ── Spotlight (mismo índice, búsqueda y lanzador)
+Check 'Atajo de Spotlight (Alt+Espacio) registrado o, si está ocupado, dicho en el registro' ((LogHas '[spotlight] atajo Alt+Espacio registrado') -or (LogHas '[spotlight] el atajo Alt+Espacio no está libre'))
+& $bar --spotlight | Out-Null
+$sv = WaitFor { [Lp]::SpotVisible() } 10
+Check 'Spotlight se abre' $sv
+if ($sv) {
+  $null = WaitFor { [Lp]::GetForegroundWindow() -eq [Lp]::FindWindow('WinMacSpotlight', $null) } 3
+  [System.Windows.Forms.SendKeys]::SendWait('12*12'); Start-Sleep -Milliseconds 500
+  $shot = New-Object System.Drawing.Bitmap $sc.Width, $sc.Height; $gg = [System.Drawing.Graphics]::FromImage($shot); $gg.CopyFromScreen($sc.X, $sc.Y, 0, 0, $shot.Size, [System.Drawing.CopyPixelOperation]::SourceCopy); $gg.Dispose()
+  $shot.Save((Join-Path $OutDir 'spotlight-real.png'), [System.Drawing.Imaging.ImageFormat]::Png); $shot.Dispose()
+  Set-Clipboard -Value 'vacío'
+  [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+  $clip = ''; $null = WaitFor { $script:clip = (Get-Clipboard -Raw); $script:clip -match '144' } 5
+  Check 'Calculadora: «12*12» + Intro copia 144 al portapapeles' ($clip -match '^144\s*$') "portapapeles: $clip"
+  Check 'Spotlight se cierra tras usar un resultado' (WaitFor { -not [Lp]::SpotVisible() } 5)
+  & $bar --spotlight | Out-Null; $null = WaitFor { [Lp]::SpotVisible() } 10; Start-Sleep -Milliseconds 300
+  [System.Windows.Forms.SendKeys]::SendWait('notepad'); Start-Sleep -Milliseconds 500; [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+  Check 'Spotlight: «notepad» + Intro abre el Bloc de notas (índice y lanzador compartidos con Launchpad)' (WaitFor { (Get-Process -Name 'notepad' -ErrorAction SilentlyContinue).Count -ge 1 } 15)
+  Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  & $bar --spotlight | Out-Null; $null = WaitFor { [Lp]::SpotVisible() } 10; Start-Sleep -Milliseconds 300
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+  Check 'Esc cierra Spotlight' (WaitFor { -not [Lp]::SpotVisible() } 5)
+}
+if (Test-Path $log) { Select-String -Path $log -Pattern '\[spotlight\]' | Select-Object -Last 8 | ForEach-Object { Write-Host "  bar.log> $($_.Line)" } }
 
 & $bar --quit | Out-Null
 Check 'La barra se cierra y el gancho se va con ella' (WaitFor { $p.HasExited } 20)

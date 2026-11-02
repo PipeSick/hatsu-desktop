@@ -71,6 +71,7 @@ public sealed partial class BarHost : IDisposable
         CreateHub();
         StartTray();
         StartLauncher();
+        StartSpotlight();
         Reconcile(initial: true);
         ApplyPendingConfig();   // una configuración que llegó del host antes de que existieran las ventanas
         var clock = Stopwatch.StartNew(); double last = 0; int frames = 0;
@@ -263,6 +264,7 @@ public sealed partial class BarHost : IDisposable
     public void Dispose()
     {
         StopNotchFeed();
+        StopSpotlight();
         StopLauncher();
         StopTray();
         DisposePanels();

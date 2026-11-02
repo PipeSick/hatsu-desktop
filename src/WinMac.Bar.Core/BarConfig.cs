@@ -67,6 +67,10 @@ public sealed record BarConfig
     // ── Launchpad y Spotlight (docs/22)
     /// <summary>Pulsar y soltar SOLA la tecla Windows abre Launchpad en vez del menú Inicio. Los atajos con Windows (Win+E, Win+R, Win+L…) siguen igual: no se bloquea ninguna tecla.</summary>
     public bool LaunchpadOnWinKey { get; init; } = true;
+    /// <summary>Atajo de Spotlight. Alt+Espacio sustituye, mientras WinMac está abierto, al menú de ventana de Windows (Restaurar/Mover/Cerrar), igual que PowerToys Run.</summary>
+    public Launcher.SpotlightHotkey SpotlightHotkey { get; init; } = Launcher.SpotlightHotkey.AltSpace;
+    /// <summary>Spotlight busca también archivos: recientes de Windows y, si el servicio Windows Search responde, el índice de Windows (sin indexar nada por su cuenta).</summary>
+    public bool SpotlightFiles { get; init; } = true;
 
     /// <summary>Iconos de la bandeja de Windows (apps en segundo plano) en la barra. WinMac recibe los iconos como lo hace la bandeja y se los reenvía a Explorer.</summary>
     public bool ShowTrayIcons { get; init; } = true;

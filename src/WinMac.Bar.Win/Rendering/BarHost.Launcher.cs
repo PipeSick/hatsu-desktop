@@ -98,6 +98,7 @@ public sealed partial class BarHost
         try
         {
             if (_lp?.IsOpen == true) { _lp.Hide(); return; }
+            if (_spot?.IsOpen == true) _spot.Hide();
             if (_popover is { IsOpen: true }) _popover.Hide();
             _lpIcons ??= CreateLauncherIcons();
             _lp ??= new LaunchpadWindow(OnLaunchpadCommand, _log) { Icons = LauncherIcon };

@@ -50,6 +50,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("autostart", "toggle"): setAutostart(e.On); cfg.SetAutostartFlag(e.On); return true;
             case ("bar.bg", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.BackgroundValues.Length: cfg.ApplyBarPatch(Patch("background", SettingsBuilder.BackgroundValues[e.Index])); return true;
             case ("bar.theme", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.ThemeValues.Length: cfg.ApplyBarPatch(Patch("theme", SettingsBuilder.ThemeValues[e.Index])); return true;
+            case ("bar.spot", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.SpotKeyValues.Length: cfg.ApplyBarPatch(Patch("spotlightHotkey", SettingsBuilder.SpotKeyValues[e.Index])); return true;
             case ("hub.rate", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.RateValues.Length: cfg.ApplyBarPatch(Patch("rateUnit", SettingsBuilder.RateValues[e.Index])); return true;
             case ("bar.ics", "text"): { var t = (e.Text ?? "").Trim(); cfg.ApplyBarPatch(Patch("calendarIcsPath", t.Length == 0 ? null : t)); return true; }
             case ("hub.ms", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int ms)) cfg.ApplyBarPatch(Patch("hubRefreshMs", ms)); return true;   // un valor no numérico se ignora (la ventana vuelve a mostrar el vigente)
