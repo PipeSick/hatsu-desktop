@@ -272,7 +272,7 @@ public sealed partial class BarHost : IPanelUi
         if (cmd > 0 && cmd <= choices.Count) onPick(choices[cmd - 1].Id);
     }
 
-    private void OnPanelEvent(PanelEvent e) => _ops.Handle(e);
+    private void OnPanelEvent(PanelEvent e) { if (_pkind == PanelKind.AppleMenu) { AppleAction(e); return; } _ops.Handle(e); }
 
     // ───────────────────────────── cuadros de diálogo propios
     private void ShowInfo(string title, string? text) { if (string.IsNullOrWhiteSpace(text)) return; ModalBox(title, text!, 0x40 /* ICONINFORMATION | OK */); }
@@ -287,35 +287,37 @@ public sealed partial class BarHost : IPanelUi
     }
 
     // ───────────────────────────── menú Apple
+    private IntPtr _appleReturn;
+
+    /// <summary>
+    /// Menú de la manzana con el aspecto de macOS (panel propio de WinMac en vez del menú nativo de Windows), pegado al icono y en el monitor de la barra pulsada.
+    /// Al elegir una opción, el foco vuelve a la app que lo tenía y la acción se ejecuta sobre ella (Forzar salida, confirmaciones).
+    /// </summary>
     private void ShowAppleMenu(BarWindow src, BarItemFrame? item)
     {
-        IntPtr menu = BarNative.CreatePopupMenu(); IntPtr prev = BarNative.GetForegroundWindow();
-        string? appName = SessionService.ForegroundProcessName();
         try
         {
-            _popover?.Hide();
-            const uint Grayed = 0x1, Sep = 0x800;
-            void Add(SystemActionKind k, bool enabled = true, string? label = null) => BarNative.AppendMenuW(menu, enabled ? 0u : Grayed, (UIntPtr)(2000 + (int)k), label ?? SystemActions.Get(k).Label);
-            void Line() => BarNative.AppendMenuW(menu, Sep, UIntPtr.Zero, null);
-            Add(SystemActionKind.About); Line();
-            Add(SystemActionKind.Settings); Add(SystemActionKind.Store); Line();
-            Add(SystemActionKind.ForceQuit, appName is not null, appName is null ? "Forzar salida (no hay una app que se pueda cerrar)" : $"Forzar salida de «{appName}»…"); Line();
-            Add(SystemActionKind.Sleep); Add(SystemActionKind.Restart); Add(SystemActionKind.Shutdown); Line();
-            Add(SystemActionKind.Lock); Add(SystemActionKind.LogOff); Line();
-            BarNative.AppendMenuW(menu, _cfg.ReserveSpace ? 0x8u : 0u, (UIntPtr)1, "Reservar espacio arriba");
-            BarNative.AppendMenuW(menu, 0, (UIntPtr)2, "Salir de la barra superior");
-            int x = src.Left + (int)((item?.X ?? 0) * src.Scale), y = src.Top + src.Height;   // el menú nace bajo la barra pulsada; Windows lo mantiene dentro de ese monitor
-            BarNative.SetForegroundWindow(src.Hwnd);
-            _modal = true; int cmd;
-            try { cmd = BarNative.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, x, y, src.Hwnd, IntPtr.Zero); } finally { _modal = false; }
-            BarNative.PostMessage(src.Hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
-            if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev)) BarNative.SetForegroundWindow(prev);   // la acción se ejecuta con el foco de vuelta en la app que lo tenía
-            if (cmd == 1) SetReserve(!_cfg.ReserveSpace);
-            else if (cmd == 2) _quitting = true;
-            else if (cmd >= 2000) RunSystemAction((SystemActionKind)(cmd - 2000), appName);
+            if (_popover is { IsOpen: true } && _pkind == PanelKind.AppleMenu && ReferenceEquals(_popSource, src)) { _popover.Hide(); return; }   // segundo clic: cerrar
+            _appleReturn = BarNative.GetForegroundWindow();
+            _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
+            _popSource = src; _pkind = PanelKind.AppleMenu;
+            _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { ForegroundApp = SessionService.ForegroundProcessName() };
+            var model = PanelBuilder.AppleMenu(_pctx);
+            int left = src.Left + (int)((item?.X ?? 0) * src.Scale), anchor = left + (int)Math.Round(model.Width * src.Scale / 2);   // el borde izquierdo del menú bajo el icono
+            _popover.Show(model, anchor, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight: false);
         }
         catch (Exception e) { _log("Menú falló: " + e.Message); }
-        finally { BarNative.DestroyMenu(menu); }
+    }
+
+    private void AppleAction(PanelEvent e)
+    {
+        if (e.Kind != PanelEventKind.Click || !e.Id.StartsWith("apple:", StringComparison.Ordinal)) return;
+        string id = e.Id[6..]; var prev = _appleReturn; string? app = _pctx.ForegroundApp; _appleReturn = IntPtr.Zero;
+        _popover?.Hide();
+        if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev) && BarNative.IsWindow(prev)) BarNative.SetForegroundWindow(prev);   // la acción se ejecuta con el foco de vuelta en la app que lo tenía
+        if (id == "reserve") SetReserve(!_cfg.ReserveSpace);
+        else if (id == "quitbar") _quitting = true;
+        else if (Enum.TryParse<SystemActionKind>(id, out var k)) RunSystemAction(k, app);
     }
 
     private void RunSystemAction(SystemActionKind k, string? appName)

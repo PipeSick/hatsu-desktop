@@ -44,7 +44,7 @@ public sealed partial class PanelPainter : IDisposable
         _kind = m.Kind; _ctx.BeginDraw();
         if (clear) _ctx.Clear(new Color4(0, 0, 0, 0));
         // tarjeta (el panel lateral, con el vidrio del fondo de pantalla si lo hay y esquinas algo más amplias)
-        float rad = m.Kind == PanelKind.Notifications ? 18 : 16;
+        float rad = m.Kind == PanelKind.Notifications ? 18 : m.Kind == PanelKind.AppleMenu ? 10 : 16;
         if (m.Kind == PanelKind.Notifications && Backdrop is { } bd)
         {
             using var br = _ctx.CreateBitmapBrush(bd, new BitmapBrushProperties { ExtendModeX = ExtendMode.Clamp, ExtendModeY = ExtendMode.Clamp, InterpolationMode = BitmapInterpolationMode.Linear });
@@ -179,6 +179,16 @@ public sealed partial class PanelPainter : IDisposable
                 break;
             }
             case WidgetKind.Month: DrawMonth(f); break;
+            case WidgetKind.MenuItem:
+            {
+                bool hot = hover && w.Enabled;
+                if (hot) FillRR(x, y, x + wd, y + h, 5, Accent);   // resalte azul, como en macOS
+                var tc = hot ? new Color4(1, 1, 1, 1) : Fg(w.Enabled ? 0.92f : 0.38f);
+                if (w.On) Glyph("check", x + 12, y + h / 2, 4.5f, tc);
+                Text(w.Text, _body, x + 22, y, wd - 30, h, tc);
+                break;
+            }
+            case WidgetKind.Separator when _kind == PanelKind.AppleMenu: Line(x + 8, y + h / 2, x + wd - 8, y + h / 2, Fill(0.16f), 1f); break;
             case WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.NcEmpty: DrawNcWidget(f, hover); break;
             default: DrawHubWidget(f, hover); break;
         }

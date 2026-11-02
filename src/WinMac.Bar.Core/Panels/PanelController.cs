@@ -48,7 +48,7 @@ public sealed class PanelController
     }
 
     private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav or WidgetKind.Tabs or WidgetKind.TabHeader or WidgetKind.Select or WidgetKind.AppRow or WidgetKind.Stats or WidgetKind.CityRow
-        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard
+        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem
         || (w.Kind == WidgetKind.Header && w.Id == "back");
 
     private static string ScrollKey(PanelModel m) => m.PinTop > 0 && m.PinTop <= m.Widgets.Count ? m.Kind + "/" + m.Widgets[m.PinTop - 1].Id : m.Kind.ToString();

@@ -2,7 +2,7 @@ using WinMac.Calendar;
 
 namespace WinMac.Bar;
 
-public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications }
+public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications, AppleMenu }
 
 public enum WidgetKind
 {
@@ -35,6 +35,8 @@ public enum WidgetKind
     NotifGroup,  // cabecera del grupo de una app: icono, nombre, cantidad, «Borrar» y desplegar/plegar (Data = NotifGroupData)
     NotifCard,   // una notificación: icono, app, hora, título, texto y «×» (Data = NotifCardData)
     NcEmpty,     // estado vacío o de permiso: icono grande, título y explicación
+    // ── menú de WinMac (el de la manzana)
+    MenuItem,    // opción de menú: texto, ✓ si On, atenuada si no está disponible; resalte azul al pasar el ratón
 }
 
 public sealed record TabsData(IReadOnlyList<WinMac.Bar.Hub.TabItem> Tabs, int Selected);
@@ -74,7 +76,10 @@ public sealed record MonthData(IReadOnlyList<CalendarDay> Days, IReadOnlyList<st
 /// <param name="PinTop">Cuántos elementos del principio (logotipo, pestañas, título) quedan fijos arriba cuando el contenido se desplaza.</param>
 /// <param name="PinBottom">Cuántos elementos del final (Ajustes y Salir) quedan fijos abajo cuando el contenido se desplaza.</param>
 /// <param name="FillHeight">El panel ocupa siempre la altura máxima (panel lateral): si el contenido es más corto, el pie fijo baja al borde inferior.</param>
-public sealed record PanelModel(PanelKind Kind, string Title, IReadOnlyList<Widget> Widgets, double Width = PanelLayout.Width, (int From, int To)? Card = null, int PinTop = 0, int PinBottom = 0, bool FillHeight = false);
+/// <param name="Pad">Margen interior (DIP); null = el de siempre (14). Los menús usan uno pequeño.</param>
+/// <param name="Spacing">Separación entre elementos (DIP); null = la de siempre (8). Los menús van seguidos.</param>
+public sealed record PanelModel(PanelKind Kind, string Title, IReadOnlyList<Widget> Widgets, double Width = PanelLayout.Width, (int From, int To)? Card = null, int PinTop = 0, int PinBottom = 0, bool FillHeight = false,
+    double? Pad = null, double? Spacing = null);
 
 public sealed record WidgetFrame(Widget W, double X, double Y, double Width, double Height);
 public sealed record CardRect(double X, double Y, double W, double H);
@@ -115,6 +120,7 @@ public static class PanelLayout
         WidgetKind.NcSection => 26,
         WidgetKind.NotifGroup => 30,
         WidgetKind.NotifCard => NotifCardHeight(w.Data as NotifCardData),
+        WidgetKind.MenuItem => 24,
         WidgetKind.NcEmpty => Math.Max(118, 76 + 14 * Math.Ceiling((w.Sub?.Length ?? 0) / 44.0)),
         _ => 30,
     };
@@ -136,6 +142,7 @@ public static class PanelLayout
     /// </summary>
     public static PanelFrame Compute(PanelModel m, double maxHeight = double.PositiveInfinity, double scroll = 0)
     {
+        double Pad = m.Pad ?? PanelLayout.Pad, Gap = m.Spacing ?? PanelLayout.Gap;   // márgenes del modelo (los menús los quieren pequeños)
         var items = new List<WidgetFrame>(); double y = Pad, inner = m.Width - 2 * Pad, half = (inner - Gap) / 2;
         var ws = m.Widgets; double? cardTop = null; double cardBottom = 0; bool cardOpen = false;
         int scrollFrom = -1, scrollTo = -1; double topEnd = 0, bottomStart = 0; int bottomIdx = ws.Count - m.PinBottom;

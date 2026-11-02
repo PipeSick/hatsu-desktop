@@ -15,7 +15,7 @@ public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothS
 
 /// <summary>Estado de interfaz de los paneles: mes visible, día elegido, operaciones en curso («Conectando…») y el último error.</summary>
 public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo Battery, DateTime Now, IReadOnlyList<CalendarEvent> Events, int ViewYear, int ViewMonth,
-    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null)
+    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null, string? ForegroundApp = null)
 {
     public static PanelContext Initial(BarConfig cfg, DateTime now) => new(SystemSnapshot.Empty, cfg, BatteryInfo.None, now, [], now.Year, now.Month, null, new Dictionary<string, string>(), null);
 }
@@ -37,12 +37,34 @@ public static partial class PanelBuilder
         PanelKind.Hub => HubPanel(c),
         PanelKind.Weather => WeatherPanel(c),
         PanelKind.Notifications => NotificationCenter(c),
+        PanelKind.AppleMenu => AppleMenu(c),
         _ => ControlCenter(c),
     };
 
     private static string? BusyOr(PanelContext c, string id, string? normal) => c.Busy.TryGetValue(id, out var b) ? b : normal;
     private static void Msg(List<Widget> w, PanelContext c) { if (!string.IsNullOrWhiteSpace(c.Message)) w.Add(new Widget(WidgetKind.Note, "msg", c.Message!)); }
     private static Widget Back(string title) => new(WidgetKind.Header, "back", title, Glyph: "back");
+
+    public const double MenuWidth = 252;
+
+    /// <summary>
+    /// Menú de la manzana con aspecto de macOS (antes era el menú nativo de Windows): las mismas acciones reales del sistema, filas compactas, separadores finos y las dos
+    /// opciones propias de WinMac al final. «Forzar salida» nombra la app en primer plano al abrir el menú y se atenúa si no hay una que se pueda cerrar.
+    /// </summary>
+    public static PanelModel AppleMenu(PanelContext c)
+    {
+        var w = new List<Widget>(); int sep = 0;
+        void Item(SystemActionKind k, string? label = null, bool enabled = true) => w.Add(new Widget(WidgetKind.MenuItem, "apple:" + k, label ?? SystemActions.Get(k).Label, Enabled: enabled));
+        void Line() => w.Add(new Widget(WidgetKind.Separator, "apple-sep" + sep++));
+        Item(SystemActionKind.About); Line();
+        Item(SystemActionKind.Settings); Item(SystemActionKind.Store); Line();
+        Item(SystemActionKind.ForceQuit, c.ForegroundApp is { } app ? $"Forzar salida de «{app}»…" : "Forzar salida…", enabled: c.ForegroundApp is not null); Line();
+        Item(SystemActionKind.Sleep); Item(SystemActionKind.Restart); Item(SystemActionKind.Shutdown); Line();
+        Item(SystemActionKind.Lock); Item(SystemActionKind.LogOff); Line();
+        w.Add(new Widget(WidgetKind.MenuItem, "apple:reserve", "Reservar espacio arriba", On: c.Cfg.ReserveSpace));
+        w.Add(new Widget(WidgetKind.MenuItem, "apple:quitbar", "Salir de la barra superior"));
+        return new PanelModel(PanelKind.AppleMenu, "WinMac", w, MenuWidth, Pad: 5, Spacing: 0);
+    }
 
     public static PanelModel ControlCenter(PanelContext c)
     {

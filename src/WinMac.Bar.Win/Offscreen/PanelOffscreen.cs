@@ -91,6 +91,7 @@ public static class PanelOffscreen
                 Nc = new NcView(store.State, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Microsoft.OutlookForWindows" }, 356) };
             model = PanelBuilder.NotificationCenter(ctx); if (double.IsInfinity(maxHeight)) maxHeight = 1040;
         }
+        else if (kind == "apple") model = PanelBuilder.AppleMenu(ctx with { ForegroundApp = "Spotify" });
         else model = kind == "weather" ? PanelBuilder.WeatherPanel(ctx) : PanelBuilder.HubPanel(ctx);
         var frame = PanelLayout.Compute(model, maxHeight, scroll);
         using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new PanelPainter(dev) { Theme = theme };
