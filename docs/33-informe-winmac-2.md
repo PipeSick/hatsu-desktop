@@ -56,7 +56,7 @@ Letras: sin cambios; no verificables en el CI (sin reproductor) — **NO VERIFIC
 
 ## 14. Rendimiento (medido, orientativo: runner sin GPU)
 En reposo: host ~0,5–2,5 % de un núcleo y ~45 MB; Barra ~0,8 % y ~147 MB; Dock ~0,5 % y ~100–127 MB; Isla 1,4–10 % y ~170–184 MB; cada extensión demo ~0–3 % y ~30 MB.
-Tras grabar, la Barra quedaba en ~670 MB (fotogramas en el montón de objetos grandes): se compacta al terminar (**IMPLEMENTADO, PENDIENTE de medir**).
+Tras grabar, la Barra quedaba en ~670 MB (fotogramas en el montón de objetos grandes); con la compactación al terminar baja a ~435 MB de trabajo / 312 MB privada (run 41516149777). Sigue alta: reutilizar los búferes de fotogramas es la siguiente optimización (**PENDIENTE**).
 
 ## 15. Distribución — VALIDADO EN CI (nada publicado)
 Zip de 75 MB reproducible (mismo SHA-256 en dos empaquetados), licencias, VERSION, SHA256SUMS, desinstalación limpia comprobada. Sin firma comercial (SmartScreen

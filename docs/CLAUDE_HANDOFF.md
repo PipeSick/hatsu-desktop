@@ -71,7 +71,7 @@ Prioridad absoluta: NO tocar las letras sincronizadas (NotchWindow.Extras.cs, Co
 | 9 Configuración unificada + migración | IMPLEMENTADO + PROBADO |
 | 10 Refinamiento visual | PARCIAL (correcciones vistas en las capturas) |
 | 11 Auditoría integral | VALIDADO EN CI (Visual-Audit: secciones 01–47) |
-| 12 Medición | VALIDADO EN CI (tablas en el informe); compactación tras grabar PENDIENTE de medir |
+| 12 Medición | VALIDADO EN CI; tras grabar la Barra baja de 670 a 435 MB (run 41516149777); reutilizar búferes PENDIENTE |
 | 13 Distribución | VALIDADO EN CI (zip reproducible, desinstalación limpia); nada publicado |
 
 Notas: los diálogos modales en el hilo de la barra detienen su latido y el host la reinicia → nunca usar MessageBox/GetSaveFileName en ese hilo.
