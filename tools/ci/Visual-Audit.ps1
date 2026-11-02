@@ -28,6 +28,21 @@ public static class Au {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
   delegate bool EnumProc(IntPtr h, IntPtr l);
   public struct RC { public int L, T, R, B; }
+  [StructLayout(LayoutKind.Sequential)] struct MI { public int dx, dy; public uint data, flags, time; public IntPtr extra; }
+  [StructLayout(LayoutKind.Explicit)] struct IN { [FieldOffset(0)] public uint type; [FieldOffset(8)] public MI mi; }
+  [DllImport("user32.dll")] static extern uint SendInput(uint n, IN[] i, int size);
+  [DllImport("user32.dll")] static extern int GetSystemMetrics(int i);
+  [DllImport("user32.dll")] public static extern bool GetCursorPos(out PT p);
+  public struct PT { public int X, Y; }
+  /// Movimiento por la ruta de entrada de Windows (como un ratón físico), en pasos, de donde esté el puntero a (x, y).
+  public static void Glide(int x, int y, int steps) {
+    PT p; GetCursorPos(out p); int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
+    for (int k = 1; k <= steps; k++) {
+      int nx = p.X + (x - p.X) * k / steps, ny = p.Y + (y - p.Y) * k / steps;
+      var i = new IN[1]; i[0].type = 0; i[0].mi.dx = nx * 65535 / (w - 1); i[0].mi.dy = ny * 65535 / (h - 1); i[0].mi.flags = 0x8001; // MOVE | ABSOLUTE
+      SendInput(1, i, Marshal.SizeOf(typeof(IN))); System.Threading.Thread.Sleep(15);
+    }
+  }
   public static void Click(int x, int y) { SetCursorPos(x, y); System.Threading.Thread.Sleep(120); mouse_event(2, 0, 0, 0, IntPtr.Zero); mouse_event(4, 0, 0, 0, IntPtr.Zero); }
   public static bool Visible(string cls) { var h = FindWindow(cls, null); return h != IntPtr.Zero && IsWindowVisible(h); }
   public static string RectOf(string cls) { var h = FindWindow(cls, null); if (h == IntPtr.Zero) return "(no existe)"; RC r; GetWindowRect(h, out r); return r.L + "," + r.T + " " + (r.R - r.L) + "x" + (r.B - r.T); }
@@ -96,7 +111,19 @@ if ($back) { Start-Sleep -Milliseconds 900; IslaShot '06-isla-regreso' 'Regreso 
 [Au]::Click($cx, $sc.Y + 12); Start-Sleep -Milliseconds 1200
 Shot '07-isla-expandida' 'Isla expandida (clic del ratón sobre ella)' ($cx - 450) $sc.Y 900 460
 Note "  - ventanas de la Isla: $(NotchRects)"
-[Au]::SetCursorPos($sc.X + 60, $sc.Y + [int]($sc.Height * 0.6)) | Out-Null; Start-Sleep -Milliseconds 2200
+# P2: ¿se contrae al salir el ratón? Se sale por la RUTA DE ENTRADA de Windows (SendInput, en pasos, como un ratón físico), no con SetCursorPos.
+function NotchW { if ((NotchRects) -match ' (\d+)x(\d+);') { [int]$Matches[1] } else { 0 } }
+$wIn = NotchW
+[Au]::Glide($cx, $sc.Y + 150, 10); [Au]::Glide($sc.X + 60, $sc.Y + [int]($sc.Height * 0.6), 25)
+$collapsed = WaitFor { (NotchW) -lt $wIn -and (NotchW) -gt 0 } 4
+Note "  - P2: ancho de la Isla expandida $wIn px; tras salir el ratón por SendInput: $(NotchW) px → $(if ($collapsed) { 'se contrajo (comportamiento correcto)' } else { 'NO se contrajo' })"
+Shot '07b-isla-tras-salir-raton' "Isla después de sacar el ratón con SendInput ($(if ($collapsed) { 'contraída' } else { 'sigue expandida' }))" ($cx - 450) $sc.Y 900 460
+if (-not $collapsed) {
+  [Au]::SetCursorPos($sc.X + 60, $sc.Y + [int]($sc.Height * 0.6)) | Out-Null; $c2 = WaitFor { (NotchW) -lt $wIn -and (NotchW) -gt 0 } 3
+  Note "  - P2: con SetCursorPos además: $(if ($c2) { 'se contrajo' } else { 'tampoco' })"
+  if (-not $c2) { [Au]::Click($cx, $sc.Y + 12); Start-Sleep -Milliseconds 1200; Note "  - P2: cerrada con otro clic: $(NotchW) px" }
+}
+[Au]::Glide($sc.X + 60, $sc.Y + [int]($sc.Height * 0.6), 2); Start-Sleep -Milliseconds 800
 if (Test-Path $pillLog) { Note ''; Note '### Registro de la Isla (lo que mostró y el tamaño pedido a su ventana, DIP)'; Note '```'; Get-Content $pillLog | ForEach-Object { Note $_ }; Note '```' }
 
 # ── 2. Global Menu con el Bloc de notas real
