@@ -181,6 +181,7 @@ Remove-Item (Join-Path $dlDir 'Descarga de prueba.iso*') -ErrorAction SilentlyCo
 
 # ── 1c. WinMac Screenshot (docs/26): overlay REAL sobre la pantalla congelada; región arrastrando con el ratón, ventana, pantalla completa
 Note ''; Note '### WinMac Screenshot'
+Collapse; Start-Sleep -Milliseconds 600   # la Isla abierta del paso anterior taparía la barra de captura y el editor
 $capBefore = @(Get-ChildItem $shotsDir -Filter 'Captura *' -ErrorAction SilentlyContinue).Count
 function Saved([int]$n) { WaitFor { (Select-String -Path $barLog -SimpleMatch '[captura] guardada' -ErrorAction SilentlyContinue).Count -ge $n } 8 }
 $np2 = Start-Process notepad.exe -PassThru; Start-Sleep -Milliseconds 1500

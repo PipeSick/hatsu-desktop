@@ -107,10 +107,13 @@ public sealed partial class BarHost
         try
         {
             _lp?.Hide(); _spot?.Hide(); _popover?.Hide();   // our own panels are not part of what the user wants to capture
-            var (frame, rect) = ScreenGrabber.GrabVirtualScreen();
-            var monitors = ScreenGrabber.Monitors(); var windows = ScreenGrabber.Windows(IntPtr.Zero);
+            var t0 = System.Diagnostics.Stopwatch.StartNew();
+            var (frame, rect) = ScreenGrabber.GrabVirtualScreen(); long tGrab = t0.ElapsedMilliseconds;
+            var monitors = ScreenGrabber.Monitors(); var windows = ScreenGrabber.Windows(IntPtr.Zero); long tEnum = t0.ElapsedMilliseconds;
+            if (MenuDiagOn) _log($"[captura] etapas: copia {tGrab} ms, ventanas {tEnum - tGrab} ms");
             _overlay = new CaptureOverlay(frame, rect, monitors, windows, mode, (t, m, title) => Post(() => SaveCapture(frame, rect, t, m, title)), () => Post(EndCapture), _log);
             _overlay.Show();
+            if (MenuDiagOn) _log($"[captura] etapas: superposición visible a los {t0.ElapsedMilliseconds} ms");
             _log($"[captura] abierta ({why}): modo {mode}, pantalla virtual {rect.X},{rect.Y} {rect.W}x{rect.H}, {monitors.Count} monitor(es), {windows.Count} ventana(s)");
             CaptureDiag();
         }
