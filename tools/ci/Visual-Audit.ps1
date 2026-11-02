@@ -476,8 +476,9 @@ Start-Sleep -Milliseconds 600
 
 # ── 1h. Teclado en la Isla (docs/25): se abre con un clic real; ←/→ cambian de sección; Esc la cierra (pulsaciones reales)
 Note ''; Note '### Teclado en la Isla'
-Collapse; Start-Sleep -Milliseconds 600
-[Au]::Click($cx, $sc.Y + 12); $null = WaitFor { NotchWide } 4; Start-Sleep -Milliseconds 1200
+Collapse; Start-Sleep -Milliseconds 600; $wasClosed = -not (NotchWide)
+[Au]::Click($cx, $sc.Y + 12); $opened = WaitFor { NotchWide } 4; Start-Sleep -Milliseconds 1200
+Note "  - antes del clic cerrada: $wasClosed; abierta tras el clic: $opened; ventana en primer plano: $([Au]::GetForegroundWindow())" 
 [System.Windows.Forms.SendKeys]::SendWait('{RIGHT}'); $kOk = WaitFor { (Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch 'teclado seccion').Count -ge 1 } 4
 Start-Sleep -Milliseconds 600; Shot '48-isla-teclado' 'Isla abierta con un clic: → pasó a la sección siguiente (foco en la pestaña)' ($cx - 330) $sc.Y 660 560
 [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); $eOk = WaitFor { (Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch 'teclado esc').Count -ge 1 } 4

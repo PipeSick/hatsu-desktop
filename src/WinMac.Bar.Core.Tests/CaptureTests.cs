@@ -151,3 +151,18 @@ public class FramePoolTests
         pool.Return(held[0]!); Assert.NotNull(pool.Rent(TimeSpan.Zero)); Assert.Equal(3, pool.Allocated);
     }
 }
+
+public class ThumbnailTests
+{
+    [Fact]
+    public void ThumbnailIsTopDownScaledAndReusesItsBuffer()
+    {
+        int w = 640, h = 480; var bu = new byte[w * h * 4];
+        for (int x = 0; x < w * 2; x++) { bu[x * 4 + 2] = 255; }                   // bottom-up: the FIRST stored rows are the BOTTOM of the image (red)
+        var (px, tw, th) = CaptureGeometry.Thumbnail(bu, w, h, 320);
+        Assert.Equal((320, 240), (tw, th));
+        Assert.Equal(255, px[((th - 1) * tw) * 4 + 2]); Assert.Equal(0, px[2]);    // red ends up at the bottom of the top-down thumbnail
+        var again = CaptureGeometry.Thumbnail(bu, w, h, 320, px);
+        Assert.Same(px, again.Px);
+    }
+}

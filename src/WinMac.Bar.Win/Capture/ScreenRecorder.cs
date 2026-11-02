@@ -75,6 +75,9 @@ internal sealed class ScreenRecorder : IDisposable
     }
 
     private FramePool? _pool; private ScreenGrabber.AreaGrabber? _grabber;
+    private (byte[] Px, int W, int H)? _thumb;
+    /// <summary>A 320-px still taken from the frames themselves (no decoding of the finished video).</summary>
+    public (byte[] Px, int W, int H)? Thumb => _thumb;
     private static FramePool? _lastPool;
     /// <summary>The pool is kept for the next recording of the same size (one recording at a time): its few buffers are reused instead of re-allocated.</summary>
     private static FramePool PoolFor(int bytes) { var p = _lastPool; if (p is null || p.Bytes != bytes || p.Outstanding > 0) _lastPool = p = new FramePool(bytes, 4); return p; }
@@ -104,6 +107,7 @@ internal sealed class ScreenRecorder : IDisposable
             var pool = _pool;
             sample.Processed += (_, _) => pool.Return(buf);
             e.Request.Sample = sample;
+            if (n == 0 || n == Fps) _thumb = CaptureGeometry.Thumbnail(buf, _rect.W, _rect.H, 320, _thumb?.Px);   // the still for the Island: first frame, then the one at 1 s
             Interlocked.Increment(ref _frames);
         }
         catch (Exception ex) { _log("[grabación] fotograma: " + ex.GetType().Name + ": " + ex.Message); e.Request.Sample = null; _stop = true; }

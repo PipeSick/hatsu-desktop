@@ -80,7 +80,7 @@ public sealed partial class BarHost
                 var (path, length, frames) = await r.StopAsync().ConfigureAwait(false);
                 _log($"[grabación] búferes de fotograma: {pool.Buffers} (máx. 4), saltados: {pool.Skipped}");
                 long bytes = File.Exists(path) ? new FileInfo(path).Length : 0;
-                string? poster = await PosterAsync(path).ConfigureAwait(false);
+                string? poster = await PosterAsync(path, r.Thumb).ConfigureAwait(false);
                 _log($"[grabación] guardada: {Path.GetFileName(path)} ({length.TotalSeconds:0.0} s, {frames} fotogramas, {bytes} B){(poster is null ? "" : ", fotograma de muestra listo")}");
                 if (MenuDiagOn && poster is not null) _log("[grabación] muestra " + poster);
                 NotchActivity?.Invoke(new { op = "upsert", activity = new { id = "grabacion", kind = "recording", title = "Grabación guardada", subtitle = Path.GetFileName(path) + $" · {length:mm\\:ss}", source = "WinMac", state = "completed", path, thumbnail = poster } });
@@ -99,19 +99,19 @@ public sealed partial class BarHost
         });
     }
 
-    /// <summary>A still of the first second (Windows' own media editing API) for the Island's thumbnail, in WinMac's local data folder (not in the gallery).</summary>
-    private static async Task<string?> PosterAsync(string video)
+    /// <summary>
+    /// The recording's still for the Island, from a frame kept while recording (scaled to 320 px) and encoded as JPEG. It used to decode the finished MP4 with
+    /// Windows.Media.Editing, which left tens of MB of native memory waiting for finalizers after each recording (measured in CI). Saved in WinMac's own data folder.
+    /// </summary>
+    private static async Task<string?> PosterAsync(string video, (byte[] Px, int W, int H)? thumb)
     {
+        if (thumb is not { } t) return null;
         try
         {
-            var file = await global::Windows.Storage.StorageFile.GetFileFromPathAsync(video);
-            var clip = await global::Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
-            var comp = new global::Windows.Media.Editing.MediaComposition(); comp.Clips.Add(clip);
-            var at = TimeSpan.FromSeconds(Math.Min(1, clip.OriginalDuration.TotalSeconds / 2));
-            using var img = await comp.GetThumbnailAsync(at, 0, 0, global::Windows.Media.Editing.VideoFramePrecision.NearestFrame);
             var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "posters"); Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, Path.GetFileNameWithoutExtension(video) + ".jpg");
-            using (var fs = File.Create(path)) await img.AsStreamForRead().CopyToAsync(fs);
+            if (File.Exists(path)) File.Delete(path);
+            await ScreenGrabber.SaveAsync(t.Px.Length == t.W * t.H * 4 ? t.Px : t.Px[..(t.W * t.H * 4)], t.W, t.H, path, jpeg: true).ConfigureAwait(false);
             return path;
         }
         catch (Exception) { return null; }

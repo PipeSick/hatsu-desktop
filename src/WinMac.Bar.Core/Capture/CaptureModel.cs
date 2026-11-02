@@ -37,6 +37,27 @@ public sealed record CaptureWindow(IntPtr Handle, string Title, CaptureRect Boun
 /// <summary>Geometry of a capture session, pure (tested on Linux with simulated layouts: monitors left/right/above/below, negative coordinates, mixed DPI).</summary>
 public static class CaptureGeometry
 {
+    /// <summary>
+    /// A small top-down thumbnail (nearest pixel) of a BOTTOM-UP BGRA frame, for the recording's still in the Island. Writes into <paramref name="into"/>
+    /// when it is big enough, so a recording allocates nothing per frame for it.
+    /// </summary>
+    public static (byte[] Px, int W, int H) Thumbnail(byte[] bottomUp, int w, int h, int maxW, byte[]? into = null)
+    {
+        int tw = Math.Max(1, Math.Min(maxW, w)), th = Math.Max(1, (int)Math.Round(h * (tw / (double)w)));
+        var o = into is { } b && b.Length >= tw * th * 4 ? b : new byte[tw * th * 4];
+        for (int y = 0; y < th; y++)
+        {
+            int sy = h - 1 - Math.Min(h - 1, y * h / th);   // bottom-up source row
+            for (int x = 0; x < tw; x++)
+            {
+                int sx = Math.Min(w - 1, x * w / tw), si = (sy * w + sx) * 4, di = (y * tw + x) * 4;
+                o[di] = bottomUp[si]; o[di + 1] = bottomUp[si + 1]; o[di + 2] = bottomUp[si + 2]; o[di + 3] = 255;
+            }
+        }
+
+        return (o, tw, th);
+    }
+
     /// <summary>Recording area: H.264 needs even dimensions, so it is trimmed by at most one pixel per axis.</summary>
     public static CaptureRect EvenRect(CaptureRect r) => new(r.X, r.Y, Math.Max(2, r.W & ~1), Math.Max(2, r.H & ~1));
 
