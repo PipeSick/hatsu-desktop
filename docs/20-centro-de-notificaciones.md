@@ -2,7 +2,15 @@
 
 Panel lateral inspirado en macOS. Se abre con el **reloj de la barra**, igual que en macOS, o con el mosaico «Notificaciones» del Control Center. Muestra las notificaciones **reales** que Windows guarda en su centro, agrupadas por app, y una sección de widgets: calendario, tiempo y batería.
 
-Sustituye a la propuesta de [docs/19](19-notificaciones-propuesta.md). La sonda de esa propuesta ya se ejecutó en el PC del usuario: `UserNotificationListener.GetAccessStatus()` devolvió **`Allowed`** desde la app sin paquete. Eso confirma que WinMac puede consultar el permiso. **Falta medir** si `GetNotificationsAsync` y el evento de cambios también funcionan sin paquete (ver §6).
+Sustituye a la propuesta de [docs/19](19-notificaciones-propuesta.md). En el PC del usuario, la lectura funciona sin paquete y el evento de cambios no (ver la tabla siguiente).
+
+## Medido en el PC del usuario (2026-11-02, Windows 11 build 26100, app sin paquete, `--selftest-system`)
+| Qué | Resultado |
+|---|---|
+| Permiso (`GetAccessStatus`) | **Allowed** |
+| Lectura (`GetNotificationsAsync`) | **funciona sin paquete**: 20 notificaciones de 5 apps en 281 ms, todas con texto |
+| Iconos solo con `AppDisplayInfo.GetLogo` | 4 de 20: las apps Win32 no dan logo. Desde ese día se recurre también al icono del Shell para su AUMID (`shell:AppsFolder\AUMID`), sin medir aún |
+| Evento `NotificationChanged` | **no disponible** para la app sin paquete: `COMException 0x80070490` (elemento no encontrado). El panel relee cada 4 s **solo mientras está abierto** |
 
 ## Capturas (dibujo real, datos de MUESTRA)
 Las dibujó el CI de Windows (runner virtual, WARP) con el pintor real, fuera de pantalla, a escala 1, sobre un fondo sintético. **Las notificaciones son de muestra**: validan el dibujo, no la lectura de Windows. Se obtienen con `WinMac.Bar.App --render-panel notifications|notifications-off`.
@@ -14,7 +22,7 @@ Las dibujó el CI de Windows (runner virtual, WARP) con el pintor real, fuera de
 ## 1. Qué hace
 | Función | Cómo | Estado |
 |---|---|---|
-| Notificaciones reales | `UserNotificationListener.GetNotificationsAsync(NotificationKinds.Toast)` | implementado, sin medir en el PC |
+| Notificaciones reales | `UserNotificationListener.GetNotificationsAsync(NotificationKinds.Toast)` | implementado; **medido**: lee las notificaciones reales en el PC |
 | App de origen, nombre e icono | `UserNotification.AppInfo` (`AppUserModelId`, `DisplayInfo.DisplayName`, `DisplayInfo.GetLogo`, reducido a 32×32) | implementado; sin icono se dibuja la inicial |
 | Título y texto | Textos de la plantilla `ToastGeneric`: el primero es el título y el resto, el cuerpo | sin texto se muestra «Notificación sin texto»; nunca se inventa nada |
 | Hora | `UserNotification.CreationTime`: «ahora», «hace 5 min», «14:05», «ayer», «dd/MM» | implementado |
@@ -123,8 +131,8 @@ Son pruebas con una fuente simulada: **no demuestran** que Windows entregue noti
 ## 8. Riesgos e incompatibilidades
 | Riesgo | Efecto | Qué hace WinMac |
 |---|---|---|
-| `GetNotificationsAsync` exige identidad de paquete en algunas versiones de Windows | «No se pudieron leer…» con el código | lo dice y ofrece Win+N; la solución sería un paquete disperso, fuera de alcance |
-| Sin evento de cambios para apps sin paquete | Las notificaciones nuevas tardan hasta 4 s en aparecer | relectura solo con el panel abierto |
+| `GetNotificationsAsync` exige identidad de paquete en otras versiones de Windows (en el PC del usuario NO la exige) | «No se pudieron leer…» con el código | lo dice y ofrece Win+N; la solución sería un paquete disperso, fuera de alcance |
+| Sin evento de cambios para apps sin paquete (**medido**: 0x80070490) | Las notificaciones nuevas tardan hasta 4 s en aparecer | relectura solo con el panel abierto |
 | Apps Win32 sin nombre o icono | Grupo con el AUMID o «Aplicación desconocida» e inicial | sin inventar nada |
 | Windows no activa una notificación concreta desde fuera | El clic abre la app, no el mensaje | documentado |
 | El vidrio usa el fondo de pantalla, no lo que hay detrás | Sobre ventanas, el desenfoque no las refleja | igual que la barra; opaco si no hay fondo |
