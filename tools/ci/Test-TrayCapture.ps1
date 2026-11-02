@@ -102,7 +102,8 @@ Say "Iconos de prueba visibles en el desplegable: $visible de 3"
 
 # Vista previa en el log (recorte alrededor de la flecha y el desplegable) para revisarla sin descargar el artefacto
 $img = [System.Drawing.Bitmap]::FromFile($shotPath); $cw = [Math]::Min(420, $img.Width); $cx0 = [Math]::Max(0, [Math]::Min($img.Width - $cw, $bx - $screen.X - [int]($cw / 2)))
-$crop = $img.Clone((New-Object System.Drawing.Rectangle $cx0, 0, $cw, [Math]::Min(220, $img.Height)), $img.PixelFormat); $img.Dispose()
+$ch = [Math]::Min(220, $img.Height); $rect = [System.Drawing.Rectangle]::new([int]$cx0, 0, [int]$cw, [int]$ch)
+$crop = $img.Clone($rect, $img.PixelFormat); $img.Dispose()
 $prev = Join-Path $OutDir 'preview-tray-right.png'; $crop.Save($prev, [System.Drawing.Imaging.ImageFormat]::Png); $crop.Dispose()
 $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($prev))
 Write-Host "::group::PREVIEW_B64 tray-real bytes=$((Get-Item $prev).Length) b64len=$($b64.Length)"
