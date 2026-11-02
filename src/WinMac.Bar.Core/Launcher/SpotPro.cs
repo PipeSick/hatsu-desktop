@@ -25,7 +25,24 @@ public static partial class SpotPro
         ("Detener la grabación", "winmac:record:stop", "detener parar grabacion stop"),
         ("Abrir Launchpad", "winmac:launchpad", "launchpad aplicaciones apps"),
         ("Ajustes de WinMac", "winmac:settings", "ajustes winmac configuracion preferencias"),
+        ("Guardar espacio de trabajo", "winmac:ws:save", "guardar espacio trabajo ventanas distribucion workspace"),
+        ("Ventanas lado a lado", "winmac:ws:side", "ventanas lado dividir mitad side"),
+        ("Ventanas en cuadrícula", "winmac:ws:grid", "ventanas cuadricula mosaico grid organizar"),
     ];
+
+    /// <summary>«Restaurar «Espacio 1»» for each saved workspace.</summary>
+    public static IEnumerable<(int Score, SpotItem Item)> SearchWorkspaces(string q, IReadOnlyList<string> names)
+    {
+        var f = AppMatcher.Fold(q.Trim());
+        foreach (var n in names)
+        {
+            string title = "Restaurar «" + n + "»";
+            int s = Math.Max(AppMatcher.Score(q, n), AppMatcher.Score(q, title));
+            if (s is >= 0 and < SpotlightEngine.Weak) s = -1;
+            if (s < 0 && f.Length >= 4 && ("restaurar espacio trabajo workspace").Split(' ').Any(k => k.StartsWith(f, StringComparison.Ordinal))) s = 310;
+            if (s >= 0) yield return (s, new SpotItem(SpotKind.Action, title, "Espacio de trabajo guardado", "winmac:ws:restore:" + n));
+        }
+    }
 
     public static IEnumerable<(int Score, SpotItem Item)> SearchActions(string q, bool recording)
     {

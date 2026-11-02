@@ -14,6 +14,7 @@ public sealed partial class BarHost
 {
     private CancellationTokenSource? _toolCts;
     private IReadOnlyList<SpotScript> _scripts = [];
+    private IReadOnlyList<string> _wsNames = [];
 
     /// <summary>User scripts: <c>%APPDATA%\WinMac\spotlight-scripts.json</c> (<c>[{"name": "...", "path": "C:\\...", "arguments": "..."}]</c>). Read when Spotlight opens.</summary>
     public static string ScriptsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "spotlight-scripts.json");
@@ -27,6 +28,7 @@ public sealed partial class BarHost
             _scripts = list.Where(s => !string.IsNullOrWhiteSpace(s.Name) && Path.IsPathFullyQualified(s.Path ?? "")).Take(50).ToList();
         }
         catch (Exception e) { _scripts = []; _log("[spotlight] scripts ilegibles: " + e.GetType().Name); }
+        _wsNames = WorkspaceNames();
     }
 
     /// <summary>Instant, local providers: local IP and adapters (no network traffic).</summary>
@@ -89,6 +91,10 @@ public sealed partial class BarHost
             case "winmac:record:stop": StopRecording("Spotlight"); break;
             case "winmac:launchpad": ToggleLaunchpad("Spotlight"); break;
             case "winmac:settings": if (HostCommand is { } hc) hc("settings", null); break;
+            case "winmac:ws:save": SaveWorkspace(null); break;
+            case "winmac:ws:side": ArrangeWindows(grid: false); break;
+            case "winmac:ws:grid": ArrangeWindows(grid: true); break;
+            case var t when t.StartsWith("winmac:ws:restore:", StringComparison.Ordinal): RestoreWorkspace(t["winmac:ws:restore:".Length..]); break;
         }
     }
 

@@ -13,7 +13,7 @@ namespace WinMac.Bar.Win.Rendering;
 public sealed partial class BarHost
 {
     public static string CaptureEventName(string mode) => @"Local\WinMac.Bar.Capture." + mode;
-    private static readonly string[] CaptureModes = ["region", "window", "screen", "all", "toolbar", "record-region", "record-window", "record-screen", "record-stop"];
+    private static readonly string[] CaptureModes = ["region", "window", "screen", "all", "toolbar", "record-region", "record-window", "record-screen", "record-stop", "ws-save", "ws-restore", "ws-side", "ws-grid"];
 
     private readonly List<GlobalHotkey> _captureKeys = [];
     private readonly Dictionary<string, EventWaitHandle> _captureEvents = [];
@@ -62,6 +62,7 @@ public sealed partial class BarHost
                     try
                     {
                         _editor = CaptureEditor.Open(path, px, w, h, CopyImage, () => { _editor = null; _log("[editor] cerrado"); }, _log);
+                        _editor.PostToUi = Post;
                         _log($"[editor] abierto ({why}): {Path.GetFileName(path)} {w}x{h}");
                         if (MenuDiagOn)
                         {
@@ -99,6 +100,7 @@ public sealed partial class BarHost
             {
                 _log("[captura] petición: " + m);
                 if (m == "record-stop") { StopRecording("orden externa"); continue; }
+                if (m.StartsWith("ws-", StringComparison.Ordinal)) { switch (m) { case "ws-save": SaveWorkspace(null); break; case "ws-restore": RestoreWorkspace(null); break; case "ws-side": ArrangeWindows(false); break; default: ArrangeWindows(true); break; } continue; }
                 if (m.StartsWith("record-", StringComparison.Ordinal)) { ToggleRecording(m switch { "record-window" => CaptureMode.Window, "record-screen" => CaptureMode.Monitor, _ => CaptureMode.Region }, "orden externa " + m); continue; }
                 BeginCapture(m switch { "window" or "toolbar" => CaptureMode.Window, "screen" => CaptureMode.Monitor, "all" => CaptureMode.AllMonitors, _ => CaptureMode.Region }, "orden externa " + m);
             }

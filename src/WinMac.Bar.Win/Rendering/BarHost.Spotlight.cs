@@ -85,7 +85,7 @@ public sealed partial class BarHost
         if (_spot is null) return;
         int gen = ++_spotGen; _toolCts?.Cancel();   // a new search cancels a running ping/DNS
         var recent = _cfg.SpotlightFiles ? SpotlightEngine.MatchRecent(q, _recent) : [];
-        IReadOnlyList<SpotItem> Local(IReadOnlyList<SpotItem> files) => FillLocalTools(SpotlightEngine.Query(q, _catalog.Apps, _lprefs.Usage, _folders, files, p => Directory.Exists(p) || File.Exists(p), IsRecording, _scripts));
+        IReadOnlyList<SpotItem> Local(IReadOnlyList<SpotItem> files) => FillLocalTools(SpotlightEngine.Query(q, _catalog.Apps, _lprefs.Usage, _folders, files, p => Directory.Exists(p) || File.Exists(p), IsRecording, _scripts, _wsNames));
         _spot.Controller.SetResults(Local(recent)); _spot.Refresh();
         if (!_cfg.SpotlightFiles || _searchBroken || q.Trim().Length < 3) return;
         Task.Run(async () =>

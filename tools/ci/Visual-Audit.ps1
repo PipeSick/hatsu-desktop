@@ -258,6 +258,22 @@ if (WaitFor { [Au]::Visible('WinMacCapture') } 8) {
   } else { Note '  - la grabación no se pudo iniciar en este equipo (ver registro)' }
 } else { Note '- **40-grabacion**: la superposición no apareció' }
 if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[grabación]' | Where-Object { $_.Line -notmatch 'diag|muestra' } | Select-Object -Last 8 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
+
+# ── 1f. Workspace Manager (docs/29): ventanas reales del Bloc de notas; cuadrícula, guardar, lado a lado, restaurar
+Note ''; Note '### Espacios de trabajo'
+$wsA = Start-Process notepad.exe -PassThru; $wsB = Start-Process notepad.exe -PassThru; $wsC = Start-Process notepad.exe -PassThru; Start-Sleep -Milliseconds 2500
+[Au]::SetCursorPos($cx, [int]($sc.Height / 2)) | Out-Null
+& $bar --workspace grid | Out-Null; $null = WaitFor { LogHas $barLog '[espacios] cuadrícula' } 6; Start-Sleep -Milliseconds 800
+Shot '44-espacios-cuadricula' 'Workspace Manager: ventanas del monitor en cuadrícula (APIs públicas de Windows)'
+& $bar --workspace save | Out-Null; $null = WaitFor { LogHas $barLog '[espacios] guardado' } 6
+& $bar --workspace side | Out-Null; $null = WaitFor { LogHas $barLog '[espacios] lado a lado' } 6; Start-Sleep -Milliseconds 800
+Shot '45-espacios-lado-a-lado' 'Workspace Manager: las dos ventanas del frente, lado a lado'
+& $bar --workspace restore | Out-Null; $null = WaitFor { LogHas $barLog '[espacios] restaurado' } 6; Start-Sleep -Milliseconds 800
+Shot '46-espacios-restaurado' 'Workspace Manager: el espacio guardado (la cuadrícula) restaurado'
+if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[espacios]' | Select-Object -Last 5 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
+$wsf = Join-Path $env:APPDATA 'WinMac\workspaces.json'; if (Test-Path $wsf) { Note "  - archivo de espacios: $((Get-Item $wsf).Length) B" }
+foreach ($p in @($wsA, $wsB, $wsC)) { try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { } }
+Start-Sleep -Milliseconds 800
 Expand; $null = ClickTab 'captures'; Shot '33-galeria-tras-capturar' 'Galería de la Isla con las capturas recién hechas por WinMac' ($cx - 330) $sc.Y 660 560
 # Galería completa: «Ver todas» con el ratón, búsqueda con el teclado, selección de la primera, vista ampliada
 $gm = [regex]::Match((TabsLine), 'gallery@(\d+),(\d+)')
