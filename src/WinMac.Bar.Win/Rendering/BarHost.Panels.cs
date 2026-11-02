@@ -127,7 +127,7 @@ public sealed partial class BarHost : IPanelUi
 
     private void PanelsTick()
     {
-        _popover?.Pump(); HubTick(); TrayTick(); NotchTick(); LauncherTick(); SpotlightTick();
+        _popover?.Pump(); HubTick(); TrayTick(); NotchTick(); LauncherTick(); SpotlightTick(); MenuDiag();
         if (_popover is not { IsOpen: true }) return;
         var now = DateTime.UtcNow;
         if (_pkind == PanelKind.Notifications && _nc.NeedsPolling && now - _lastNcPoll >= NcPollEvery) { _lastNcPoll = now; _nc.Refresh(); }   // sin evento de Windows: relectura suave, solo con el panel abierto
@@ -418,6 +418,26 @@ public sealed partial class BarHost : IPanelUi
         _popSource = src; _pkind = PanelKind.AppMenu;
         var model = WinMac.Bar.Menus.AppMenuPanel.Build(tree, _amPath);
         _popover.Show(model, x + (int)Math.Round(model.Width * src.Scale / 2), y, src.MonitorRect, src.Scale, _theme, alignRight: false);
+    }
+
+    /// <summary>
+    /// SOLO CI (WINMAC_MENU_DIAG=1): dónde están en la pantalla las etiquetas de los menús de la app y, con un menú abierto, sus filas; así la auditoría visual pulsa
+    /// con el ratón como un usuario. Sin la variable no se registra nada.
+    /// </summary>
+    private static readonly bool MenuDiagOn = Environment.GetEnvironmentVariable("WINMAC_MENU_DIAG") == "1";
+    private string? _menuDiagLast; private DateTime _menuDiagAt;
+    private void MenuDiag()
+    {
+        if (!MenuDiagOn || DateTime.UtcNow - _menuDiagAt < TimeSpan.FromMilliseconds(400)) return;
+        _menuDiagAt = DateTime.UtcNow;
+        var parts = new List<string>();
+        foreach (var w in _wins)
+            foreach (var f in w.Ctl.Frame.Items.Where(i => i.Item.Kind is BarItemKind.AppMenu or BarItemKind.AppName))
+                parts.Add($"{f.Item.Kind}:{f.Item.Text}@{w.Left + (int)((f.X + f.W / 2) * w.Scale)},{w.Top + w.Height / 2}");
+        if (_popover is { IsOpen: true } && _pkind == PanelKind.AppMenu)
+            foreach (var r in _popover.DiagRows()) parts.Add($"fila:{r.Id}:{r.Text}@{r.X},{r.Y}");
+        var line = string.Join(" | ", parts);
+        if (line != _menuDiagLast) { _menuDiagLast = line; _log("[menús] diag " + line); }
     }
 
     private void AppMenuAction(PanelEvent e)

@@ -170,6 +170,19 @@ jobs:
       - name: Pruebas de NotchWin, arranque real bajo el host y cierre ordenado
         shell: pwsh
         run: ./tools/ci/Test-Notch.ps1 -DistDir dist/WinMac -NotchPath C:\nw -OutDir notch-out
+      - name: Auditoría visual (WinMac completo, capturas de la pantalla real)
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: ./tools/ci/Visual-Audit.ps1 -DistDir dist/WinMac -OutDir auditoria
+      - name: Subir la auditoría visual (PNG, mosaico, informes)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auditoria-visual-${{ github.sha }}
+          path: auditoria
+          retention-days: 30
+          if-no-files-found: warn
       - name: Subir resultados de la integración
         if: always()
         uses: actions/upload-artifact@v4

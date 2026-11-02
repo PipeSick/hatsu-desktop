@@ -34,6 +34,9 @@ internal sealed class PopoverWindow : IDisposable
     private readonly Func<string, byte[]?>? _icons;
     public PopoverWindow(Action<PanelEvent> onEvent, Action onClosed, Action<string> log, Func<string, byte[]?>? icons = null) { _onEvent = onEvent; _onClosed = onClosed; _log = log; _icons = icons; _proc = WndProcImpl; }
     internal IntPtr Hwnd => _hwnd;
+    /// <summary>Diagnóstico (CI): filas del panel abierto con su centro en píxeles de pantalla.</summary>
+    internal IEnumerable<(string Id, string Text, int X, int Y)> DiagRows() =>
+        _ctl.Frame.Items.Select(f => (f.W.Id, f.W.Text + (f.W.Sub == "›" ? " ›" : "") + (f.W.Enabled ? "" : " (deshabilitada)"), Position.X + (int)((f.X + f.Width / 2) * _scale), Position.Y + (int)((f.Y + f.Height / 2) * _scale)));
 
     public bool IsOpen => _open;
     public PanelKind? Kind => _open ? _ctl.Model.Kind : null;
