@@ -471,7 +471,7 @@ if (SpotOpen) {
   if (-not [Au]::Visible('WinMacSpotlight')) { & $bar --spotlight | Out-Null; $null = WaitFor { [Au]::Visible('WinMacSpotlight') } 4 }
   [System.Windows.Forms.SendKeys]::SendWait('portapapeles'); Start-Sleep -Milliseconds 1200;
   Select-String -Path $barLog -SimpleMatch '[spotlight] portapapeles:' -ErrorAction SilentlyContinue | Select-Object -Last 1 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) }
-  Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch ' clip query ' | Select-Object -Last 2 | ForEach-Object { Note ('  - Isla: ' + $_.Line) } SpotShot '19e-spotlight-portapapeles' 'Spotlight Pro: historial del portapapeles de la Isla (solo lo admitido por la privacidad)'
+  Start-Sleep -Milliseconds 500; Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch ' clip query ' | Select-Object -Last 3 | ForEach-Object { Note ('  - Isla: ' + $_.Line) } SpotShot '19e-spotlight-portapapeles' 'Spotlight Pro: historial del portapapeles de la Isla (solo lo admitido por la privacidad)'
   [System.Windows.Forms.SendKeys]::SendWait('{TAB}'); Start-Sleep -Milliseconds 300; SpotShot '19f-spotlight-tab' 'Spotlight Pro: Tab mueve la selección (la vista previa la sigue)'
   if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[spotlight] herramienta' | Select-Object -Last 3 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
