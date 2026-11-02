@@ -75,6 +75,9 @@ internal sealed class ScreenRecorder : IDisposable
     }
 
     private FramePool? _pool; private ScreenGrabber.AreaGrabber? _grabber;
+    private static FramePool? _lastPool;
+    /// <summary>The pool is kept for the next recording of the same size (one recording at a time): its few buffers are reused instead of re-allocated.</summary>
+    private static FramePool PoolFor(int bytes) { var p = _lastPool; if (p is null || p.Bytes != bytes || p.Outstanding > 0) _lastPool = p = new FramePool(bytes, 4); return p; }
     /// <summary>Frame buffers created during the recording (bounded by the pool) and frames skipped because all were still with the encoder.</summary>
     public (int Buffers, long Skipped) PoolStats => _pool is { } p ? (p.Allocated, p.Starved) : (0, 0);
 
@@ -91,7 +94,7 @@ internal sealed class ScreenRecorder : IDisposable
             var due = TimeSpan.FromSeconds(n / (double)Fps) - _clock.Elapsed;
             if (due > TimeSpan.Zero) Thread.Sleep(due);
             if (_stop) { e.Request.Sample = null; return; }
-            _pool ??= new FramePool(_rect.W * _rect.H * 4, 4);
+            _pool ??= PoolFor(_rect.W * _rect.H * 4);
             _grabber ??= new ScreenGrabber.AreaGrabber(_rect);
             var buf = _pool.Rent(TimeSpan.FromSeconds(1));
             if (buf is null) { _log("[grabación] el codificador va retrasado: no se pudo reservar fotograma"); _stop = true; e.Request.Sample = null; return; }

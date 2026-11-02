@@ -318,6 +318,9 @@ $failFlag = Join-Path $env:LOCALAPPDATA 'WinMac\ci-record-fail'; 'x' | Set-Conte
 Remove-Item $failFlag -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2
 BarRow 'tras una grabación fallida (fallo de inicialización SIMULADO)'
 Start-Sleep -Seconds 20; BarRow 'tras otros 20 s de reposo'
+& $bar --diag gc | Out-Null; $null = WaitFor { LogHas $barLog '[diag] GC completo' } 8; Start-Sleep -Seconds 2
+BarRow 'tras un GC completo pedido por el diagnóstico (¿basura o retenido?)'
+Select-String -Path $barLog -SimpleMatch '[diag] GC completo' -ErrorAction SilentlyContinue | Select-Object -Last 1 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) }
 Note '| Momento | Working Set (MB) | Privada (MB) | CPU desde la fila anterior (% de un núcleo) | Hilos | Handles | GDI | USER |'; Note '|---|---|---|---|---|---|---|---|'
 $script:memRows | ForEach-Object { Note $_ }
 Select-String -Path $barLog -SimpleMatch '[grabación] búferes' -ErrorAction SilentlyContinue | Select-Object -Last 2 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) }
@@ -503,7 +506,8 @@ Note "  - Spotlight visible tras la orden: $(if ($spotMs.Count) { "$([int]($spot
 Note "  - reinicios o latidos perdidos del host durante la prueba: $($hostAfter.Count - $hostBefore)"
 $hostAfter | Select-Object -Skip $hostBefore | Select-Object -First 6 | ForEach-Object { Note ('    ' + $_.Line) }
 Select-String -Path $hostLog -SimpleMatch '[extensiones]' -ErrorAction SilentlyContinue | Select-Object -Last 4 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ \S+ ', '')) }
-$exc = @(Select-String -Path $barLog -Pattern 'CIERRE INESPERADO|ERROR|\] error' -ErrorAction SilentlyContinue).Count; Note "  - errores en bar.log: $exc"
+$excL = @(Select-String -Path $barLog -Pattern 'CIERRE INESPERADO|ERROR|\] error' -ErrorAction SilentlyContinue); Note "  - errores en bar.log: $($excL.Count)"
+$excL | Select-Object -Last 4 | ForEach-Object { Note ('    ' + (($_.Line -replace '^\S+ ', '') -replace '(.{220}).*', '$1…')) }
 Measure-Idle 'al final, tras usar todo' 10
 Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; [void]$hp.WaitForExit(30000)
 Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue

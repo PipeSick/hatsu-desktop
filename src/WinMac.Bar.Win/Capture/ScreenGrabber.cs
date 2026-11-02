@@ -14,10 +14,17 @@ internal static class ScreenGrabber
     public static (byte[] Px, CaptureRect Rect) GrabVirtualScreen()
     {
         var r = new CaptureRect(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));   // SM_X/Y/CX/CYVIRTUALSCREEN
-        return (Grab(r), r);
+        // One frozen frame at a time (the overlay is modal): the same large array is reused while the screen size does not change, instead of a new
+        // multi-MB allocation in the large-object heap for every capture (measured in CI: ~3 MB more managed heap per capture/recording)
+        var buf = _frozen is { } f && f.Length == r.W * r.H * 4 ? f : (_frozen = new byte[r.W * r.H * 4]);
+        return (Grab(r, buf), r);
     }
 
-    public static byte[] Grab(CaptureRect r)
+    private static byte[]? _frozen;
+
+    public static byte[] Grab(CaptureRect r) => Grab(r, null);
+
+    private static byte[] Grab(CaptureRect r, byte[]? into)
     {
         IntPtr screen = GetDC(IntPtr.Zero), mem = CreateCompatibleDC(screen);
         var bi = new BITMAPINFOHEADER { biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(), biWidth = r.W, biHeight = -r.H, biPlanes = 1, biBitCount = 32 };
@@ -26,7 +33,7 @@ internal static class ScreenGrabber
         try
         {
             if (!BitBlt(mem, 0, 0, r.W, r.H, screen, r.X, r.Y, 0x00CC0020 | 0x40000000 /* SRCCOPY | CAPTUREBLT */)) throw new InvalidOperationException("BitBlt falló: " + Marshal.GetLastWin32Error());
-            var px = new byte[r.W * r.H * 4];
+            var px = into ?? new byte[r.W * r.H * 4];
             Marshal.Copy(bits, px, 0, px.Length);
             for (int i = 3; i < px.Length; i += 4) px[i] = 255;   // GDI leaves alpha undefined: the screen is opaque
             return px;

@@ -14,6 +14,9 @@ public sealed class FramePool(int bytes, int max = 4)
     public int Max { get; } = max;
     /// <summary>Buffers created so far (never more than <see cref="Max"/>).</summary>
     public int Allocated { get; private set; }
+    /// <summary>Buffers not yet given back (still with the encoder).</summary>
+    public int Outstanding { get { lock (_lock) return Allocated - _free.Count; } }
+
     /// <summary>Frames that had to be skipped because every buffer was still with the encoder.</summary>
     public long Starved { get; private set; }
 
