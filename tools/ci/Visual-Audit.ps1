@@ -308,8 +308,8 @@ Note ''; Note '### Memoria de la Barra con grabaciones repetidas (pantalla 1024�
 $script:recStarted = @(Select-String -Path $barLog -SimpleMatch '[grabación] iniciada' -ErrorAction SilentlyContinue).Count; $script:releaseMs = 0
 Collapse; Start-Sleep -Seconds 5; BarRow 'reposo inicial (tras la primera grabación de arriba)'
 $okRec = 0
-for ($i = 1; $i -le 10; $i++) { if (OneRecording 3) { $okRec++ }; if ($i -in 1, 3, 5, 10) { Start-Sleep -Seconds 2; BarRow "tras $i grabación(es) más" } }
-Note "  - grabaciones guardadas en el bucle: $okRec de 10; tiempo medio de cierre del archivo: $([int]($script:releaseMs / [Math]::Max(1, $okRec))) ms"
+for ($i = 1; $i -le 20; $i++) { if (OneRecording 3) { $okRec++ }; if ($i -in 1, 3, 5, 10, 15, 20) { Start-Sleep -Seconds 2; BarRow "tras $i grabación(es) más" } }
+Note "  - grabaciones guardadas en el bucle: $okRec de 20; tiempo medio de cierre del archivo: $([int]($script:releaseMs / [Math]::Max(1, $okRec))) ms"
 Start-Sleep -Seconds 20; BarRow 'tras 20 s de reposo'
 & $bar --record screen | Out-Null; if (WaitFor { [Au]::Visible('WinMacCapture') } 8) { Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Seconds 2 }
 BarRow 'tras una grabación cancelada (Esc en la superposición)'
@@ -321,6 +321,8 @@ Start-Sleep -Seconds 20; BarRow 'tras otros 20 s de reposo'
 Note '| Momento | Working Set (MB) | Privada (MB) | CPU desde la fila anterior (% de un núcleo) | Hilos | Handles | GDI | USER |'; Note '|---|---|---|---|---|---|---|---|'
 $script:memRows | ForEach-Object { Note $_ }
 Select-String -Path $barLog -SimpleMatch '[grabación] búferes' -ErrorAction SilentlyContinue | Select-Object -Last 2 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) }
+$mem = @(Select-String -Path $barLog -SimpleMatch '[grabación] memoria:' -ErrorAction SilentlyContinue)
+foreach ($k in 0, 4, 9, 14, ($mem.Count - 1)) { if ($k -ge 0 -and $k -lt $mem.Count) { Note ("  - grabación $($k + 1): " + ($mem[$k].Line -replace '^.*memoria: ', '')) } }
 if (LogHas $barLog 'fallo simulado') { Note '  - el fallo simulado se registró y la Barra siguió funcionando' }
 
 # ── 1g. Extensiones (docs/30): procesos aparte con su propio canal; actividades reales de la API en la Isla
@@ -469,6 +471,39 @@ if (SpotOpen) {
 } else { Note '- **13-spotlight**: NO capturado (la ventana no apareció)' }
 Start-Sleep -Milliseconds 600
 
+# ── 1h. Teclado en la Isla (docs/25): se abre con un clic real; ←/→ cambian de sección; Esc la cierra (pulsaciones reales)
+Note ''; Note '### Teclado en la Isla'
+Collapse; Start-Sleep -Milliseconds 600
+[Au]::Click($cx, $sc.Y + 12); $null = WaitFor { NotchWide } 4; Start-Sleep -Milliseconds 1200
+[System.Windows.Forms.SendKeys]::SendWait('{RIGHT}'); $kOk = WaitFor { (Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch 'teclado seccion').Count -ge 1 } 4
+Start-Sleep -Milliseconds 600; Shot '48-isla-teclado' 'Isla abierta con un clic: → pasó a la sección siguiente (foco en la pestaña)' ($cx - 330) $sc.Y 660 560
+[System.Windows.Forms.SendKeys]::SendWait('{ESC}'); $eOk = WaitFor { (Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch 'teclado esc').Count -ge 1 } 4
+Note "  - → cambió de sección: $kOk; Esc la cerró: $eOk"
+Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch ' teclado ' | Select-Object -Last 3 | ForEach-Object { Note ('  - ' + $_.Line) }
+
+# ── 1i. Estabilidad prolongada (docs/34): ciclos repetidos de todo lo que puede bloquear un hilo de interfaz
+Note ''; Note '### Estabilidad prolongada'
+$hostBefore = @(Select-String -Path $hostLog -Pattern 'sin latido|Crashed|terminó de forma inesperada' -ErrorAction SilentlyContinue).Count
+$spotMs = @(); $cycles = 6; $t1 = Get-Date
+for ($c = 1; $c -le $cycles; $c++) {
+  for ($k = 0; $k -lt 3; $k++) { [Au]::Click($cx, $sc.Y + 12); Start-Sleep -Milliseconds 500; $null = ClickTab 'captures'; $null = ClickTab 'activity'; [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 400; Collapse }
+  & $bar --capture screen | Out-Null; if (WaitFor { [Au]::Visible('WinMacCapture') } 6) { Start-Sleep -Milliseconds 200; [Au]::Click(500, 300) }; Start-Sleep -Milliseconds 800
+  $last = Get-ChildItem $shotsDir -Filter 'Captura *' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'editada' } | Sort-Object LastWriteTime | Select-Object -Last 1
+  if ($last) { & $bar --edit $last.FullName | Out-Null; if (WaitFor { [Au]::Visible('WinMacCaptureEditor') } 8) { Start-Sleep -Milliseconds 400; [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); $null = WaitFor { -not [Au]::Visible('WinMacCaptureEditor') } 4 } }
+  $null = OneRecording 2
+  $sw = [Diagnostics.Stopwatch]::StartNew(); & $bar --spotlight | Out-Null
+  if (WaitFor { [Au]::Visible('WinMacSpotlight') } 5) { $spotMs += $sw.ElapsedMilliseconds; [System.Windows.Forms.SendKeys]::SendWait('captura'); Start-Sleep -Milliseconds 400; [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); [System.Windows.Forms.SendKeys]::SendWait('{ESC}') }
+  & $bar --workspace grid | Out-Null; Start-Sleep -Milliseconds 500
+  if ($c -eq 3) { Get-Process -Name 'WinMac.Ext.Demos' -ErrorAction SilentlyContinue | Select-Object -First 1 | Stop-Process -Force; Note '  - ciclo 3: se cerró a la fuerza un proceso de extensión (prueba de aislamiento)' }
+}
+$secs = [int]((Get-Date) - $t1).TotalSeconds
+$hostAfter = @(Select-String -Path $hostLog -Pattern 'sin latido|Crashed|terminó de forma inesperada' -ErrorAction SilentlyContinue)
+Note "  - $cycles ciclos en $secs s (Isla 18 veces, $cycles capturas, editor, grabaciones, Spotlight, cuadrícula)"
+Note "  - Spotlight visible tras la orden: $(if ($spotMs.Count) { "$([int]($spotMs | Measure-Object -Average).Average) ms de media, máx. $(($spotMs | Measure-Object -Maximum).Maximum) ms ($($spotMs.Count) veces)" } else { 'no se abrió' })"
+Note "  - reinicios o latidos perdidos del host durante la prueba: $($hostAfter.Count - $hostBefore)"
+$hostAfter | Select-Object -Skip $hostBefore | Select-Object -First 6 | ForEach-Object { Note ('    ' + $_.Line) }
+Select-String -Path $hostLog -SimpleMatch '[extensiones]' -ErrorAction SilentlyContinue | Select-Object -Last 4 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ \S+ ', '')) }
+$exc = @(Select-String -Path $barLog -Pattern 'CIERRE INESPERADO|ERROR|\] error' -ErrorAction SilentlyContinue).Count; Note "  - errores en bar.log: $exc"
 Measure-Idle 'al final, tras usar todo' 10
 Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; [void]$hp.WaitForExit(30000)
 Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue

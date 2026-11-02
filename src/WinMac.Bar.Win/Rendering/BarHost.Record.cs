@@ -87,7 +87,15 @@ public sealed partial class BarHost
                 NotchActivity?.Invoke(new { op = "finish", activity = new { id = "grabacion", state = "completed" } });
             }
             catch (Exception e) { _log("[grabación] no se pudo cerrar el archivo: " + e.GetType().Name + ": " + e.Message); NotchActivity?.Invoke(new { op = "finish", activity = new { id = "grabacion", state = "failed" } }); }
-            finally { r.Dispose(); }   // frames come from a bounded pool (FramePool): nothing per frame is left for the GC to find
+            finally
+            {
+                r.Dispose();
+                if (MenuDiagOn)   // SOLO CI: separar memoria gestionada de la nativa (Media Foundation, WinRT) para saber qué crece entre grabaciones
+                {
+                    var gi = GC.GetGCMemoryInfo();
+                    _log($"[grabación] memoria: montón gestionado {gi.HeapSizeBytes / 1048576.0:0.0} MB, comprometido {gi.TotalCommittedBytes / 1048576.0:0.0} MB, en uso {GC.GetTotalMemory(false) / 1048576.0:0.0} MB, GC gen2 {GC.CollectionCount(2)}");
+                }
+            }   // frames come from a bounded pool (FramePool): nothing per frame is left for the GC to find
         });
     }
 
