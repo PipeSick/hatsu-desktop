@@ -44,6 +44,7 @@ internal sealed class SettingsWindow : IDisposable
 
     /// <summary>Extensions (docs/30): operations and the list to show; set by the host.</summary>
     public WinMac.Host.IExtensionOps? ExtensionOps { get => _actions.Extensions; set => _actions.Extensions = value; }
+    public Action? ClearClipboard { get => _actions.ClearClipboard; set => _actions.ClearClipboard = value; }
     public Func<IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension Ext, string Status)>>? ExtensionList { get; set; }
     /// <summary>Redraw with fresh data (safe from any thread).</summary>
     public void Refresh() { if (_hwnd != IntPtr.Zero) Native.PostMessage(_hwnd, WM_REFRESH, IntPtr.Zero, IntPtr.Zero); }

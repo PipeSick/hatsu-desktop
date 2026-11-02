@@ -42,6 +42,17 @@ public sealed record NotchSettings
     public int ClipboardLimit { get; init; } = 50;
     public bool ClipboardPersist { get; init; }
     public bool ClipboardSkipSecrets { get; init; } = true;
+    public bool ClipboardExclusionsOn { get; init; } = true;
+    /// <summary>Procesos excluidos separados por comas (sin .exe). Null = la lista por defecto (gestores de contraseñas). Texto, no lista: el record compara por valor.</summary>
+    public string? ClipboardExcludedApps { get; init; }
+    public static readonly string DefaultExcludedApps = "KeePass, KeePassXC, 1Password, Bitwarden, LastPass, Dashlane, NordPass, ProtonPass, Enpass";
+
+    /// <summary>Nombres de proceso válidos (letras, números, punto, guion, guion bajo y espacio), sin «.exe», sin repetir, hasta 64.</summary>
+    public static IReadOnlyList<string> ParseApps(string? text) =>
+        (text ?? DefaultExcludedApps).Split([',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(a => a.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? a[..^4] : a)
+            .Where(a => a.Length is > 0 and <= 64 && a.All(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_' or ' '))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Take(64).ToList();
 
     public static IReadOnlyList<NotchSection> DefaultSections() => SectionIds.Select(id => new NotchSection(id, id != CameraId)).ToList();
 
@@ -66,6 +77,7 @@ public sealed record NotchSettings
         PillHudSeconds = Math.Clamp(PillHudSeconds, 1, 10),
         PillNotifySeconds = Math.Clamp(PillNotifySeconds, 2, 30),
         ClipboardLimit = Math.Clamp(ClipboardLimit, 5, 500),
+        ClipboardExcludedApps = ClipboardExcludedApps is null ? null : string.Join(", ", ParseApps(ClipboardExcludedApps)),
     };
 
     /// <summary>Aplica un parche JSON (camelCase, solo los campos presentes). Lo desconocido o inválido se ignora campo a campo.</summary>
@@ -96,6 +108,7 @@ public sealed record NotchSettings
                 case "clipboardlimit" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int cl): n = n with { ClipboardLimit = cl }; break;
                 case "clipboardpersist" when IsBool(v): n = n with { ClipboardPersist = v.GetBoolean() }; break;
                 case "clipboardskipsecrets" when IsBool(v): n = n with { ClipboardSkipSecrets = v.GetBoolean() }; break;
+                case "clipboardexclusionson" when IsBool(v): n = n with { ClipboardExclusionsOn = v.GetBoolean() }; break;
                 case "sections" when v.ValueKind == JsonValueKind.Array:
                     var list = new List<NotchSection>();
                     foreach (var item in v.EnumerateArray())
@@ -128,6 +141,7 @@ public sealed record NotchSettings
         musicPlayer = MusicPlayer, customPlayerPath = CustomPlayerPath, lyricsEnabled = LyricsEnabled, lyricsInPill = LyricsInPill, pollIntervalSeconds = PollIntervalSeconds,
         pillVolume = PillVolume, pillBrightness = PillBrightness, pillNotifications = PillNotifications, pillHudSeconds = PillHudSeconds, pillNotifySeconds = PillNotifySeconds, pillAnimations = PillAnimations,
         clipboardLimit = ClipboardLimit, clipboardPersist = ClipboardPersist, clipboardSkipSecrets = ClipboardSkipSecrets,
+        clipboardExcludedApps = ClipboardExclusionsOn ? ParseApps(ClipboardExcludedApps).ToArray() : Array.Empty<string>(),
     };
 
     /// <summary>

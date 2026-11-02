@@ -170,7 +170,10 @@ public static class SettingsBuilder
         notch.Add(new("Portapapeles", [
             new(RowKind.Field, "notch.cliplimit", "Elementos en el historial", Enabled: installed, Reason: why, Text: n.ClipboardLimit.ToString(), Placeholder: "50"),
             new(RowKind.Toggle, "notch.clipsecrets", "No guardar contraseñas ni claves", "Detecta claves privadas, tokens y contraseñas generadas; ignora siempre a los gestores de contraseñas", n.ClipboardSkipSecrets, installed, why),
-            new(RowKind.Toggle, "notch.clippersist", "Conservar al reiniciar", "Cifrado para tu usuario de Windows (DPAPI); al desactivarlo se borra el archivo", n.ClipboardPersist, installed, why),
+            new(RowKind.Toggle, "notch.clippersist", "Conservar al reiniciar", n.ClipboardPersist ? "Activado: el historial se guarda cifrado para tu usuario de Windows (DPAPI)" : "Desactivado: nada del historial se guarda en disco", n.ClipboardPersist, installed, why),
+            new(RowKind.Toggle, "notch.clipexcl", "Ignorar las apps de la lista", "Lo que copien no entra en el historial (se identifican por el nombre de su proceso)", n.ClipboardExclusionsOn, installed, why),
+            new(RowKind.Field, "notch.clipapps", "Apps excluidas", Enabled: installed && n.ClipboardExclusionsOn, Reason: !installed ? why : "Activa «Ignorar las apps de la lista»", Text: string.Join(", ", NotchSettings.ParseApps(n.ClipboardExcludedApps)), Placeholder: "KeePass, 1Password, … (separadas por comas; vacío = lista por defecto)"),
+            new(RowKind.Button, "notch.clipclear", "Borrar el historial del portapapeles", Enabled: installed, Reason: why),
         ], "Solo en este equipo: el historial nunca se sincroniza ni se registra."));
         notch.Add(new("Agentes de IA", [
             new(RowKind.Toggle, "notch.agents", "Agentes de IA", "Estado de tus agentes en el notch", n.AgentsEnabled, installed, why),

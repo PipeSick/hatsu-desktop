@@ -18,6 +18,9 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { log?.Invoke("[host] ajuste «" + e.Id + "» no se pudo aplicar: " + ex.Message); return false; }
     }
 
+    /// <summary>Clears the Island's clipboard history (pinned included); provided by the host.</summary>
+    public Action? ClearClipboard { get; set; }
+
     /// <summary>Extension operations, provided by the host (null when extensions are not available).</summary>
     public IExtensionOps? Extensions { get; set; }
 
@@ -78,6 +81,9 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("notch.pillbright", "toggle"): cfg.UpdateNotch(n => n with { PillBrightness = e.On }); return true;
             case ("notch.pillnotif", "toggle"): cfg.UpdateNotch(n => n with { PillNotifications = e.On }); return true;
             case ("notch.pillanim", "toggle"): cfg.UpdateNotch(n => n with { PillAnimations = e.On }); return true;
+            case ("notch.clipexcl", "toggle"): cfg.UpdateNotch(n => n with { ClipboardExclusionsOn = e.On }); return true;
+            case ("notch.clipapps", "text"): { var t = (e.Text ?? "").Trim(); cfg.UpdateNotch(n => n with { ClipboardExcludedApps = t.Length == 0 ? null : string.Join(", ", NotchSettings.ParseApps(t)) }); return true; }
+            case ("notch.clipclear", _): ClearClipboard?.Invoke(); return true;
             case ("notch.clipsecrets", "toggle"): cfg.UpdateNotch(n => n with { ClipboardSkipSecrets = e.On }); return true;
             case ("notch.clippersist", "toggle"): cfg.UpdateNotch(n => n with { ClipboardPersist = e.On }); return true;
             case ("notch.cliplimit", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int cl)) cfg.UpdateNotch(n => n with { ClipboardLimit = cl }); return true;
