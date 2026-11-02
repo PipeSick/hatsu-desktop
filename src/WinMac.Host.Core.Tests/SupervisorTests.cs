@@ -161,6 +161,23 @@ public class HostConfigTests
     private static string Tmp() => Path.Combine(Path.GetTempPath(), "winmac-host-" + Guid.NewGuid().ToString("N") + ".json");
 
     [Fact]
+    public void A_config_from_before_WinMac_2_loads_with_safe_defaults_for_every_new_option()
+    {
+        // winmac.json escrito por una versión anterior: sin capturas, portapapeles ni extensiones (configuración unificada, docs/31)
+        var f = Tmp();
+        try
+        {
+            File.WriteAllText(f, """{ "version": 2, "modules": { "bar": { "enabled": true } }, "notch": { "position": "TopLeft", "glassLevel": 40, "lyricsEnabled": true }, "bar": { "Clock": true } }""");
+            var c = HostConfig.Load(f);
+            Assert.Equal("TopLeft", c.Notch!.Position); Assert.True(c.Notch.LyricsEnabled);   // lo que había se conserva (letras incluidas)
+            Assert.False(c.Notch.ClipboardPersist); Assert.True(c.Notch.ClipboardSkipSecrets); Assert.Equal(50, c.Notch.ClipboardLimit);   // privacidad por defecto
+            Assert.True(c.Bar!.CaptureHotkeys); Assert.Equal("Png", c.Bar.CaptureFormat); Assert.Null(c.Bar.CaptureFolder); Assert.False(c.Bar.CaptureCopyToClipboard);
+            Assert.Contains("activity", c.Notch.Sections.Select(x => x.Id));                    // pestañas nuevas añadidas al final sin perder el orden guardado
+        }
+        finally { File.Delete(f); }
+    }
+
+    [Fact]
     public void Defaults_start_every_module_including_the_notch_and_autostart_is_off()
     {
         var c = new HostConfig(); Assert.True(c.Modules["bar"].Enabled && c.Modules["dock"].Enabled && c.Modules["notch"].Enabled); Assert.False(c.Autostart); Assert.Equal(2, c.Version);

@@ -99,11 +99,16 @@ public static class SettingsBuilder
             new("Comportamiento", [Bar(9, "El resto de ventanas no se superpone a la barra"), Bar(10), Bar(11), Bar(12, "Apps con menú de Windows o accesible; los menús originales siguen en la app")]),
             new("Launchpad", [Bar(29, "Solo al pulsarla sola; los atajos con Windows siguen igual. Ctrl+Esc abre el menú Inicio")], "Desactivado, la tecla Windows vuelve a abrir el menú Inicio."),
             new("Capturas", [
-                Bar(31, "3: pantalla · 4: región · 5: barra de captura. Si otro programa ya los usa, Windows los rechaza"),
+                Bar(31, "Ctrl+Mayús+3: pantalla · 4: región · 5: barra de captura · 6: grabar/detener. Si otro programa ya los usa, Windows los rechaza (queda en bar.log)"),
                 new(RowKind.Segmented, "bar.capfmt", "Formato", Options: CaptureFormatNames, Selected: Index(CaptureFormatValues, bar.CaptureFormat)),
                 Bar(32),
                 new(RowKind.Field, "bar.capdir", "Carpeta", Text: bar.CaptureFolder ?? "", Placeholder: "Imágenes\\Capturas de pantalla"),
-            ], "Las capturas se guardan en esa carpeta y aparecen en la galería de la Isla."),
+            ], "Las capturas se guardan en esa carpeta y aparecen en la galería de la Isla. Las grabaciones (solo vídeo, nunca el micrófono) van a Vídeos\\Screen Recordings."),
+            new("Spotlight Pro y espacios de trabajo", [
+                new(RowKind.Info, "bar.spotpro", "En Spotlight: acciones de WinMac, «ip», «red», «ping …» y «dns …» (solo con Intro), «ssh usuario@equipo», «> …» (nunca se ejecuta: abre la terminal o lo copia), «20% de 150»."),
+                new(RowKind.Info, "bar.scripts", "Scripts propios: %APPDATA%\\WinMac\\spotlight-scripts.json. Se ejecutan con doble Intro y tus permisos, nunca elevados."),
+                new(RowKind.Info, "bar.workspaces", "Espacios de trabajo: «Guardar espacio de trabajo», «Restaurar …», «Ventanas lado a lado» o «en cuadrícula». Se guardan en %APPDATA%\\WinMac\\workspaces.json; ninguna app se abre sola."),
+            ]),
             new("Spotlight", [
                 new(RowKind.Segmented, "bar.spot", "Atajo", Options: SpotKeyNames, Selected: Index(SpotKeyValues, bar.SpotlightHotkey.ToString())),
                 Bar(30, "Recientes de Windows y el índice de Windows Search; no indexa nada por su cuenta"),
