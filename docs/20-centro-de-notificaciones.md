@@ -4,6 +4,13 @@ Panel lateral inspirado en macOS. Se abre con el **reloj de la barra**, igual qu
 
 Sustituye a la propuesta de [docs/19](19-notificaciones-propuesta.md). La sonda de esa propuesta ya se ejecutó en el PC del usuario: `UserNotificationListener.GetAccessStatus()` devolvió **`Allowed`** desde la app sin paquete. Eso confirma que WinMac puede consultar el permiso. **Falta medir** si `GetNotificationsAsync` y el evento de cambios también funcionan sin paquete (ver §6).
 
+## Capturas (dibujo real, datos de MUESTRA)
+Las dibujó el CI de Windows (runner virtual, WARP) con el pintor real, fuera de pantalla, a escala 1, sobre un fondo sintético. **Las notificaciones son de muestra**: validan el dibujo, no la lectura de Windows. Se obtienen con `WinMac.Bar.App --render-panel notifications|notifications-off`.
+
+| Oscuro (grupo de Outlook desplegado) | Claro | Antes de activarlo |
+|---|---|---|
+| ![](img/centro-notificaciones-oscuro.png) | ![](img/centro-notificaciones-claro.png) | ![](img/centro-notificaciones-sin-activar.png) |
+
 ## 1. Qué hace
 | Función | Cómo | Estado |
 |---|---|---|
