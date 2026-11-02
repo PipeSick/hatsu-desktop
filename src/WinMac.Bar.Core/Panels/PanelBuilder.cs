@@ -15,7 +15,7 @@ public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothS
 
 /// <summary>Estado de interfaz de los paneles: mes visible, día elegido, operaciones en curso («Conectando…») y el último error.</summary>
 public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo Battery, DateTime Now, IReadOnlyList<CalendarEvent> Events, int ViewYear, int ViewMonth,
-    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null)
+    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null)
 {
     public static PanelContext Initial(BarConfig cfg, DateTime now) => new(SystemSnapshot.Empty, cfg, BatteryInfo.None, now, [], now.Year, now.Month, null, new Dictionary<string, string>(), null);
 }
@@ -36,6 +36,7 @@ public static partial class PanelBuilder
         PanelKind.Display => DisplayPanel(c),
         PanelKind.Hub => HubPanel(c),
         PanelKind.Weather => WeatherPanel(c),
+        PanelKind.Notifications => NotificationCenter(c),
         _ => ControlCenter(c),
     };
 
@@ -53,7 +54,9 @@ public static partial class PanelBuilder
         if (cfg.CcAppearance) Tile(new Widget(WidgetKind.Tile, "appearance", "Modo oscuro", s.Appearance.Available ? (s.Appearance.Dark ? "Activado" : "Desactivado") : "No disponible", On: s.Appearance.Available && s.Appearance.Dark, Enabled: s.Appearance.Available, Reason: s.Appearance.Reason, Glyph: "moon"));
         if (cfg.CcDisplay) Tile(new Widget(WidgetKind.Tile, "open:display", "Pantallas", "Duplicar / extender", Glyph: "display"));
         if (cfg.CcPower) Tile(new Widget(WidgetKind.Tile, "open:battery", c.Battery.Present ? "Batería" : "Energía", c.Battery.Present ? $"{c.Battery.Percent}%" : (s.Power.Available ? PowerModeState.Label(s.Power.Mode) : "No disponible"), Enabled: true, Glyph: "power", On: c.Battery.Present && c.Battery.Charging));
-        if (cfg.CcNotifications) Tile(new Widget(WidgetKind.Tile, "notifications", "Notificaciones", "Abrir centro de Windows", Glyph: "bell"));
+        if (cfg.CcNotifications) Tile(cfg.NotificationCenter
+            ? new Widget(WidgetKind.Tile, "nc:open", "Notificaciones", "Centro de WinMac", Glyph: "bell")
+            : new Widget(WidgetKind.Tile, "notifications", "Notificaciones", "Abrir centro de Windows", Glyph: "bell"));
         if (col == 1) w.Add(new Widget(WidgetKind.Separator, "pad"));   // número impar de mosaicos: cierra la fila
         if (cfg.CcSound) w.Add(new Widget(WidgetKind.Slider, "volume", "Sonido", Value: s.Audio.Volume, Enabled: s.Audio.Available, Reason: s.Audio.Reason, Glyph: s.Audio.Muted ? "sound-muted" : "sound"));
         if (cfg.CcSound && s.Audio.Available) w.Add(new Widget(WidgetKind.Row, "open:sound", "Salida de audio", s.Audio.Outputs.FirstOrDefault(o => o.IsDefault)?.Name ?? "Dispositivo predeterminado", Glyph: "chevron"));

@@ -48,6 +48,7 @@ public sealed class PanelController
     }
 
     private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav or WidgetKind.Tabs or WidgetKind.TabHeader or WidgetKind.Select or WidgetKind.AppRow or WidgetKind.Stats or WidgetKind.CityRow
+        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard
         || (w.Kind == WidgetKind.Header && w.Id == "back");
 
     private static string ScrollKey(PanelModel m) => m.PinTop > 0 && m.PinTop <= m.Widgets.Count ? m.Kind + "/" + m.Widgets[m.PinTop - 1].Id : m.Kind.ToString();
@@ -119,6 +120,17 @@ public sealed class PanelController
                 int t = PanelLayout.TabAt(f, x); return w.Data is TabsData td && t >= 0 ? new PanelEvent(PanelEventKind.Click, "tab:" + td.Tabs[t].Id) : null;
             }
             case WidgetKind.Stats: return PanelLayout.StatsPillHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "unit") : null;
+            case WidgetKind.NcHeader: return PanelLayout.NcCloseHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "nc:close") : null;
+            case WidgetKind.NcSection: return PanelLayout.NcSectionActionHit(f, x) && w.Data is NcSectionData sd ? new PanelEvent(PanelEventKind.Click, sd.ActionId!) : null;
+            case WidgetKind.NotifGroup:
+                return w.Data is not NotifGroupData gd ? null
+                    : new PanelEvent(PanelEventKind.Click, (PanelLayout.NotifGroupClearHit(f, x) ? "ngclear:" : "ngtoggle:") + gd.GroupKey);
+            case WidgetKind.NotifCard:
+            {
+                if (w.Data is not NotifCardData cd) return null;
+                if (PanelLayout.NotifDismissHit(f, x, y)) return new PanelEvent(PanelEventKind.Click, "ndismiss:" + cd.NotificationId);
+                return new PanelEvent(PanelEventKind.Click, cd.Stacked > 0 ? "ngtoggle:" + cd.GroupKey : "nopen:" + cd.NotificationId);   // tarjeta apilada: despliega el grupo; si no, abre la app
+            }
             default: return new PanelEvent(PanelEventKind.Click, w.Id);
         }
     }

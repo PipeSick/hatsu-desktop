@@ -35,7 +35,7 @@ public interface IPanelUi
 /// Traduce lo que el usuario toca en un panel (<see cref="PanelEvent"/>) en operaciones REALES sobre los servicios del sistema, siempre fuera del hilo de interfaz y con «ocupado» visible,
 /// el valor mostrado al instante cuando es seguro, y el error con su motivo si algo falla. Es lógica pura: se prueba con servicios simulados, sin Windows.
 /// </summary>
-public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> log, TimeSpan? notificationDelay = null, HubRuntime? rt = null)
+public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> log, TimeSpan? notificationDelay = null, HubRuntime? rt = null, Notifications.NotificationStore? nc = null)
 {
     private readonly TimeSpan _notifyDelay = notificationDelay ?? TimeSpan.FromMilliseconds(250);
 
@@ -66,6 +66,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
             if (id.StartsWith("open:ms-settings:") || id.StartsWith("open:ms-windows-store:")) { ui.HidePanel(); ui.OpenUri(id[5..]); return; }
             if (id.StartsWith("open:")) { var k = id[5..] switch { "wifi" => PanelKind.Wifi, "bluetooth" => PanelKind.Bluetooth, "sound" => PanelKind.Sound, "battery" => PanelKind.Battery, "display" => PanelKind.Display, _ => PanelKind.ControlCenter }; ui.Navigate(k); return; }
             if (HubAction(id)) return;
+            if (NcAction(id)) return;
             var s = hub.Snapshot; var svc = hub.Services;
             switch (id)
             {
@@ -96,6 +97,43 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
             if (id.StartsWith("topology:") && Enum.TryParse<DisplayTopology>(id[9..], out var topo)) { ui.HidePanel(); hub.Run(() => svc.Display.SetTopology(topo), r => { if (!r.IsOk) ui.ShowInfo("Pantallas", r.Message); }); return; }
         }
         catch (Exception ex) { log("[bar] evento de panel falló: " + ex.GetType().Name + ": " + ex.Message); }
+    }
+
+    /// <summary>Acciones del Centro de Notificaciones. Devuelve true si el Id era de ellas.</summary>
+    private bool NcAction(string id)
+    {
+        bool win = ui.Ctx.Cfg.NotifRemoveFromWindows;
+        switch (id)
+        {
+            case "nc:open": ui.Navigate(PanelKind.Notifications); return true;   // mosaico del Control Center: el anfitrión lo reabre como panel lateral
+            case "nc:close": ui.HidePanel(); return true;
+            case "nc:settings": ui.HidePanel(); ui.OpenSettings("notifications"); return true;
+            case "nc:enable":   // consentimiento explícito en WinMac; después, el de Windows
+                ui.Ctx = ui.Ctx with { Cfg = ui.Ctx.Cfg with { NotificationsFromWindows = true } }; ui.PatchConfig(new { notificationsFromWindows = true });
+                nc?.SetEnabled(true); if (nc is { Active: false }) nc.Activate(); ui.Rebuild(); return true;
+            case "nc:request": nc?.RequestAccess(); ui.Rebuild(); return true;
+            case "nc:retry": nc?.Refresh(); return true;
+            case "nc:clearall":
+                if (nc is null) return true;
+                if (win && !ui.Confirm("Borrar todas las notificaciones", "Se eliminarán de WinMac y también del centro de notificaciones de Windows. ¿Continuar?")) return true;
+                nc.ClearAll(win); return true;
+        }
+
+        if (id.StartsWith("ngtoggle:"))
+        {
+            var key = id[9..]; var view = ui.Ctx.Nc; if (view is null) return true;
+            var set = new HashSet<string>(view.Expanded, StringComparer.OrdinalIgnoreCase); if (!set.Remove(key)) set.Add(key);
+            ui.Ctx = ui.Ctx with { Nc = view with { Expanded = set } }; ui.Rebuild(); return true;
+        }
+
+        if (id.StartsWith("ngclear:")) { nc?.ClearGroup(id[8..], win); return true; }
+        if (id.StartsWith("ndismiss:") && uint.TryParse(id[9..], out var did)) { nc?.Dismiss(did, win); return true; }
+        if (id.StartsWith("nopen:") && uint.TryParse(id[6..], out var oid))
+        {
+            nc?.OpenApp(oid, r => { if (r.IsOk) ui.HidePanel(); else { SetMessage(r.Message ?? "No se pudo abrir la app"); ui.Rebuild(); } }); return true;
+        }
+
+        return false;
     }
 
     private void ToggleSelectedVolume(string letter) => ui.Ctx = ui.Ctx with { Hub = ui.Ctx.Hub is { } h ? h with { SelectedVolume = letter } : null };

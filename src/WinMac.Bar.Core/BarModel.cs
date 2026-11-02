@@ -60,7 +60,8 @@ public static class BarModel
     };
 
     /// <summary>Acción real del clic sobre un elemento concreto: abre su panel (con la página de Configuración como respaldo) o el menú de la app.</summary>
-    public static BarAction ClickAction(BarItem item)
+    /// <param name="notificationCenter">El reloj abre el Centro de Notificaciones (ajuste <see cref="BarConfig.NotificationCenter"/>) en vez del calendario.</param>
+    public static BarAction ClickAction(BarItem item, bool notificationCenter = false)
     {
         var basic = ActionFor(item.Kind);
         return item.Kind switch
@@ -70,7 +71,7 @@ public static class BarModel
             BarItemKind.Volume => basic with { Kind = BarActionKind.OpenPanel, Panel = PanelKind.Sound },
             BarItemKind.Battery => basic with { Kind = BarActionKind.OpenPanel, Panel = PanelKind.Battery },
             BarItemKind.ControlCenter => basic with { Kind = BarActionKind.OpenPanel, Panel = PanelKind.ControlCenter },
-            BarItemKind.Clock => basic with { Kind = BarActionKind.OpenPanel, Panel = PanelKind.Calendar },
+            BarItemKind.Clock => basic with { Kind = BarActionKind.OpenPanel, Panel = notificationCenter ? PanelKind.Notifications : PanelKind.Calendar },
             BarItemKind.AppMenu => new BarAction(BarActionKind.ShowAppMenu, Index: int.TryParse(item.Id.AsSpan(7), out int i) ? i : 0),
             _ => basic,
         };

@@ -180,7 +180,7 @@ public class PanelBuilderTests
     {
         foreach (var kind in Enum.GetValues<PanelKind>())
         {
-            foreach (var w in PanelBuilder.Build(kind, Ctx(Nothing)).Widgets.Where(x => x.Kind is WidgetKind.Tile or WidgetKind.Slider or WidgetKind.Row && !x.Id.StartsWith("open:") && !x.Id.StartsWith("topology:") && x.Id is not ("notifications" or "mute")))
+            foreach (var w in PanelBuilder.Build(kind, Ctx(Nothing)).Widgets.Where(x => x.Kind is WidgetKind.Tile or WidgetKind.Slider or WidgetKind.Row && !x.Id.StartsWith("open:") && !x.Id.StartsWith("topology:") && x.Id is not ("notifications" or "nc:open" or "mute")))
             {
                 if (w.Enabled) Assert.True(w.Id is "power:BestEfficiency" or "power:Balanced" or "power:Performance" or "power:BestPerformance" ? false : false, $"{kind}/{w.Id} está habilitado sin respaldo");
                 else Assert.False(string.IsNullOrWhiteSpace(w.Reason) && !PanelBuilder.Build(kind, Ctx(Nothing)).Widgets.Any(n => n.Kind == WidgetKind.Note), $"{kind}/{w.Id} deshabilitado sin motivo");

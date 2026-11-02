@@ -2,7 +2,7 @@ using WinMac.Calendar;
 
 namespace WinMac.Bar;
 
-public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather }
+public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications }
 
 public enum WidgetKind
 {
@@ -29,6 +29,12 @@ public enum WidgetKind
     WeatherHead, // ciudad, temperatura grande, icono, descripción y máx/mín (Data = WeatherHeadData)
     Strip,       // pronóstico horizontal por horas (Data = StripData)
     CityRow,     // ciudad adicional: nombre a la izquierda, icono y temperatura a la derecha
+    // ── Centro de Notificaciones
+    NcHeader,    // día y fecha grandes + botón de cerrar (Data = NcHeaderData; clic en la «×» = "nc:close")
+    NcSection,   // título de sección con una acción opcional a la derecha («Borrar todo», «Editar»; Data = NcSectionData)
+    NotifGroup,  // cabecera del grupo de una app: icono, nombre, cantidad, «Borrar» y desplegar/plegar (Data = NotifGroupData)
+    NotifCard,   // una notificación: icono, app, hora, título, texto y «×» (Data = NotifCardData)
+    NcEmpty,     // estado vacío o de permiso: icono grande, título y explicación
 }
 
 public sealed record TabsData(IReadOnlyList<WinMac.Bar.Hub.TabItem> Tabs, int Selected);
@@ -42,6 +48,17 @@ public sealed record StatItem(string Arrow, string Value, string Label, string C
 public sealed record StatsData(StatItem Left, StatItem Right, string? Pill);
 public sealed record WeatherHeadData(string Place, bool Located, string Temp, string IconKey, string Description, string? HighLow);
 public sealed record StripData(IReadOnlyList<WinMac.Bar.Hub.StripItem> Items);
+public sealed record NcHeaderData(string Day, string Date);
+/// <param name="ActionId">Evento al pulsar la acción de la derecha (null = sin acción).</param>
+public sealed record NcSectionData(string? ActionId, string? ActionLabel);
+/// <param name="IconKey">Clave del icono de la app para el dibujo (null = sin icono: se dibuja la inicial).</param>
+/// <param name="ClearLabel">Texto del botón del grupo («Borrar» elimina en Windows, «Ocultar» solo en WinMac); null = sin botón.</param>
+public sealed record NotifGroupData(string GroupKey, string? IconKey, string AppName, int Count, bool Expanded, string? ClearLabel);
+/// <param name="Secondary">Segunda línea (el cuerpo cuando hay título); null = una sola línea.</param>
+/// <param name="CanDismiss">Muestra la «×» (Eliminar u Ocultar según el ajuste).</param>
+/// <param name="Stacked">Cuántas notificaciones más de la misma app hay debajo (grupo plegado): se dibujan como tarjetas apiladas.</param>
+/// <param name="ShowApp">Muestra el nombre de la app en la tarjeta (las tarjetas de un grupo desplegado no lo repiten).</param>
+public sealed record NotifCardData(uint NotificationId, string GroupKey, string? IconKey, string AppName, string Primary, string? Secondary, string When, bool CanDismiss, int Stacked, bool ShowApp);
 
 /// <summary>
 /// Un elemento del panel. NO hay controles decorativos: un control cuyo respaldo no existe en este equipo lleva <c>Enabled = false</c> y su <see cref="Reason"/> (se dibuja atenuado con el motivo debajo).
@@ -56,7 +73,8 @@ public sealed record MonthData(IReadOnlyList<CalendarDay> Days, IReadOnlyList<st
 /// <param name="Card">Rango de elementos (índices, ambos incluidos) que van dentro de una tarjeta redondeada con margen interior, como el contenido de las pestañas de referencia.</param>
 /// <param name="PinTop">Cuántos elementos del principio (logotipo, pestañas, título) quedan fijos arriba cuando el contenido se desplaza.</param>
 /// <param name="PinBottom">Cuántos elementos del final (Ajustes y Salir) quedan fijos abajo cuando el contenido se desplaza.</param>
-public sealed record PanelModel(PanelKind Kind, string Title, IReadOnlyList<Widget> Widgets, double Width = PanelLayout.Width, (int From, int To)? Card = null, int PinTop = 0, int PinBottom = 0);
+/// <param name="FillHeight">El panel ocupa siempre la altura máxima (panel lateral): si el contenido es más corto, el pie fijo baja al borde inferior.</param>
+public sealed record PanelModel(PanelKind Kind, string Title, IReadOnlyList<Widget> Widgets, double Width = PanelLayout.Width, (int From, int To)? Card = null, int PinTop = 0, int PinBottom = 0, bool FillHeight = false);
 
 public sealed record WidgetFrame(Widget W, double X, double Y, double Width, double Height);
 public sealed record CardRect(double X, double Y, double W, double H);
@@ -93,8 +111,21 @@ public static class PanelLayout
         WidgetKind.WeatherHead => 96,
         WidgetKind.Strip => 92,
         WidgetKind.CityRow => 30,
+        WidgetKind.NcHeader => 58,
+        WidgetKind.NcSection => 26,
+        WidgetKind.NotifGroup => 30,
+        WidgetKind.NotifCard => NotifCardHeight(w.Data as NotifCardData),
+        WidgetKind.NcEmpty => Math.Max(118, 76 + 14 * Math.Ceiling((w.Sub?.Length ?? 0) / 44.0)),
         _ => 30,
     };
+
+    /// <summary>Alto de una tarjeta: fila de la app (si se muestra), título, hasta 3 líneas de texto y el borde de las tarjetas apiladas.</summary>
+    public static double NotifCardHeight(NotifCardData? d)
+    {
+        if (d is null) return 60;
+        double lines = d.Secondary is null ? 0 : Math.Clamp(Math.Ceiling(d.Secondary.Length / 42.0), 1, 3);
+        return 12 + (d.ShowApp ? 18 : 0) + 19 + lines * 16 + 10 + (d.Stacked > 0 ? 8 : 0);
+    }
 
     /// <summary>Separación entre elementos dentro de la tarjeta del contenido (más apretada que fuera: como las filas de las referencias).</summary>
     public const double CardGap = 2, ScrollBarGutter = 6;
@@ -130,6 +161,13 @@ public static class PanelLayout
 
         CardRect? card = cardTop is { } t ? new CardRect(Pad, t, inner, cardBottom - t) : null;
         double natural = y - Gap + Pad;
+        if (m.FillHeight && double.IsFinite(maxHeight) && natural < maxHeight)   // panel lateral más alto que su contenido: el pie baja al borde, el resto queda arriba
+        {
+            double extra = maxHeight - natural; int from = scrollTo >= 0 ? scrollTo : items.Count;
+            var filled = items.Select((it, idx) => idx >= from ? it with { Y = it.Y + extra } : it).ToList();
+            return new PanelFrame(m.Width, maxHeight, filled, card);
+        }
+
         if (natural <= maxHeight || scrollFrom < 0 || scrollTo < 0 || scrollTo <= scrollFrom) return new PanelFrame(m.Width, natural, items, card);
 
         // Más alto que la pantalla: el centro se desplaza entre las zonas fijas.
@@ -170,6 +208,16 @@ public static class PanelLayout
     public static bool SliderMuteHit(WidgetFrame f, double x) => f.W.Data is string && x < f.X + 36;
     /// <summary>Botón de unidad de las estadísticas (arriba a la derecha).</summary>
     public static bool StatsPillHit(WidgetFrame f, double x, double y) => f.W.Data is StatsData { Pill: not null } && x >= f.X + f.Width - 46 && y <= f.Y + 30;
+    // ── Centro de Notificaciones
+    /// <summary>«×» de cerrar del encabezado (arriba a la derecha).</summary>
+    public static bool NcCloseHit(WidgetFrame f, double x, double y) => x >= f.X + f.Width - 36 && y <= f.Y + 36;
+    /// <summary>Acción de la derecha de una sección («Borrar todo»).</summary>
+    public static bool NcSectionActionHit(WidgetFrame f, double x) => f.W.Data is NcSectionData { ActionId: not null } && x >= f.X + f.Width - 96;
+    /// <summary>Botón «Borrar»/«Ocultar» de la cabecera de un grupo.</summary>
+    public static bool NotifGroupClearHit(WidgetFrame f, double x) => f.W.Data is NotifGroupData { ClearLabel: not null } && x >= f.X + f.Width - 78;
+    /// <summary>«×» de una tarjeta (esquina superior derecha).</summary>
+    public static bool NotifDismissHit(WidgetFrame f, double x, double y) => f.W.Data is NotifCardData { CanDismiss: true } && x >= f.X + f.Width - 32 && y <= f.Y + 30;
+
     /// <summary>Pestaña bajo el punto (0…n-1) o -1.</summary>
     public static int TabAt(WidgetFrame f, double x)
     {

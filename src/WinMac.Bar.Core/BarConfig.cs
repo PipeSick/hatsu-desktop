@@ -64,6 +64,16 @@ public sealed record BarConfig
     public bool CcDisplay { get; init; } = true;
     public bool CcNotifications { get; init; } = true;
 
+    // ── Centro de Notificaciones (panel lateral; se abre con el reloj, como en macOS)
+    /// <summary>El reloj abre el Centro de Notificaciones de WinMac. false = abre el calendario desplegable de antes.</summary>
+    public bool NotificationCenter { get; init; } = true;
+    /// <summary>Leer las notificaciones que Windows guarda en su centro (con el permiso de Windows). APAGADO por defecto: el usuario lo activa desde el propio panel.</summary>
+    public bool NotificationsFromWindows { get; init; } = false;
+    /// <summary>Al descartar o borrar en WinMac, eliminar también del centro de notificaciones de Windows. false = solo se ocultan en WinMac durante la sesión.</summary>
+    public bool NotifRemoveFromWindows { get; init; } = true;
+    /// <summary>Widgets del Centro de Notificaciones, en orden («calendar,weather,battery»). Vacío = ninguno.</summary>
+    public string NcWidgets { get; init; } = Notifications.NcWidgets.Default;
+
     /// <summary>Formato de los mensajes entre el host y la barra (camelCase), el mismo patrón que los ajustes de la Isla.</summary>
     public static readonly JsonSerializerOptions Wire = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
@@ -76,6 +86,7 @@ public sealed record BarConfig
         HubRefreshMs = Math.Clamp(HubRefreshMs, 500, 10_000),
         WeatherCity = Hub.GeoPoint.Parse(WeatherCity)?.Serialize(),
         WeatherFavorites = Hub.GeoPoint.ParseList(WeatherFavorites) is { Count: > 0 } favs ? Hub.GeoPoint.SerializeList(favs) : null,
+        NcWidgets = Notifications.NcWidgets.Serialize(Notifications.NcWidgets.Parse(NcWidgets ?? Notifications.NcWidgets.Default)),
     };
 
     /// <summary>Aplica un parche JSON (camelCase, solo los campos presentes): lo desconocido o de otro tipo se ignora campo a campo.</summary>
