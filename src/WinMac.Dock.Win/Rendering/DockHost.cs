@@ -82,6 +82,7 @@ public sealed class DockHost : IDisposable
             if (selfTest) { _force = true; if (clock.Elapsed.TotalSeconds > 10) throw new TimeoutException("selftest: no se alcanzaron los frames en 10 s"); }
             double now = clock.Elapsed.TotalSeconds, dt = Math.Min(now - last, 0.1); last = now;
             _view = _ctl.Step(dt);
+            UpdateHitRegion();
             PrefetchThumbnails();
             bool animating = _view.NeedsFrames;
             if (animating || _wasAnimating || _force) { Render(); _force = false; frames++; }
@@ -109,6 +110,7 @@ public sealed class DockHost : IDisposable
         double sx = (p.X - _winLeftPx) / _scale, sy = (p.Y - _winTopPx) / _scale;
         bool inWin = p.X >= _winLeftPx && p.X < _winLeftPx + _winWpx && p.Y >= _winTopPx && p.Y < _winTopPx + _winHpx;
         _ctl.SetPointer(inWin ? new PointerSample(sx, sy) : null);
+        _pointerOver = inWin && _view is not null && (InteractiveAt(sx, sy) || _view.HoverIndex >= 0);
         _ctl.SetEdgeHot(p.Y >= _monitor.Bottom - 2 && p.X >= _winLeftPx && p.X < _winLeftPx + _winWpx);
         if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000) { _lastFs = DateTime.UtcNow; _ctl.SetSuppressed(FullscreenWatcher.ShouldSuppress()); }
     }
@@ -187,7 +189,7 @@ public sealed class DockHost : IDisposable
     private void ResizeWindow()
     {
         _blurred?.Dispose(); _blurred = null; _painter.SetBackdrop(null);
-        _bmp?.Dispose(); _bmp = null; _dev.Context.Target = null;
+        _bmp?.Dispose(); _bmp = null; _dev.Context.Target = null; _regionKey = "";   // región nueva para el tamaño nuevo
         PlaceWindow(show: false);
         // Se recrea la superficie completa en vez de ResizeBuffers: su resultado no se comprobaba y, si fallaba, el búfer conservaba el ancho
         // anterior y la barra quedaba recortada por la derecha cuando cambiaba el número de apps.
@@ -421,6 +423,25 @@ public sealed class DockHost : IDisposable
         finally { _modal = false; if (menu != IntPtr.Zero) Native2.DestroyMenu(menu); }   // DestroyMenu destruye también los submenús
     }
 
+    private bool _pointerOver; private string _regionKey = "";
+
+    /// <summary>
+    /// Limita la ventana, para el ratón, a la barra y lo que de verdad se dibuja (<see cref="DockHitRegion"/>): fuera de esa región Windows entrega el clic a la app de debajo.
+    /// Solo se llama a SetWindowRgn cuando la región cambia (al pasar el puntero, al ocultarse o con la vista previa), no en cada fotograma.
+    /// </summary>
+    private void UpdateHitRegion()
+    {
+        if (_view is null || _hwnd == IntPtr.Zero) return;
+        var rects = DockHitRegion.Compute(_view, _m, _pointerOver, _ctl.IsDragging);
+        var px = rects.Select(r => (L: (int)Math.Floor(r.X * _scale), T: (int)Math.Floor(r.Y * _scale), R: (int)Math.Ceiling(r.Right * _scale), B: (int)Math.Ceiling(r.Bottom * _scale))).ToList();
+        string key = string.Join(";", px);
+        if (key == _regionKey) return;
+        _regionKey = key;
+        IntPtr rgn = Native2.CreateRectRgn(0, 0, 0, 0);
+        foreach (var (l, t, r, b) in px) { var part = Native2.CreateRectRgn(l, t, r, b); Native2.CombineRgn(rgn, rgn, part, 2 /* RGN_OR */); Native2.DeleteObject(part); }
+        if (Native2.SetWindowRgn(_hwnd, rgn, true) == 0) Native2.DeleteObject(rgn);   // si Windows la acepta, pasa a ser suya
+    }
+
     /// <summary>Solo la barra (y los íconos ampliados) capturan el ratón; el resto de la ventana, transparente, lo deja pasar a las apps de abajo.</summary>
     private bool InteractiveAt(double x, double y)
     {
@@ -448,6 +469,10 @@ public sealed class DockHost : IDisposable
     private static class Native2
     {
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern ushort RegisterClassEx(ref WNDCLASSEX c);
+        [DllImport("gdi32.dll")] public static extern IntPtr CreateRectRgn(int l, int t, int r, int b);
+        [DllImport("gdi32.dll")] public static extern int CombineRgn(IntPtr dest, IntPtr a, IntPtr b, int mode);
+        [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr o);
+        [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr h, IntPtr rgn, bool redraw);
         [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr inst, IntPtr p);
         [DllImport("user32.dll")] public static extern IntPtr DefWindowProc(IntPtr h, uint m, IntPtr w, IntPtr l);
         [DllImport("user32.dll")] public static extern bool DestroyWindow(IntPtr h);
