@@ -164,6 +164,7 @@ if (WaitFor { LogHas $pillLog 'pill Capture' } 8) { Start-Sleep -Milliseconds 50
 Set-Clipboard -Value 'Texto de prueba del portapapeles (CI)'; Start-Sleep -Milliseconds 400; Set-Clipboard -Value 'https://github.com/PipeSick/win11-macos'
 Start-Sleep -Milliseconds 2600
 Expand
+$null = ClickTab 'activity'   # la Isla recuerda la última pestaña: se vuelve a «En curso»
 Shot '25-centro-varias-actividades' 'Centro de actividades: música de prueba, descarga en curso (y captura en el historial)' ($cx - 330) $sc.Y 660 560
 Shot '25b-barra-e-isla-expandida' 'Pantalla completa: barra superior con la Isla expandida'
 foreach ($t in @(@('captures', '26-centro-capturas', 'Sección «Capturas»: galería de la carpeta de capturas'), @('clipboard', '27-centro-portapapeles', 'Sección «Portapapeles»'), @('downloads', '28-centro-descargas', 'Sección «Descargas»'))) {
