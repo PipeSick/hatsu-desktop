@@ -74,7 +74,14 @@ internal sealed class ScreenRecorder : IDisposable
         _transcode = prep.TranscodeAsync().AsTask();
     }
 
-    /// <summary>Media Foundation asks for the next frame (its own thread): wait for its time, copy the area, hand it over. A null sample ends the file.</summary>
+    private FramePool? _pool; private ScreenGrabber.AreaGrabber? _grabber;
+    /// <summary>Frame buffers created during the recording (bounded by the pool) and frames skipped because all were still with the encoder.</summary>
+    public (int Buffers, long Skipped) PoolStats => _pool is { } p ? (p.Allocated, p.Starved) : (0, 0);
+
+    /// <summary>
+    /// Media Foundation asks for the next frame (its own thread): wait for its time, copy the area into a pooled buffer and hand it over; the buffer comes back
+    /// to the pool when the encoder has processed the sample. No allocation per frame (measured in CI: two 3 MB arrays per frame before). A null sample ends the file.
+    /// </summary>
     private void OnSample(MediaStreamSource sender, MediaStreamSourceSampleRequestedEventArgs e)
     {
         if (_stop) { e.Request.Sample = null; return; }
@@ -84,20 +91,19 @@ internal sealed class ScreenRecorder : IDisposable
             var due = TimeSpan.FromSeconds(n / (double)Fps) - _clock.Elapsed;
             if (due > TimeSpan.Zero) Thread.Sleep(due);
             if (_stop) { e.Request.Sample = null; return; }
-            var px = FlipRows(ScreenGrabber.Grab(_rect), _rect.W, _rect.H);   // uncompressed RGB in Media Foundation is bottom-up (verified in CI: frames came out upside down)
-            var sample = MediaStreamSample.CreateFromBuffer(px.AsBuffer(), TimeSpan.FromSeconds(n / (double)Fps));
+            _pool ??= new FramePool(_rect.W * _rect.H * 4, 4);
+            _grabber ??= new ScreenGrabber.AreaGrabber(_rect);
+            var buf = _pool.Rent(TimeSpan.FromSeconds(1));
+            if (buf is null) { _log("[grabación] el codificador va retrasado: no se pudo reservar fotograma"); _stop = true; e.Request.Sample = null; return; }
+            _grabber.CopyInto(buf);
+            var sample = MediaStreamSample.CreateFromBuffer(buf.AsBuffer(), TimeSpan.FromSeconds(n / (double)Fps));
             sample.Duration = TimeSpan.FromSeconds(1.0 / Fps);
+            var pool = _pool;
+            sample.Processed += (_, _) => pool.Return(buf);
             e.Request.Sample = sample;
             Interlocked.Increment(ref _frames);
         }
         catch (Exception ex) { _log("[grabación] fotograma: " + ex.GetType().Name + ": " + ex.Message); e.Request.Sample = null; _stop = true; }
-    }
-
-    public static byte[] FlipRows(byte[] px, int w, int h)
-    {
-        int stride = w * 4; var o = new byte[px.Length];
-        for (int y = 0; y < h; y++) Buffer.BlockCopy(px, y * stride, o, (h - 1 - y) * stride, stride);
-        return o;
     }
 
     /// <summary>Ends the file (the encoder finishes the MP4) and returns its path and length.</summary>
@@ -111,8 +117,18 @@ internal sealed class ScreenRecorder : IDisposable
             else await t.ConfigureAwait(false);
         }
         _stream?.Dispose(); _stream = null;
+        Release();
         return (Path, TimeSpan.FromSeconds(Frames / (double)Fps), Frames);
     }
 
-    public void Dispose() { _stop = true; _stream?.Dispose(); _stream = null; }
+    /// <summary>Everything native and every reference to the pooled frames goes now, not when a finalizer runs.</summary>
+    private void Release()
+    {
+        if (_mss is not null) { _mss.SampleRequested -= OnSample; _mss = null; }
+        _transcode = null;
+        try { _grabber?.Dispose(); } catch (Exception) { }
+        _grabber = null; _pool = null;
+    }
+
+    public void Dispose() { _stop = true; _stream?.Dispose(); _stream = null; Release(); }
 }

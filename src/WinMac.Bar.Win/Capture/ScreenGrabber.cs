@@ -34,6 +34,37 @@ internal static class ScreenGrabber
         finally { SelectObject(mem, old); DeleteObject(bmp); DeleteDC(mem); ReleaseDC(IntPtr.Zero, screen); }
     }
 
+    /// <summary>
+    /// Repeated copies of one area (recording): ONE memory DC and ONE bottom-up DIB section for the whole recording (Media Foundation wants uncompressed RGB
+    /// bottom-up, so no flip is needed), copied into the caller's buffer. Created and released on the encoder's thread. Must be disposed.
+    /// </summary>
+    internal sealed class AreaGrabber : IDisposable
+    {
+        private readonly CaptureRect _r; private IntPtr _mem, _bmp, _old, _bits; private readonly IntPtr _screen;
+
+        public AreaGrabber(CaptureRect r)
+        {
+            _r = r; _screen = GetDC(IntPtr.Zero); _mem = CreateCompatibleDC(_screen);
+            var bi = new BITMAPINFOHEADER { biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(), biWidth = r.W, biHeight = r.H /* positive: bottom-up */, biPlanes = 1, biBitCount = 32 };
+            _bmp = CreateDIBSection(_screen, ref bi, 0, out _bits, IntPtr.Zero, 0);
+            if (_bmp == IntPtr.Zero) { Dispose(); throw new InvalidOperationException("No se pudo crear el búfer de captura"); }
+            _old = SelectObject(_mem, _bmp);
+        }
+
+        public void CopyInto(byte[] dest)
+        {
+            if (!BitBlt(_mem, 0, 0, _r.W, _r.H, _screen, _r.X, _r.Y, 0x00CC0020 | 0x40000000)) throw new InvalidOperationException("BitBlt falló: " + Marshal.GetLastWin32Error());
+            Marshal.Copy(_bits, dest, 0, Math.Min(dest.Length, _r.W * _r.H * 4));
+        }
+
+        public void Dispose()
+        {
+            if (_mem != IntPtr.Zero) { if (_old != IntPtr.Zero) SelectObject(_mem, _old); DeleteDC(_mem); _mem = IntPtr.Zero; }
+            if (_bmp != IntPtr.Zero) { DeleteObject(_bmp); _bmp = IntPtr.Zero; }
+            if (_screen != IntPtr.Zero) ReleaseDC(IntPtr.Zero, _screen);
+        }
+    }
+
     public static IReadOnlyList<CaptureMonitor> Monitors()
     {
         var list = new List<CaptureMonitor>();

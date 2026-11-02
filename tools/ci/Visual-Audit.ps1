@@ -24,6 +24,7 @@ public static class Au {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern uint GetGuiResources(IntPtr h, uint flags);
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
@@ -278,6 +279,49 @@ if (WaitFor { [Au]::Visible('WinMacCapture') } 8) {
   } else { Note '  - la grabación no se pudo iniciar en este equipo (ver registro)'; & $bar --record stop | Out-Null }   # nunca dejarla grabando
 } else { Note '- **40-grabacion**: la superposición no apareció' }
 if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[grabación]' | Where-Object { $_.Line -notmatch 'diag|muestra' } | Select-Object -Last 8 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
+
+# ── 1e-bis. Memoria de la Barra con grabaciones repetidas (docs/34): tendencias, no una sola muestra
+function BarProc { Get-Process -Name 'WinMac.Bar.App' -ErrorAction SilentlyContinue | Select-Object -First 1 }
+$script:memRows = @(); $script:lastCpu = $null; $script:lastAt = $null
+function BarRow([string]$label) {
+  $p = BarProc; if (-not $p) { $script:memRows += "| $label | (la Barra no está en marcha) | | | | | | |"; return }
+  $p.Refresh(); $now = Get-Date; $cpu = $p.TotalProcessorTime.TotalMilliseconds
+  $pct = if ($script:lastCpu -ne $null) { ($cpu - $script:lastCpu) / [Math]::Max(1, ($now - $script:lastAt).TotalMilliseconds) * 100 } else { 0 }
+  $script:lastCpu = $cpu; $script:lastAt = $now
+  $gdi = [Au]::GetGuiResources($p.Handle, 0); $usr = [Au]::GetGuiResources($p.Handle, 1)
+  $script:memRows += ("| {0} | {1:N1} | {2:N1} | {3:N1} | {4} | {5} | {6} | {7} |" -f $label, ($p.WorkingSet64 / 1MB), ($p.PrivateMemorySize64 / 1MB), $pct, $p.Threads.Count, $p.HandleCount, $gdi, $usr)
+}
+function OneRecording([int]$secs = 3) {
+  $before = @(Select-String -Path $barLog -SimpleMatch '[grabación] guardada' -ErrorAction SilentlyContinue).Count
+  & $bar --record screen | Out-Null
+  if (-not (WaitFor { [Au]::Visible('WinMacCapture') } 8)) { return $false }
+  Start-Sleep -Milliseconds 300; [Au]::Click(500, 300)
+  $null = WaitFor { (Select-String -Path $barLog -SimpleMatch '[grabación] iniciada' -ErrorAction SilentlyContinue).Count -gt $script:recStarted } 20
+  $script:recStarted = @(Select-String -Path $barLog -SimpleMatch '[grabación] iniciada' -ErrorAction SilentlyContinue).Count
+  Start-Sleep -Seconds $secs; & $bar --record stop | Out-Null
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $ok = WaitFor { (Select-String -Path $barLog -SimpleMatch '[grabación] guardada' -ErrorAction SilentlyContinue).Count -gt $before } 20
+  $script:releaseMs += $sw.ElapsedMilliseconds
+  return $ok
+}
+Note ''; Note '### Memoria de la Barra con grabaciones repetidas (pantalla 1024×768, 15 fps, ~3 s cada una)'
+$script:recStarted = @(Select-String -Path $barLog -SimpleMatch '[grabación] iniciada' -ErrorAction SilentlyContinue).Count; $script:releaseMs = 0
+Collapse; Start-Sleep -Seconds 5; BarRow 'reposo inicial (tras la primera grabación de arriba)'
+$okRec = 0
+for ($i = 1; $i -le 10; $i++) { if (OneRecording 3) { $okRec++ }; if ($i -in 1, 3, 5, 10) { Start-Sleep -Seconds 2; BarRow "tras $i grabación(es) más" } }
+Note "  - grabaciones guardadas en el bucle: $okRec de 10; tiempo medio de cierre del archivo: $([int]($script:releaseMs / [Math]::Max(1, $okRec))) ms"
+Start-Sleep -Seconds 20; BarRow 'tras 20 s de reposo'
+& $bar --record screen | Out-Null; if (WaitFor { [Au]::Visible('WinMacCapture') } 8) { Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Seconds 2 }
+BarRow 'tras una grabación cancelada (Esc en la superposición)'
+$failFlag = Join-Path $env:LOCALAPPDATA 'WinMac\ci-record-fail'; 'x' | Set-Content $failFlag
+& $bar --record screen | Out-Null; if (WaitFor { [Au]::Visible('WinMacCapture') } 8) { Start-Sleep -Milliseconds 300; [Au]::Click(500, 300); $null = WaitFor { LogHas $barLog 'fallo simulado' } 10 }
+Remove-Item $failFlag -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2
+BarRow 'tras una grabación fallida (fallo de inicialización SIMULADO)'
+Start-Sleep -Seconds 20; BarRow 'tras otros 20 s de reposo'
+Note '| Momento | Working Set (MB) | Privada (MB) | CPU desde la fila anterior (% de un núcleo) | Hilos | Handles | GDI | USER |'; Note '|---|---|---|---|---|---|---|---|'
+$script:memRows | ForEach-Object { Note $_ }
+Select-String -Path $barLog -SimpleMatch '[grabación] búferes' -ErrorAction SilentlyContinue | Select-Object -Last 2 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) }
+if (LogHas $barLog 'fallo simulado') { Note '  - el fallo simulado se registró y la Barra siguió funcionando' }
 
 # ── 1g. Extensiones (docs/30): procesos aparte con su propio canal; actividades reales de la API en la Isla
 Note ''; Note '### Extensiones'

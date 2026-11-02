@@ -35,6 +35,8 @@ public sealed partial class BarHost
         {
             try
             {
+                // SOLO CI (diagnóstico activado + archivo marcador): simula un fallo de inicialización para comprobar que no queda nada retenido
+                if (MenuDiagOn && File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "ci-record-fail"))) throw new InvalidOperationException("fallo simulado de inicialización (solo pruebas del CI)");
                 var rec = await ScreenRecorder.StartAsync(area, RecordingsFolder, _log).ConfigureAwait(false);
                 Post(() =>
                 {
@@ -74,7 +76,9 @@ public sealed partial class BarHost
         {
             try
             {
+                var pool = r.PoolStats;
                 var (path, length, frames) = await r.StopAsync().ConfigureAwait(false);
+                _log($"[grabación] búferes de fotograma: {pool.Buffers} (máx. 4), saltados: {pool.Skipped}");
                 long bytes = File.Exists(path) ? new FileInfo(path).Length : 0;
                 string? poster = await PosterAsync(path).ConfigureAwait(false);
                 _log($"[grabación] guardada: {Path.GetFileName(path)} ({length.TotalSeconds:0.0} s, {frames} fotogramas, {bytes} B){(poster is null ? "" : ", fotograma de muestra listo")}");
@@ -83,13 +87,7 @@ public sealed partial class BarHost
                 NotchActivity?.Invoke(new { op = "finish", activity = new { id = "grabacion", state = "completed" } });
             }
             catch (Exception e) { _log("[grabación] no se pudo cerrar el archivo: " + e.GetType().Name + ": " + e.Message); NotchActivity?.Invoke(new { op = "finish", activity = new { id = "grabacion", state = "failed" } }); }
-            finally
-            {
-                r.Dispose();
-                // Each frame was a few MB in the large-object heap: give that memory back now instead of whenever a full GC happens (measured in CI: 670 MB after a recording)
-                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
-                GC.Collect(2, GCCollectionMode.Forced, blocking: false, compacting: true);
-            }
+            finally { r.Dispose(); }   // frames come from a bounded pool (FramePool): nothing per frame is left for the GC to find
         });
     }
 

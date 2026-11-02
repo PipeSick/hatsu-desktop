@@ -135,3 +135,19 @@ public class RecordingGeometryTests
         Assert.Equal("Grabación 2026-11-02 a las 17.20.05.mp4", CaptureGeometry.RecordingName(new DateTime(2026, 11, 2, 17, 20, 5)));
     }
 }
+
+public class FramePoolTests
+{
+    [Fact]
+    public void ThePoolNeverGrowsBeyondItsLimitHoweverLongTheRecording()
+    {
+        var pool = new FramePool(16, 3);
+        for (int i = 0; i < 1000; i++) { var b = pool.Rent(TimeSpan.FromMilliseconds(10))!; pool.Return(b); }
+        Assert.Equal(1, pool.Allocated);
+        var held = new[] { pool.Rent(TimeSpan.Zero), pool.Rent(TimeSpan.Zero), pool.Rent(TimeSpan.Zero) };
+        Assert.All(held, Assert.NotNull);
+        Assert.Null(pool.Rent(TimeSpan.FromMilliseconds(20)));   // all with the encoder: the frame is skipped, nothing new is allocated
+        Assert.Equal(3, pool.Allocated); Assert.Equal(1, pool.Starved);
+        pool.Return(held[0]!); Assert.NotNull(pool.Rent(TimeSpan.Zero)); Assert.Equal(3, pool.Allocated);
+    }
+}
