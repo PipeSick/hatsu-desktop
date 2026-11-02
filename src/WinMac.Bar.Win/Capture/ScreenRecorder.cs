@@ -62,8 +62,8 @@ internal sealed class ScreenRecorder : IDisposable
         profile.Video.FrameRate.Numerator = Fps; profile.Video.FrameRate.Denominator = 1;
         profile.Video.Bitrate = (uint)Math.Clamp((long)_rect.W * _rect.H * Fps / 8, 1_000_000, 16_000_000);
 
-        var transcoder = new MediaTranscoder { HardwareAccelerationEnabled = true };
-        var prep = await transcoder.PrepareMediaStreamSourceTranscodeAsync(_mss, _stream, profile);
+        var transcoder = _transcoder = new MediaTranscoder { HardwareAccelerationEnabled = true };
+        var prep = _prep = await transcoder.PrepareMediaStreamSourceTranscodeAsync(_mss, _stream, profile);
         if (!prep.CanTranscode)
         {
             _stream.Dispose(); try { await file.DeleteAsync(Windows.Storage.StorageDeleteOption.PermanentDelete); } catch (Exception) { }   // our own empty file
@@ -76,6 +76,7 @@ internal sealed class ScreenRecorder : IDisposable
 
     private FramePool? _pool; private ScreenGrabber.AreaGrabber? _grabber;
     private (byte[] Px, int W, int H)? _thumb;
+    private MediaTranscoder? _transcoder; private PrepareTranscodeResult? _prep;
     /// <summary>A 320-px still taken from the frames themselves (no decoding of the finished video).</summary>
     public (byte[] Px, int W, int H)? Thumb => _thumb;
     private static FramePool? _lastPool;
@@ -131,10 +132,18 @@ internal sealed class ScreenRecorder : IDisposable
     /// <summary>Everything native and every reference to the pooled frames goes now, not when a finalizer runs.</summary>
     private void Release()
     {
-        if (_mss is not null) { _mss.SampleRequested -= OnSample; _mss = null; }
+        // The Media Foundation pipeline (encoder buffers, tens of MB) belongs to these WinRT objects; their .NET wrappers would release it only when a
+        // finalizer runs (measured in CI: up to ~90 MB private waiting for the GC). Their native references are released here, once the file is closed.
+        if (_mss is not null) { _mss.SampleRequested -= OnSample; ReleaseNative(_mss); _mss = null; }
+        ReleaseNative(_prep); _prep = null; ReleaseNative(_transcoder); _transcoder = null;
         _transcode = null;
         try { _grabber?.Dispose(); } catch (Exception) { }
         _grabber = null; _pool = null;
+    }
+
+    private static void ReleaseNative(object? o)
+    {
+        try { if (o is WinRT.IWinRTObject w) w.NativeObject.Dispose(); } catch (Exception) { }
     }
 
     public void Dispose() { _stop = true; _stream?.Dispose(); _stream = null; Release(); }
