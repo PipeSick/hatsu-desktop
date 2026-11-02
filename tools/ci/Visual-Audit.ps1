@@ -467,7 +467,10 @@ if (SpotOpen) {
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
   [System.Windows.Forms.SendKeys]::SendWait('20% de 150'); Start-Sleep -Milliseconds 700; SpotShot '19d-spotlight-porcentaje' 'Spotlight Pro: «20% de 150»'
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
-  [System.Windows.Forms.SendKeys]::SendWait('portapapeles'); Start-Sleep -Milliseconds 1200; SpotShot '19e-spotlight-portapapeles' 'Spotlight Pro: historial del portapapeles de la Isla (solo lo admitido por la privacidad)'
+  $sp = [Au]::FindWindow($null, 'System Properties'); if ($sp -ne [IntPtr]::Zero) { $null = [Au]::PostMessage($sp, 0x10, [IntPtr]::Zero, [IntPtr]::Zero); Note '  - (se cerró un aviso del runner «System Properties» que quitaba el foco)'; Start-Sleep -Milliseconds 500 }
+  if (-not [Au]::Visible('WinMacSpotlight')) { & $bar --spotlight | Out-Null; $null = WaitFor { [Au]::Visible('WinMacSpotlight') } 4 }
+  [System.Windows.Forms.SendKeys]::SendWait('portapapeles'); Start-Sleep -Milliseconds 1200;
+  Select-String -Path $barLog -SimpleMatch '[spotlight] portapapeles:' -ErrorAction SilentlyContinue | Select-Object -Last 1 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } SpotShot '19e-spotlight-portapapeles' 'Spotlight Pro: historial del portapapeles de la Isla (solo lo admitido por la privacidad)'
   [System.Windows.Forms.SendKeys]::SendWait('{TAB}'); Start-Sleep -Milliseconds 300; SpotShot '19f-spotlight-tab' 'Spotlight Pro: Tab mueve la selección (la vista previa la sigue)'
   if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[spotlight] herramienta' | Select-Object -Last 3 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
@@ -509,6 +512,13 @@ $hostAfter | Select-Object -Skip $hostBefore | Select-Object -First 6 | ForEach-
 Select-String -Path $hostLog -SimpleMatch '[extensiones]' -ErrorAction SilentlyContinue | Select-Object -Last 4 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ \S+ ', '')) }
 $excL = @(Select-String -Path $barLog -Pattern 'CIERRE INESPERADO|ERROR|\] error' -ErrorAction SilentlyContinue); Note "  - errores en bar.log: $($excL.Count)"
 $excL | Select-Object -Last 4 | ForEach-Object { Note ('    ' + (($_.Line -replace '^\S+ ', '') -replace '(.{220}).*', '$1…')) }
+# ── 1j. Ajustes nuevos dibujados FUERA de pantalla con el pintor real (valida el dibujo, no el ratón): atajos, portapapeles, extensiones
+Note ''; Note '### Ajustes (fuera de pantalla)'
+foreach ($r in @(@('bar', 1500, '49a-ajustes-atajos'), @('bar', 2300, '49b-ajustes-spotlight-espacios'), @('notch', 900, '49c-ajustes-portapapeles'), @('ext', 0, '49d-ajustes-extensiones'))) {
+  $png = Join-Path $OutDir ($r[2] + '.png')
+  Start-Process -FilePath $hostExe -ArgumentList @('--render-settings', $r[0], '--scroll', $r[1], '--out', "`"$png`"", '--scale', '1') -Wait -WindowStyle Hidden | Out-Null
+  Note "- **$($r[2]).png**: Ajustes › $($r[0]) desplazado $($r[1]) DIP (los atajos solo muestran su estado real en la ventana viva: aquí no hay Barra que informe)"
+}
 Measure-Idle 'al final, tras usar todo' 10
 Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; [void]$hp.WaitForExit(30000)
 Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
