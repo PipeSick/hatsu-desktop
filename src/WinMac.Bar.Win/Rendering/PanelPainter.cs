@@ -187,7 +187,9 @@ public sealed partial class PanelPainter : IDisposable
                 if (hot) FillRR(x, y, x + wd, y + h, 5, Accent);   // resalte azul, como en macOS
                 var tc = hot ? new Color4(1, 1, 1, 1) : Fg(w.Enabled ? 0.92f : 0.38f);
                 if (w.On) Glyph("check", x + 12, y + h / 2, 4.5f, tc);
-                Text(w.Text, _body, x + 22, y, wd - 30, h, tc);
+                double subW = string.IsNullOrEmpty(w.Sub) ? 0 : Math.Min(120, MeasureText(w.Sub, _body) + 6);   // atajo («Ctrl+N») o «›» de submenú, a la derecha y atenuado, como en macOS
+                Text(w.Text, _body, x + 22, y, wd - 30 - subW, h, tc);
+                if (subW > 0) TextAlign(w.Sub!, _body, x + wd - subW - 10, y, subW, h, hot ? tc : Fg(w.Enabled ? 0.5f : 0.3f), TextAlignment.Trailing);
                 break;
             }
             case WidgetKind.TrayGrid when w.Data is TrayGridData g:

@@ -212,6 +212,9 @@ public sealed partial class BarHost : IPanelUi
     private void RebuildPanel()
     {
         if (_popover is not { IsOpen: true }) return;
+        // El menú de una app no sale de PanelBuilder ni usa el contexto de los paneles (que puede no existir aún): se rehace desde su propio árbol.
+        // Antes caía aquí, _pctx era null → NullReferenceException en el bucle de la barra → la barra se cerraba y el host la reiniciaba (P1, visto en el CI).
+        if (_pkind == PanelKind.AppMenu) { if (_amTop is not null) _popover.SetModel(WinMac.Bar.Menus.AppMenuPanel.Build(_amTop, _amPath)); return; }
         _pctx = _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData(), Nc = _pctx.Nc is { } v ? v with { State = _nc.State } : null, Tray = _trayStore.Visible };
         _popover.SetModel(PanelBuilder.Build(_pkind, _pctx));
     }
