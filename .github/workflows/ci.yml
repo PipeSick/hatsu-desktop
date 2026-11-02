@@ -191,6 +191,31 @@ jobs:
           path: notch-out
           retention-days: 14
           if-no-files-found: warn
+      - name: Paquete de distribución (zip reproducible, NO se publica ninguna versión)
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          ./tools/Package-WinMac.ps1 -DistDir dist/WinMac -OutDir paquete
+          $first = Get-Content (Get-ChildItem paquete -Filter *.sha256 | Select-Object -First 1).FullName
+          Remove-Item paquete -Recurse -Force
+          ./tools/Package-WinMac.ps1 -DistDir dist/WinMac -OutDir paquete
+          $second = Get-Content (Get-ChildItem paquete -Filter *.sha256 | Select-Object -First 1).FullName
+          Write-Host "Reproducible (dos empaquetados del mismo commit, mismo SHA-256): $($first -eq $second)"
+          Write-Host "Primero:  $first"; Write-Host "Segundo:  $second"
+          # Desinstalación limpia en este runner: sin -RemoveFolder; comprueba que el inicio automático y los datos se quitan
+          New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WinMac' -Value 'x' -Force | Out-Null
+          ./dist/WinMac/Uninstall-WinMac.ps1 -RemoveData
+          $runLeft = [bool](Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WinMac' -ErrorAction SilentlyContinue)
+          Write-Host "Tras desinstalar: inicio automático presente=$runLeft; datos presentes=$(Test-Path (Join-Path $env:APPDATA 'WinMac'))/$(Test-Path (Join-Path $env:LOCALAPPDATA 'WinMac'))"
+      - name: Subir el paquete (artefacto temporal, no es una versión publicada)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmac-paquete-${{ github.sha }}
+          path: paquete
+          retention-days: 14
+          if-no-files-found: warn
 
   linux-cross:
     name: Linux · compilación cruzada y pruebas de lógica pura (informativo)

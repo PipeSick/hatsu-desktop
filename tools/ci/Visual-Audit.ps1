@@ -120,6 +120,18 @@ $t0 = Get-Date
 $up = WaitFor { (LogHas $hostLog '[notch] Running') -and (LogHas $hostLog '[bar] Running') } 60
 Note "  (host, Barra e Isla en marcha: $up, $([int]((Get-Date) - $t0).TotalSeconds) s)"
 [Au]::SetCursorPos($sc.X + 60, $sc.Y + [int]($sc.Height / 2)) | Out-Null
+# Medición en reposo (docs/32: medir antes de optimizar). Runner sin GPU (WARP): valores orientativos, no de un PC real.
+function Measure-Idle([string]$label, [int]$seconds = 10) {
+  $names = 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'WinMac.Ext.Demos'
+  $a = @{}; Get-Process -Name $names -ErrorAction SilentlyContinue | ForEach-Object { $a["$($_.Name)#$($_.Id)"] = $_.TotalProcessorTime.TotalMilliseconds }
+  Start-Sleep -Seconds $seconds
+  Note ''; Note "### Medición en reposo: $label ($seconds s, $([Environment]::ProcessorCount) núcleos)"
+  Note '| Proceso | CPU media (% de un núcleo) | Memoria de trabajo (MB) | Privada (MB) | Hilos |'; Note '|---|---|---|---|---|'
+  Get-Process -Name $names -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object {
+    $k = "$($_.Name)#$($_.Id)"; $cpu = if ($a.ContainsKey($k)) { ($_.TotalProcessorTime.TotalMilliseconds - $a[$k]) / ($seconds * 10) } else { 0 }
+    Note ("| {0} | {1:N2} | {2:N1} | {3:N1} | {4} |" -f $_.Name, $cpu, ($_.WorkingSet64 / 1MB), ($_.PrivateMemorySize64 / 1MB), $_.Threads.Count)
+  }
+}
 
 # ── 1. Isla (la secuencia de muestra empieza ~12 s después de arrancar la Barra)
 Start-Sleep -Seconds 5
@@ -186,6 +198,7 @@ if (Test-Path $pillLog) { Note "  - pestañas: $(TabsLine)" }
 Collapse
 Remove-Item (Join-Path $dlDir 'Descarga de prueba.iso*') -ErrorAction SilentlyContinue
 
+Measure-Idle 'en reposo tras las pruebas de la Isla' 10
 # ── 1c. WinMac Screenshot (docs/26): overlay REAL sobre la pantalla congelada; región arrastrando con el ratón, ventana, pantalla completa
 Note ''; Note '### WinMac Screenshot'
 Collapse; Start-Sleep -Milliseconds 600   # la Isla abierta del paso anterior taparía la barra de captura y el editor
@@ -409,6 +422,7 @@ if (SpotOpen) {
 } else { Note '- **13-spotlight**: NO capturado (la ventana no apareció)' }
 Start-Sleep -Milliseconds 600
 
+Measure-Idle 'al final, tras usar todo' 10
 Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; [void]$hp.WaitForExit(30000)
 Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
