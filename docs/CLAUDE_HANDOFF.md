@@ -39,8 +39,13 @@ Problemas (sin corregir, a decidir con el usuario): **P0 la píldora de la Isla 
 lentos o ausentes; P4 «System» de Windows Terminal como menú; P5 coincidencias flojas en Spotlight; P6–P8 decisiones de diseño (Isla negra con barra clara, Launchpad tapa la barra,
 Dock sobre la barra de tareas).
 
+## Corrección de los defectos de la auditoría (docs/24 §Correcciones)
+P0, P1, P3, P4 y P5 corregidos y verificados con capturas reales; P2 no es un defecto (era el ratón simulado). Commits: NotchWin cc855be; WinMac 0619ef5, 66f671e, 2c9a241,
+f567e5f, 4e3982b, fae2bb8/3d4673d, cefedf1 (más los de diagnóstico). Diagnóstico solo-CI disponible: WINMAC_MENU_DIAG (posiciones, apertura de paneles y quién toma el foco,
+barras de menús accesibles), «CIERRE INESPERADO» y «ERROR» en bar.log, crash.log de NotchWin.
+
 ## Siguiente paso exacto
-1. Decidir con el usuario qué corregir de la auditoría visual (docs/24); empezar por P0 (Isla atascada, arreglo de una línea descrito en docs/24), P1 (Global Menu) y P3 (iconos de Launchpad).
+1. Validación manual en el PC (lista en docs/24). P6–P8 son decisiones de diseño pendientes de que el usuario decida.
 2. Validación manual en el PC (docs/21 §5, docs/22, docs/23).
 3. Mejoras posibles: submenús con estilo propio para apps UI Automation; Win11 «No molestar» (sin API documentada).
 

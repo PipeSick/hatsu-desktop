@@ -68,3 +68,18 @@ con WinMac completo (host + Barra + Dock + Isla de `dist/WinMac`). Revisadas una
 - Windows Search no responde en el runner (0x80041820).
 - La tecla Windows y Alt+Espacio físicos no se pueden pulsar (teclas inyectadas ignoradas a propósito).
 - Ratón por programa (`SetCursorPos`/`mouse_event`): puede no reproducir la entrada y salida del puntero de WinUI (P2).
+
+
+## Correcciones (run 41467916399, commit 3d4673d · capturas reales revisadas a mano)
+
+| # | Causa encontrada | Corrección | Evidencia en el CI (Windows real) | Estado |
+|---|---|---|---|---|
+| P0 | El temporizador de la Isla (`DispatcherQueueTimer`) podía dispararse unos ms antes de hora; `Tick()` no cambiaba nada y nadie lo volvía a programar | Reprogramar SIEMPRE tras cada disparo (`PillArbiter.NextWait`, mínimo 15 ms) + vigilante en el reloj de la interfaz (`Overdue`) — NotchWin cc855be | «Isla: al terminar vuelve al contenido habitual» PASS; 11 pruebas nuevas (temporizador adelantado/atrasado, tiempo restante tras varias interrupciones, ráfagas, pausa) | **Corregido** |
+| P1 | `PanelsTick()` reconstruye cada 2,5 s el panel abierto con `RebuildPanel()`, que usa `_pctx` y `PanelBuilder`; el menú de la app no usa ninguno: `NullReferenceException` en el bucle → la barra terminaba (código 1) y el host la reiniciaba a los ~40 ms (pila completa en el registro) | `RebuildPanel()` rehace el menú de la app desde su árbol; `MenuItem` dibuja el atajo y «›» (66f671e) | Los 5 menús del Bloc de notas se abren sin reiniciar la barra (mismo proceso); submenú «‹ Zoom»; deshabilitadas atenuadas; **«Time/Date» elegido en el desplegable de WinMac inserta la fecha en el Bloc de notas** (09x, 09y) | **Corregido** |
+| P2 | Saliendo con `SendInput` (ruta de entrada de Windows, como un ratón físico) la Isla se contrae (520 → 324–358 px en 3 runs); el síntoma venía de `SetCursorPos` | Ninguna (no hay defecto) | 07b-isla-tras-salir-raton | **No es un defecto** |
+| P3 | 2 hilos de carga, nada precargado; Launchpad (128 px) y Spotlight (64 px) cargaban por separado | Precarga del índice al leerlo, caché en disco, un tamaño compartido, redibujo al llegar (f567e5f). **Regresión propia corregida**: con 4 hilos el grupo de hilos se agotaba y el host reiniciaba la barra por falta de latido → 2 hilos + mínimo de 16 hilos en el grupo (4e3982b) | «30 reales de 30 en la página» al abrir y 3 s después; 0 fallos; el icono real del Bloc de notas en la búsqueda (11, 12) | **Corregido** |
+| P4 | Windows Terminal expone su menú de sistema como `MenuBar` con id «MenuBar», nombre «System» y 1 elemento (no «SystemMenuBar») | Se descarta `SystemMenuBar` o una barra «System»/traducción con una sola entrada; las barras con varios menús se conservan (3d4673d) | «[menús] Terminal: sin menús»; la barra muestra solo «Terminal» (01b); el Bloc de notas conserva sus 5 menús | **Corregido** |
+| P5 | Coincidencias por letras sueltas y palabras clave cortas en Configuración | Si hay coincidencias fuertes se ocultan las débiles; en Configuración nada de letras sueltas y palabra clave con 4+ letras (cefedf1) | «con» → Control Panel, Reload Configuration, System Configuration… sin «Notificaciones» ni «Accesibilidad» (16b) | **Corregido** |
+
+Sin regresiones en la auditoría completa final: Isla (todos los estados), Launchpad, Spotlight y Global Menu revisados en el mosaico; P6–P8 sin tocar.
+Queda para el PC: ratón físico sobre la Isla, menús en más apps (Paint, VS Code), y Launchpad en una primera ejecución sin caché (en el CI la caché de disco ya venía de la prueba anterior del mismo job).
