@@ -308,3 +308,50 @@ public class AppMenuTests
         Assert.Null(new WinMac.Bar.Menus.AppMenus(WinMac.Bar.Menus.AppMenuSource.None, []).Labels);   // sin menús: nada inventado
     }
 }
+
+public class AppMenuFilterTests
+{
+    [Theory]
+    [InlineData("SystemMenuBar", false)] [InlineData("systemmenubar", false)] [InlineData(" SystemMenuBar ", false)]
+    [InlineData("MenuBar", true)] [InlineData("", true)] [InlineData(null, true)] [InlineData("MainMenu", true)] [InlineData("SystemMenuBarExtra", true)]
+    public void OnlyTheTitleBarSystemMenuIsDiscarded(string? id, bool keep) => Assert.Equal(keep, WinMac.Bar.Menus.AppMenuFilter.IsAppMenuBar(id));
+}
+
+public class SpotlightRelevanceTests
+{
+    private static readonly InstalledApp[] Apps =
+    [
+        new("cp", "Control Panel", AppKind.Win32), new("rc", "Reload Configuration", AppKind.Win32), new("sc", "System Configuration", AppKind.Win32),
+        new("my", "MySQL 8.4 Configurator", AppKind.Win32), new("rd", "Remote Desktop Connection", AppKind.Win32), new("cx", "Cortana Experience", AppKind.Packaged),
+        new("np", "Notepad", AppKind.Win32), new("nn", "Notepad++", AppKind.Win32), new("ms", "Microsoft Store", AppKind.Packaged),
+    ];
+    private static readonly (string, string)[] Folders = [("Documentos", @"C:\u\Documents"), ("Descargas", @"C:\u\Downloads")];
+
+    [Fact]
+    public void ConShowsStrongMatchesOnlyAndPrefixFirst()
+    {
+        var r = SpotlightEngine.Query("con", Apps, null, Folders, []);
+        Assert.Equal("Control Panel", r[0].Title);                                   // empieza por
+        Assert.DoesNotContain(r, i => i.Title is "Notificaciones" or "Accesibilidad");   // las coincidencias flojas de la auditoría (P5)
+        Assert.All(r, i => Assert.True(AppMatcher.Score("con", i.Title) >= SpotlightEngine.Weak || i.Kind == SpotKind.Setting));
+    }
+
+    [Fact]
+    public void ExactBeatsPrefixAndAppsBeatWeakSettings()
+    {
+        var r = SpotlightEngine.Query("notepad", Apps, null, Folders, []);
+        Assert.Equal(["Notepad", "Notepad++"], r.Take(2).Select(i => i.Title));
+        Assert.Equal("Microsoft Store", SpotlightEngine.Query("store", Apps, null, Folders, [])[0].Title);   // una palabra empieza por
+    }
+
+    [Fact]
+    public void KeywordsStillWorkWithLongerQueriesAndWeakMatchesRemainWhenNothingBetterExists()
+    {
+        Assert.Contains(SpotlightEngine.Query("resolu", Apps, null, Folders, []), i => i.Target == "ms-settings:display");
+        Assert.Contains(SpotlightEngine.Query("bluetooth", Apps, null, Folders, []), i => i.Target == "ms-settings:bluetooth");
+        var weak = SpotlightEngine.Query("ntpd", Apps, null, Folders, []);   // solo letras en orden: se muestran porque no hay nada mejor
+        Assert.Contains(weak, i => i.Title == "Notepad");
+        Assert.Equal("144", SpotlightEngine.Query("12*12", Apps, null, Folders, [])[0].Title);           // el resto de funciones sigue igual
+        Assert.Contains(SpotlightEngine.Query("descar", Apps, null, Folders, []), i => i.Kind == SpotKind.Folder);
+    }
+}

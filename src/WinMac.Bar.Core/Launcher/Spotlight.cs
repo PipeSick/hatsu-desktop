@@ -132,7 +132,9 @@ public static class SpotSettings
         foreach (var (title, uri, kw) in All)
         {
             int s = AppMatcher.Score(q, title);
-            if (s < 0 && AppMatcher.Fold(q).Length >= 3) s = kw.Split(' ').Any(k => k.StartsWith(AppMatcher.Fold(q.Trim()), StringComparison.Ordinal)) ? 300 : -1;
+            if (s is >= 0 and < SpotlightEngine.Weak) s = -1;   // letras sueltas en orden: en Configuración no (con «con» salía «Notificaciones»)
+            // Palabra clave: con 4+ letras («resolu» → Pantalla); con menos, una palabra clave corta coincide con demasiadas cosas («con» → «contraste» → Accesibilidad).
+            if (s < 0 && AppMatcher.Fold(q.Trim()).Length >= 4) s = kw.Split(' ').Any(k => k.StartsWith(AppMatcher.Fold(q.Trim()), StringComparison.Ordinal)) ? 300 : -1;
             if (s >= 0) yield return (s, new SpotItem(SpotKind.Setting, title, "Configuración de Windows", uri));
         }
     }
@@ -145,6 +147,8 @@ public static class SpotSettings
 public static class SpotlightEngine
 {
     public const int MaxResults = 9;
+    /// <summary>Puntuaciones de <see cref="AppMatcher.Score"/>: desde «iniciales» (550) es una coincidencia fuerte; por debajo de «contiene» (≈300) es débil (letras sueltas).</summary>
+    public const int Strong = 550, Weak = 300;
 
     public static IReadOnlyList<SpotItem> Query(string text, IReadOnlyList<InstalledApp> apps, IReadOnlyDictionary<string, int>? usage,
         IReadOnlyList<(string Name, string Path)> folders, IReadOnlyList<SpotItem> files, Func<string, bool>? pathExists = null)
@@ -165,6 +169,9 @@ public static class SpotlightEngine
         ranked.AddRange(SpotSettings.Search(q).OrderByDescending(x => x.Score).Take(2).Select(x => (x.Score, 1, x.Item)));
         ranked.AddRange(folders.Select(f => (f, s: AppMatcher.Score(q, f.Name))).Where(x => x.s >= 400).OrderByDescending(x => x.s).Take(2)
             .Select(x => (x.s, 2, new SpotItem(SpotKind.Folder, x.f.Name, x.f.Path, x.f.Path))));
+        // Relevancia: si hay coincidencias fuertes (exacta, empieza por, palabra, iniciales), las débiles (letras sueltas en orden) no se muestran.
+        int best = ranked.Count == 0 ? -1 : ranked.Max(x => x.Score);
+        if (best >= Strong) ranked.RemoveAll(x => x.Score < Weak);
         list.AddRange(ranked.OrderByDescending(x => x.Score).ThenBy(x => x.Order).Select(x => x.Item));
         list.AddRange(files.Where(f => !list.Any(l => string.Equals(l.Target, f.Target, StringComparison.OrdinalIgnoreCase))).Take(4));
         return list.Take(MaxResults).ToList();
