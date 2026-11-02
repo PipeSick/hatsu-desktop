@@ -117,6 +117,17 @@ foreach ($pv in @(@{ n = 'bar-light-glass'; t = 'light'; b = 'glass' }, @{ n = '
     Write-Host "::endgroup::"
   }
 }
+# Centro de Notificaciones en el log (escala 1, datos de MUESTRA): permite revisar el dibujo desde el sandbox sin descargar artefactos.
+foreach ($pv in @(@{ n = 'nc-dark'; k = 'notifications'; t = 'dark' }, @{ n = 'nc-light'; k = 'notifications'; t = 'light' }, @{ n = 'nc-off'; k = 'notifications-off'; t = 'dark' })) {
+  $f = Join-Path $OutDir "preview-$($pv.n).png"
+  Run "Vista previa $($pv.n)" $bar @('--render-panel', $pv.k, '--theme', $pv.t, '--out', "`"$f`"", '--scale', '1') 90
+  if (Test-Path $f) {
+    $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f))
+    Write-Host "::group::PREVIEW_B64 $($pv.n) bytes=$((Get-Item $f).Length) b64len=$($b64.Length)"
+    for ($i = 0; $i -lt $b64.Length; $i += 3000) { Write-Host ("PVB64|" + $b64.Substring($i, [Math]::Min(3000, $b64.Length - $i))) }
+    Write-Host "::endgroup::"
+  }
+}
 # Hoja de contacto: compone los PNG REALES del renderizador (no genera imágenes propias) para revisarlos de un vistazo.
 try {
   Add-Type -AssemblyName System.Drawing

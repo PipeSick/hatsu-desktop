@@ -100,6 +100,6 @@ public static class PanelOffscreen
         painter.Paint(frame, model, -1, clear: false);
         var rgba = BarOffscreen.Readback(dev, target, pw, ph, scale); Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(pngPath))!);
         File.WriteAllBytes(pngPath, PngWriter.EncodeRgba(rgba, pw, ph)); c.Target = null;
-        return $"{pw}x{ph}px, {dev.Description}, {kind} {(kind == "hub" ? tab.ToString() : "")}, tema {theme}, datos de muestra (no son notificaciones reales)" + (frame.View is { } v ? $", desplazable (contenido {v.ContentHeight:0} DIP, visible {v.Bottom - v.Top:0}, desplazado {v.Offset:0}/{v.MaxOffset:0})" : "");
+        return $"{pw}x{ph}px, {dev.Description}, {kind} {(kind == "hub" ? tab.ToString() : "")}, tema {theme}, datos de muestra" + (kind.StartsWith("notifications", StringComparison.Ordinal) ? " (no son notificaciones reales)" : "") + (frame.View is { } v ? $", desplazable (contenido {v.ContentHeight:0} DIP, visible {v.Bottom - v.Top:0}, desplazado {v.Offset:0}/{v.MaxOffset:0})" : "");
     }
 }
