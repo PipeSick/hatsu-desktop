@@ -64,6 +64,10 @@ public sealed record BarConfig
     public bool CcDisplay { get; init; } = true;
     public bool CcNotifications { get; init; } = true;
 
+    // ── Launchpad y Spotlight (docs/22)
+    /// <summary>Pulsar y soltar SOLA la tecla Windows abre Launchpad en vez del menú Inicio. Los atajos con Windows (Win+E, Win+R, Win+L…) siguen igual: no se bloquea ninguna tecla.</summary>
+    public bool LaunchpadOnWinKey { get; init; } = true;
+
     /// <summary>Iconos de la bandeja de Windows (apps en segundo plano) en la barra. WinMac recibe los iconos como lo hace la bandeja y se los reenvía a Explorer.</summary>
     public bool ShowTrayIcons { get; init; } = true;
 

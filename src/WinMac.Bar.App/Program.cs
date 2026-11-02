@@ -56,6 +56,7 @@ internal static class Program
             }
             if (args.Contains("--status")) return Status();
             if (args.Contains("--quit")) return Quit();
+            if (args.Contains("--launchpad")) return Signal(WinMac.Bar.Win.Rendering.BarHost.LaunchpadEventName, "Launchpad");
             if (args.Contains("--selftest-system")) return SystemProbe();
             if (args.Contains("--selftest-monitors")) return MonitorProbe();
             if (args.Contains("--selftest")) return SelfTest(appBar: false);
@@ -172,6 +173,13 @@ internal static class Program
         return 0;
     }
 
+    /// <summary>Pide a la barra en ejecución que abra (o cierre) Launchpad, como la tecla Windows. Sirve para atajos propios, el Dock o las pruebas.</summary>
+    private static int Signal(string name, string what)
+    {
+        try { AllowSetForegroundWindow(-1); using var ev = EventWaitHandle.OpenExisting(name); ev.Set(); Log(what + ": señal enviada."); return 0; }   // quien lo pide (un atajo, el Dock) cede el primer plano a la barra
+        catch (WaitHandleCannotBeOpenedException) { Log("No hay ninguna barra en ejecución."); return 2; }
+    }
+
     private static int Quit()
     {
         try { using var ev = EventWaitHandle.OpenExisting(BarHost.QuitEventName); ev.Set(); Log("Señal de cierre enviada."); return 0; }
@@ -219,4 +227,5 @@ internal static class Program
         Log(failures == 0 ? "SELFTEST: todo OK" : $"SELFTEST: {failures} fallo(s)");
         return failures == 0 ? 0 : 1;
     }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool AllowSetForegroundWindow(int processId);
 }

@@ -70,6 +70,7 @@ public sealed partial class BarHost : IDisposable
     {
         CreateHub();
         StartTray();
+        StartLauncher();
         Reconcile(initial: true);
         ApplyPendingConfig();   // una configuración que llegó del host antes de que existieran las ventanas
         var clock = Stopwatch.StartNew(); double last = 0; int frames = 0;
@@ -85,7 +86,7 @@ public sealed partial class BarHost : IDisposable
             foreach (var w in _wins.ToArray()) { Guard(w, () => rendered |= w.Frame(dt, selfTest)); needs |= w.NeedsFrames; }
             if (rendered) frames++;
             if (frames >= maxFrames) return 0;
-            if (!needs && !selfTest) BarNative.MsgWaitForMultipleObjectsEx(0, null, _popover?.Animating == true ? 8u : 50u, BarNative.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);   // entrada/salida del panel lateral: pasos cortos solo mientras dura
+            if (!needs && !selfTest) BarNative.MsgWaitForMultipleObjectsEx(0, null, _popover?.Animating == true || LauncherAnimating ? 8u : 50u, BarNative.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);   // entrada/salida del panel lateral: pasos cortos solo mientras dura
         }
     }
 
@@ -262,6 +263,7 @@ public sealed partial class BarHost : IDisposable
     public void Dispose()
     {
         StopNotchFeed();
+        StopLauncher();
         StopTray();
         DisposePanels();
         foreach (var w in _wins) { try { w.Dispose(); } catch (Exception) { /* seguimos liberando las demás */ } }

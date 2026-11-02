@@ -133,6 +133,10 @@ jobs:
       - name: Barra real con tres iconos de bandeja y captura de pantalla
         shell: pwsh
         run: ./tools/ci/Test-TrayCapture.ps1 -PublishDir ci-publish -OutDir tray-capture
+      - name: Launchpad real (índice de apps, búsqueda, abrir con Intro, Esc)
+        if: always()
+        shell: pwsh
+        run: ./tools/ci/Test-Launchpad.ps1 -PublishDir ci-publish -OutDir tray-capture/launchpad
       - name: Subir la captura (winmac-tray-icons-real.png) y el informe
         if: always()
         uses: actions/upload-artifact@v4
