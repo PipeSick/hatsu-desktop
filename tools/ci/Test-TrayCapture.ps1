@@ -8,7 +8,7 @@
   4. Espera a que bar.log diga que la barra tiene los tres visibles (estado interno).
   5. Captura otra vez (winmac-tray-icons-real.png) y compara con la de antes: busca, DENTRO de la franja de la barra, los píxeles nuevos de los tres iconos
      (azul de Information, amarillo de Warning, rojo de Error) y dónde están.
-  Las capturas son de la pantalla real (Graphics.CopyFromScreen con CAPTUREBLT), no del render fuera de pantalla. Nada de esto toca el código de producción.
+  Las capturas son de la pantalla real (Graphics.CopyFromScreen), no del render fuera de pantalla. Nada de esto toca el código de producción.
 #>
 param([string]$PublishDir = 'ci-publish', [string]$OutDir = 'tray-capture')
 $ErrorActionPreference = 'Stop'
@@ -26,7 +26,7 @@ $stripH = [Math]::Min(80, $screen.Height)
 function Shot([string]$path) {
   $bmp = New-Object System.Drawing.Bitmap $screen.Width, $stripH
   $g = [System.Drawing.Graphics]::FromImage($bmp)
-  $g.CopyFromScreen($screen.X, $screen.Y, 0, 0, (New-Object System.Drawing.Size $screen.Width, $stripH), [System.Drawing.CopyPixelOperation]([int][System.Drawing.CopyPixelOperation]::SourceCopy -bor [int][System.Drawing.CopyPixelOperation]::CaptureBlt))
+  $g.CopyFromScreen($screen.X, $screen.Y, 0, 0, (New-Object System.Drawing.Size $screen.Width, $stripH), [System.Drawing.CopyPixelOperation]::SourceCopy)   # con DWM, la copia de pantalla ya trae lo compuesto
   $g.Dispose(); $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
 }
 
