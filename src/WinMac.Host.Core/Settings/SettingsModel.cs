@@ -15,7 +15,11 @@ public sealed record SettingsGroup(string? Header, IReadOnlyList<SettingsRow> Ro
 public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOnlyList<SettingsGroup> Groups);
 
 /// <param name="WeatherStatus">Texto de estado de la búsqueda de ciudad (qué se eligió, cómo pedir otra).</param>
-public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, ModuleState> States, bool Autostart, string WeatherStatus = "");
+public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, ModuleState> States, bool Autostart, string WeatherStatus = "")
+{
+    /// <summary>Installed extensions with their live status (docs/30). Null: the page says extensions are not available.</summary>
+    public IReadOnlyList<(Extensions.InstalledExtension Ext, string Status)>? Extensions { get; init; }
+}
 
 /// <summary>Construye las páginas de Ajustes a partir de la configuración vigente. Puro: se prueba sin Windows.</summary>
 public static class SettingsBuilder
@@ -172,6 +176,25 @@ public static class SettingsBuilder
         var notchPage = new SettingsPage("notch", "Isla", "island", notch);
 
         _bar = null;
-        return [general, barPage, hub, ncPage, notchPage];
+        return [general, barPage, hub, ncPage, notchPage, ExtensionsPage(input.Extensions)];
+    }
+
+    /// <summary>Extensions (docs/30): each one with its permissions and live state; off by default after installing; install from a folder, uninstall.</summary>
+    private static SettingsPage ExtensionsPage(IReadOnlyList<(Extensions.InstalledExtension Ext, string Status)>? exts)
+    {
+        var groups = new List<SettingsGroup>();
+        bool available = exts is not null; const string unavailable = "Las extensiones no están disponibles en esta sesión";
+        var rows = new List<SettingsRow>();
+        foreach (var (e, status) in exts ?? [])
+        {
+            if (e.Manifest is not { } m) { rows.Add(new(RowKind.Info, "ext.bad:" + Path.GetFileName(e.Folder), Path.GetFileName(e.Folder) + " — no se puede usar: " + e.Error)); continue; }
+            rows.Add(new(RowKind.Toggle, "ext:" + m.Id, m.Name + " " + m.Version, $"Puede: {WinMac.Host.Extensions.ExtensionManifest.Describe(m.Permissions)} · {(e.Enabled ? status : "Desactivada")}", e.Enabled));
+            rows.Add(new(RowKind.Button, "ext.uninstall:" + m.Id, "Desinstalar " + m.Name));
+        }
+
+        if (rows.Count == 0) rows.Add(new(RowKind.Info, "ext.empty", "No hay extensiones instaladas."));
+        groups.Add(new("Instaladas", rows, "Cada extensión es un programa aparte: si falla, WinMac sigue funcionando. Solo puede hacer lo que indican sus permisos; se ejecuta con tus permisos de usuario (no es un entorno aislado para código desconocido: instala solo extensiones en las que confíes)."));
+        groups.Add(new("Instalar", [new(RowKind.Field, "ext.install", "Carpeta de la extensión", Enabled: available, Reason: available ? null : unavailable, Text: "", Placeholder: "C:\\…\\mi-extension (con extension.json)")], "Se copia a la carpeta de extensiones de WinMac y queda desactivada hasta que la actives."));
+        return new SettingsPage("ext", "Extensiones", "puzzle", groups);
     }
 }

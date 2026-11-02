@@ -328,3 +328,30 @@ public class EmitTests
         Assert.Equal(0, late);   // un evento no se reenvía a quien llega después (a diferencia de Publish)
     }
 }
+
+/// <summary>Canal de extensiones (docs/30): un token por cliente y sin reenvío entre clientes.</summary>
+public class ExtensionChannelTests
+{
+    [Fact]
+    public async Task Per_client_tokens_are_enforced_and_clients_cannot_reach_each_other()
+    {
+        var pipe = T.Pipe();
+        var tokens = new Dictionary<string, string> { ["ext-a"] = "ta", ["ext-b"] = "tb" };
+        var got = new List<string>();
+        var s = new IpcServer(new ServerOptions(pipe, "unused") { Relay = false, HelloValidator = (m, t, _) => tokens.TryGetValue(m, out var k) && k == t });
+        s.MessageReceived += (m, e) => { if (e.T == MsgType.Evt) lock (got) got.Add(m + ":" + e.Topic); };
+        s.Start();
+        await using var a = T.Client(pipe, "ext-a", "ta");
+        await using var b = T.Client(pipe, "ext-b", "tb");
+        await using var impostor = T.Client(pipe, "ext-b", "ta");   // a's token used to claim b's name
+        Assert.True(await T.Until(() => s.IsConnected("ext-a") && s.IsConnected("ext-b")));
+        var seenByB = 0; b.Subscribe("ext.activity", _ => Interlocked.Increment(ref seenByB));
+        await Task.Delay(200);
+        a.Event("ext.activity", new { op = "upsert" });
+        Assert.True(await T.Until(() => { lock (got) return got.Contains("ext-a:ext.activity"); }));
+        await Task.Delay(300);
+        Assert.Equal(0, seenByB);                                    // the host got it; the other extension did not
+        Assert.Equal(2, s.ConnectedModules.Count);                   // the impostor never got in (b is still b)
+        await s.DisposeAsync();
+    }
+}

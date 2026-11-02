@@ -107,6 +107,13 @@ for ($k = 1; $k -le 5; $k++) { $p = Join-Path $shotsDir "captura-de-prueba-$k.pn
 $barLog = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'; Remove-Item $barLog -ErrorAction SilentlyContinue
 $env:WINMAC_PILL_SELFTEST = $pillLog; $env:WINMAC_MENU_DIAG = '1'
 $hostLog = Join-Path $d 'host.log'; $hostExe = Join-Path $DistDir 'WinMac.exe'; $bar = Join-Path $DistDir 'WinMac.Bar.App.exe'
+# Extensiones de demostración (docs/30): se «instalan» como lo haría Ajustes (copia a %LOCALAPPDATA%\WinMac\extensions) y se activan las dos
+$extRoot = Join-Path $env:LOCALAPPDATA 'WinMac\extensions'
+if (Test-Path (Join-Path $DistDir 'extensions')) {
+  New-Item -ItemType Directory -Force -Path $extRoot | Out-Null
+  foreach ($id in 'pomodoro', 'uptime') { $src = Join-Path $DistDir "extensions\$id"; if (Test-Path $src) { Copy-Item $src $extRoot -Recurse -Force } }
+  '["pomodoro","uptime"]' | Set-Content (Join-Path $extRoot 'extensions.json') -Encoding UTF8
+}
 $hp = Start-Process -FilePath $hostExe -ArgumentList @('--no-tray', '--fast', '--notchwin-settings', "`"$(Join-Path $d 'sin.json')`"", '--config', "`"$(Join-Path $d 'winmac.json')`"", '--log', "`"$hostLog`"") -PassThru -WindowStyle Hidden
 Remove-Item Env:WINMAC_PILL_SELFTEST; Remove-Item Env:WINMAC_MENU_DIAG
 $t0 = Get-Date
@@ -258,6 +265,14 @@ if (WaitFor { [Au]::Visible('WinMacCapture') } 8) {
   } else { Note '  - la grabación no se pudo iniciar en este equipo (ver registro)' }
 } else { Note '- **40-grabacion**: la superposición no apareció' }
 if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[grabación]' | Where-Object { $_.Line -notmatch 'diag|muestra' } | Select-Object -Last 8 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
+
+# ── 1g. Extensiones (docs/30): procesos aparte con su propio canal; actividades reales de la API en la Isla
+Note ''; Note '### Extensiones'
+$extOk = WaitFor { (LogHas $hostLog '[extensiones] pomodoro conectada') -and (LogHas $hostLog '[extensiones] uptime conectada') } 15
+Note "  - las dos extensiones de demostración conectadas por su canal: $extOk"
+if (Test-Path $hostLog) { Select-String -Path $hostLog -SimpleMatch '[extensiones]' | Select-Object -Last 6 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ \S+ ', '')) } }
+Get-Process -Name 'WinMac.Ext.Demos' -ErrorAction SilentlyContinue | ForEach-Object { Note "  - proceso aparte: WinMac.Ext.Demos pid $($_.Id)" }
+Expand; $null = ClickTab 'activity'; Start-Sleep -Milliseconds 800; Shot '47-extensiones-en-curso' 'Extensiones: «Concentración» (Pomodoro) y «Windows encendido» como actividades reales de la API' ($cx - 330) $sc.Y 660 560; Collapse
 
 # ── 1f. Workspace Manager (docs/29): ventanas reales del Bloc de notas; cuadrícula, guardar, lado a lado, restaurar
 Note ''; Note '### Espacios de trabajo'

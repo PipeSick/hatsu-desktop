@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- SDK de extensiones de WinMac (docs/30): API v1 documentada sobre el canal de extensiones. Sin dependencias externas. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinMac.Extensions</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\WinMac.Ipc\WinMac.Ipc.csproj" /></ItemGroup>
+</Project>

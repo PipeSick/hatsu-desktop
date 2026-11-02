@@ -42,6 +42,12 @@ internal sealed class SettingsWindow : IDisposable
 
     private void OnConfigChanged(HostConfig a, HostConfig b) { if (_hwnd != IntPtr.Zero) Native.PostMessage(_hwnd, WM_REFRESH, IntPtr.Zero, IntPtr.Zero); }   // puede llegar de otro hilo
 
+    /// <summary>Extensions (docs/30): operations and the list to show; set by the host.</summary>
+    public WinMac.Host.IExtensionOps? ExtensionOps { get => _actions.Extensions; set => _actions.Extensions = value; }
+    public Func<IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension Ext, string Status)>>? ExtensionList { get; set; }
+    /// <summary>Redraw with fresh data (safe from any thread).</summary>
+    public void Refresh() { if (_hwnd != IntPtr.Zero) Native.PostMessage(_hwnd, WM_REFRESH, IntPtr.Zero, IntPtr.Zero); }
+
     public void Show() => Show(null);
 
     /// <param name="section">Sección pedida desde el panel de la Barra: «weather» abre Panel y Tiempo con el campo de ciudad listo; «sound», «system», «network», «disks» abren Panel y Tiempo.</param>
@@ -135,7 +141,9 @@ internal sealed class SettingsWindow : IDisposable
 
     private void RebuildPages()
     {
-        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus)));
+        IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension, string)>? exts = null;
+        try { exts = ExtensionList?.Invoke(); } catch (Exception e) { _log("[extensiones] lista no disponible: " + e.Message); }
+        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { Extensions = exts }));
         PositionEdit();
     }
 

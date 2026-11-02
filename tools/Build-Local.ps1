@@ -21,6 +21,15 @@ foreach ($p in @('src/WinMac.Host/WinMac.Host.csproj', 'src/WinMac.Bar.App/WinMa
   & dotnet publish $p -c $Configuration -r win-x64 --self-contained false -o $dest
   if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de $p" }
 }
+# Extensiones de demostración (docs/30): se distribuyen en «extensions\<id>» para instalarlas desde Ajustes › Extensiones (no se activan solas)
+$extTmp = Join-Path $dest '_ext-build'
+& dotnet publish 'src/WinMac.Ext.Demos/WinMac.Ext.Demos.csproj' -c $Configuration -r win-x64 --self-contained false -o $extTmp
+if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de las extensiones de demostración" }
+foreach ($id in 'pomodoro', 'uptime') {
+  $to = Join-Path $dest "extensions\$id"; New-Item -ItemType Directory -Force -Path $to | Out-Null
+  Copy-Item (Join-Path $extTmp '*') $to -Recurse -Force; Copy-Item "extensions/$id/extension.json" $to -Force
+}
+Remove-Item -Recurse -Force $extTmp
 $notchProj = Join-Path $NotchPath 'src\NotchWin.App\NotchWin.App.csproj'
 if (Test-Path $notchProj) {
   Write-Host "Publicando NotchWin ($NotchPath) …"

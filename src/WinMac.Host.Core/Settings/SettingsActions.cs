@@ -18,9 +18,18 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { log?.Invoke("[host] ajuste «" + e.Id + "» no se pudo aplicar: " + ex.Message); return false; }
     }
 
+    /// <summary>Extension operations, provided by the host (null when extensions are not available).</summary>
+    public IExtensionOps? Extensions { get; set; }
+
     private bool ApplyCore(SettingsEdit e)
     {
         string id = e.Id;
+        if (Extensions is { } x)
+        {
+            if (id.StartsWith("ext:", StringComparison.Ordinal) && e.Kind == "toggle") { x.SetEnabled(id[4..], e.On); return true; }
+            if (id.StartsWith("ext.uninstall:", StringComparison.Ordinal)) { x.Uninstall(id[14..]); return true; }
+            if (id == "ext.install" && e.Kind == "text" && !string.IsNullOrWhiteSpace(e.Text)) { var err = x.Install(e.Text.Trim().Trim('"')); log?.Invoke(err is null ? "[extensiones] instalada (desactivada)" : "[extensiones] no se pudo instalar: " + err); return true; }
+        }
         if (id.StartsWith("bar:", StringComparison.Ordinal) && e.Kind == "toggle") { string f = id[4..]; if (!SettingsBuilder.BarToggles.Any(t => t.Field == f)) return false; cfg.ApplyBarPatch(Patch(f, e.On)); return true; }
         if (id.StartsWith("notch.sec:", StringComparison.Ordinal) && int.TryParse(id[10..], out int si))
         {
@@ -79,4 +88,13 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
 
         return false;
     }
+}
+
+/// <summary>What the Settings window can do with extensions (the host implements it over <c>ExtensionCatalog</c> + <c>ExtensionHost</c>).</summary>
+public interface IExtensionOps
+{
+    void SetEnabled(string id, bool on);
+    void Uninstall(string id);
+    /// <summary>Null on success, else the reason.</summary>
+    string? Install(string folder);
 }

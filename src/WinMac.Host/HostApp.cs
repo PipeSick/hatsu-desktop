@@ -87,6 +87,16 @@ internal static class HostApp
         }
         catch (Exception e) { log("[host] sin ventana/bandeja: " + e.Message); }
 
+        // Extensiones (docs/30): canal propio, un proceso por extensión, solo lo que permite su manifiesto
+        var extCatalog = new WinMac.Host.Extensions.ExtensionCatalog(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "extensions"));
+        var extHost = new WinMac.Host.Extensions.ExtensionHost(extCatalog, launcher, (topic, payload) => bus.Emit(topic, payload), log, pipe + "-ext");
+        try { extHost.Start(); } catch (Exception e) { log("[extensiones] no disponibles: " + e.Message); }
+        if (settings is not null)
+        {
+            settings.ExtensionList = () => extCatalog.List().Select(e => (e, e.Manifest is { } m ? extHost.StatusOf(m.Id) : "")).ToList();
+            settings.ExtensionOps = new ExtensionOps(extCatalog, extHost, settings.Refresh);
+        }
+
         sup.StartAsync().GetAwaiter().GetResult();
         log("[host] módulos lanzados: " + string.Join(", ", sup.States.Select(kv => $"{kv.Key}={kv.Value}")));
 
@@ -107,6 +117,7 @@ internal static class HostApp
         tray?.RemoveIcon();
         sup.StopAllAsync().GetAwaiter().GetResult();
         log("[host] módulos cerrados: " + string.Join(", ", sup.States.Select(kv => $"{kv.Key}={kv.Value}")));
+        try { extHost.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); } catch (Exception) { }
         settings?.Dispose(); tray?.Dispose(); job?.Dispose(); server.DisposeAsync().AsTask().GetAwaiter().GetResult();
         log("[host] fin."); return 0;
     }
@@ -146,3 +157,12 @@ internal static class HostApp
         catch (WaitHandleCannotBeOpenedException) { Console.WriteLine("WinMac no está en ejecución."); return 0; }
     }
 }
+
+/// <summary>Settings → Extensions: every change is applied at once (start/stop the process) and the page redraws with the new state.</summary>
+internal sealed class ExtensionOps(WinMac.Host.Extensions.ExtensionCatalog catalog, WinMac.Host.Extensions.ExtensionHost host, Action refresh) : WinMac.Host.IExtensionOps
+{
+    public void SetEnabled(string id, bool on) { catalog.SetEnabled(id, on); host.Sync(); refresh(); _ = Task.Delay(1500).ContinueWith(_ => refresh()); }
+    public void Uninstall(string id) { catalog.SetEnabled(id, false); host.Sync(); Thread.Sleep(400); catalog.Uninstall(id); refresh(); }
+    public string? Install(string folder) { var (_, err) = catalog.Install(folder); refresh(); return err; }
+}
+
