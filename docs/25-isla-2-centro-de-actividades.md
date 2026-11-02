@@ -63,3 +63,12 @@ actividades con progreso y acciones, galería 3×2 con «Hoy/Ayer hh:mm», histo
 
 Problemas corregidos durante la auditoría: conflicto de nombres con System.Diagnostics (compilación), pestañas sin nombre, icono repetido,
 «…» en la descarga compacta, auditoría que capturaba la pestaña equivocada.
+
+
+## Teclado (fase de estabilización)
+La Isla nunca toma el teclado por sí sola (al pasar el ratón, con notificaciones o con la píldora). Solo cuando el usuario la abre **con un clic** quita
+`WS_EX_NOACTIVATE` y se pone en primer plano; al cerrarse lo restaura. No intercepta teclas globales.
+Esc cierra · ←/→ (desde las pestañas) o Ctrl+←/→ cambian de sección · Ctrl+1…9 sección N · Tab/Mayús+Tab recorren pestañas, tarjetas y acciones (sin salir de la
+Isla) · ↓/↑ siguiente/anterior elemento · Intro/Espacio activan · foco con el rectángulo del sistema. Validado en el CI con pulsaciones reales (captura 48).
+
+WinMac cierra la Isla abierta antes de capturar, grabar o editar (orden `collapse`), porque está siempre encima y se llevaría los clics.

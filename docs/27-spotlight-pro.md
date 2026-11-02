@@ -15,4 +15,10 @@ Lista de resultados a la izquierda y **vista previa** a la derecha (detalles y l
 
 Divisas: **no** se ofrecen (no hay fuente gratuita fiable integrada con fecha de cotización; se documenta como pendiente).
 Un proveedor lento nunca bloquea: lo local aparece al instante y lo lento (Windows Search, ping, DNS) llega después y se descarta si la búsqueda cambió.
-Portapapeles en Spotlight: pendiente (el historial vive en la Isla).
+**Portapapeles** (desde la fase de estabilización): «portapapeles» o «cb texto» muestran el historial de la Isla primero; cualquier búsqueda incluye hasta 3 coincidencias.
+Spotlight pide a la Isla (`clip.query` por el canal interno de WinMac; las extensiones no tienen acceso a ese canal) y recibe **solo vistas previas de una línea**
+(máx. 160 caracteres, imágenes como «Imagen») de lo que el historial ya admitió con sus reglas de privacidad. Intro copia, **Ctrl+Intro copia sin formato**,
+**Ctrl+Supr** lo quita del historial; lo hace la propia Isla. Con la pestaña Portapapeles desactivada no devuelve nada. Nada de esto va a los registros.
+«Pegar» automáticamente no se ofrece: WinMac no simula pulsaciones en otras apps.
+
+Teclado: ↑/↓ y **Tab / Mayús+Tab** mueven la selección (la vista previa la sigue); Intro, Ctrl+Intro, Esc (borra y cierra).
