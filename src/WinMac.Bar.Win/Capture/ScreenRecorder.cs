@@ -84,13 +84,20 @@ internal sealed class ScreenRecorder : IDisposable
             var due = TimeSpan.FromSeconds(n / (double)Fps) - _clock.Elapsed;
             if (due > TimeSpan.Zero) Thread.Sleep(due);
             if (_stop) { e.Request.Sample = null; return; }
-            var px = ScreenGrabber.Grab(_rect);
+            var px = FlipRows(ScreenGrabber.Grab(_rect), _rect.W, _rect.H);   // uncompressed RGB in Media Foundation is bottom-up (verified in CI: frames came out upside down)
             var sample = MediaStreamSample.CreateFromBuffer(px.AsBuffer(), TimeSpan.FromSeconds(n / (double)Fps));
             sample.Duration = TimeSpan.FromSeconds(1.0 / Fps);
             e.Request.Sample = sample;
             Interlocked.Increment(ref _frames);
         }
         catch (Exception ex) { _log("[grabación] fotograma: " + ex.GetType().Name + ": " + ex.Message); e.Request.Sample = null; _stop = true; }
+    }
+
+    public static byte[] FlipRows(byte[] px, int w, int h)
+    {
+        int stride = w * 4; var o = new byte[px.Length];
+        for (int y = 0; y < h; y++) Buffer.BlockCopy(px, y * stride, o, (h - 1 - y) * stride, stride);
+        return o;
     }
 
     /// <summary>Ends the file (the encoder finishes the MP4) and returns its path and length.</summary>
