@@ -1,6 +1,6 @@
 namespace WinMac.Bar;
 
-public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather }
+public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather, TrayIcon }
 
 /// <summary>
 /// Un elemento de la barra. <see cref="Text"/> puede estar vacío (solo icono). <see cref="GlyphWidth"/> es el ancho fijo del icono (0 = sin icono).
@@ -12,7 +12,7 @@ public sealed record BarItem(BarItemKind Kind, string Text, double GlyphWidth, b
     public string Id => Key ?? Kind.ToString();
 }
 
-public enum BarActionKind { None, OpenSettings, ShowMenu, Quit, OpenPanel, ShowAppMenu }
+public enum BarActionKind { None, OpenSettings, ShowMenu, Quit, OpenPanel, ShowAppMenu, TrayClick, TrayRightClick }
 
 /// <summary>
 /// Lo que pasa al hacer clic. <see cref="Panel"/>: panel desplegable a abrir; <see cref="Uri"/>: página de Configuración (única acción en el modo antiguo y respaldo si el panel no puede abrirse).
@@ -24,6 +24,8 @@ public sealed record BarAction(BarActionKind Kind, string? Uri = null, PanelKind
 public static class BarModel
 {
     public const double IconW = 16, BatteryW = 24;
+    /// <summary>Prefijo del Id de un icono de bandeja en la barra (el resto es la clave del icono en <see cref="Tray.TrayIconStore"/>).</summary>
+    public const string TrayKeyPrefix = "tray:";
 
     public static (IReadOnlyList<BarItem> Left, IReadOnlyList<BarItem> Right) Build(BarState s, BarConfig c)
     {
@@ -32,6 +34,7 @@ public static class BarModel
         if (c.AppMenus && s.AppMenus is { Count: > 0 } menus) for (int i = 0; i < menus.Count; i++) left.Add(new BarItem(BarItemKind.AppMenu, menus[i], 0, Key: "AppMenu" + i));
 
         var right = new List<BarItem>();
+        if (c.ShowTrayIcons) foreach (var t in s.Tray) right.Add(new BarItem(BarItemKind.TrayIcon, "", IconW, Key: TrayKeyPrefix + t.Key));   // apps en segundo plano, como los iconos de la barra de menús de macOS
         if (c.ShowHub) right.Add(new BarItem(BarItemKind.Hub, "", IconW));   // UN solo icono de la aplicación: un panel con pestañas
         if (c.ShowWeather) right.Add(new BarItem(BarItemKind.Weather, s.Weather.Text, IconW));   // el Tiempo es un componente aparte, con su propio panel
         if (c.ShowBluetooth && s.Bt.Present) right.Add(new BarItem(BarItemKind.Bluetooth, "", IconW));
@@ -56,6 +59,7 @@ public static class BarModel
         BarItemKind.AppMenu => new BarAction(BarActionKind.ShowAppMenu),
         BarItemKind.Hub => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Hub),
         BarItemKind.Weather => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Weather),
+        BarItemKind.TrayIcon => new BarAction(BarActionKind.TrayClick),
         _ => new BarAction(BarActionKind.None),
     };
 
@@ -73,9 +77,14 @@ public static class BarModel
             BarItemKind.ControlCenter => basic with { Kind = BarActionKind.OpenPanel, Panel = PanelKind.ControlCenter },
             BarItemKind.Clock => basic with { Kind = BarActionKind.OpenPanel, Panel = notificationCenter ? PanelKind.Notifications : PanelKind.Calendar },
             BarItemKind.AppMenu => new BarAction(BarActionKind.ShowAppMenu, Index: int.TryParse(item.Id.AsSpan(7), out int i) ? i : 0),
+            BarItemKind.TrayIcon => new BarAction(BarActionKind.TrayClick, Uri: item.Id[TrayKeyPrefix.Length..]),
             _ => basic,
         };
     }
 
     public static bool IsClickable(BarItemKind kind) => ActionFor(kind).Kind != BarActionKind.None;
+
+    /// <summary>Clic derecho sobre un elemento: en un icono de bandeja, su menú (el de la app); en el resto, el menú de WinMac como siempre.</summary>
+    public static BarAction RightClickAction(BarItem? item) =>
+        item is { Kind: BarItemKind.TrayIcon } ? new BarAction(BarActionKind.TrayRightClick, Uri: item.Id[TrayKeyPrefix.Length..]) : new BarAction(BarActionKind.ShowMenu);
 }

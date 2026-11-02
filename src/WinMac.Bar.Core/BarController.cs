@@ -60,6 +60,9 @@ public sealed class BarController
         return i < 0 ? new BarAction(BarActionKind.None) : BarModel.ClickAction(_frame.Items[i].Item, _cfg.NotificationCenter);
     }
 
+    /// <summary>Acción del clic derecho en X: el menú de la app en un icono de bandeja; si no, el menú de WinMac.</summary>
+    public BarAction OnRightClick(double x) { int i = BarLayout.HitTest(_frame, x); return BarModel.RightClickAction(i < 0 ? null : _frame.Items[i].Item); }
+
     /// <summary>Elemento (Id) bajo X, para que el host ancle un menú junto a él. Null si no hay.</summary>
     public BarItemFrame? ItemAt(double x) { int i = BarLayout.HitTest(_frame, x); return i < 0 ? null : _frame.Items[i]; }
 }

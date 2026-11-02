@@ -64,6 +64,9 @@ public sealed record BarConfig
     public bool CcDisplay { get; init; } = true;
     public bool CcNotifications { get; init; } = true;
 
+    /// <summary>Iconos de la bandeja de Windows (apps en segundo plano) en la barra. WinMac recibe los iconos como lo hace la bandeja y se los reenvía a Explorer.</summary>
+    public bool ShowTrayIcons { get; init; } = true;
+
     // ── Centro de Notificaciones (panel lateral; se abre con el reloj, como en macOS)
     /// <summary>El reloj abre el Centro de Notificaciones de WinMac. false = abre el calendario desplegable de antes.</summary>
     public bool NotificationCenter { get; init; } = true;
