@@ -36,3 +36,18 @@ public class DockHitRegionTests
         Assert.Empty(DockHitRegion.Compute(View(hideT: 1), M, false, false));
     }
 }
+
+// Un Dock por pantalla.
+public class DockFleetTests
+{
+    [Fact]
+    public void Each_monitor_gets_one_dock_mirrors_and_running_ones_do_not_get_another()
+    {
+        (int, int, int, int) a = (0, 0, 2560, 1440), b = (2560, 0, 5120, 1440);
+        Assert.Equal([a, b], DockFleet.ToStart([a, b, a], []));                         // el espejo (mismos límites) no lleva otro
+        Assert.Equal([b], DockFleet.ToStart([a, b], [DockFleet.Key(a)]));                // ya hay uno en a
+        Assert.Empty(DockFleet.ToStart([a, b], [DockFleet.Key(a), DockFleet.Key(b)]));
+        Assert.Empty(DockFleet.ToStart([(0, 0, 0, 0)], []));                              // monitor sin tamaño (en mitad de un cambio)
+        Assert.Equal("2560,0,5120,1440", DockFleet.Key(b));
+    }
+}

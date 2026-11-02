@@ -83,15 +83,67 @@ internal static class Program
         if (themeArg is ThemeMode tm) cfg = cfg with { Theme = tm };
         cfg = DockSettings.Sanitize(cfg);
         if (!File.Exists(cfgPath) && !args.Contains("--no-config")) { try { cfg.Save(cfgPath); } catch (Exception e) { Log("No se pudo guardar la configuración: " + e.Message); } }
-        using var host = new DockHost(cfg, DockMetrics.ForIconSize(cfg.IconSize), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), args.Contains("--demo"), Log, args.Contains("--no-config") ? null : cfgPath);
-        // --hosted (lo pasa WinMac.exe): enlace con el host. Sin él, el dock funciona exactamente como siempre. Si el host cae, el dock sigue solo.
+        bool demo = args.Contains("--demo"); string? persist = args.Contains("--no-config") ? null : cfgPath;
+        if (demo || args.Contains("--single"))   // demostración o un solo Dock (en el monitor principal), como antes
+        {
+            using var host = new DockHost(cfg, DockMetrics.ForIconSize(cfg.IconSize), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), demo, Log, persist);
+            var link1 = ModuleHostLink.FromArgs(args, "dock", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
+            if (link1 is not null) { link1.ShutdownRequested += host.RequestQuit; link1.HealthCheck = () => host.Responsive; link1.Start(); Log("Modo hosted: enlazado con WinMac.exe."); }
+            Log("Iniciando dock…");
+            int rc1 = host.Run();
+            Log("Dock terminado. " + host.Report());
+            if (link1 is not null) { if (rc1 == 0) link1.ByeAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult(); link1.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+            return rc1;
+        }
+
+        // Un Dock en cada pantalla, cada uno en su hilo (ventana, bucle de mensajes y seguimiento de ventanas propios). Las apps ancladas y los ajustes se comparten por dock.json:
+        // cada Dock guarda lo que cambia en él y los demás lo releen al ver el archivo cambiado.
+        var fleet = new List<(string Key, DockHost Host, Thread Thread)>(); var gate = new object(); bool quitting = false;
+        void StartOn((int Left, int Top, int Right, int Bottom) mon)
+        {
+            string key = DockFleet.Key(mon); using var ready = new ManualResetEventSlim();
+            var th = new Thread(() =>
+            {
+                DockHost? h = null;
+                try
+                {
+                    var c = persist is null ? cfg : DockSettings.Sanitize(DockConfig.LoadOrDefault(persist, DockDefaults.Create));   // lo último guardado (otro Dock puede haberlo cambiado)
+                    if (tier is GlassTier tt) c = c with { GlassTier = tt };
+                    if (themeArg is ThemeMode tmm) c = c with { Theme = tmm };
+                    h = new DockHost(c, DockMetrics.ForIconSize(c.IconSize), GlassStyle.For(SystemTheme.Resolve(c.Theme)), false, Log, persist, mon);
+                    lock (gate) fleet.Add((key, h, Thread.CurrentThread));
+                    ready.Set();
+                    Log($"Iniciando dock en el monitor {key}…");
+                    h.Run();
+                    Log($"Dock del monitor {key} terminado{(h.MonitorGone ? " (el monitor ya no existe)" : "")}. " + h.Report());
+                    if (!h.MonitorGone) lock (gate) quitting = true;   // cerrado a propósito (señal de cierre): se cierran todos
+                }
+                catch (Exception e) { Log($"Dock del monitor {key} falló: " + e); }
+                finally { lock (gate) fleet.RemoveAll(x => x.Key == key); h?.Dispose(); try { ready.Set(); } catch (ObjectDisposedException) { } }
+            }) { Name = "Dock " + key, IsBackground = false };
+            th.SetApartmentState(ApartmentState.STA); th.Start();
+            ready.Wait(TimeSpan.FromSeconds(10));
+        }
+
+        List<DockHost> Hosts() { lock (gate) return fleet.Select(x => x.Host).ToList(); }
         var link = ModuleHostLink.FromArgs(args, "dock", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
-        if (link is not null) { link.ShutdownRequested += host.RequestQuit; link.HealthCheck = () => host.Responsive; link.Start(); Log("Modo hosted: enlazado con WinMac.exe."); }
-        Log("Iniciando dock…");
-        int rc = host.Run();
-        Log("Dock terminado. " + host.Report());
-        if (link is not null) { if (rc == 0) link.ByeAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult(); link.DisposeAsync().AsTask().GetAwaiter().GetResult(); }   // «bye» = cierre voluntario: el host no nos reinicia
-        return rc;
+        if (link is not null) { link.ShutdownRequested += () => { lock (gate) quitting = true; foreach (var h in Hosts()) h.RequestQuit(); }; link.HealthCheck = () => Hosts().All(h => h.Responsive); link.Start(); Log("Modo hosted: enlazado con WinMac.exe."); }
+
+        using var quitEvent = new EventWaitHandle(false, EventResetMode.ManualReset, DockDefaults.QuitEventName);
+        while (true)
+        {
+            List<string> running; lock (gate) running = fleet.Select(x => x.Key).ToList();
+            foreach (var mon in DockFleet.ToStart(DockHost.Monitors(), running)) StartOn(mon);   // al arrancar y cuando aparece una pantalla nueva
+            bool q; lock (gate) q = quitting;
+            if (q || quitEvent.WaitOne(500)) break;   // cierre en ≤ 0,5 s; las pantallas nuevas se miran en cada vuelta (EnumDisplayMonitors es barato)
+        }
+
+        foreach (var h in Hosts()) h.RequestQuit();
+        List<Thread> threads; lock (gate) threads = fleet.Select(x => x.Thread).ToList();
+        foreach (var th in threads) th.Join(TimeSpan.FromSeconds(5));
+        Log("Docks terminados.");
+        if (link is not null) { link.ByeAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult(); link.DisposeAsync().AsTask().GetAwaiter().GetResult(); }   // «bye» = cierre voluntario: el host no nos reinicia
+        return 0;
     }
 
     private static int Quit()

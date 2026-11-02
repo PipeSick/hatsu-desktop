@@ -39,6 +39,14 @@ public sealed class DockHost : IDisposable
 
     public string Diagnostics { get; private set; } = "";
 
+    private readonly Native.RECT? _screen; private bool _monitorGone;
+
+    /// <summary>Los monitores activos (px de pantalla), sin repetir los espejos: uno por Dock.</summary>
+    public static IReadOnlyList<(int Left, int Top, int Right, int Bottom)> Monitors() => Native.MonitorRects().Select(r => (r.Left, r.Top, r.Right, r.Bottom)).ToList();
+    private static int _classCounter;
+    /// <summary>El monitor de este Dock ya no existe (se desconectó o cambió la distribución): su bucle termina y el coordinador crea los que hagan falta.</summary>
+    public bool MonitorGone => _monitorGone;
+
     /// <summary>Pide el cierre normal del dock (lo usa el host de WinMac vía <c>--hosted</c>). Seguro desde otro hilo: el bucle lo atiende en ≤ 50 ms.</summary>
     public void RequestQuit() => _quitting = true;
 
@@ -47,9 +55,11 @@ public sealed class DockHost : IDisposable
     public bool Responsive => _modal || Environment.TickCount64 - Volatile.Read(ref _lastTickMs) < 10_000;
 
     /// <param name="configPath">Si se indica, las apps ancladas y su orden se guardan aquí (escritura atómica, con retardo) y se recargan si el archivo cambia desde fuera.</param>
-    public DockHost(DockConfig cfg, DockMetrics m, GlassStyle glass, bool demo, Action<string> log, string? configPath = null)
+    /// <param name="monitor">Monitor de este Dock (px de pantalla). null = el principal. Con varias pantallas hay un Dock por monitor, cada uno en su hilo.</param>
+    public DockHost(DockConfig cfg, DockMetrics m, GlassStyle glass, bool demo, Action<string> log, string? configPath = null, (int Left, int Top, int Right, int Bottom)? monitor = null)
     {
         _cfg = cfg; _glass = glass; _demo = demo; _log = log; _proc = WndProcImpl; _cfgPath = demo ? null : configPath;
+        _screen = monitor is { } mm ? new Native.RECT { Left = mm.Left, Top = mm.Top, Right = mm.Right, Bottom = mm.Bottom } : null;
         // Vista previa de ventanas: la ventana crece hacia arriba y a los lados (zona transparente que deja pasar el ratón); la barra sigue igual y centrada.
         _m = Compose(m, cfg); _appliedLayout = DockSettings.LayoutKey(cfg);
         _ctl = new DockController(_m, cfg);
@@ -78,7 +88,7 @@ public sealed class DockHost : IDisposable
             _tracker?.Pump();
             PollInputs();
             Housekeeping();
-            if (_quitting) return 0;
+            if (_quitting || _monitorGone) return 0;
             if (selfTest) { _force = true; if (clock.Elapsed.TotalSeconds > 10) throw new TimeoutException("selftest: no se alcanzaron los frames en 10 s"); }
             double now = clock.Elapsed.TotalSeconds, dt = Math.Min(now - last, 0.1); last = now;
             _view = _ctl.Step(dt);
@@ -102,7 +112,7 @@ public sealed class DockHost : IDisposable
         if (_thumbs.TakeDirty()) _force = true;
     }
 
-    private static double ScreenWidthDip() => Native2.GetSystemMetrics(0 /* SM_CXSCREEN */) / (Native2.GetDpiForSystem() / 96.0);
+    private double ScreenWidthDip() => (_screen is { } t ? t.Width : Native2.GetSystemMetrics(0 /* SM_CXSCREEN */)) / (Native2.GetDpiForSystem() / 96.0);
 
     private void PollInputs()
     {
@@ -160,9 +170,13 @@ public sealed class DockHost : IDisposable
     // ------------------------------------------------------------------ ventana
     private void Create()
     {
-        var cls = new WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = Native2.GetModuleHandle(null), lpszClassName = "WinMacDock", hCursor = Native2.LoadCursor(IntPtr.Zero, 32512) };
+        // Una clase por Dock: la clase de ventana guarda el procedimiento de quien la registra, y con varios Docks en el proceso (uno por monitor) los mensajes
+        // de todos acabarían en el primero.
+        string clsName = "WinMacDock" + (Interlocked.Increment(ref _classCounter) == 1 ? "" : _classCounter.ToString());
+        var cls = new WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = Native2.GetModuleHandle(null), lpszClassName = clsName, hCursor = Native2.LoadCursor(IntPtr.Zero, 32512) };
         Native2.RegisterClassEx(ref cls);
-        _hwnd = Native2.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "WinMacDock", "WinMac Dock", WS_POPUP, 0, 0, 100, 100, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
+        int ox = _screen?.Left ?? 0, oy = _screen?.Top ?? 0;   // nace en SU monitor: así su DPI es el de ese monitor
+        _hwnd = Native2.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, clsName, "WinMac Dock", WS_POPUP, ox, oy, 100, 100, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
         _dev = new D2DDevice(); Diagnostics = _dev.Description;
         _scale = Native.GetDpiForWindow(_hwnd) / 96.0; _dev.SetDpi(_scale);
@@ -176,9 +190,13 @@ public sealed class DockHost : IDisposable
 
     private void PlaceWindow(bool show)
     {
-        var pt = new Native.POINT { X = 0, Y = 0 };
+        var pt = _screen is { } t ? new Native.POINT { X = t.Left + t.Width / 2, Y = t.Top + t.Height / 2 } : new Native.POINT { X = 0, Y = 0 };
         var mi = new Native.MONITORINFO { cbSize = (uint)Marshal.SizeOf<Native.MONITORINFO>() };
         Native.GetMonitorInfo(Native.MonitorFromPoint(pt, Native.MONITOR_DEFAULTTOPRIMARY), ref mi);
+        if (_screen is { } want && (mi.rcMonitor.Left != want.Left || mi.rcMonitor.Top != want.Top || mi.rcMonitor.Right != want.Right || mi.rcMonitor.Bottom != want.Bottom))
+        {
+            _monitorGone = true; _log($"[dock] el monitor ({want.Left},{want.Top} {want.Width}x{want.Height}) ya no existe: este Dock se cierra"); return;
+        }
         _monitor = mi.rcMonitor;
         _winWpx = (int)Math.Ceiling(_ctl.WindowWidth * _scale); _winHpx = (int)Math.Ceiling(_ctl.WindowHeight * _scale);
         // Posición según la alineación y la altura elegidas (centro + altura normal = la de siempre: centrada justo sobre la barra de tareas).
