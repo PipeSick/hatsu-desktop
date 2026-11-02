@@ -48,12 +48,12 @@ public sealed class PanelController
     }
 
     private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav or WidgetKind.Tabs or WidgetKind.TabHeader or WidgetKind.Select or WidgetKind.AppRow or WidgetKind.Stats or WidgetKind.CityRow
-        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem
+        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem or WidgetKind.TrayGrid
         || (w.Kind == WidgetKind.Header && w.Id == "back");
 
     private static string ScrollKey(PanelModel m) => m.PinTop > 0 && m.PinTop <= m.Widgets.Count ? m.Kind + "/" + m.Widgets[m.PinTop - 1].Id : m.Kind.ToString();
 
-    public void PointerLeave() { _hover = -1; }
+    public void PointerLeave() { _hover = -1; Pointer = null; }
 
     /// <summary>Identificador del evento de deslizador: el de la fila de una aplicación lleva el prefijo «appvol:» (su Id es el de la sesión de audio).</summary>
     private static string DragId(Widget w) => w.Kind == WidgetKind.AppRow ? "appvol:" + w.Id : w.Id;
@@ -67,6 +67,7 @@ public sealed class PanelController
             _lastValue = v; return new PanelEvent(PanelEventKind.SliderChange, DragId(_frame.Items[_down].W), v);
         }
 
+        Pointer = (x, y);
         int i = PanelLayout.HitTest(_frame, x, y); _hover = i >= 0 && Interactive(_frame.Items[i].W) ? i : -1; return null;
     }
 
@@ -92,6 +93,17 @@ public sealed class PanelController
 
         return null;
     }
+
+    /// <summary>Clic derecho: solo en un icono de app en segundo plano (su menú). Devuelve «rclick:trayitem:» + clave.</summary>
+    public PanelEvent? RightClick(double x, double y)
+    {
+        int i = PanelLayout.HitTest(_frame, x, y); if (i < 0 || _frame.Items[i].W.Kind != WidgetKind.TrayGrid) return null;
+        int cell = PanelLayout.TrayCellAt(_frame.Items[i], x, y);
+        return cell >= 0 && _frame.Items[i].W.Data is TrayGridData g ? new PanelEvent(PanelEventKind.Click, "rclick:trayitem:" + g.Cells[cell].Key) : null;
+    }
+
+    /// <summary>Último punto del puntero dentro del panel (DIP): el dibujo resalta la casilla de la cuadrícula que hay debajo.</summary>
+    public (double X, double Y)? Pointer { get; private set; }
 
     public PanelEvent? PointerUp(double x, double y)
     {
@@ -120,6 +132,11 @@ public sealed class PanelController
                 int t = PanelLayout.TabAt(f, x); return w.Data is TabsData td && t >= 0 ? new PanelEvent(PanelEventKind.Click, "tab:" + td.Tabs[t].Id) : null;
             }
             case WidgetKind.Stats: return PanelLayout.StatsPillHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "unit") : null;
+            case WidgetKind.TrayGrid:
+            {
+                int cell = PanelLayout.TrayCellAt(f, x, y);
+                return cell >= 0 && w.Data is TrayGridData g ? new PanelEvent(PanelEventKind.Click, "trayitem:" + g.Cells[cell].Key) : null;
+            }
             case WidgetKind.NcHeader: return PanelLayout.NcCloseHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "nc:close") : null;
             case WidgetKind.NcSection: return PanelLayout.NcSectionActionHit(f, x) && w.Data is NcSectionData sd ? new PanelEvent(PanelEventKind.Click, sd.ActionId!) : null;
             case WidgetKind.NotifGroup:

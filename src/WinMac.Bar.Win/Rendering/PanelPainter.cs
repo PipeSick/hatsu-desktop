@@ -19,6 +19,8 @@ public sealed partial class PanelPainter : IDisposable
     public BarTheme Theme { get; set; } = BarTheme.Dark;
     /// <summary>Fondo de pantalla desenfocado tras el panel lateral (lo crea y libera <see cref="PopoverWindow"/>); null = tarjeta opaca.</summary>
     public ID2D1Bitmap? Backdrop { get; set; }
+    /// <summary>Punto del ratón dentro del panel (DIP), para resaltar la casilla de la cuadrícula de apps en segundo plano que hay debajo.</summary>
+    public (double X, double Y)? HoverPoint { get; set; }
     private static readonly Color4 Accent = new(0.04f, 0.52f, 1f, 1f);
 
     public PanelPainter(D2DDevice dev)
@@ -186,6 +188,18 @@ public sealed partial class PanelPainter : IDisposable
                 var tc = hot ? new Color4(1, 1, 1, 1) : Fg(w.Enabled ? 0.92f : 0.38f);
                 if (w.On) Glyph("check", x + 12, y + h / 2, 4.5f, tc);
                 Text(w.Text, _body, x + 22, y, wd - 30, h, tc);
+                break;
+            }
+            case WidgetKind.TrayGrid when w.Data is TrayGridData g:
+            {
+                double cs = PanelLayout.TrayCell;
+                for (int c = 0; c < g.Cells.Count; c++)
+                {
+                    double cx0 = x + c % g.Columns * cs, cy0 = y + c / g.Columns * cs;
+                    if (HoverPoint is { } hp && hp.X >= cx0 && hp.X < cx0 + cs && hp.Y >= cy0 && hp.Y < cy0 + cs) FillRR(cx0 + 2, cy0 + 2, cx0 + cs - 2, cy0 + cs - 2, 7, Fill(0.16f));   // casilla bajo el ratón
+                    if (IconFor(g.Cells[c].IconKey) is { } bmp) _ctx.DrawBitmap(bmp, R(cx0 + cs / 2 - 8, cy0 + cs / 2 - 8, cx0 + cs / 2 + 8, cy0 + cs / 2 + 8), 1f, BitmapInterpolationMode.Linear, null);
+                    else FillCircle(cx0 + cs / 2, cy0 + cs / 2, 3, Fg(0.5f));   // icono ilegible: un punto discreto
+                }
                 break;
             }
             case WidgetKind.Separator when _kind == PanelKind.AppleMenu: Line(x + 8, y + h / 2, x + wd - 8, y + h / 2, Fill(0.16f), 1f); break;

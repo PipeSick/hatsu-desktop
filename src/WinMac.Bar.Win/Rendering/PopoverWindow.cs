@@ -179,7 +179,7 @@ internal sealed class PopoverWindow : IDisposable
     private void Render()
     {
         if (_painter is null || _swap is null || _dcomp is null) return;
-        _painter.Paint(_ctl.Frame, _ctl.Model, _ctl.Hover); _dcomp.Commit(); _swap.Present(1, PresentFlags.None); _dirty = false;
+        _painter.HoverPoint = _ctl.Pointer; _painter.Paint(_ctl.Frame, _ctl.Model, _ctl.Hover); _dcomp.Commit(); _swap.Present(1, PresentFlags.None); _dirty = false;
     }
 
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
@@ -202,6 +202,7 @@ internal sealed class PopoverWindow : IDisposable
                 case WM_MOUSELEAVE: _tracking = false; if (!_ctl.Dragging) { _ctl.PointerLeave(); _dirty = true; } return IntPtr.Zero;
                 case WM_LBUTTONDOWN: { BarNative.SetCapture(_hwnd); var ev = _ctl.PointerDown(X(l), Y(l)); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero; }
                 case WM_LBUTTONUP: { BarNative.ReleaseCapture(); var ev = _ctl.PointerUp(X(l), Y(l)); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero; }
+                case 0x205 /* WM_RBUTTONUP */: { var ev = _ctl.RightClick(X(l), Y(l)); if (ev is not null) _onEvent(ev); return IntPtr.Zero; }   // menú de una app en segundo plano
                 case WM_ACTIVATE when ((long)w & 0xFFFF) == 0 && _open && !KeepOpen: Hide(); return IntPtr.Zero;   // perdió el foco: como un menú
                 case WM_KEYDOWN when (int)w == 0x1B: Hide(); return IntPtr.Zero;
                 case 0x2E0 /* WM_DPICHANGED */: return IntPtr.Zero;   // el tamaño y el escalado del panel los fija Show() según el monitor de destino: Windows no debe redimensionarlo por su cuenta al moverlo entre monitores

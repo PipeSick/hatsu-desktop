@@ -33,8 +33,6 @@ public static class BarLayout
         // Derecha: si no cabe, se descartan elementos de menor prioridad (volumen, red, batería); el reloj nunca.
         var r = right.ToList();
         double Total(List<BarItem> l) => l.Sum(i => Outer(i)) + Math.Max(0, l.Count - 1) * m.ItemGap;
-        // Primero los iconos de bandeja, uno a uno desde la izquierda (los últimos en llegar, a la derecha, se quedan).
-        while (Total(r) > sideMax && r.FindIndex(i => i.Kind == BarItemKind.TrayIcon) is int ti and >= 0) r.RemoveAt(ti);
         foreach (var kind in new[] { BarItemKind.Volume, BarItemKind.Network, BarItemKind.Battery })
             if (Total(r) > sideMax) r.RemoveAll(i => i.Kind == kind);
 

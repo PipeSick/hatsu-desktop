@@ -59,20 +59,34 @@ public class TrayTests
     }
 
     [Fact]
-    public void Tray_icons_sit_first_on_the_right_go_first_when_space_runs_out_and_right_click_opens_their_menu()
+    public void The_bar_shows_ONE_button_that_opens_the_background_apps_dropdown_only_when_there_are_any()
     {
-        var icons = Enumerable.Range(0, 30).Select(i => new TrayIcon("k" + i, (uint)i + 1, 1, 0, 9, "app" + i, 4, false, i)).ToList();
+        var icons = Enumerable.Range(0, 30).Select(i => new TrayIcon("k" + i, (uint)i + 1, 1, 0, (uint)(100 + i), "app" + i, 4, false, i)).ToList();
         var st = BarState.Empty(new DateTime(2026, 11, 2, 10, 0, 0)) with { TrayIcons = icons };
         var (_, right) = BarModel.Build(st, new BarConfig());
-        Assert.Equal(BarItemKind.TrayIcon, right[0].Kind); Assert.Equal("tray:k0", right[0].Id); Assert.Equal(BarItemKind.Clock, right[^1].Kind);
-        var f = BarLayout.Compute(new BarMetrics(), new BarConfig(), 1280, [], right, (t, _) => t.Length * 7);
-        var shown = f.Items.Where(i => i.Item.Kind == BarItemKind.TrayIcon).ToList();
-        Assert.InRange(shown.Count, 1, 29); Assert.Equal("tray:k29", shown[^1].Item.Id);   // no caben todos: se quedan los de la derecha
-        Assert.Contains(f.Items, i => i.Item.Kind == BarItemKind.Clock);
-        Assert.DoesNotContain(BarModel.Build(st, new BarConfig { ShowTrayIcons = false }).Right, i => i.Kind == BarItemKind.TrayIcon);
-        var item = right[3];
-        Assert.Equal(new BarAction(BarActionKind.TrayClick, Uri: "k3"), BarModel.ClickAction(item));
-        Assert.Equal(new BarAction(BarActionKind.TrayRightClick, Uri: "k3"), BarModel.RightClickAction(item));
-        Assert.Equal(BarActionKind.ShowMenu, BarModel.RightClickAction(null).Kind);
+        Assert.Single(right, i => i.Kind == BarItemKind.TrayMenu); Assert.Equal(BarItemKind.TrayMenu, right[0].Kind);
+        Assert.Equal(new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Tray), BarModel.ClickAction(right[0]));
+        Assert.Equal(BarActionKind.ShowMenu, BarModel.RightClickAction(right[0]).Kind);   // clic derecho en la barra: el menú de WinMac, como siempre
+        Assert.DoesNotContain(BarModel.Build(BarState.Empty(DateTime.Now), new BarConfig()).Right, i => i.Kind == BarItemKind.TrayMenu);   // sin apps: sin botón
+        Assert.DoesNotContain(BarModel.Build(st, new BarConfig { ShowTrayIcons = false }).Right, i => i.Kind == BarItemKind.TrayMenu);
+    }
+
+    [Fact]
+    public void The_dropdown_is_a_grid_of_icons_like_windows_and_left_and_right_clicks_reach_each_app()
+    {
+        var icons = Enumerable.Range(0, 7).Select(i => new TrayIcon("k" + i, (uint)i + 1, 1, 0, (uint)(0x50 + i), i == 0 ? "Discord\nsegunda línea" : "", 4, false, i)).ToList();
+        var ctx = PanelContext.Initial(new BarConfig(), DateTime.Now) with { Tray = icons };
+        var m = PanelBuilder.Build(PanelKind.Tray, ctx);
+        var g = (TrayGridData)Assert.Single(m.Widgets).Data!;
+        Assert.Equal(5, g.Columns); Assert.Equal(7, g.Cells.Count); Assert.Equal("tray-icon:80", g.Cells[0].IconKey); Assert.Equal("Discord", g.Cells[0].Name); Assert.Equal("App sin nombre", g.Cells[1].Name);
+        var f = PanelLayout.Compute(m); var grid = f.Items[0];
+        Assert.Equal(5 * PanelLayout.TrayCell + 12, f.Width, 6); Assert.Equal(2 * PanelLayout.TrayCell, grid.Height, 6);   // 7 iconos: 2 filas de hasta 5
+        var ctl = new PanelController(); ctl.SetModel(m);
+        double cx = grid.X + 1.5 * PanelLayout.TrayCell, cy = grid.Y + 1.5 * PanelLayout.TrayCell;   // fila 2, columna 2 → el 7.º icono
+        ctl.PointerDown(cx, cy); Assert.Equal("trayitem:k6", ctl.PointerUp(cx, cy)!.Id);
+        Assert.Equal("rclick:trayitem:k6", ctl.RightClick(cx, cy)!.Id);
+        Assert.Null(ctl.RightClick(grid.X + 4.5 * PanelLayout.TrayCell, cy));   // casilla vacía
+        var one = PanelLayout.Compute(PanelBuilder.Build(PanelKind.Tray, ctx with { Tray = icons.Take(2).ToList() })); Assert.Equal(2 * PanelLayout.TrayCell + 12, one.Width, 6);
+        Assert.Contains(PanelBuilder.Build(PanelKind.Tray, ctx with { Tray = [] }).Widgets, w => w.Id == "tray-none");
     }
 }

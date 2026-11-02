@@ -57,7 +57,10 @@ public sealed partial class BarHost : IPanelUi
     private void OnNcChanged() { if (_popover is { IsOpen: true } && _pkind == PanelKind.Notifications) RebuildPanel(); }
 
     /// <summary>Iconos del panel: los de las apps de las notificaciones (en memoria, los entregó Windows al leer) y los de ejecutables (multifunción).</summary>
-    private byte[]? PanelIcon(string key) => key.StartsWith(PanelBuilder.NcIconPrefix, StringComparison.Ordinal) ? _ncSrc?.CachedIcon(key[PanelBuilder.NcIconPrefix.Length..]) : _hubSvc.Icons.GetBgra(key, 32);
+    private byte[]? PanelIcon(string key) =>
+        key.StartsWith(PanelBuilder.NcIconPrefix, StringComparison.Ordinal) ? _ncSrc?.CachedIcon(key[PanelBuilder.NcIconPrefix.Length..])
+        : key.StartsWith(PanelBuilder.TrayIconPrefix, StringComparison.Ordinal) ? TrayIconBgra(key)
+        : _hubSvc.Icons.GetBgra(key, 32);
 
     /// <summary>Ciudad y adicionales desde la configuración central. La ubicación automática es OPT-IN: solo si el usuario la activó, se pide una vez por activación, y si Windows no la da se usa la ciudad elegida.</summary>
     private void ConfigureWeather()
@@ -117,7 +120,7 @@ public sealed partial class BarHost : IPanelUi
         var net = _network.Kind == NetKind.Wifi && s.Wifi.Available && s.Wifi.Connected ? _network with { Ssid = s.Wifi.Ssid, Bars = s.Wifi.Bars } : _network;
         var bt = s.Bluetooth.Available ? new BluetoothInfo(true, s.Bluetooth.RadioOn, s.Bluetooth.ConnectedCount) : BluetoothInfo.None;
         var wx = _weather.Current(); var wbar = wx.Snapshot is { } sn ? new WeatherBarInfo(WeatherCodes.Icon(sn.Main.Code, sn.Main.IsDay), TempFormat.Bar(sn.Main.TempC, _cfg.WeatherFahrenheit)) : WeatherBarInfo.None;
-        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar, _cfg.ShowTrayIcons ? _trayStore.Visible : null);
+        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar, _cfg.ShowTrayIcons ? _trayStore.Visible : null, TrayOpen: _popover is { IsOpen: true } && _pkind == PanelKind.Tray);
     }
 
     private void OnHubChanged() { SetStateAll(); if (_popover is { IsOpen: true }) RebuildPanel(); }
@@ -160,10 +163,11 @@ public sealed partial class BarHost : IPanelUi
     {
         _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
         _popSource = src; _pkind = kind; _anchorX = anchorX; _alignRight = alignRight; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
-        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab }; _pctx = _pctx with { Hub = MakeHubData() };
+        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab, Tray = _trayStore.Visible }; _pctx = _pctx with { Hub = MakeHubData() };
         if (kind == PanelKind.Notifications) { OpenNotificationCenter(src); return; }
         var model = PanelBuilder.Build(kind, _pctx);
         _popover.Show(model, anchorX, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight);   // se abre en el monitor donde se hizo clic, escalado a SU DPI
+        if (kind == PanelKind.Tray) SetStateAll();   // la flecha pasa a apuntar arriba
         RefreshFor(kind, firstOpen: true);
     }
 
@@ -208,11 +212,11 @@ public sealed partial class BarHost : IPanelUi
     private void RebuildPanel()
     {
         if (_popover is not { IsOpen: true }) return;
-        _pctx = _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData(), Nc = _pctx.Nc is { } v ? v with { State = _nc.State } : null };
+        _pctx = _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData(), Nc = _pctx.Nc is { } v ? v with { State = _nc.State } : null, Tray = _trayStore.Visible };
         _popover.SetModel(PanelBuilder.Build(_pkind, _pctx));
     }
 
-    private void OnPanelClosed() { if (_pkind == PanelKind.Notifications) _nc.Deactivate(); _popSource = null; foreach (var w in _wins) w.Redraw(); }
+    private void OnPanelClosed() { if (_pkind == PanelKind.Notifications) _nc.Deactivate(); _popSource = null; SetStateAll(); foreach (var w in _wins) w.Redraw(); }   // la flecha de las apps en segundo plano vuelve a apuntar abajo
 
     private void LoadEvents()
     {
@@ -272,7 +276,12 @@ public sealed partial class BarHost : IPanelUi
         if (cmd > 0 && cmd <= choices.Count) onPick(choices[cmd - 1].Id);
     }
 
-    private void OnPanelEvent(PanelEvent e) { if (_pkind == PanelKind.AppleMenu) { AppleAction(e); return; } _ops.Handle(e); }
+    private void OnPanelEvent(PanelEvent e)
+    {
+        if (_pkind == PanelKind.AppleMenu) { AppleAction(e); return; }
+        if (_pkind == PanelKind.Tray) { TrayPanelAction(e); return; }
+        _ops.Handle(e);
+    }
 
     // ───────────────────────────── cuadros de diálogo propios
     private void ShowInfo(string title, string? text) { if (string.IsNullOrWhiteSpace(text)) return; ModalBox(title, text!, 0x40 /* ICONINFORMATION | OK */); }

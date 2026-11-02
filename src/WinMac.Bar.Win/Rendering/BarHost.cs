@@ -252,8 +252,6 @@ public sealed partial class BarHost : IDisposable
                 case BarActionKind.ShowMenu: ShowAppleMenu(src, item); break;
                 case BarActionKind.OpenPanel: OpenPanelFromBar(src, a, item); break;
                 case BarActionKind.ShowAppMenu: ShowAppMenu(src, a.Index, item); break;
-                case BarActionKind.TrayClick: TrayClickOn(src, a, item, WinMac.Bar.Tray.TrayButton.Left); break;
-                case BarActionKind.TrayRightClick: TrayClickOn(src, a, item, WinMac.Bar.Tray.TrayButton.Right); break;
             }
         }
         catch (Exception e) { _log($"Acción {a.Kind} falló: {e.GetType().Name}: {e.Message}"); }

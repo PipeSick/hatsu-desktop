@@ -15,7 +15,7 @@ public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothS
 
 /// <summary>Estado de interfaz de los paneles: mes visible, día elegido, operaciones en curso («Conectando…») y el último error.</summary>
 public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo Battery, DateTime Now, IReadOnlyList<CalendarEvent> Events, int ViewYear, int ViewMonth,
-    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null, string? ForegroundApp = null)
+    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null, string? ForegroundApp = null, IReadOnlyList<Tray.TrayIcon>? Tray = null)
 {
     public static PanelContext Initial(BarConfig cfg, DateTime now) => new(SystemSnapshot.Empty, cfg, BatteryInfo.None, now, [], now.Year, now.Month, null, new Dictionary<string, string>(), null);
 }
@@ -38,6 +38,7 @@ public static partial class PanelBuilder
         PanelKind.Weather => WeatherPanel(c),
         PanelKind.Notifications => NotificationCenter(c),
         PanelKind.AppleMenu => AppleMenu(c),
+        PanelKind.Tray => TrayMenu(c),
         _ => ControlCenter(c),
     };
 
@@ -64,6 +65,24 @@ public static partial class PanelBuilder
         w.Add(new Widget(WidgetKind.MenuItem, "apple:reserve", "Reservar espacio arriba", On: c.Cfg.ReserveSpace));
         w.Add(new Widget(WidgetKind.MenuItem, "apple:quitbar", "Salir de la barra superior"));
         return new PanelModel(PanelKind.AppleMenu, "WinMac", w, MenuWidth, Pad: 5, Spacing: 0);
+    }
+
+    public const int TrayColumns = 5;
+    /// <summary>Prefijo de la clave de icono de una app en segundo plano (el resto es su HICON); el anfitrión la resuelve con los píxeles del icono.</summary>
+    public const string TrayIconPrefix = "tray-icon:";
+
+    /// <summary>
+    /// Desplegable de las apps en segundo plano, como el de la flechita de la bandeja de Windows: una cuadrícula de iconos (hasta 5 por fila), con el vidrio de los demás paneles.
+    /// Clic = lo mismo que un clic en su icono de la bandeja (abrirla); clic derecho = su menú.
+    /// </summary>
+    public static PanelModel TrayMenu(PanelContext c)
+    {
+        const double pad = 6;
+        var icons = c.Tray ?? [];
+        if (icons.Count == 0) return new PanelModel(PanelKind.Tray, "Apps en segundo plano", [new Widget(WidgetKind.Note, "tray-none", "No hay apps en segundo plano.")], 200, Pad: 8, Spacing: 0);
+        var cells = icons.Select(t => new TrayCellData(t.Key, TrayIconPrefix + t.Icon, string.IsNullOrWhiteSpace(t.Tip) ? "App sin nombre" : t.Tip.Split('\n', 2)[0].Trim())).ToList();
+        int cols = Math.Min(TrayColumns, cells.Count);
+        return new PanelModel(PanelKind.Tray, "Apps en segundo plano", [new Widget(WidgetKind.TrayGrid, "tray-grid", Data: new TrayGridData(cells, cols))], cols * PanelLayout.TrayCell + 2 * pad, Pad: pad, Spacing: 0);
     }
 
     public static PanelModel ControlCenter(PanelContext c)

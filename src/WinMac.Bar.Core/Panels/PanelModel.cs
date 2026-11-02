@@ -2,7 +2,7 @@ using WinMac.Calendar;
 
 namespace WinMac.Bar;
 
-public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications, AppleMenu }
+public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications, AppleMenu, Tray }
 
 public enum WidgetKind
 {
@@ -37,6 +37,7 @@ public enum WidgetKind
     NcEmpty,     // estado vacío o de permiso: icono grande, título y explicación
     // ── menú de WinMac (el de la manzana)
     MenuItem,    // opción de menú: texto, ✓ si On, atenuada si no está disponible; resalte azul al pasar el ratón
+    TrayGrid,    // cuadrícula de iconos de las apps en segundo plano, como el desplegable de la bandeja de Windows (Data = TrayGridData); clic = abrir, clic derecho = su menú
 }
 
 public sealed record TabsData(IReadOnlyList<WinMac.Bar.Hub.TabItem> Tabs, int Selected);
@@ -51,6 +52,9 @@ public sealed record StatsData(StatItem Left, StatItem Right, string? Pill);
 public sealed record WeatherHeadData(string Place, bool Located, string Temp, string IconKey, string Description, string? HighLow);
 public sealed record StripData(IReadOnlyList<WinMac.Bar.Hub.StripItem> Items);
 public sealed record NcHeaderData(string Day, string Date);
+/// <summary>Una app en segundo plano de la cuadrícula: su clave en el almacén de la bandeja, la clave de su icono y su nombre (texto de ayuda de la app).</summary>
+public sealed record TrayCellData(string Key, string IconKey, string Name);
+public sealed record TrayGridData(IReadOnlyList<TrayCellData> Cells, int Columns);
 /// <param name="ActionId">Evento al pulsar la acción de la derecha (null = sin acción).</param>
 public sealed record NcSectionData(string? ActionId, string? ActionLabel);
 /// <param name="IconKey">Clave del icono de la app para el dibujo (null = sin icono: se dibuja la inicial).</param>
@@ -121,6 +125,7 @@ public static class PanelLayout
         WidgetKind.NotifGroup => 30,
         WidgetKind.NotifCard => NotifCardHeight(w.Data as NotifCardData),
         WidgetKind.MenuItem => 24,
+        WidgetKind.TrayGrid => w.Data is TrayGridData g ? Math.Ceiling(g.Cells.Count / (double)Math.Max(1, g.Columns)) * TrayCell : TrayCell,
         WidgetKind.NcEmpty => Math.Max(118, 76 + 14 * Math.Ceiling((w.Sub?.Length ?? 0) / 44.0)),
         _ => 30,
     };
@@ -215,6 +220,17 @@ public static class PanelLayout
     public static bool SliderMuteHit(WidgetFrame f, double x) => f.W.Data is string && x < f.X + 36;
     /// <summary>Botón de unidad de las estadísticas (arriba a la derecha).</summary>
     public static bool StatsPillHit(WidgetFrame f, double x, double y) => f.W.Data is StatsData { Pill: not null } && x >= f.X + f.Width - 46 && y <= f.Y + 30;
+    /// <summary>Lado de cada casilla de la cuadrícula de apps en segundo plano (DIP): icono de 16 con margen, como el desplegable de Windows.</summary>
+    public const double TrayCell = 36;
+
+    /// <summary>Casilla de la cuadrícula bajo el punto, o -1.</summary>
+    public static int TrayCellAt(WidgetFrame f, double x, double y)
+    {
+        if (f.W.Data is not TrayGridData g || x < f.X || y < f.Y) return -1;
+        int col = (int)((x - f.X) / TrayCell), row = (int)((y - f.Y) / TrayCell), i = row * g.Columns + col;
+        return col < g.Columns && i < g.Cells.Count ? i : -1;
+    }
+
     // ── Centro de Notificaciones
     /// <summary>«×» de cerrar del encabezado (arriba a la derecha).</summary>
     public static bool NcCloseHit(WidgetFrame f, double x, double y) => x >= f.X + f.Width - 36 && y <= f.Y + 36;

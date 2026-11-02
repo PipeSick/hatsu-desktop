@@ -19,7 +19,7 @@ public sealed partial class BarHost
         try
         {
             _trayHost = new TrayHost(_log);
-            _trayHost.Message += m => Post(() => { if (_trayStore.Apply(m)) { SetStateAll(); TrayDiag(); } });   // el estado solo se toca en el hilo de la barra
+            _trayHost.Message += m => Post(() => { if (_trayStore.Apply(m)) { SetStateAll(); TrayDiag(); if (_popover is { IsOpen: true } && _pkind == PanelKind.Tray) RebuildPanel(); } });   // el estado solo se toca en el hilo de la barra
             _trayHost.Start();
         }
         catch (Exception e) { _log("[bandeja] no arrancó: " + e.GetType().Name + ": " + e.Message); _trayHost = null; }
@@ -34,6 +34,9 @@ public sealed partial class BarHost
     {
         if (!TrayDiagOn) return;
         var v = _trayStore.Visible; _log($"[bandeja] visibles ({v.Count}): " + string.Join(" | ", v.Select(i => i.Tip)));
+        foreach (var w in _wins)   // dónde está la flecha en la pantalla (la prueba visual del CI la pulsa para abrir el desplegable)
+            foreach (var f in w.Ctl.Frame.Items.Where(i => i.Item.Kind == BarItemKind.TrayMenu))
+                _log($"[bandeja] botón: x={w.Left + (int)((f.X + f.W / 2) * w.Scale)} y={w.Top + w.Height / 2}");
     }
 
     private void StopTray()
@@ -50,15 +53,27 @@ public sealed partial class BarHost
         if (_trayStore.RemoveDead(h => BarNative.IsWindow((IntPtr)h))) SetStateAll();
     }
 
-    /// <summary>Clic en un icono: la app recibe lo mismo que le enviaría Explorer, con permiso para pasar al frente (su menú o su ventana).</summary>
-    private void TrayClickOn(BarWindow src, BarAction a, BarItemFrame? item, TrayButton button)
+    /// <summary>
+    /// Clic en un icono del desplegable: se cierra el desplegable y la app recibe lo mismo que le enviaría Explorer (clic izquierdo = abrirla, derecho = su menú),
+    /// con permiso para pasar al frente y con el punto de anclaje bajo la flecha de la barra (donde aparece su menú).
+    /// </summary>
+    private void TrayPanelAction(PanelEvent e)
     {
-        if (a.Uri is not { } key || _trayStore.Get(key) is not { } icon) return;
+        bool right = e.Id.StartsWith("rclick:", StringComparison.Ordinal); string id = right ? e.Id[7..] : e.Id;
+        if (!id.StartsWith("trayitem:", StringComparison.Ordinal) || _trayStore.Get(id[9..]) is not { } icon) return;
+        var src = _popSource; int x = _anchorX, y = src is null ? 0 : src.Top + src.Height;
+        _popover?.Hide();
         IntPtr hwnd = (IntPtr)icon.Hwnd;
         if (!BarNative.IsWindow(hwnd)) { _trayStore.RemoveDead(h => h != icon.Hwnd); SetStateAll(); return; }
-        int x = item is null ? src.Left : src.Left + (int)((item.X + item.W / 2) * src.Scale), y = src.Top + src.Height;
         BarNative.GetWindowThreadProcessId(hwnd, out uint pid); AllowSetForegroundWindow(pid);
-        foreach (var (w, l) in TrayClick.Messages(icon, button, x, y)) BarNative.PostMessage(hwnd, icon.CallbackMessage, w, l);
+        foreach (var (w, l) in TrayClick.Messages(icon, right ? TrayButton.Right : TrayButton.Left, x, y)) BarNative.PostMessage(hwnd, icon.CallbackMessage, w, l);
+    }
+
+    /// <summary>Iconos del desplegable: el HICON de la app a 32×32 BGRA (el que pide el dibujo de los paneles).</summary>
+    private static byte[]? TrayIconBgra(string key)
+    {
+        if (!uint.TryParse(key.AsSpan(PanelBuilder.TrayIconPrefix.Length), out uint hicon) || TrayIconPixels.Read(hicon) is not { } px) return null;
+        return px.W > 32 || px.H > 32 ? Shell.Notifications.WinNotificationSource.Downscale(px.Bgra, px.W, px.H, 32) : px.W == 32 && px.H == 32 ? px.Bgra : Shell.Hub.AppIcons.Resize(px.Bgra, px.W, px.H, 32);
     }
 
     [DllImport("user32.dll")] private static extern bool AllowSetForegroundWindow(uint pid);
