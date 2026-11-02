@@ -18,14 +18,31 @@ nunca tocar resolución, monitores, red, audio ni reiniciar el PC del usuario; d
   Al cambiar NotchWin: push a su rama `claude/relaxed-turing-cijzko`, luego actualizar `tools/notch-pin.txt` en WinMac.
 - Logs del CI: `mcp__github__get_job_logs` con `tail_lines` pequeño (los registros con imágenes en base64 son enormes).
 
-## Estado por etapa
-| Etapa | Estado | Commits | CI |
-|---|---|---|---|
-| 0. Captura de la bandeja (sesión anterior) | cerrada a nivel de CI (run 75: 3 de 3 iconos en el desplegable real) | d309ed9 | verde |
-| 1. Isla informativa (docs/21) | implementada + pruebas; arreglado un cierre al arrancar visto en el CI | NotchWin 14c374b, 58d14d9, e810ec0; WinMac c529e5c, 9a50ec4 | run 76 falló por ese cierre; verificar el siguiente |
-| 2. Launchpad + tecla Windows (docs/22) | implementado + pruebas + prueba real en CI (`Test-Launchpad.ps1`, job windows-tray-capture) | 4a0b889 | verificar |
-| 3. Spotlight (docs/22) | implementado + pruebas + prueba real en CI (mismo script) | 21c9540 | verificar |
-| 4. Global Menu (opción A) | en curso: ya existía `AppMenuService` (menús Win32) y el ajuste «appMenus» | — | — |
+## Estado por etapa (informe)
+| Etapa | Implementado | Compilado | Probado automáticamente | CI de Windows (real) | Pendiente en el PC |
+|---|---|---|---|---|---|
+| 0. Bandeja (sesión anterior) | sí | sí | sí | run 75: 3/3 iconos en el desplegable | clics con apps reales |
+| 1. Isla: volumen, brillo, notificaciones, prioridades | sí | sí (NotchWin CI + Build-Local) | 18 (NotchWin) + 7 (WinMac) | run de 4d8c7d3: integración en verde (barra real → host → Isla real con secuencia de muestra) | teclas de volumen/brillo, notificación real, aspecto |
+| 2. Launchpad + tecla Windows | sí | sí | 19 | 11/11 (índice real de 126 apps, abrir, «notepad»+Intro, Esc) | tecla Windows física, varias pantallas |
+| 3. Spotlight | sí | sí | 22 | 6/6 (12*12 → 144, notepad, Esc). Windows Search NO disponible en el runner (0x80041820): solo recientes | atajo físico, Windows Search con archivos reales |
+| 4. Global Menu (opción A) | sí | sí | 5 | la prueba falló por un error del TEST (clave «appMenus» en vez de «AppMenus» en bar.json); corregido en el último commit, verificar | clic en Bloc de notas, Paint, VS Code |
+
+Commits principales: NotchWin 14c374b, 58d14d9, e810ec0, 5bb75b9, 7b87512; WinMac c529e5c, 9a50ec4, 4a0b889, 21c9540, c4ad5ec, 1cca724, 4d8c7d3 y el de este traspaso.
+
+Causa de los cierres de la Isla en el CI: `AppWindow.IsShownInSwitchers = false` lanza NotImplementedException en Windows Server 2025 (código ANTERIOR a esta sesión); ahora se tolera (NotchWin 7b87512). NotchWin escribe `%LOCALAPPDATA%\NotchWin\crash.log` si se cierra.
+
+## Siguiente paso exacto
+1. Comprobar el run del último commit: job «captura real de los iconos de la bandeja» → línea «Global Menu: los menús del Bloc de notas…» en PASS.
+   Si falla, mirar las líneas `[menús]` del bar.log impresas en ese job (Win32 vs Automation).
+2. Validación manual en el PC (docs/21 §5, docs/22, docs/23).
+3. Mejoras posibles: submenús con estilo propio para apps UI Automation; Win11 «No molestar» (sin API documentada).
+
+## Limitaciones conocidas
+- «No molestar» de Windows 11 no tiene API documentada (solo pantalla completa/presentación se respetan).
+- Brillo de monitores externos (DDC/CI): sin aviso de cambios; solo el deslizador de la barra.
+- Alt+Espacio sustituye al menú de ventana de Windows mientras WinMac está abierto (configurable).
+- Tecla Windows: el gancho no ve pantallas seguras (UAC) ni ventanas de administrador si WinMac no lo es.
+- Global Menu: apps sin barra de menús (Office, navegadores) solo muestran su nombre; en apps UI Automation el desplegable es el de la propia app.
 
 ## Dónde está cada cosa (nuevo en esta sesión)
 - Isla: `notch-win/src/NotchWin.Core/Pill/` (árbitro, formato), `NotchWindow.Pill.cs`; barra: `BarHost.Notch.cs`, `AudioService.Watch.cs`, `BrightnessService.Watch.cs`, `Bar.Core/Notch/NotchFeed.cs`.

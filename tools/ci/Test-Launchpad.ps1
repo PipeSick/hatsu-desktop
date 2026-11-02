@@ -32,7 +32,7 @@ public static class Lp {
 Get-Process -Name 'WinMac.Bar.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 if (Test-Path $log) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
 Remove-Item (Join-Path $env:LOCALAPPDATA 'WinMac\launcher.json') -ErrorAction SilentlyContinue
-$cfgFile = Join-Path $OutDir 'bar-ci.json'; '{ "appMenus": true }' | Set-Content $cfgFile -Encoding UTF8   # Global Menu activado para la prueba de menús
+$cfgFile = Join-Path $OutDir 'bar-ci.json'; '{ "AppMenus": true }' | Set-Content $cfgFile -Encoding UTF8   # Global Menu activado para la prueba de menús
 $p = Start-Process -FilePath $bar -ArgumentList @('--config', "`"$cfgFile`"") -PassThru
 Check 'La barra real arranca' (WaitFor { LogHas 'Barra superior iniciada' } 30)
 Check 'Gancho de la tecla Windows instalado (solo deja pasar teclas; no bloquea ninguna)' (WaitFor { LogHas '[launchpad] tecla Windows: gancho instalado' } 15)
