@@ -125,3 +125,13 @@ public class CaptureEditTests
         Assert.True(a.X < 100 && b.X < 100); Assert.True(a.Y * b.Y < 0);
     }
 }
+
+public class RecordingGeometryTests
+{
+    [Fact]
+    public void RecordingAreaIsEvenAndNamedLikeWindows()
+    {
+        Assert.Equal(new CaptureRect(-2559, 10, 440, 300), CaptureGeometry.EvenRect(new CaptureRect(-2559, 10, 441, 301)));
+        Assert.Equal("Grabación 2026-11-02 a las 17.20.05.mp4", CaptureGeometry.RecordingName(new DateTime(2026, 11, 2, 17, 20, 5)));
+    }
+}

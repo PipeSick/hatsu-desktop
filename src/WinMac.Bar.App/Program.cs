@@ -67,6 +67,7 @@ internal static class Program
                 Directory.CreateDirectory(Path.GetDirectoryName(BarHost.EditRequestFile)!); File.WriteAllText(BarHost.EditRequestFile, Path.GetFullPath(ep));
                 return Signal(BarHost.EditEventName, "Editar captura");
             }
+            if (Arg(args, "--record") is string rm) return Signal(WinMac.Bar.Win.Rendering.BarHost.CaptureEventName("record-" + rm.ToLowerInvariant()), "Grabación " + rm);
             if (Arg(args, "--capture") is string cm) return Signal(WinMac.Bar.Win.Rendering.BarHost.CaptureEventName(cm.ToLowerInvariant()), "Captura " + cm);
             if (args.Contains("--selftest-system")) return SystemProbe();
             if (args.Contains("--selftest-monitors")) return MonitorProbe();

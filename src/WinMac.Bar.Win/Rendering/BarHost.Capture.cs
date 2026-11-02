@@ -13,7 +13,7 @@ namespace WinMac.Bar.Win.Rendering;
 public sealed partial class BarHost
 {
     public static string CaptureEventName(string mode) => @"Local\WinMac.Bar.Capture." + mode;
-    private static readonly string[] CaptureModes = ["region", "window", "screen", "all", "toolbar"];
+    private static readonly string[] CaptureModes = ["region", "window", "screen", "all", "toolbar", "record-region", "record-window", "record-screen", "record-stop"];
 
     private readonly List<GlobalHotkey> _captureKeys = [];
     private readonly Dictionary<string, EventWaitHandle> _captureEvents = [];
@@ -85,10 +85,12 @@ public sealed partial class BarHost
         _captureKeys.Add(new GlobalHotkey(cs, 0x33, () => Post(() => BeginCapture(CaptureMode.Monitor, "atajo")), _log, "Ctrl+Mayús+3 (pantalla)"));
         _captureKeys.Add(new GlobalHotkey(cs, 0x34, () => Post(() => BeginCapture(CaptureMode.Region, "atajo")), _log, "Ctrl+Mayús+4 (región)"));
         _captureKeys.Add(new GlobalHotkey(cs, 0x35, () => Post(() => BeginCapture(CaptureMode.Window, "atajo")), _log, "Ctrl+Mayús+5 (barra de captura)"));
+        _captureKeys.Add(new GlobalHotkey(cs, 0x36, () => Post(() => ToggleRecording(CaptureMode.Region, "atajo")), _log, "Ctrl+Mayús+6 (grabar / detener)"));
     }
 
     private void CaptureTick()
     {
+        RecordTick();
         if (_editRequest is { } req) { _editRequest = null; OpenEditor(req, "Isla"); }
         if (_editEvent?.WaitOne(0) == true)
             try { var p = File.ReadAllText(EditRequestFile).Trim(); File.Delete(EditRequestFile); OpenEditor(p, "orden externa"); } catch (Exception e) { _log("[editor] petición ilegible: " + e.Message); }
@@ -96,12 +98,14 @@ public sealed partial class BarHost
             if (ev.WaitOne(0))
             {
                 _log("[captura] petición: " + m);
+                if (m == "record-stop") { StopRecording("orden externa"); continue; }
+                if (m.StartsWith("record-", StringComparison.Ordinal)) { ToggleRecording(m switch { "record-window" => CaptureMode.Window, "record-screen" => CaptureMode.Monitor, _ => CaptureMode.Region }, "orden externa " + m); continue; }
                 BeginCapture(m switch { "window" or "toolbar" => CaptureMode.Window, "screen" => CaptureMode.Monitor, "all" => CaptureMode.AllMonitors, _ => CaptureMode.Region }, "orden externa " + m);
             }
     }
 
     /// <summary>Freezes the screen and shows the overlay in the given mode (the toolbar lets the user switch). Only one at a time.</summary>
-    public void BeginCapture(CaptureMode mode, string why)
+    public void BeginCapture(CaptureMode mode, string why, bool record = false)
     {
         if (_overlay is not null) { _log("[captura] ya hay una captura abierta (" + why + ")"); return; }
         try
@@ -111,10 +115,11 @@ public sealed partial class BarHost
             var (frame, rect) = ScreenGrabber.GrabVirtualScreen(); long tGrab = t0.ElapsedMilliseconds;
             var monitors = ScreenGrabber.Monitors(); var windows = ScreenGrabber.Windows(IntPtr.Zero); long tEnum = t0.ElapsedMilliseconds;
             if (MenuDiagOn) _log($"[captura] etapas: copia {tGrab} ms, ventanas {tEnum - tGrab} ms");
-            _overlay = new CaptureOverlay(frame, rect, monitors, windows, mode, (t, m, title) => Post(() => SaveCapture(frame, rect, t, m, title)), () => Post(EndCapture), _log);
+            _overlay = new CaptureOverlay(frame, rect, monitors, windows, mode,
+                (t, m, title) => Post(() => { if (record) StartRecording(t, monitors); else SaveCapture(frame, rect, t, m, title); }), () => Post(EndCapture), _log, record);
             _overlay.Show();
             if (MenuDiagOn) _log($"[captura] etapas: superposición visible a los {t0.ElapsedMilliseconds} ms");
-            _log($"[captura] abierta ({why}): modo {mode}, pantalla virtual {rect.X},{rect.Y} {rect.W}x{rect.H}, {monitors.Count} monitor(es), {windows.Count} ventana(s)");
+            _log($"[captura] abierta ({why}){(record ? " para grabar" : "")}: modo {mode}, pantalla virtual {rect.X},{rect.Y} {rect.W}x{rect.H}, {monitors.Count} monitor(es), {windows.Count} ventana(s)");
             CaptureDiag();
         }
         catch (Exception e) { _log("[captura] no se pudo abrir: " + e.GetType().Name + ": " + e.Message); EndCapture(); }
@@ -171,5 +176,6 @@ public sealed partial class BarHost
         foreach (var e in _captureEvents.Values) e.Dispose(); _captureEvents.Clear();
         EndCapture();
         _editEvent?.Dispose(); _editEvent = null; _editor?.Dispose(); _editor = null;
+        if (_recorder is not null) StopRecording("cierre de la barra");
     }
 }

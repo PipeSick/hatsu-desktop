@@ -37,6 +37,12 @@ public sealed record CaptureWindow(IntPtr Handle, string Title, CaptureRect Boun
 /// <summary>Geometry of a capture session, pure (tested on Linux with simulated layouts: monitors left/right/above/below, negative coordinates, mixed DPI).</summary>
 public static class CaptureGeometry
 {
+    /// <summary>Recording area: H.264 needs even dimensions, so it is trimmed by at most one pixel per axis.</summary>
+    public static CaptureRect EvenRect(CaptureRect r) => new(r.X, r.Y, Math.Max(2, r.W & ~1), Math.Max(2, r.H & ~1));
+
+    /// <summary>«Grabación 2026-11-02 a las 17.20.05.mp4».</summary>
+    public static string RecordingName(DateTime local) => "Grabación " + local.ToString("yyyy-MM-dd 'a las' HH.mm.ss", System.Globalization.CultureInfo.InvariantCulture) + ".mp4";
+
     /// <summary>Smallest region that counts as a drag; anything smaller is a click (in region mode a click captures nothing).</summary>
     public const int MinDrag = 4;
 

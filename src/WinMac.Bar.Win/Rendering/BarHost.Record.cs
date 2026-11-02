@@ -1,0 +1,106 @@
+using WinMac.Bar.Capture;
+using WinMac.Bar.Win.Capture;
+
+namespace WinMac.Bar.Win.Rendering;
+
+/// <summary>
+/// WinMac screen recording (docs/26), part of the bar process. Only on an explicit user action: the shortcut (Ctrl+Mayús+6, which also stops it), Spotlight or
+/// <c>WinMac.Bar.App --record region|window|screen|stop</c>; the user picks the area in the same overlay as screenshots. Video only (never the microphone).
+/// While it records there is always a visible indicator (click = stop) and an activity in the Island with the elapsed time; nothing records hidden.
+/// </summary>
+public sealed partial class BarHost
+{
+    private ScreenRecorder? _recorder; private RecordingIndicator? _recIndicator; private bool _recStarting; private DateTime _recLastActivity;
+
+    public bool IsRecording => _recorder is not null;
+
+    public static string RecordingsFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "Screen Recordings");
+
+    /// <summary>Shortcut / Spotlight / command: stop if recording, otherwise let the user choose what to record.</summary>
+    public void ToggleRecording(CaptureMode mode, string why)
+    {
+        if (_recorder is not null) { StopRecording(why); return; }
+        if (_recStarting) return;
+        BeginCapture(mode, why, record: true);
+    }
+
+    private void StartRecording(CaptureRect area, IReadOnlyList<CaptureMonitor> monitors)
+    {
+        EndCapture();
+        if (_recorder is not null || _recStarting) return;
+        _recStarting = true;
+        var mon = CaptureGeometry.MonitorAt(monitors, area.X + area.W / 2, area.Y + area.H / 2) ?? monitors.FirstOrDefault(m => m.Primary) ?? new CaptureMonitor(area, 1, true);
+        Task.Run(async () =>
+        {
+            try
+            {
+                var rec = await ScreenRecorder.StartAsync(area, RecordingsFolder, _log).ConfigureAwait(false);
+                Post(() =>
+                {
+                    _recStarting = false; _recorder = rec;
+                    try { _recIndicator = new RecordingIndicator(() => Post(() => StopRecording("indicador")), _log); _recIndicator.Show(mon); }
+                    catch (Exception e) { _log("[grabación] sin indicador visible, se detiene: " + e.Message); StopRecording("sin indicador"); return; }   // never record without a visible indicator
+                    _log($"[grabación] iniciada: {Path.GetFileName(rec.Path)} ({rec.Rect.W}x{rec.Rect.H}, {ScreenRecorder.Fps} fps, sin audio)");
+                    if (MenuDiagOn) _log($"[grabación] diag indicador@{_recIndicator.Bounds.X + _recIndicator.Bounds.W / 2},{_recIndicator.Bounds.Y + _recIndicator.Bounds.H / 2}");
+                    RecordingActivity();
+                });
+            }
+            catch (Exception e) { Post(() => _recStarting = false); _log("[grabación] no se pudo iniciar: " + e.GetType().Name + ": " + e.Message); }
+        });
+    }
+
+    private void RecordTick()
+    {
+        if (_recorder is not { } r) return;
+        _recIndicator?.Update(r.Elapsed);
+        if (DateTime.UtcNow - _recLastActivity >= TimeSpan.FromSeconds(1)) RecordingActivity();
+    }
+
+    private void RecordingActivity()
+    {
+        if (_recorder is not { } r) return;
+        _recLastActivity = DateTime.UtcNow;
+        var t = r.Elapsed; string el = t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"mm\:ss");
+        NotchActivity?.Invoke(new { op = "upsert", activity = new { id = "grabacion", kind = "recording", title = "Grabando la pantalla", subtitle = $"{el} · {r.Rect.W} × {r.Rect.H} · sin audio", source = "WinMac", state = "active" } });
+    }
+
+    public void StopRecording(string why)
+    {
+        if (_recorder is not { } r) return;
+        _recorder = null; _recIndicator?.Dispose(); _recIndicator = null;
+        _log("[grabación] deteniendo (" + why + ")");
+        Task.Run(async () =>
+        {
+            try
+            {
+                var (path, length, frames) = await r.StopAsync().ConfigureAwait(false);
+                long bytes = File.Exists(path) ? new FileInfo(path).Length : 0;
+                string? poster = await PosterAsync(path).ConfigureAwait(false);
+                _log($"[grabación] guardada: {Path.GetFileName(path)} ({length.TotalSeconds:0.0} s, {frames} fotogramas, {bytes} B){(poster is null ? "" : ", fotograma de muestra listo")}");
+                if (MenuDiagOn && poster is not null) _log("[grabación] muestra " + poster);
+                NotchActivity?.Invoke(new { op = "upsert", activity = new { id = "grabacion", kind = "recording", title = "Grabación guardada", subtitle = Path.GetFileName(path) + $" · {length:mm\\:ss}", source = "WinMac", state = "completed", path, thumbnail = poster } });
+                NotchActivity?.Invoke(new { op = "finish", activity = new { id = "grabacion", state = "completed" } });
+            }
+            catch (Exception e) { _log("[grabación] no se pudo cerrar el archivo: " + e.GetType().Name + ": " + e.Message); NotchActivity?.Invoke(new { op = "finish", activity = new { id = "grabacion", state = "failed" } }); }
+            finally { r.Dispose(); }
+        });
+    }
+
+    /// <summary>A still of the first second (Windows' own media editing API) for the Island's thumbnail, in WinMac's local data folder (not in the gallery).</summary>
+    private static async Task<string?> PosterAsync(string video)
+    {
+        try
+        {
+            var file = await global::Windows.Storage.StorageFile.GetFileFromPathAsync(video);
+            var clip = await global::Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
+            var comp = new global::Windows.Media.Editing.MediaComposition(); comp.Clips.Add(clip);
+            var at = TimeSpan.FromSeconds(Math.Min(1, clip.OriginalDuration.TotalSeconds / 2));
+            using var img = await comp.GetThumbnailAsync(at, 0, 0, global::Windows.Media.Editing.VideoFramePrecision.NearestFrame);
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "posters"); Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, Path.GetFileNameWithoutExtension(video) + ".jpg");
+            using (var fs = File.Create(path)) await img.AsStreamForRead().CopyToAsync(fs);
+            return path;
+        }
+        catch (Exception) { return null; }
+    }
+}
