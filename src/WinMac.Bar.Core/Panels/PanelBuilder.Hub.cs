@@ -218,7 +218,12 @@ public static partial class PanelBuilder
             w.Add(KV("smart-hours", "Horas encendido", sm.PowerOnHours is { } h ? h.ToString("N0", new System.Globalization.CultureInfo("es-CL")) : "No disponible", dim: sm.PowerOnHours is null));
             if (sm.TotalWrittenBytes is { } tw) w.Add(KV("smart-written", "Total escrito", Units.FormatSize(tw)));
             if (sm.TotalReadBytes is { } tr) w.Add(KV("smart-read", "Total leído", Units.FormatSize(tr)));
-            if (sm.Reason is not null && !sm.HasAny) w.Add(Note("smart-why", sm.Reason)); else if (sm.Reason is not null) w.Add(Note("smart-why", sm.Reason));
+            if (sm.Reason is not null) w.Add(Note("smart-why", sm.Reason));
+            if (sm.Incidents is { Total: > 0 } inc)
+            {
+                w.Add(KV("smart-events", "Errores (7 días)", inc.Summary(), "dot-red"));
+                w.Add(Note("smart-events-why", "Windows registró estos errores de este disco en el registro del sistema, aunque su estado diga «Saludable». Haz una copia de lo importante antes de nada."));
+            }
         }
 
         w.Add(Sep("sep-4"));

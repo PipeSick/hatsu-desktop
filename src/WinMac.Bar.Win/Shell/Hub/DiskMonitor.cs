@@ -31,6 +31,7 @@ internal sealed class DiskMonitor : IDiskMonitor, IDisposable
         try
         {
             var (smart, smartWhy) = ReadReliability(ns);
+            IReadOnlyDictionary<int, DiskIncidents> incidents; try { incidents = DiskEventReader.Read().Map; } catch (Exception) { incidents = new Dictionary<int, DiskIncidents>(); }   // errores que Windows registró de cada disco (7 días)
             foreach (var o in Wmi.Query(ns, "SELECT DeviceId, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"))
             {
                 int number = Wmi.I32(o["DeviceId"]); if (number < 0) continue;
@@ -40,7 +41,7 @@ internal sealed class DiskMonitor : IDiskMonitor, IDisposable
                 double? temp = rel?.Temp ?? sq?.TempC, wear = sq?.WearPercent ?? rel?.Wear;   // el registro del propio disco manda: WMI puede dar «0» sin dato real long? hours = rel?.Hours ?? sq?.Hours;
                 string? why = temp is null && hours is null && wear is null ? (sq?.Why ?? smartWhy) : null;
                 physical.Add(new PhysicalRec(number, Wmi.Str(o["FriendlyName"]), Wmi.I32(o["MediaType"]) switch { 3 => "HDD", 4 => "SSD", _ => null }, bus, Wmi.U64(o["Size"]),
-                    new SmartInfo(health, temp, hours, wear, sq?.ReadBytes, sq?.WrittenBytes, why)));
+                    new SmartInfo(health, temp, hours, wear, sq?.ReadBytes, sq?.WrittenBytes, why, incidents.GetValueOrDefault(number))));
             }
 
             foreach (var o in Wmi.Query(ns, "SELECT DiskNumber, DriveLetter FROM MSFT_Partition"))

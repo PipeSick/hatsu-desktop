@@ -94,6 +94,23 @@ internal static class StorageDiagnostics
         var userPools = data.Pools.Where(p => Show(p, "IsPrimordial") == "False").ToList();
         lines.Add("  Grupos de Espacios de almacenamiento (no primordiales): " + (userPools.Count == 0 ? "ninguno" : string.Join(", ", userPools.Select(p => "«" + Show(p, "FriendlyName") + "»"))));
 
+        // ── Errores que Windows registró (registro Sistema, 7 días): cada evento con su ruta y a qué disco se atribuye
+        lines.Add("  Registro «Sistema» (últimos 7 días; proveedores " + string.Join(", ", DiskEventLog.Providers) + "; eventos " + string.Join(", ", DiskEventLog.EventIds) + "):");
+        try
+        {
+            var (events, ports, why) = DiskEventReader.ReadRaw();
+            lines.Add("    puertos SCSI → disco(s) según Win32_DiskDrive: " + (ports.Count == 0 ? "ninguno" : string.Join(" · ", ports.OrderBy(kv => kv.Key).Select(kv => "RaidPort" + kv.Key + " → [" + string.Join(",", kv.Value) + "]"))));
+            if (why is not null) lines.Add("    " + why);
+            lines.Add("    eventos encontrados: " + events.Count);
+            foreach (var e in events.OrderByDescending(x => x.Time).Take(15))
+            {
+                var one = DiskEventLog.Attribute([e], ports);
+                lines.Add($"      {e.Time:dd/MM HH:mm:ss} {e.Provider} {e.EventId} · «{string.Join(" | ", e.Strings.Take(2))}» → " + (one.Count == 0 ? "sin atribuir" : "disco " + one.Keys.First()));
+            }
+            foreach (var kv in DiskEventLog.Attribute(events, ports).OrderBy(kv => kv.Key)) lines.Add("    disco " + kv.Key + ": " + kv.Value.Summary());
+        }
+        catch (Exception e) { lines.Add("    no se pudo leer (" + e.GetType().Name + ": " + Short(e.Message) + ")"); }
+
         lines.Add("  RESUMEN (una línea por disco):");
         foreach (var s in summary) lines.Add("    " + s);
         lines.Add("Fin del diagnóstico de discos. Pega todo el texto de «Diagnóstico SMART/NVMe por disco» hasta aquí.");

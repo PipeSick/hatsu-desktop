@@ -121,7 +121,7 @@ public sealed class SpeedTestEngine(HttpClient http, Func<long> ticks, long tick
 public enum DiskMedia { Unknown, SSD, HDD }
 
 /// <summary>Datos de salud del disco FÍSICO al que pertenecen. Cada campo es opcional: lo que el dispositivo no entrega queda null y la interfaz lo muestra como no disponible.</summary>
-public sealed record SmartInfo(string? Health, double? TemperatureC, long? PowerOnHours, double? WearPercent, double? TotalReadBytes, double? TotalWrittenBytes, string? Reason = null)
+public sealed record SmartInfo(string? Health, double? TemperatureC, long? PowerOnHours, double? WearPercent, double? TotalReadBytes, double? TotalWrittenBytes, string? Reason = null, DiskIncidents? Incidents = null)
 {
     public static SmartInfo None(string reason) => new(null, null, null, null, null, null, reason);
     public bool HasAny => Health is not null || TemperatureC is not null || PowerOnHours is not null || WearPercent is not null || TotalReadBytes is not null || TotalWrittenBytes is not null;

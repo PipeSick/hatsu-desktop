@@ -223,6 +223,21 @@ public class HubPanelModelTests
     }
 
     [Fact]
+    public void Errors_registered_by_windows_are_shown_for_that_disk_only()
+    {
+        var inc = new DiskIncidents(30, 1, 1, new DateTime(2026, 10, 31, 1, 9, 30));
+        var r = new HubRig(); r.Disks.Catalog = DiskCatalog.Build(
+            [new PhysicalRec(0, "KINGSTON", "SSD", "NVMe", 1000, new SmartInfo("Saludable", null, null, null, null, null, "El disco no respondió a la consulta de salud", inc)), new PhysicalRec(1, "KINGSTON", "SSD", "NVMe", 1000, new SmartInfo("Saludable", 33, 3268, 4, null, null))],
+            [new PartitionRec(0, "D"), new PartitionRec(1, "C")], [new VolumeRec("C:\\", "", "NTFS", 1000, 250, false), new VolumeRec("D:\\", "Juegos", "NTFS", 1000, 100, false)]);
+        r.LoadAll(HubTab.Disks);
+        r.Click("disk:D:"); var m = r.Hub();
+        Assert.Equal("30 errores de E/S · 1 error de la controladora · 1 reinicio de la controladora · último 31/10 01:09", W(m, "smart-events").Sub);
+        Assert.Contains("copia", W(m, "smart-events-why").Text);
+        r.Click("disk:C:"); m = r.Hub();
+        Assert.False(Has(m, "smart-events")); Assert.False(Has(m, "smart-events-why"));   // C: no hereda los errores de D:
+    }
+
+    [Fact]
     public void Smart_data_is_shown_for_the_selected_volumes_own_disk_only_and_missing_fields_say_not_available()
     {
         var r = new HubRig(); r.Disks.Catalog = DiskCatalog.Build(

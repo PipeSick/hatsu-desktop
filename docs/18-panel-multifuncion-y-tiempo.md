@@ -79,3 +79,11 @@ Qué imprime, por cada `\\.\PhysicalDriveN` (WMI, Windows y el propio disco; **s
 - Fiabilidad según WMI (directa y por asociación) y las métricas finales con su **origen** (WMI, propiedad de temperatura o registro NVMe).
 
 Corrección incluida: la propiedad de temperatura se pedía con el número 12 (`StorageDevicePowerProperty`); la correcta es 52 (`StorageDeviceTemperatureProperty`, según winioctl.h). Y un registro NVMe sin ningún dato verosímil se descarta entero (antes podía dar un «0 % usado» inventado).
+
+## Errores que Windows registró de cada disco
+
+En la sección SMART, el panel muestra «Errores (7 días)» con un punto rojo cuando el registro «Sistema» tiene errores de ese disco. Se leen los eventos 7, 51, 153 y 157 de `disk` y los eventos 11 y 129 de `stornvme`, `storahci` y `storport`. Solo lectura y sin administrador; la lectura se guarda 10 minutos.
+
+- Un evento cuenta para un disco solo si su ruta lo nombra. `\Device\HarddiskN\…` es el disco N. `\Device\RaidPortN` es el puerto SCSI N, y se atribuye al disco que `Win32_DiskDrive.SCSIPort` sitúa en ese puerto, solo si es uno. Lo que no se puede atribuir se descarta; nunca se reparte entre discos.
+- Es lo que Windows anotó, no una medida del disco: un disco «Saludable» puede tener errores registrados, y ese es justo el caso que interesa ver.
+- `--selftest-system` lista los eventos con su ruta, el disco al que se atribuye cada uno y el mapa de puertos a discos.
