@@ -29,7 +29,13 @@ internal sealed class CaptureEditor : IDisposable
     private EditTool _tool = EditTool.Arrow; private EditColor _color = EditColor.Red; private float _scale = 1;
     private (float X, float Y)? _from; private (float X, float Y) _cur; private List<(float X, float Y)>? _stroke;
     private (float X, float Y)? _textAt; private string _text = "";
-    private string? _status; private bool _saved, _disposed;
+    private string? _status; private bool _saved, _disposed, _closeArmed, _asking;
+    /// <summary>Runs on the bar's UI thread (results of the Save As dialog).</summary>
+    public Action<Action> PostToUi { get; set; } = a => a();
+    private Action<Action> _post => PostToUi;
+
+    /// <summary>Anything drawn, cropped, undone or redone after the last save counts as unsaved again.</summary>
+    private void Edited() { _saved = false; _closeArmed = false; }
     private readonly List<(string Id, RawRectF Rect)> _buttons = [];
 
     private CaptureEditor(string path, byte[] px, int w, int h, Action<byte[], int, int> copy, Action closed, Action<string> log)
@@ -95,7 +101,9 @@ internal sealed class CaptureEditor : IDisposable
         _ctx.Target = _target;
     }
 
-    private float ToolbarH => 52 * _scale;
+    /// <summary>One row when everything fits; two (file actions on the second) in a narrow window, so no button ever covers another.</summary>
+    private float ToolbarH => (_twoRows ? 96 : 52) * _scale;
+    private bool _twoRows;
     private float StatusH => 26 * _scale;
 
     private EditView View()
@@ -191,20 +199,24 @@ internal sealed class CaptureEditor : IDisposable
 
     private void DrawToolbar(float width)
     {
+        float h = 32 * _scale, need = 10 * _scale + 24 * _scale + EditColor.Palette.Length * 30 * _scale + 20 * _scale;
+        foreach (var (_, label) in ToolButtons.Concat(FileButtons)) { using var m = _dw!.CreateTextLayout(label, _ui!, 1000, h); need += m.Metrics.Width + 30 * _scale; }
+        bool two = need > width;
+        if (two != _twoRows) { _twoRows = two; BarNative.InvalidateRect(_hwnd, IntPtr.Zero, false); }   // the image area moves: draw again
         Brush(0.17f, 0.17f, 0.18f, 1); _ctx!.FillRectangle(new RawRectF(0, 0, width, ToolbarH), _b!);
-        _buttons.Clear(); float x = 10 * _scale, h = 32 * _scale, y = (ToolbarH - h) / 2;
+        _buttons.Clear(); float x = 10 * _scale, rowH = 52 * _scale, y = (rowH - h) / 2;
         foreach (var (id, label) in ToolButtons) x = Button(id, label, x, y, h, ToolOf(id) == _tool, enabled: true) + 4 * _scale;
         x += 10 * _scale;
         for (int i = 0; i < EditColor.Palette.Length; i++)
         {
-            var c = EditColor.Palette[i]; float d = 20 * _scale, cy = ToolbarH / 2;
+            var c = EditColor.Palette[i]; float d = 20 * _scale, cy = rowH / 2;
             var r = new RawRectF(x, cy - d / 2, x + d, cy + d / 2);
             Brush(c); _ctx.FillEllipse(new Ellipse(new Vector2(x + d / 2, cy), d / 2, d / 2), _b!);
             Brush(1, 1, 1, c == _color ? 1f : 0.25f); _ctx.DrawEllipse(new Ellipse(new Vector2(x + d / 2, cy), d / 2 + 2 * _scale, d / 2 + 2 * _scale), _b!, c == _color ? 2 * _scale : 1);
             _buttons.Add(("color" + i, r)); x += d + 10 * _scale;
         }
 
-        float right = width - 10 * _scale;
+        float right = width - 10 * _scale; if (_twoRows) y += 44 * _scale;
         for (int i = FileButtons.Length - 1; i >= 0; i--)
         {
             var (id, label) = FileButtons[i];
@@ -293,7 +305,15 @@ internal sealed class CaptureEditor : IDisposable
     {
         CommitText();
         var suggested = System.IO.Path.GetFileName(EditDocument.EditedPath(_path, File.Exists));
-        if (SaveDialog.Ask(_hwnd, System.IO.Path.GetDirectoryName(_path) ?? "", suggested) is { } chosen) Save(chosen);
+        if (_asking) return;
+        _asking = true; var owner = _hwnd; var folder = System.IO.Path.GetDirectoryName(_path) ?? "";
+        // The dialog runs on its own STA thread: the bar keeps running (a modal dialog on the bar's thread would stop its loop and its heartbeat).
+        var t = new Thread(() =>
+        {
+            var chosen = SaveDialog.Ask(owner, folder, suggested);
+            _post(() => { _asking = false; if (chosen is not null && !_disposed) Save(chosen); });
+        }) { IsBackground = true, Name = "Guardar como" };
+        t.SetApartmentState(ApartmentState.STA); t.Start();
     }
 
     // ───────────────────────────── input
@@ -309,8 +329,8 @@ internal sealed class CaptureEditor : IDisposable
         if (id.StartsWith("color", StringComparison.Ordinal) && int.TryParse(id[5..], out int ci)) { _color = EditColor.Palette[ci]; Render(); return; }
         switch (id)
         {
-            case "undo": CommitText(); _doc.Undo(); break;
-            case "redo": CommitText(); _doc.Redo(); break;
+            case "undo": CommitText(); _doc.Undo(); Edited(); break;
+            case "redo": CommitText(); _doc.Redo(); Edited(); break;
             case "copy": Copy(); return;
             case "save": Save(null); return;
             case "saveas": SaveAs(); return;
@@ -325,7 +345,7 @@ internal sealed class CaptureEditor : IDisposable
 
     private void CommitText()
     {
-        if (_textAt is { } t) _doc.Add(new TextShape(_color, TextSize(), t.X, t.Y, _text));
+        if (_textAt is { } t && !string.IsNullOrWhiteSpace(_text)) { _doc.Add(new TextShape(_color, TextSize(), t.X, t.Y, _text)); Edited(); }
         _textAt = null; _text = "";
     }
 
@@ -344,7 +364,7 @@ internal sealed class CaptureEditor : IDisposable
                 case WM_LBUTTONDOWN:
                 {
                     float vx = (short)((long)l & 0xFFFF), vy = (short)(((long)l >> 16) & 0xFFFF);
-                    var hit = _buttons.FirstOrDefault(b => vx >= b.Rect.Left && vx < b.Rect.Right && vy >= b.Rect.Top && vy < b.Rect.Bottom);
+                    var hit = _buttons.LastOrDefault(b => vx >= b.Rect.Left && vx < b.Rect.Right && vy >= b.Rect.Top && vy < b.Rect.Bottom);
                     if (hit.Id is not null) { Click(hit.Id); return IntPtr.Zero; }
                     if (vy < ToolbarH) return IntPtr.Zero;
                     var p = ImagePoint(l); _cur = p;
@@ -371,7 +391,7 @@ internal sealed class CaptureEditor : IDisposable
                             break;
                     }
 
-                    _from = null; _stroke = null; Render(); return IntPtr.Zero;
+                    _from = null; _stroke = null; Edited(); Render(); return IntPtr.Zero;
                 }
                 case WM_CHAR when _textAt is not null:
                 {
@@ -395,7 +415,8 @@ internal sealed class CaptureEditor : IDisposable
                 }
                 case WM_CLOSE:
                     CommitText();
-                    if (_doc.IsDirty && !_saved && BarNative.MessageBoxW(h, "Hay cambios sin guardar. ¿Cerrar el editor sin guardarlos?\n\nLa captura original no se ha modificado.", "Editar captura", 0x4 | 0x30) != 6) return IntPtr.Zero;
+                    // No modal dialog here: it would stop the bar's loop (and its heartbeat). The first close with unsaved changes only warns; the second discards them.
+                    if (_doc.IsDirty && !_saved && !_closeArmed) { _closeArmed = true; _status = "Hay cambios sin guardar: guarda, o cierra otra vez para descartarlos (el original no cambia)"; Render(); return IntPtr.Zero; }
                     Dispose(); _closed(); return IntPtr.Zero;
             }
         }
