@@ -17,7 +17,8 @@ public sealed record NotchSettings
 
     public static readonly string[] Positions = ["TopCenter", "TopLeft", "TopRight"];
     public static readonly string[] Players = ["Spotify", "Feishin", "Custom"];
-    public static readonly string[] SectionIds = ["music", "agents", "timer", "calendar", "downloads", "notifications", "shelf", "camera", "system", "clipboard"];
+    /// <summary>Mismo orden que NotchWin (NotchSections.AllIds): el Centro de actividades de WinMac 2.0 primero (docs/25).</summary>
+    public static readonly string[] SectionIds = ["activity", "captures", "clipboard", "downloads", "history", "music", "agents", "timer", "calendar", "notifications", "shelf", "camera", "system"];
     private const string CameraId = "camera";   // se abre la webcam: apagada por defecto
 
     public string Position { get; init; } = "TopCenter";

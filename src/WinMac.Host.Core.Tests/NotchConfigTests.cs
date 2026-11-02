@@ -62,7 +62,7 @@ public class NotchSettingsTests
     [Fact]
     public void Move_and_toggle_are_pure_and_safe_at_the_edges()
     {
-        var n = new NotchSettings(); var m = n.MoveSection(0, 1); Assert.Equal("agents", m.Sections[0].Id); Assert.Equal("music", n.Sections[0].Id);   // el original no cambia
+        var n = new NotchSettings(); var m = n.MoveSection(0, 1); Assert.Equal(NotchSettings.SectionIds[1], m.Sections[0].Id); Assert.Equal(NotchSettings.SectionIds[0], n.Sections[0].Id);   // el original no cambia
         Assert.Same(n, n.MoveSection(0, -1)); Assert.Same(n, n.MoveSection(99, 1)); Assert.Same(n, n.ToggleSection(-1));
         Assert.False(n.ToggleSection(0).Sections[0].Enabled);
     }
@@ -71,7 +71,7 @@ public class NotchSettingsTests
     public void The_wire_format_is_camelCase_and_roundtrips_through_a_patch()
     {
         var n = new NotchSettings { GlassLevel = 41, LyricsInPill = true, Position = "TopRight" }.MoveSection(2, -2);
-        string json = JsonSerializer.Serialize(n.ToWire()); Assert.Contains("\"glassLevel\":41", json); Assert.Contains("\"sections\":[{\"id\":\"timer\"", json);
+        string json = JsonSerializer.Serialize(n.ToWire()); Assert.Contains("\"glassLevel\":41", json); Assert.Contains("\"sections\":[{\"id\":\"" + NotchSettings.SectionIds[2] + "\"", json);
         Assert.True(ConfigService.SameNotch(n, new NotchSettings().ApplyPatch(J(json))));
     }
 
