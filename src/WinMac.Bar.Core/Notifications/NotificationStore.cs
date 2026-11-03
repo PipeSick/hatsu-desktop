@@ -79,7 +79,7 @@ public sealed class NotificationStore
             default:
                 if (error is not null)
                 {
-                    _status = NcStatus.Error; _message = "No se pudieron leer las notificaciones de Windows (" + Describe(error) + ")."; _log("[notificaciones] lectura: " + error.GetType().Name + ": " + error.Message);   // el contenido nunca va al registro
+                    _status = NcStatus.Error; _message = "No se pudieron leer las notificaciones de Windows. Se volverá a intentar al abrir el panel."; _log("[notificaciones] lectura: " + error.GetType().Name + ": " + error.Message);   // el contenido nunca va al registro
                     break;
                 }
 
@@ -135,10 +135,40 @@ public sealed class NotificationStore
         var ids = _items.Select(i => i.Id).ToList(); _removing.UnionWith(ids); Raise();
         _bg(() =>
         {
+            // WM-026: Windows' «clear all» can fail (0x80070490, element not found, seen on a real PC). Then each one is removed on its own, and in every case
+            // the truth is what Windows still has afterwards: only what is really gone counts as removed, and nothing technical reaches the user.
             ServiceResult r; try { r = _src.ClearAll(); } catch (Exception e) { r = ServiceResult.Failed(Describe(e)); }
-            _post(() => { _removing.ExceptWith(ids); if (r.IsOk) _items = _items.Where(i => !ids.Contains(i.Id)).ToList(); else _notice = "Windows no pudo borrar las notificaciones: " + (r.Message ?? "motivo desconocido"); Raise(); Refresh(); });
+            if (!r.IsOk)
+            {
+                _log("[notificaciones] borrar todo falló (" + r.Message + "): se borran una a una");
+                foreach (var id in ids) { try { var one = _src.Remove(id); if (!one.IsOk) _log("[notificaciones] borrar una falló (" + one.Message + ")"); } catch (Exception e) { _log("[notificaciones] borrar una: " + Describe(e)); } }
+            }
+
+            var left = StillThere(ids);
+            _post(() =>
+            {
+                _removing.ExceptWith(ids);
+                if (left is null) { _notice = r.IsOk ? null : "No se pudo comprobar el centro de notificaciones de Windows. Vuelve a abrir el panel."; if (r.IsOk) _items = _items.Where(i => !ids.Contains(i.Id)).ToList(); }
+                else
+                {
+                    _items = _items.Where(i => !ids.Contains(i.Id) || left.Contains(i.Id)).ToList();
+                    _notice = left.Count == 0 ? null : Remaining(left.Count);
+                }
+
+                Raise(); Refresh();
+            });
         });
     }
+
+    /// <summary>Ids of <paramref name="ids"/> that Windows still has (re-read after an operation); null if Windows could not be read.</summary>
+    private HashSet<uint>? StillThere(IReadOnlyCollection<uint> ids)
+    {
+        try { var now = _src!.Read().Select(n => n.Id).ToHashSet(); now.IntersectWith(ids); return now; }
+        catch (Exception e) { _log("[notificaciones] relectura tras borrar: " + Describe(e)); return null; }
+    }
+
+    private static string Remaining(int n) => (n == 1 ? "Windows no permitió borrar 1 notificación." : $"Windows no permitió borrar {n} notificaciones.")
+        + " Puedes quitarla" + (n == 1 ? "" : "s") + " desde el centro de notificaciones de Windows (Win+N).";
 
     private void RemoveFromWindows(IReadOnlyList<uint> ids)
     {
@@ -146,18 +176,21 @@ public sealed class NotificationStore
         _removing.UnionWith(ids); Raise();   // se ve al instante; si Windows lo rechaza, vuelve
         _bg(() =>
         {
-            var failed = new List<(uint Id, string Why)>();
+            int failures = 0;
             foreach (var id in ids)
             {
                 ServiceResult r; try { r = _src.Remove(id); } catch (Exception e) { r = ServiceResult.Failed(Describe(e)); }
-                if (!r.IsOk) failed.Add((id, r.Message ?? "motivo desconocido"));
+                if (!r.IsOk) { failures++; _log("[notificaciones] borrar una falló (" + r.Message + ")"); }
             }
 
+            // «element not found» usually means it was already gone (dismissed in Windows, expired): what counts is whether it is still there
+            var left = failures == 0 ? new HashSet<uint>() : StillThere(ids);
             _post(() =>
             {
-                _removing.ExceptWith(ids); var gone = ids.Except(failed.Select(f => f.Id)).ToHashSet();
-                _items = _items.Where(i => !gone.Contains(i.Id)).ToList();
-                if (failed.Count > 0) _notice = "Windows no pudo eliminar " + (failed.Count == 1 ? "la notificación" : failed.Count + " notificaciones") + ": " + failed[0].Why;
+                _removing.ExceptWith(ids);
+                if (left is null) { _notice = "No se pudo comprobar si Windows borró la notificación."; Raise(); return; }
+                _items = _items.Where(i => !ids.Contains(i.Id) || left.Contains(i.Id)).ToList();
+                _notice = left.Count == 0 ? null : Remaining(left.Count);
                 Raise();
             });
         });

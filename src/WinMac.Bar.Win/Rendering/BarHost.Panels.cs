@@ -262,7 +262,7 @@ public sealed partial class BarHost : IPanelUi
     void IPanelUi.ShowInfo(string title, string? text) => ShowInfo(title, text);
     void IPanelUi.OpenUri(string uri) => BarNative.ShellExecuteW(IntPtr.Zero, "open", uri, null, null, 1);
     void IPanelUi.TabChanged(HubTab tab) { _hubTicks = 0; _lastHubTick = DateTime.UtcNow; RefreshHubTab(first: true); }
-    bool IPanelUi.Confirm(string title, string text) => Confirm(title, text);
+    bool IPanelUi.Confirm(string title, string text, string action, bool danger) => Confirm(title, text, action, danger);
 
     void IPanelUi.OpenSettings(string? section)
     {
@@ -309,16 +309,22 @@ public sealed partial class BarHost : IPanelUi
     }
 
     // ───────────────────────────── cuadros de diálogo propios
-    private void ShowInfo(string title, string? text) { if (string.IsNullOrWhiteSpace(text)) return; ModalBox(title, text!, 0x40 /* ICONINFORMATION | OK */); }
-
-    private bool Confirm(string title, string text) => ModalBox(title, text, 0x4 | 0x30 | 0x100) == 6;   // YESNO | ICONWARNING | DEFBUTTON2 (por defecto «No»)
-
-    private int ModalBox(string title, string text, uint flags)
+    private void ShowInfo(string title, string? text)
     {
+        if (string.IsNullOrWhiteSpace(text)) return;
         if (_popover is not null) _popover.KeepOpen = true; _modal = true;
-        try { return BarNative.MessageBoxW(_actionSource?.Hwnd ?? (_wins.Count > 0 ? _wins[0].Hwnd : IntPtr.Zero), text, title, flags | 0x40000 /* TOPMOST */ | 0x10000 /* SETFOREGROUND */); }
+        try { WinMac.Dock.Win.Rendering.DarkDialog.Tell(title, text!, _log); }   // WM-024: WinMac's own dialog, not the white MessageBox
         finally { _modal = false; if (_popover is not null) _popover.KeepOpen = false; }
     }
+
+    /// <summary>WM-024: WinMac's own dark dialog (Cancelar by default) instead of the white MessageBox; same modal guard as before so the host does not think the bar hung.</summary>
+    private bool Confirm(string title, string text, string action = "Continuar", bool danger = false)
+    {
+        if (_popover is not null) _popover.KeepOpen = true; _modal = true;
+        try { return WinMac.Dock.Win.Rendering.DarkDialog.Ask(title, text, action, danger, _log); }
+        finally { _modal = false; if (_popover is not null) _popover.KeepOpen = false; }
+    }
+
 
     // ───────────────────────────── menú Apple
     private IntPtr _appleReturn;
@@ -360,7 +366,7 @@ public sealed partial class BarHost : IPanelUi
     private void RunSystemAction(SystemActionKind k, string? appName)
     {
         var info = SystemActions.Get(k);
-        if (SystemActions.NeedsConfirmation(k, _cfg.ConfirmDestructive) && !Confirm(info.ConfirmTitle ?? info.Label, string.Format(info.ConfirmText ?? "¿Continuar?", appName ?? "la app activa"))) return;
+        if (SystemActions.NeedsConfirmation(k, _cfg.ConfirmDestructive) && !Confirm(info.ConfirmTitle ?? info.Label, string.Format(info.ConfirmText ?? "¿Continuar?", appName ?? "la app activa"), info.Label.TrimEnd('…', '.'), danger: true)) return;
         _hub.Run(() => _hub.Services.Session.Run(k), r => { if (!r.IsOk) ShowInfo(info.Label, r.Message); });
     }
 

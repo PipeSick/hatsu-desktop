@@ -28,7 +28,8 @@ public interface IPanelUi
     void ShowChoices(string title, IReadOnlyList<Choice> choices, Action<string> onPick);
     /// <summary>Cambia un ajuste central (parche JSON camelCase), que el host guarda y reparte.</summary>
     void PatchConfig(object patch);
-    bool Confirm(string title, string text);
+    /// <param name="action">Label of the confirming button (WM-024); <paramref name="danger"/> paints it red. «Cancelar» is always the default.</param>
+    bool Confirm(string title, string text, string action = "Continuar", bool danger = false);
 }
 
 /// <summary>
@@ -118,7 +119,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
             case "nc:retry": nc?.Refresh(); return true;
             case "nc:clearall":
                 if (nc is null) return true;
-                if (win && !ui.Confirm("Borrar todas las notificaciones", "Se eliminarán de WinMac y también del centro de notificaciones de Windows. ¿Continuar?")) return true;
+                if (win && !ui.Confirm("¿Eliminar todas las notificaciones?", "Cuando Windows lo permita, también se eliminarán de su centro de notificaciones. No se puede deshacer.", "Eliminar notificaciones", danger: true)) return true;
                 nc.ClearAll(win); return true;
         }
 
@@ -170,7 +171,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
 
             case "speedtest":
                 if (rt is null || !rt.Speed.Available) { SetMessage("La prueba de velocidad no está disponible en este equipo"); ui.Rebuild(); return true; }
-                if (!ui.Confirm("Prueba de velocidad", "La prueba consume datos: descarga hasta 25 MB y sube hasta 8 MB con tu conexión. ¿Ejecutarla ahora?")) return true;   // nunca arranca sola ni sin confirmar
+                if (!ui.Confirm("Prueba de velocidad", "La prueba consume datos: descarga hasta 25 MB y sube hasta 8 MB con tu conexión.", "Ejecutar la prueba")) return true;   // nunca arranca sola ni sin confirmar
                 rt.Speed.Start(); ui.Rebuild(); return true;
             case "speedtest-cancel": rt?.Speed.Cancel(); return true;
             case "weather:refresh": rt?.Weather.Refresh(force: true); ui.Rebuild(); return true;

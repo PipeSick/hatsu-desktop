@@ -155,7 +155,7 @@ public class NotificationStoreTests
         Assert.Contains(r.Panel().Widgets, w => w.Id == "notifications");   // queda el centro de Windows, que sí funciona
 
         var e = new NcRig(); e.Src.Items.Add(NcRig.N(1, "Mail", 0)); e.Open(); e.Src.ReadThrows = new TimeoutException("sin respuesta"); e.Store.Refresh(); e.Pump();
-        Assert.Equal(NcStatus.Error, e.Store.State.Status); Assert.Equal(1, e.Store.State.Count); Assert.Contains("sin respuesta", e.Store.State.Message);
+        Assert.Equal(NcStatus.Error, e.Store.State.Status); Assert.Equal(1, e.Store.State.Count); Assert.DoesNotContain("sin respuesta", e.Store.State.Message); Assert.Contains(e.Log, l => l.Contains("sin respuesta"));   // WM-026: the technical detail goes to the log, not to the user
         Assert.DoesNotContain(e.Log, l => l.Contains("Título") || l.Contains("Texto"));   // el contenido de las notificaciones nunca va al registro
         var first = new NcRig(); first.Src.ReadThrows = new TimeoutException("x"); first.Open(); Assert.Contains(first.Panel().Widgets, w => w.Id == "nc:retry");
     }
@@ -178,8 +178,9 @@ public class NotificationStoreTests
     {
         var r = new NcRig(); r.Src.Items.Add(NcRig.N(1, "Mail", 1)); r.Open(); r.Src.RemoveResult = ServiceResult.Failed("acceso denegado");
         r.Store.Dismiss(1, fromWindows: true); Assert.Equal(0, r.Store.State.Count);   // se ve al instante…
-        r.Pump(); Assert.Equal(1, r.Store.State.Count); Assert.Contains("acceso denegado", r.Store.State.Message);   // …y vuelve si Windows no la quitó
-        r.Store.Refresh(); r.Pump(); Assert.Contains("acceso denegado", r.Store.State.Message);   // el motivo no desaparece con la relectura
+        r.Pump(); Assert.Equal(1, r.Store.State.Count); Assert.Contains("Windows no permitió borrar 1 notificación", r.Store.State.Message);   // …y vuelve si Windows no la quitó
+        Assert.DoesNotContain("acceso denegado", r.Store.State.Message); Assert.Contains(r.Log, l => l.Contains("acceso denegado"));   // detail in the log only
+        r.Store.Refresh(); r.Pump(); Assert.Contains("no permitió", r.Store.State.Message);   // el motivo no desaparece con la relectura
     }
 
     [Fact]
@@ -189,6 +190,7 @@ public class NotificationStoreTests
         r.Click("ngclear:Mail"); Assert.Equal([1u, 2u], r.Src.Removed.Order()); Assert.Equal(["Teams"], r.Store.State.Groups.Select(g => g.AppName));
         r.Base.Ui.ConfirmAnswer = false; r.Click("nc:clearall"); Assert.Equal(0, r.Src.Clears); Assert.Single(r.Base.Ui.Confirms);   // borrar en Windows pide confirmación
         r.Base.Ui.ConfirmAnswer = true; r.Click("nc:clearall"); Assert.Equal(1, r.Src.Clears); Assert.Equal(0, r.Store.State.Count);
+        Assert.Equal("Eliminar notificaciones", r.Base.Ui.LastConfirmAction);   // WM-024: the button says what it does (Cancelar is the default)
         Assert.Contains(r.Panel().Widgets, w => w.Id == "nc-empty");
 
         var h = new NcRig(new BarConfig { NotifRemoveFromWindows = false }); h.Src.Items.AddRange([NcRig.N(1, "Mail", 1), NcRig.N(2, "Teams", 3)]); h.Open();
@@ -360,5 +362,38 @@ public class NotificationLimitWm012Tests
 
         var big = new NcRig(); big.Src.Items.AddRange(Enumerable.Range(1, 60).Select(i => NcRig.N((uint)i, "App" + i, i))); big.Open();
         Assert.Equal(60, big.Panel().Widgets.Count(w => w.Kind == WidgetKind.NotifCard));   // no arbitrary cap at a handful
+    }
+}
+
+public class NotificationDeleteWm026Tests
+{
+    [Fact]
+    public void Clear_all_failing_with_element_not_found_falls_back_to_one_by_one_and_trusts_what_windows_still_has()
+    {
+        var r = new NcRig(); r.Src.Items.AddRange([NcRig.N(1, "Mail", 1), NcRig.N(2, "Teams", 2)]); r.Open();
+        r.Src.ClearResult = ServiceResult.Failed("COMException, 0x80070490");   // what the beta showed
+        r.Base.Ui.ConfirmAnswer = true; r.Click("nc:clearall");
+        Assert.Equal(1, r.Src.Clears); Assert.Equal([1u, 2u], r.Src.Removed.Order());   // fallback: one by one
+        Assert.Equal(0, r.Store.State.Count); Assert.Null(r.Store.State.Message);   // all gone: no error shown
+        Assert.Contains(r.Log, l => l.Contains("0x80070490"));                         // the code stays in the log
+    }
+
+    [Fact]
+    public void When_windows_keeps_some_the_ui_says_how_many_and_keeps_them()
+    {
+        var r = new NcRig(); r.Src.Items.AddRange([NcRig.N(1, "Mail", 1), NcRig.N(2, "Teams", 2)]); r.Open();
+        r.Src.ClearResult = ServiceResult.Failed("COMException, 0x80070490"); r.Src.RemoveResult = ServiceResult.Failed("COMException, 0x80070005");
+        r.Base.Ui.ConfirmAnswer = true; r.Click("nc:clearall");
+        Assert.Equal(2, r.Store.State.Count);                                            // nothing pretends to be deleted
+        Assert.Contains("Windows no permitió borrar 2 notificaciones", r.Store.State.Message); Assert.DoesNotContain("COMException", r.Store.State.Message);
+    }
+
+    [Fact]
+    public void Removing_one_that_windows_already_dropped_is_not_an_error()
+    {
+        var r = new NcRig(); r.Src.Items.Add(NcRig.N(1, "Mail", 1)); r.Open();
+        r.Src.Items.Clear(); r.Src.RemoveResult = ServiceResult.Failed("COMException, 0x80070490");   // dismissed in Windows meanwhile
+        r.Store.Dismiss(1, fromWindows: true); r.Pump();
+        Assert.Equal(0, r.Store.State.Count); Assert.Null(r.Store.State.Message);
     }
 }
