@@ -47,10 +47,23 @@ internal sealed class DarkMenuWindow
         foreach (var f in new[] { _body, _head }) { f.WordWrapping = WordWrapping.NoWrap; f.ParagraphAlignment = ParagraphAlignment.Center; }
         Surface();
         ShowWindow(_hwnd, 5); SetForegroundWindow(_hwnd); Render();
+        // If Windows does not give the menu the foreground, it never receives WM_ACTIVATE and a click elsewhere would leave it open (and the Dock waiting):
+        // a 50 ms timer also closes it when a mouse button goes down outside it, as any menu does.
+        SetTimer(_hwnd, (UIntPtr)1, 50, IntPtr.Zero);
+        bool wasDown = (GetAsyncKeyState(0x01) & 0x8000) != 0 || (GetAsyncKeyState(0x02) & 0x8000) != 0;
         while (!_done && GetMessageW(out var msg, IntPtr.Zero, 0, 0) > 0)
         {
+            if (msg.message == 0x113 /* WM_TIMER */ && msg.hwnd == _hwnd)
+            {
+                bool down = (GetAsyncKeyState(0x01) & 0x8000) != 0 || (GetAsyncKeyState(0x02) & 0x8000) != 0;
+                if (down && !wasDown && GetCursorPos(out var cp) && WindowFromPoint(cp) != _hwnd) _done = true;
+                wasDown = down; continue;
+            }
+
             TranslateMessage(ref msg); DispatchMessageW(ref msg);
         }
+
+        KillTimer(_hwnd, (UIntPtr)1);
 
         return _result;
     }
@@ -165,6 +178,11 @@ internal sealed class DarkMenuWindow
     [DllImport("user32.dll")] private static extern bool ValidateRect(IntPtr h, IntPtr r);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint f);
     [DllImport("user32.dll")] private static extern IntPtr LoadCursorW(IntPtr inst, IntPtr id);
+    [DllImport("user32.dll")] private static extern UIntPtr SetTimer(IntPtr h, UIntPtr id, uint ms, IntPtr fn);
+    [DllImport("user32.dll")] private static extern bool KillTimer(IntPtr h, UIntPtr id);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(POINT p);
     [DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(POINT p, uint flags);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool GetMonitorInfoW(IntPtr m, ref MONITORINFO mi);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr GetModuleHandle(string? name);
