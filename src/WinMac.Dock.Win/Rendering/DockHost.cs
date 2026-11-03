@@ -310,6 +310,7 @@ public sealed class DockHost : IDisposable
             case WM_NCHITTEST:
             {
                 int x = (short)((long)l & 0xFFFF), y = (short)(((long)l >> 16) & 0xFFFF);
+                if (MenuDiag && (Native2.GetKeyState(0x02) & 0x8000) != 0) _log($"[dock] diag ratón derecho en {x},{y}: {(InteractiveAt((x - _winLeftPx) / _scale, (y - _winTopPx) / _scale) ? "interactivo" : "transparente")} (ventana en {_winLeftPx},{_winTopPx})");
                 return InteractiveAt((x - _winLeftPx) / _scale, (y - _winTopPx) / _scale) ? (IntPtr)1 : (IntPtr)(-1); // HTCLIENT / HTTRANSPARENT: el resto deja pasar el ratón
             }
             case WM_LBUTTONDOWN:
@@ -350,7 +351,7 @@ public sealed class DockHost : IDisposable
             }
             case WM_RBUTTONUP:
             {
-                if (MenuDiag) _log($"[dock] clic derecho en {(short)((long)l & 0xFFFF)},{(short)(((long)l >> 16) & 0xFFFF)} (cliente)");
+                _log($"[dock] clic derecho en {(short)((long)l & 0xFFFF)},{(short)(((long)l >> 16) & 0xFFFF)} (cliente)");
                 if (_view is null || _ctl.PreviewContains((short)((long)l & 0xFFFF) / _scale, (short)(((long)l >> 16) & 0xFFFF) / _scale)) return IntPtr.Zero;
                 _ctl.DismissPreview();
                 int hit = HitIndex((short)((long)l & 0xFFFF) / _scale);
@@ -439,9 +440,9 @@ public sealed class DockHost : IDisposable
         try
         {
             Native.GetCursorPos(out var cp); _modal = true;
-            if (MenuDiag) _log($"[dock] menú oscuro: abriendo en {cp.X},{cp.Y} ({entries.Count} entradas)");
+            _log($"[dock] menú oscuro: abriendo en {cp.X},{cp.Y} ({entries.Count} entradas)");
             var r = DarkMenuWindow.Show(entries, cp.X, cp.Y, _scale, _log);
-            if (MenuDiag) _log("[dock] menú oscuro: " + (r is null ? "cerrado sin elegir" : "eligió " + r.Kind));
+            _log("[dock] menú oscuro: " + (r is null ? "cerrado sin elegir" : "eligió " + r.Kind));
             return r;
         }
         catch (Exception e) { _log("Menú oscuro no disponible, se usa el de Windows: " + e.GetType().Name + ": " + e.Message); }
