@@ -438,6 +438,7 @@ public sealed class DockHost : IDisposable
         try
         {
             Native.GetCursorPos(out var cp); _modal = true;
+            if (MenuDiag) _log($"[dock] menú oscuro: abriendo en {cp.X},{cp.Y} ({entries.Count} entradas)");
             var r = DarkMenuWindow.Show(entries, cp.X, cp.Y, _scale, _log);
             if (MenuDiag) _log("[dock] menú oscuro: " + (r is null ? "cerrado sin elegir" : "eligió " + r.Kind));
             return r;

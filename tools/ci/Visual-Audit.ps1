@@ -235,7 +235,7 @@ if (WaitFor { LogHas $barLog '[quicklook] miniatura' } 6) {
     if (WaitFor { LogHas $barLog '[quicklook] vista previa abierta' } 6) {
       Start-Sleep -Milliseconds 600; Shot '32d-quicklook-vista-previa' 'Quick Look: vista previa centrada con Copiar, Editar, Anotar, Recortar, Compartir, Guardar como, Abrir y Eliminar'
       $c = [regex]::Match((BarLine '[quicklook] diag close@'), 'copy@(\d+),(\d+)')
-      if ($c.Success) { [Au]::Click([int]$c.Groups[1].Value, [int]$c.Groups[2].Value); Start-Sleep -Milliseconds 700; $img = Get-Clipboard -Format Image -ErrorAction SilentlyContinue; Note "  - Copiar: $(if ($img) { "imagen en el portapapeles ($($img.Width)x$($img.Height))" } else { 'NO hay imagen en el portapapeles' })"; Shot '32e-quicklook-copiada' 'Quick Look tras «Copiar» (aviso en la vista previa)' }
+      if ($c.Success) { [Au]::Click([int]$c.Groups[1].Value, [int]$c.Groups[2].Value); Start-Sleep -Milliseconds 700; $img = (& powershell.exe -NoProfile -STA -Command "Add-Type -AssemblyName System.Windows.Forms; `$i = [Windows.Forms.Clipboard]::GetImage(); if (`$i) { '{0}x{1}' -f `$i.Width, `$i.Height }" | Out-String).Trim(); Note "  - Copiar: $(if ($img) { "imagen en el portapapeles ($img)" } else { 'NO hay imagen en el portapapeles' })";   # pwsh 7 no lee imágenes del portapapeles: se pregunta a Windows PowerShell (STA) Shot '32e-quicklook-copiada' 'Quick Look tras «Copiar» (aviso en la vista previa)' }
       [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 600
       Note "  - Esc cierra la vista previa: $(-not [Au]::Visible('WinMacQuickLook'))"
     } else { Note '  - la vista previa NO se abrió con el clic' }
@@ -277,13 +277,17 @@ $dkr = [Au]::RectOf('WinMacDock')
 if ($dkr -match '^(-?\d+),(-?\d+) (\d+)x(\d+)') {
   $dx = [int]$Matches[1] + [int]([int]$Matches[3] * 0.28); $dy = [int]$Matches[2] + [int]$Matches[4] - 48
   [Au]::SetCursorPos($dx, $dy) | Out-Null; Start-Sleep -Milliseconds 300
-  [Au]::mouse_event(8, 0, 0, 0, [IntPtr]::Zero); [Au]::mouse_event(16, 0, 0, 0, [IntPtr]::Zero)   # RIGHTDOWN / RIGHTUP
+  [Au]::mouse_event(8, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 90; [Au]::mouse_event(16, 0, 0, 0, [IntPtr]::Zero)   # RIGHTDOWN / RIGHTUP
   if (WaitFor { [Au]::Visible('WinMacDockMenu') } 4) {
     Start-Sleep -Milliseconds 400; Note "  - WM-017: menú oscuro del Dock abierto ($([Au]::RectOf('WinMacDockMenu')))"
     Shot '32f-dock-menu-oscuro' 'WM-017: menú contextual del Dock con el estilo oscuro de WinMac (mismas acciones que antes)'
     [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 400
     Note "  - WM-017: Esc lo cierra: $(-not [Au]::Visible('WinMacDockMenu'))"
-  } else { Note '  - WM-017: el menú del Dock NO apareció con el clic derecho' }
+  } else {
+    Note "  - WM-017: el menú del Dock NO apareció con el clic derecho en $dx,$dy (menú nativo visible: $([Au]::Visible('#32768')))"
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+    if (Test-Path $dockLog) { Get-Content $dockLog -Tail 8 | ForEach-Object { Note ('    dock.log> ' + $_) } }
+  }
 }
 Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 1500
