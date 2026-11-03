@@ -52,6 +52,7 @@ public static class SettingsBuilder
         ("captureHotkeys", "Atajos Ctrl+Mayús+3 / 4 / 5", b => b.CaptureHotkeys),
         ("captureCopyToClipboard", "Copiar también al portapapeles", b => b.CaptureCopyToClipboard),
         ("captureQuickLook", "Miniatura flotante al guardar", b => b.CaptureQuickLook),
+        ("soundMixer", "Mezclador en el menú Sonido", b => b.SoundMixer),
     ];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];
@@ -139,6 +140,7 @@ public static class SettingsBuilder
                 Bar(11),
                 Bar(12, "Solo para apps con menú de Windows o accesible; los menús originales siguen en la app"),
             ]),
+            new("Sonido", [Bar(34, "Micrófono y volumen de cada aplicación en el mismo menú del icono de volumen. Desactivado, no se leen ni el micrófono ni las apps")]),
             new("Centro de control", [Bar(13), Bar(14), Bar(15), Bar(16), Bar(17), Bar(18), Bar(19), Bar(20)], "Qué controles aparecen en el panel de la Barra."),
             new("Panel de WinMac", [
                 Bar(21),

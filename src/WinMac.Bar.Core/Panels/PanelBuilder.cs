@@ -203,10 +203,17 @@ public static partial class PanelBuilder
         return new PanelModel(PanelKind.Bluetooth, "Bluetooth", w);
     }
 
+    /// <summary>
+    /// Menú Sonido del icono de volumen (iteración 4: mezclador). Orden: volumen general con %, silencio, salida predeterminada, entrada predeterminada,
+    /// volumen por aplicación (sesiones reales de Windows: icono, nombre, deslizador, %, silencio y actividad) y ajustes avanzados de Windows.
+    /// La salida POR APLICACIÓN no tiene API pública en Windows: no se ofrece un selector que lo aparente; se abre el mezclador de Windows, que sí la tiene.
+    /// Con <see cref="BarConfig.SoundMixer"/> desactivado queda el menú de antes (volumen y salida). El centro se desplaza si no cabe: la cabecera y los ajustes quedan fijos.
+    /// </summary>
     public static PanelModel SoundPanel(PanelContext c)
     {
         var s = c.Sys.Audio; var w = new List<Widget> { Back("Sonido") };
-        w.Add(new Widget(WidgetKind.Slider, "volume", "Volumen", Value: s.Volume, Enabled: s.Available, Reason: s.Reason, Glyph: s.Muted ? "sound-muted" : "sound"));
+        bool mixer = c.Cfg.SoundMixer;
+        w.Add(new Widget(WidgetKind.Slider, "volume", "Volumen", Sub: mixer && s.Available ? $"{s.Volume} %" : null, Value: s.Volume, Enabled: s.Available, Reason: s.Reason, Glyph: s.Muted ? "sound-muted" : "sound"));
         if (s.Available)
         {
             w.Add(new Widget(WidgetKind.Row, "mute", "Silenciar", s.Muted ? "Silenciado" : "Con sonido", On: s.Muted));
@@ -217,10 +224,37 @@ public static partial class PanelBuilder
             if (c.Sys.CanRestoreOutput) w.Add(new Widget(WidgetKind.Button, "audio-restore", "Volver a la salida anterior"));
         }
 
+        if (mixer)
+        {
+            var mic = c.Sys.Mic;
+            w.Add(new Widget(WidgetKind.Header, "inputs", "Entrada", Glyph: "section"));
+            if (!mic.Available) w.Add(new Widget(WidgetKind.Note, "in-none", mic.Reason ?? "No hay micrófono disponible."));
+            else
+            {
+                bool inSwitch = c.Sys.OutputSwitchOk;   // el mismo mecanismo (IPolicyConfig) cambia la entrada: si no está, tampoco se aparenta
+                foreach (var d in mic.Devices) w.Add(new Widget(WidgetKind.Row, "in:" + d.Id, d.Name, BusyOr(c, "in:" + d.Id, d.IsDefault ? "Predeterminada" : inSwitch ? "Toca para usar esta entrada" : null), On: d.IsDefault, Enabled: inSwitch || d.IsDefault, Glyph: d.IsDefault ? "check" : null));
+                if (mic.Devices.Count == 0) w.Add(new Widget(WidgetKind.Note, "in-none", "No hay micrófonos activos."));
+                w.Add(new Widget(WidgetKind.Slider, "mic", "", Sub: mic.VolumeControllable ? $"{mic.Volume} %" : null, Value: mic.Volume, Enabled: mic.VolumeControllable, Reason: mic.VolumeControllable ? null : mic.Reason,
+                    Glyph: mic.Muted ? "mic-muted" : "mic", Data: "mic-mute"));
+            }
+
+            var ses = c.Sys.AppSessions;
+            w.Add(new Widget(WidgetKind.Header, "apps", "Por aplicación", Glyph: "section"));
+            if (!ses.Available) w.Add(new Widget(WidgetKind.Note, "apps-none", ses.Reason ?? "No se pudieron leer las aplicaciones con audio."));
+            else if (ses.Sessions.Count == 0) w.Add(new Widget(WidgetKind.Note, "apps-none", "Ninguna aplicación tiene sesión de audio ahora."));
+            else foreach (var app in ses.Sessions.Take(MixerMaxApps)) w.Add(new Widget(WidgetKind.AppRow, app.Id, app.Name, Value: app.Volume, Data: new AppRowData(app.ExePath, app.Name, app.Volume, app.Muted, app.Active)));
+            w.Add(new Widget(WidgetKind.Note, "app-output", "Windows no ofrece una API pública para elegir la salida de cada aplicación; se hace en su mezclador."));
+        }
+
         Msg(w, c);
-        w.Add(new Widget(WidgetKind.Button, "open:ms-settings:sound", "Abrir configuración de sonido…"));
-        return new PanelModel(PanelKind.Sound, "Sonido", w);
+        int pinBottom = 1;
+        if (mixer) { w.Add(new Widget(WidgetKind.Button, "open:ms-settings:apps-volume", "Salida por aplicación (mezclador de Windows)…")); pinBottom++; }
+        w.Add(new Widget(WidgetKind.Button, "open:ms-settings:sound", "Configuración de sonido de Windows…"));
+        return new PanelModel(PanelKind.Sound, "Sonido", w, PinTop: 1, PinBottom: pinBottom);
     }
+
+    /// <summary>Aplicaciones como máximo en el mezclador del menú Sonido (el resto, en el mezclador de Windows).</summary>
+    public const int MixerMaxApps = 12;
 
     /// <summary>
     /// WM-027 (on WM-010's real data): a hero with the percentage, state, level bar and charge power; health cards (health, full-charge and design capacity);

@@ -138,7 +138,8 @@ public sealed partial class BarHost : IPanelUi
         {
             case PanelKind.Wifi: _hub.RefreshWifi(scan: _panelTicks % 2 == 0); break;   // el escaneo de Windows se pide cada ~5 s
             case PanelKind.Bluetooth: _hub.RefreshBluetooth(true); break;
-            case PanelKind.Sound or PanelKind.ControlCenter or PanelKind.AppleMenu: _hub.RefreshAudio(); break;
+            case PanelKind.Sound: _hub.RefreshAudio(); if (_cfg.SoundMixer) { _hub.RefreshInput(); _hub.RefreshSessions(); } break;   // mezclador: micrófono y apps solo con el menú abierto
+            case PanelKind.ControlCenter or PanelKind.AppleMenu: _hub.RefreshAudio(); break;
             case PanelKind.Battery: _battery = SystemProviders.Battery(); _hub.RefreshSlow(); if (_panelTicks % 8 == 0) ReadBatteryDetails(); break;
         }
 
@@ -203,6 +204,7 @@ public sealed partial class BarHost : IPanelUi
         if (kind == PanelKind.Weather) { _weather.Refresh(); return; }
         if (kind == PanelKind.Hub) { _hubMon.StartSession(); _hubTicks = 0; _lastHubTick = DateTime.UtcNow; RefreshHubTab(first: true); return; }
         _hub.RefreshAudio();
+        if (kind == PanelKind.Sound && _cfg.SoundMixer) { _hub.RefreshInput(); _hub.RefreshSessions(); }
         if (kind is PanelKind.ControlCenter or PanelKind.Wifi) _hub.RefreshWifi(scan: true);
         if (kind is PanelKind.ControlCenter or PanelKind.Bluetooth) _hub.RefreshBluetooth(true);
         if (kind is PanelKind.ControlCenter or PanelKind.Sound or PanelKind.Battery) _hub.RefreshSlow();

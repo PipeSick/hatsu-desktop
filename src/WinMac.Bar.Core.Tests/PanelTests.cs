@@ -260,6 +260,55 @@ public class PanelBuilderTests
     }
 
     [Fact]
+    public void The_sound_menu_is_a_mixer_in_the_requested_order_with_real_sessions_only()
+    {
+        var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos", false) };
+        var mics = new List<AudioDevice> { new("m1", "Micrófono interno", true), new("m2", "USB", false) };
+        var apps = new List<AudioSession> { new("s1", 10, "Spotify", null, 80, false, false, true), new("s2", 11, "Discord", null, 40, true, false, false) };
+        var sys = Nothing with { Audio = new AudioState(true, 35, false, outs), OutputSwitchOk = true, Input = new AudioInputState(true, 60, false, true, mics), Sessions = new AudioSessionsState(true, apps) };
+        var m = PanelBuilder.SoundPanel(Ctx(sys));
+        var ids = m.Widgets.Select(w => w.Id).ToList();
+        int I(string id) => ids.IndexOf(id);
+        Assert.True(I("volume") < I("outputs") && I("outputs") < I("inputs") && I("inputs") < I("apps") && I("apps") < I("open:ms-settings:apps-volume") && I("open:ms-settings:apps-volume") < I("open:ms-settings:sound"));
+        Assert.Equal("35 %", m.Widgets.Single(w => w.Id == "volume").Sub);
+        Assert.True(m.Widgets.Single(w => w.Id == "in:m2").Enabled); Assert.True(m.Widgets.Single(w => w.Id == "in:m1").On);
+        Assert.Equal("60 %", m.Widgets.Single(w => w.Id == "mic").Sub); Assert.Equal("mic-mute", m.Widgets.Single(w => w.Id == "mic").Data);
+        var rows = m.Widgets.Where(w => w.Kind == WidgetKind.AppRow).ToList();
+        Assert.Equal(["s1", "s2"], rows.Select(r => r.Id)); Assert.True(((AppRowData)rows[1].Data!).Muted); Assert.False(((AppRowData)rows[1].Data!).Active);
+        Assert.Contains(m.Widgets, w => w.Id == "app-output");   // la salida por aplicación no se aparenta: se explica y se abre el mezclador de Windows
+        Assert.DoesNotContain(m.Widgets, w => w.Id.StartsWith("appout:"));
+        Assert.Equal(1, m.PinTop); Assert.Equal(2, m.PinBottom);
+        var f = PanelLayout.Compute(m, maxHeight: 360);   // pantalla baja: la cabecera y los ajustes quedan fijos, el centro se desplaza
+        Assert.NotNull(f.View); Assert.True(f.Height <= 360.5);
+    }
+
+    [Fact]
+    public void The_sound_mixer_says_why_when_there_are_no_apps_or_microphone_and_can_be_turned_off()
+    {
+        var outs = new List<AudioDevice> { new("a", "Altavoces", true) };
+        var sys = Nothing with { Audio = new AudioState(true, 35, false, outs), OutputSwitchOk = false, Input = AudioInputState.None("Sin micrófono"), Sessions = new AudioSessionsState(true, []) };
+        var m = PanelBuilder.SoundPanel(Ctx(sys));
+        Assert.Contains(m.Widgets, w => w.Id == "in-none" && w.Text == "Sin micrófono");
+        Assert.Contains(m.Widgets, w => w.Id == "apps-none" && w.Text.StartsWith("Ninguna"));
+        Assert.DoesNotContain(m.Widgets, w => w.Kind == WidgetKind.AppRow);
+        var off = PanelBuilder.SoundPanel(Ctx(sys, new BarConfig { SoundMixer = false }));
+        Assert.DoesNotContain(off.Widgets, w => w.Id is "inputs" or "apps" or "mic" or "open:ms-settings:apps-volume");
+        Assert.Null(off.Widgets.Single(w => w.Id == "volume").Sub);   // el menú de antes, igual que estaba
+        var many = Nothing with { Audio = new AudioState(true, 35, false, outs), Sessions = new AudioSessionsState(true, Enumerable.Range(0, 20).Select(i => new AudioSession("s" + i, i, "App " + i, null, 50, false, false, true)).ToList()) };
+        Assert.Equal(PanelBuilder.MixerMaxApps, PanelBuilder.SoundPanel(Ctx(many)).Widgets.Count(w => w.Kind == WidgetKind.AppRow));
+    }
+
+    [Fact]
+    public void The_input_list_is_not_switchable_when_the_default_device_api_is_not_compatible()
+    {
+        var mics = new List<AudioDevice> { new("m1", "Interno", true), new("m2", "USB", false) };
+        var sys = Nothing with { Audio = new AudioState(true, 35, false, [new("a", "Altavoces", true)]), OutputSwitchOk = false, Input = new AudioInputState(true, 60, false, false, mics, "Sin control de volumen") };
+        var m = PanelBuilder.SoundPanel(Ctx(sys));
+        Assert.False(m.Widgets.Single(w => w.Id == "in:m2").Enabled); Assert.True(m.Widgets.Single(w => w.Id == "in:m1").Enabled);
+        Assert.False(m.Widgets.Single(w => w.Id == "mic").Enabled); Assert.Null(m.Widgets.Single(w => w.Id == "mic").Sub);
+    }
+
+    [Fact]
     public void The_battery_panel_tells_desktops_apart_and_marks_the_current_power_mode()
     {
         var desktop = PanelBuilder.BatteryPanel(Ctx(Nothing with { Power = new PowerModeState(true, PowerMode.Performance) }));
