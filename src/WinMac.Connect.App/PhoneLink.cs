@@ -20,6 +20,7 @@ internal sealed class PhoneLink : IAsyncDisposable
 
     private readonly Channel<Func<Task>> _q = Channel.CreateUnbounded<Func<Task>>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Action<PhoneState> _publishState; private readonly Action<object> _publishList, _alert; private readonly Action<string> _log;
+    private readonly CallTracker _call = new(); private Action<CallState>? _publishCall; private bool _callTicking;   // WM-038
     private readonly PhoneNotificationBook _book = new(); private readonly AncsDataAssembler _asm = new(); private readonly Backoff _backoff = new();
     private readonly CancellationTokenSource _stop = new(); private readonly Task _loop; private readonly Timer _watchdog;
 
@@ -38,6 +39,25 @@ internal sealed class PhoneLink : IAsyncDisposable
     }
 
     public void Post(Func<Task> work) => _q.Writer.TryWrite(work);
+
+    /// <summary>WM-038: dónde se publica el estado de la llamada (tópico retenido).</summary>
+    public Action<CallState>? PublishCall { set => _publishCall = value; }
+
+    private void CallChanged()
+    {
+        try { _publishCall?.Invoke(_call.State); } catch (Exception e) { _log("[connect] llamada: " + e.GetType().Name); }
+        if (_call.NeedsTicks && !_callTicking) { _callTicking = true; _ = Task.Delay(1000).ContinueWith(_ => Post(TickCallAsync)); }
+    }
+
+    private Task TickCallAsync()
+    {
+        _callTicking = false;
+        if (_call.Tick()) _log("[connect] llamada: " + _call.State.Phase);
+        CallChanged();   // vuelve a programarse mientras haya una llamada que seguir
+        return Task.CompletedTask;
+    }
+
+    private void ResetCall() { if (_call.Reset()) CallChanged(); }
 
     public void ApplySettings(ConnectSettings c) => Post(async () =>
     {
@@ -134,6 +154,7 @@ internal sealed class PhoneLink : IAsyncDisposable
         if (_dev is null) return;
         if (_dev.ConnectionStatus == BluetoothConnectionStatus.Connected) { _log("[connect] conexión LE activa"); _nextAttempt = DateTime.MinValue; await CheckAsync(); return; }
         _log("[connect] conexión LE perdida");
+        ResetCall();   // WM-038: sin conexión no se sabe nada de la llamada: no queda ninguna fijada
         await DropGattAsync();   // al volver, servicios y suscripciones se rehacen (los UID de ANCS no sobreviven a la sesión)
         MarkDisconnected();
     }
@@ -222,6 +243,7 @@ internal sealed class PhoneLink : IAsyncDisposable
     {
         if (AncsEvent.Parse(b) is not { } e) return;
         if (!_cfg.Calls && e.Category is AncsCategory.IncomingCall or AncsCategory.MissedCall) return;
+        if (_call.OnEvent(e, _book.Session)) { _log("[connect] llamada: " + _call.State.Phase); CallChanged(); }
         if (_book.Apply(e) is { } uid && _cp is not null && _ds is not null)
         {
             var attrs = Ancs.AttributesFor(_cfg.Content);
@@ -239,6 +261,7 @@ internal sealed class PhoneLink : IAsyncDisposable
             if (r is AncsNotificationAttributes na)
             {
                 if (_book.SetAttributes(na) is { } bundle) _cpQueue.Enqueue((Ancs.GetAppAttributes(bundle), Ancs.CmdGetAppAttributes, 1, 0));
+                if (_call.OnCaller(na.Uid, _book.Session, na.Values.TryGetValue(Ancs.AttrTitle, out var who) ? who : null)) CallChanged();
             }
             else if (r is AncsAppAttributes aa) _book.SetAppName(aa);
             _cpInflight = 0;
@@ -279,6 +302,7 @@ internal sealed class PhoneLink : IAsyncDisposable
     {
         foreach (var c in new[] { _ns, _ds }) if (c is not null) { try { await c.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue.None); } catch (Exception) { } }
         _ns = _cp = _ds = null; _ancsSvc?.Dispose(); _ancsSvc = null; _asm.Reset(); _cpQueue.Clear(); _cpInflight = 0;
+        ResetCall();
         if (clear) _book.Clear(); else _book.NewSession();
         MarkListDirty(); SetState(_state with { NotificationsStatus = _cfg.Notifications ? _state.NotificationsStatus : PhoneFeatureStatus.Off });
     }

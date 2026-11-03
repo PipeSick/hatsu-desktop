@@ -100,7 +100,7 @@ public static class PhoneStatusText
 /// <summary>Tópicos del canal con el host. Estado y lista son retenidos (llegan al conectar); los avisos son eventos.</summary>
 public static class ConnectTopics
 {
-    public const string Config = "config.connect", State = "connect.state", Notifications = "connect.notifications", Alert = "connect.alert";
+    public const string Config = "config.connect", State = "connect.state", Notifications = "connect.notifications", Alert = "connect.alert", Call = "connect.call";
 }
 
 /// <summary>Formato de la lista y de los avisos (módulo → barra). El contenido solo viaja por el canal local con el host; nunca a disco ni a registros.</summary>
@@ -127,6 +127,12 @@ public static class ConnectWire
 
     /// <summary>Lo publica el HOST cuando el módulo se apaga o se detiene: la barra borra todo lo del iPhone (el último estado retenido ya no vale).</summary>
     public static readonly object Off = new { off = true };
+
+    public static CallState? ParseCall(JsonElement? e)
+    {
+        try { return e is { ValueKind: JsonValueKind.Object } d ? d.Deserialize<CallState>(ConnectSettings.Wire) : null; }
+        catch (Exception) { return null; }
+    }
 
     public static PhoneState? ParseState(JsonElement? e)
     {

@@ -107,4 +107,16 @@ public class ConnectBarTests
         Assert.Equal("Llamada entrante", pill.GetProperty("title").GetString()); Assert.Equal("Mamá", pill.GetProperty("body").GetString());
         Assert.Equal("notification", pill.GetProperty("kind").GetString());
     }
+
+    [Fact]
+    public void Wm038_the_call_state_travels_to_the_island_as_its_own_kind()
+    {
+        JsonElement J(CallPhase p, string? who) => JsonSerializer.SerializeToElement(NotchFeed.Call(new CallState(p, who, 326, 1, DateTimeOffset.Now)));
+        Assert.Equal("call", J(CallPhase.Ringing, "Mamá").GetProperty("kind").GetString());
+        Assert.Equal("ringing", J(CallPhase.Ringing, "Mamá").GetProperty("state").GetString()); Assert.Equal("Mamá", J(CallPhase.Ringing, "Mamá").GetProperty("caller").GetString());
+        Assert.Equal("missed", J(CallPhase.Missed, null).GetProperty("state").GetString());
+        Assert.Equal("none", J(CallPhase.None, null).GetProperty("state").GetString());
+        var round = ConnectWire.ParseCall(JsonSerializer.SerializeToElement(new CallState(CallPhase.Ringing, "Mamá", 326, 1, DateTimeOffset.Now), ConnectSettings.Wire))!;
+        Assert.Equal(CallPhase.Ringing, round.Phase); Assert.Equal("Mamá", round.Caller);
+    }
 }

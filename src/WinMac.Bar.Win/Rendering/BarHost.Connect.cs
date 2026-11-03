@@ -30,9 +30,25 @@ public sealed partial class BarHost
     public void OnPhoneAlert(ConnectWire.Item item) => Post(() =>
     {
         if (!_phone.Active || !_connectCfg.Notifications || !_connectCfg.Island || !_connectCfg.Alerts || !_notchOpts.Notifications) return;
-        if (!_connectCfg.Calls && item.Category is AncsCategory.IncomingCall or AncsCategory.MissedCall) return;
+        if (item.Category is AncsCategory.IncomingCall or AncsCategory.MissedCall) return;   // WM-038: las llamadas tienen su propia píldora (ApplyPhoneCall); aquí se duplicarían
         if (NotchFeed.Quiet(UserNotificationState())) { _log("[isla] notificación del iPhone sin mostrar: No molestar / presentación / pantalla completa"); return; }
         Send(NotchFeed.PhoneNotification(item));
+    });
+
+    private CallState _callShown = CallState.Idle;
+
+    /// <summary>
+    /// WM-038: la llamada del iPhone en la Isla. Mientras suena, una píldora persistente («Llamada de …»); perdida o terminada, unos segundos y se va.
+    /// Solo avisa: no hay botones de contestar ni rechazar (sin validar) ni audio (Windows lo restringe).
+    /// </summary>
+    public void ApplyPhoneCall(CallState? c) => Post(() =>
+    {
+        var s = c ?? CallState.Idle;
+        if (!_phone.Active || !_connectCfg.Notifications || !_connectCfg.Calls || !_connectCfg.Island || !_notchOpts.Notifications) s = CallState.Idle;
+        if (s.Phase == _callShown.Phase && s.Caller == _callShown.Caller && s.Uid == _callShown.Uid) return;
+        bool wasShowing = _callShown.Phase != CallPhase.None; _callShown = s;
+        if (s.Phase == CallPhase.None && !wasShowing) return;
+        Send(NotchFeed.Call(s));
     });
 
     private PanelContext WithPhone(PanelContext p) => p with

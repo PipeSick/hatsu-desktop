@@ -70,6 +70,17 @@ public static class NotchFeed
     public static string SnapshotKey(IReadOnlyList<AppNotification> windows, IReadOnlyList<WinMac.Connect.ConnectWire.Item> phone) =>
         SnapshotKey(windows) + "|" + string.Join(",", phone.Select(i => i.Key + ":" + i.At + ":" + (i.Title?.Length ?? 0) + ":" + (i.Body?.Length ?? 0)));
 
+    /// <summary>
+    /// WM-038: estado de la llamada del iPhone para la Isla: <c>{ kind: "call", state: "ringing"|"missed"|"ended"|"none", caller }</c>. La Isla la mantiene mientras suena
+    /// (no caduca como una notificación) y la quita al terminar. Sin quién llama (privacidad o aún sin datos): un texto genérico.
+    /// </summary>
+    public static object Call(WinMac.Connect.CallState c) => new
+    {
+        kind = "call",
+        state = c.Phase switch { WinMac.Connect.CallPhase.Ringing => "ringing", WinMac.Connect.CallPhase.Missed => "missed", WinMac.Connect.CallPhase.Ended => "ended", _ => "none" },
+        caller = c.Caller,
+    };
+
     /// <summary>Aviso emergente de una notificación nueva del iPhone (sin «Abrir»: no se puede abrir una app del iPhone desde el PC).</summary>
     public static object PhoneNotification(WinMac.Connect.ConnectWire.Item i)
     {

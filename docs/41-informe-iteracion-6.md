@@ -64,3 +64,63 @@ Con «Mezclador en el menú Sonido» desactivado sigue el menú sencillo de ante
 
 Archivos: `PanelBuilder.SoundPanel`/`MixerRows`/`OutputLabel`, `PanelModel` (fila compacta, `MaxHeight`), `PanelController` (selector de salida), `PanelOperations` (`appout:`/`approute:`), `SystemHub.RefreshRouting`, `IAppAudioRouting` (System.Core), `AudioPolicyRouting` (System.Win), `AppAudioRoutingClient` (Bar.Win), `WinMac.Bar.App --audio-route`, `PanelPainter.Hub` (fila compacta), ajuste `appOutputRouting`.
 Pruebas: orden y medidas del menú, % y silencio, dispositivo activo visible, agrupado sin mezclar volúmenes, límite de filas, alto máximo con desplazamiento, salida solo con la función activa y aceptada, motivo cuando no, columnas alineadas y clics en silencio, salida y deslizador. Bar.Core: 433 pruebas.
+
+## Etapa C — WinMac Connect: llamadas, mensajes y fotos
+
+Lo ya validado en tu iPhone se conserva sin cambios: conexión directa, batería, reconexión, notificaciones ANCS con importación silenciosa y eliminaciones, privacidad y contenido solo en memoria.
+
+### WM-038 — Llamadas persistentes en la Isla (implementado)
+
+| Pieza | Comportamiento |
+|---|---|
+| `CallTracker` (Connect.Core, puro) | Máquina de estados a partir de ANCS. **Sonando** desde la notificación «Llamada entrante» (también si ya sonaba al conectar). Cuando se retira: si en 4 s aparece «Llamada perdida» → **perdida**; si no → **terminada**. ANCS no distingue contestada de rechazada y no se inventa. **Seguridad:** más de 90 s sonando sin noticias se da por terminada, y al perder el Bluetooth se borra. Nunca queda fijada. |
+| Módulo Connect | Publica el estado en `connect.call`. Quién llama sale del título de la notificación; con privacidad «Solo la app» queda vacío. |
+| Barra | Lo envía a la Isla como `kind: "call"`. Las notificaciones de llamada ya no salen también como píldora normal (no se duplican); siguen en el Centro de Notificaciones. |
+| NotchWin | Píldora `Call` con la misma forma que la de notificación (sin diseño nuevo). Lleva la inicial de quien llama porque no hay foto, «Llamada de Mamá» y «iPhone». **No caduca mientras suena** (tiempo de seguridad 95 s) y tiene prioridad sobre todo lo demás. Después: «Llamada perdida» 5 s o «Llamada terminada» 3 s, y se retira. **Sin botones de contestar ni rechazar.** |
+
+Pruebas: secuencia real de tu iPhone (sonando → retirada → perdida), contestada o rechazada sin suponer cuál, tiempo de seguridad, desconexión, UID de otra sesión, llamada ya sonando al conectar, perdidas antiguas ignoradas; en la Isla, persistencia frente al tiempo de una notificación, prioridad, sustitución por el estado nuevo y retirada. Connect.Core: 16 · NotchWin.Core: 172 · Bar.Core: 434.
+
+Las llamadas de WhatsApp también llegan por ANCS como llamada entrante (CallKit), pero eso **no está comprobado** en tu iPhone. El aviso es el mismo y el texto no distingue la app.
+
+### WM-039 / WM-040 — Llamadas completas desde Windows (bloqueado)
+
+| Capacidad | Hallazgo |
+|---|---|
+| Windows soporta HFP | Sí: su pila tiene el perfil Hands-Free y el iPhone publica HFP AG (prueba real, docs/39 §6b). |
+| Windows deja usar el dispositivo HFP | Sí, como dispositivo de audio de llamada de Windows, gestionado por el propio sistema. |
+| WinMac controla las llamadas con API pública | **No.** `PhoneLineTransportDevice` exige la capacidad **restringida** `phoneLineTransportManagement`. Tu PC devolvió **`DeniedBySystem`** (prueba real). Con identidad de paquete (MSIX) hay informes de denegación y de `RegisterApp` sin efecto en la compilación 26300. MyPhone (MIT, MSIX) consiguió la conexión HFP y marcar, pero **no el audio SCO** (necesitaría un controlador de perfil). Microsoft concede esa capacidad, en la práctica, a Phone Link. |
+| Un HFP propio por RFCOMM | Chocaría con el servicio HFP de Windows y el audio SCO necesita controlador. Descartado: el encargo excluye controladores propios. |
+
+**Conclusión:** sin audio bidireccional fiable no hay botón «Contestar»; queda solo el aviso persistente (WM-038). WM-040 (vista de llamada activa) no se implementa porque depende de esto.
+
+«Rechazar» sí sería posible sin audio, con la acción negativa de ANCS. El iPhone la anuncia en las llamadas (prueba real), pero **no está validada**. Es la siguiente prueba propuesta, y solo con tu permiso: un botón «Rechazar» en la píldora de llamada.
+
+### WM-041 — Responder mensajes (investigado, no implementado)
+
+| Mecanismo | ¿Envía texto libre? | Estado |
+|---|---|---|
+| ANCS (acciones positiva y negativa) | **No**: solo dos acciones predefinidas (p. ej. «Borrar»), sin texto | No sirve para responder |
+| MAP (SMS e iMessage de la app Mensajes) | **Sí**: el iPhone permite enviar por MAP desde iOS 13; la sesión MAP ya funcionó en tu PC (`0xA0`) | Viable técnicamente; requiere enviar un mensaje real de prueba **con tu permiso explícito** |
+| WhatsApp | **No** hay vía autorizada: ni MAP ni ANCS llevan WhatsApp, y no hay API pública | Bloqueado sin protocolos privados. Lo oficial en el PC es WhatsApp para Windows |
+
+No se muestra ningún campo «Responder»: no hay un envío verificado. La propuesta es responder **SMS e iMessage por MAP** en una fase con una prueba de envío consentida. No se leyó ni envió ningún mensaje.
+
+### WM-042 — Fotos de contactos (investigado)
+
+- **ANCS no incluye fotos ni avatares** (especificación de Apple). WhatsApp tampoco da su avatar por ninguna vía autorizada.
+- **PBAP** (agenda por Bluetooth): el iPhone lo publica (prueba real) y sus vCards pueden traer la foto (`PHOTO`). Usaría la misma vía que MAP (RFCOMM y OBEX, ya verificada).
+  - Para la llamada: buscar la tarjeta del contacto por **nombre exacto con una única coincidencia**, o por número si lo hubiera. Nunca coincidencias ambiguas.
+  - Solo en memoria y sin copiar la agenda.
+  - Pendiente de implementar y de tu permiso «Sincronizar contactos».
+- Mientras tanto: **iniciales** de quien llama, como en la píldora de llamada.
+
+### AMS («Ahora suena» del iPhone) — investigado
+
+El iPhone publica AMS (`89D3502B-…`, prueba real) en la misma conexión que ANCS.
+- Da título, artista, álbum, estado y controles (reproducir, pausa, siguiente).
+- Para no chocar con la música del PC habría que mostrarlo solo cuando no haya sesión local, sin tocar las letras de NotchWin.
+- Queda para la siguiente fase, como estaba previsto, para no retrasar las correcciones.
+
+## Etapa D — Validación y beta
+
+Ver al final: ejecución del CI, nombre del artefacto, instrucciones y lista de prueba.

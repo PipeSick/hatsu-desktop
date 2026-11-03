@@ -171,3 +171,46 @@ public class PhoneStateTests
         b.Reset(); Assert.Equal(2, b.Next().TotalSeconds);
     }
 }
+
+public class CallTrackerTests
+{
+    private DateTimeOffset _t = new(2026, 11, 3, 17, 20, 46, TimeSpan.FromHours(-3));
+    private CallTracker T() => new(() => _t);
+    private static AncsEvent E(AncsEventId ev, uint uid, AncsCategory cat, AncsFlags f = AncsFlags.PositiveAction | AncsFlags.NegativeAction) => new(ev, f, cat, 1, uid);
+
+    [Fact]
+    public void Wm038_a_ringing_call_stays_until_it_is_resolved_and_a_missed_call_is_named()
+    {
+        var c = T();
+        Assert.True(c.OnEvent(E(AncsEventId.Added, 326, AncsCategory.IncomingCall), 1)); Assert.Equal(CallPhase.Ringing, c.State.Phase);
+        Assert.True(c.OnCaller(326, 1, "Mamá")); Assert.Equal("Mamá", c.State.Caller);
+        _t = _t.AddSeconds(30); Assert.False(c.Tick()); Assert.Equal(CallPhase.Ringing, c.State.Phase);   // sigue sonando: no caduca como una notificación
+        c.OnEvent(E(AncsEventId.Removed, 326, AncsCategory.IncomingCall), 1);   // secuencia real de la prueba: retirada y enseguida perdida
+        Assert.True(c.OnEvent(E(AncsEventId.Added, 327, AncsCategory.MissedCall), 1)); Assert.Equal(CallPhase.Missed, c.State.Phase); Assert.Equal("Mamá", c.State.Caller);
+        _t = _t + CallTracker.EndedShow; Assert.True(c.Tick()); Assert.Equal(CallPhase.None, c.State.Phase);
+    }
+
+    [Fact]
+    public void Wm038_answered_or_rejected_ends_without_pretending_to_know_which()
+    {
+        var c = T(); c.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1);
+        c.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1);
+        _t = _t.AddSeconds(1); Assert.False(c.Tick());   // se espera por si llega una perdida
+        _t = _t + CallTracker.MissedGrace; Assert.True(c.Tick()); Assert.Equal(CallPhase.Ended, c.State.Phase);
+    }
+
+    [Fact]
+    public void Wm038_safety_timeout_and_disconnection_never_leave_a_phantom_call()
+    {
+        var c = T(); c.OnEvent(E(AncsEventId.Added, 1, AncsCategory.IncomingCall), 1);
+        _t = _t + CallTracker.RingTimeout; Assert.True(c.Tick()); Assert.Equal(CallPhase.Ended, c.State.Phase);   // sin noticias: se reconcilia
+        var d = T(); d.OnEvent(E(AncsEventId.Added, 1, AncsCategory.IncomingCall), 1);
+        Assert.True(d.Reset()); Assert.Equal(CallPhase.None, d.State.Phase);   // se perdió el Bluetooth
+        var other = T(); other.OnEvent(E(AncsEventId.Added, 1, AncsCategory.IncomingCall), 1);
+        other.OnEvent(E(AncsEventId.Removed, 1, AncsCategory.IncomingCall), 2);   // UID de otra sesión: no es esta llamada
+        _t = _t.AddSeconds(10); other.Tick(); Assert.Equal(CallPhase.Ringing, other.State.Phase);
+        Assert.False(other.OnCaller(1, 2, "X"));
+        var pre = T(); Assert.True(pre.OnEvent(E(AncsEventId.Added, 4, AncsCategory.IncomingCall, AncsFlags.PreExisting), 1));   // ya sonaba al conectar
+        Assert.False(pre.OnEvent(E(AncsEventId.Added, 5, AncsCategory.MissedCall, AncsFlags.PreExisting), 1));   // perdidas antiguas no cambian nada
+    }
+}

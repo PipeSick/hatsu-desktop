@@ -141,6 +141,7 @@ internal static class Program
             link.Subscribe(WinMac.Connect.ConnectTopics.State, d => host.ApplyPhoneState(WinMac.Connect.ConnectWire.ParseState(d)));
             link.Subscribe(WinMac.Connect.ConnectTopics.Notifications, d => host.ApplyPhoneList(WinMac.Connect.ConnectWire.ParseList(d)));
             link.Subscribe(WinMac.Connect.ConnectTopics.Alert, d => { if (WinMac.Connect.ConnectWire.ParseItem(d) is { } it) host.OnPhoneAlert(it); });
+            link.Subscribe(WinMac.Connect.ConnectTopics.Call, d => host.ApplyPhoneCall(WinMac.Connect.ConnectWire.ParseCall(d)));
             host.NotchActivity = payload => link.Event("notch.activity", payload);
             host.NotchCommand = payload => link.Event("notch.cmd", payload);
             host.ModuleEvent = (topic, payload) => link.Event(topic, payload);
