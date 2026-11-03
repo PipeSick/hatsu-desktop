@@ -174,8 +174,39 @@ public sealed partial class PanelPainter
         TextAlign(w.Enabled ? sd.Current : (w.Reason is { Length: > 0 } ? "No disponible" : sd.Current), _body, px + 10, y + 3, wd - (px - x) - 34, h - 6, Fg(dim)); Glyph("updown", x + wd - 14, y + h / 2, 6f, Fg(0.65f * dim));
     }
 
+    /// <summary>WM-035: fila compacta del menú Sonido (columnas fijas de <see cref="PanelLayout"/>: todo alineado entre filas).</summary>
+    private void DrawCompactAppRow(WidgetFrame f, AppRowData ad)
+    {
+        double x = f.X, y = f.Y, wd = f.Width, h = f.Height, cy = y + h / 2; float dim = ad.Active ? 1f : 0.62f;
+        if (!ad.SubRow)
+        {
+            var bmp = IconFor(ad.ExePath);
+            if (bmp is not null) _ctx.DrawBitmap(bmp, (RawRectF?)R(x + 4, cy - 11, x + 26, cy + 11), dim, BitmapInterpolationMode.Linear, (RawRectF?)null);
+            else { FillRR(x + 4, cy - 11, x + 26, cy + 11, 6, Fill(0.16f)); TextAlign(string.IsNullOrEmpty(ad.Name) ? "?" : ad.Name[..1].ToUpperInvariant(), _bodyBold, x + 4, cy - 11, 22, 22, Fg(0.8f), TextAlignment.Center); }   // sin icono: una inicial
+            TextAlign(ad.Name, _bodyBold, x + 34, y, PanelLayout.AppNameW, h, Fg(dim));
+        }
+        else
+        {   // otra sesión de la misma app: sin repetir icono ni nombre, con una guía que la une a la de arriba
+            Line(x + 15, y - 4, x + 15, cy, Fill(0.22f), 1f); Line(x + 15, cy, x + 26, cy, Fill(0.22f), 1f);
+            TextAlign(ad.Name, _body, x + 34, y, PanelLayout.AppNameW, h, Fg(0.6f * dim));
+        }
+        var (l, r) = PanelLayout.AppSliderTrack(f); double pct = Math.Clamp(ad.Volume, 0, 100) / 100.0;
+        FillRR(l, cy - 3, r, cy + 3, 3, Fill(0.18f * dim)); if (!ad.Muted) FillRR(l, cy - 3, l + (r - l) * pct, cy + 3, 3, Dark ? new Color4(0.55f, 0.65f, 1f, 0.9f * dim) : new Color4(0.25f, 0.4f, 0.9f, dim));
+        double tx = l + (r - l) * pct; FillCircle(tx, cy, 7, new Color4(0.92f, 0.93f, 0.96f, 1f * dim)); Brush(new Color4(0, 0, 0, 0.25f)); _ctx.DrawEllipse(new Ellipse(new Vector2((float)tx, (float)cy), 7, 7), _solid, 0.8f);
+        double outW = ad.Output is null ? 0 : PanelLayout.AppOutW, muteR = x + wd - outW;
+        TextAlign(ad.Muted ? "Silencio" : $"{ad.Volume} %", _body, r + 4, y, PanelLayout.AppPctW, h, Fg(0.7f * dim), TextAlignment.Trailing);
+        Glyph(ad.Muted ? "sound-muted" : "sound", muteR - PanelLayout.AppMuteW / 2, cy, 6.5f, Fg((ad.Muted ? 0.9f : 0.65f) * dim));
+        if (ad.Output is { } o)
+        {   // selector de salida (experimental): una píldora con el nombre corto y una flecha
+            FillRR(muteR + 4, cy - 11, x + wd, cy + 11, 11, Fill(0.10f));
+            TextAlign(o, _small, muteR + 12, cy - 11, PanelLayout.AppOutW - 26, 22, Fg(0.85f * dim));
+            Glyph("down", x + wd - 11, cy, 3.5f, Fg(0.6f * dim));
+        }
+    }
+
     private void DrawAppRow(WidgetFrame f)
     {
+        if (f.W.Data is AppRowData { Compact: true } cad) { DrawCompactAppRow(f, cad); return; }
         if (f.W.Data is not AppRowData ad) return; var w = f.W; double x = f.X, y = f.Y, wd = f.Width, h = f.Height; float dim = ad.Active ? 1f : 0.62f;
         var bmp = IconFor(ad.ExePath);
         if (bmp is not null) _ctx.DrawBitmap(bmp, (RawRectF?)R(x + 6, y + 4, x + 36, y + 34), dim, BitmapInterpolationMode.Linear, (RawRectF?)null);

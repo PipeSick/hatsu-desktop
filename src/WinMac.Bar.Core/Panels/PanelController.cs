@@ -10,7 +10,7 @@ public sealed record PanelEvent(PanelEventKind Kind, string Id, double Value = 0
 public sealed class PanelController
 {
     private PanelModel _model = new(PanelKind.ControlCenter, "", []); private PanelFrame _frame = new(PanelLayout.Width, 0, []);
-    private int _hover = -1, _down = -1; private bool _dragging, _muteDown; private double _lastValue;
+    private int _hover = -1, _down = -1; private bool _dragging, _muteDown, _outDown; private double _lastValue;
     private double _maxHeight = double.PositiveInfinity, _scroll;
 
     /// <summary>Altura máxima del panel en DIP (la de la pantalla donde está). Si el contenido no cabe, se desplaza el centro y las pestañas y el pie quedan fijos.</summary>
@@ -141,7 +141,7 @@ public sealed class PanelController
 
     public PanelEvent? PointerDown(double x, double y)
     {
-        int i = PanelLayout.HitTest(_frame, x, y); _down = i >= 0 && Interactive(_frame.Items[i].W) ? i : -1; _muteDown = false;
+        int i = PanelLayout.HitTest(_frame, x, y); _down = i >= 0 && Interactive(_frame.Items[i].W) ? i : -1; _muteDown = false; _outDown = false;
         if (_down < 0) return null;
         var f = _frame.Items[_down];
         if (f.W.Kind == WidgetKind.Slider)
@@ -154,6 +154,7 @@ public sealed class PanelController
         if (f.W.Kind == WidgetKind.AppRow)
         {
             if (PanelLayout.AppMuteHit(f, x, y)) { _muteDown = true; return null; }
+            if (PanelLayout.AppOutputHit(f, x, y)) { _outDown = true; return null; }   // WM-035: el selector de salida se resuelve al soltar
             if (!PanelLayout.AppSliderHit(f, x, y)) { _down = -1; return null; }   // pulsar el nombre o el icono no hace nada
             _dragging = true; _lastValue = PanelLayout.SliderValueAt(f, x);
             return new PanelEvent(PanelEventKind.SliderChange, DragId(f.W), _lastValue);
@@ -194,7 +195,9 @@ public sealed class PanelController
             }
             case WidgetKind.Nav: return new PanelEvent(PanelEventKind.Click, x < f.X + f.Width / 2 ? "prev" : "next");
             case WidgetKind.Slider: return _muteDown && PanelLayout.SliderMuteHit(f, x) && w.Data is string muteId ? new PanelEvent(PanelEventKind.Click, muteId) : null;
-            case WidgetKind.AppRow: return _muteDown && PanelLayout.AppMuteHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "appmute:" + w.Id) : null;
+            case WidgetKind.AppRow:
+                if (_outDown && PanelLayout.AppOutputHit(f, x, y)) return new PanelEvent(PanelEventKind.Click, "appout:" + w.Id);
+                return _muteDown && PanelLayout.AppMuteHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "appmute:" + w.Id) : null;
             case WidgetKind.Tabs:
             {
                 int t = PanelLayout.TabAt(f, x); return w.Data is TabsData td && t >= 0 ? new PanelEvent(PanelEventKind.Click, "tab:" + td.Tabs[t].Id) : null;

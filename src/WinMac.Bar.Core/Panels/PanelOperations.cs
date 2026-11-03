@@ -195,6 +195,24 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
         if (id.StartsWith("disk:")) { ToggleSelectedVolume(id[5..]); ui.Rebuild(); return true; }
         if (id.StartsWith("explorer:")) { ui.OpenUri(id[9..] + "\\"); return true; }
         if (id.StartsWith("eject:")) { var letter = id[6..]; rt?.Monitor.Eject(letter, r => { SetMessage(r.IsOk ? null : r.Message ?? "No se pudo expulsar"); ui.Rebuild(); }); return true; }
+        // WM-035 (experimental): salida de audio de una app. Se elige en un menú; el cambio lo comprueba Windows antes de darlo por hecho.
+        if (id.StartsWith("appout:"))
+        {
+            var sid = id[7..]; var app = s.AppSessions.Sessions.FirstOrDefault(a => a.Id == sid);
+            if (app is null || app.Pid <= 0 || s.Routing is not { Available: true } rt) return true;
+            string? cur = rt.Outputs.TryGetValue(app.Pid, out var d) ? d : null;
+            var choices = new List<Choice> { new($"approute:{app.Pid}:default", "Predeterminada del sistema", cur is null) };
+            choices.AddRange(s.Audio.Outputs.Select(o => new Choice($"approute:{app.Pid}:{o.Id}", o.Name, string.Equals(o.Id, cur, StringComparison.OrdinalIgnoreCase))));
+            ui.ShowChoices("Salida de " + app.Name, choices, pick => Handle(new PanelEvent(PanelEventKind.Click, pick))); return true;
+        }
+
+        if (id.StartsWith("approute:"))
+        {
+            var parts = id.Split(':', 3); if (parts.Length < 3 || !int.TryParse(parts[1], out int pid) || svc.Routing is not { } routing) return true;
+            string? dev = parts[2] == "default" ? null : parts[2];
+            Op(id, "Cambiando…", () => routing.Set(pid, dev), hub.RefreshRouting); return true;
+        }
+
         if (id.StartsWith("appmute:"))
         {
             var sid = id[8..]; var app = s.AppSessions.Sessions.FirstOrDefault(a => a.Id == sid); if (app is null) return true; bool m = !app.Muted;

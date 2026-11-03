@@ -59,6 +59,7 @@ internal static class Program
                 Log("PNG: " + PanelOffscreen.Render(Arg(args, "--out") ?? "panel.png", kind.ToLowerInvariant(), tab, theme, scale, maxH, scrollTo, bands: args.Contains("--bands"))); return 0;
             }
             if (args.Contains("--status")) return Status();
+            if (args.Contains("--audio-route")) return AudioRoute(args);   // WM-035: proceso auxiliar (experimental), lo lanza la barra
             if (args.Contains("--quit")) return Quit();
             if (args.Contains("--launchpad")) return Signal(WinMac.Bar.Win.Rendering.BarHost.LaunchpadEventName, "Launchpad");
             if (args.Contains("--spotlight")) return Signal(WinMac.Bar.Win.Rendering.BarHost.SpotlightEventName, "Spotlight");
@@ -78,6 +79,41 @@ internal static class Program
             return RunBar(args);
         }
         catch (Exception e) { Log("ERROR: " + e); return 1; }
+    }
+
+    /// <summary>
+    /// WM-035: salida de audio por aplicación en un proceso aparte. Una línea JSON por la salida estándar. «probe» no cambia nada; «get» solo lee; «set» aplica y comprueba.
+    /// </summary>
+    private static int AudioRoute(string[] args)
+    {
+        int i = Array.IndexOf(args, "--audio-route"); string op = i + 1 < args.Length ? args[i + 1] : "probe";
+        static void Out(object o) { Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(o)); Console.Out.Flush(); }
+        var f = WinMac.SystemControl.Win.AudioPolicyRouting.Factory(out var why);
+        if (f == IntPtr.Zero) { Out(new { ok = false, why }); return 0; }
+        try
+        {
+            switch (op)
+            {
+                case "probe": Out(new { ok = true }); return 0;
+                case "get":
+                {
+                    var map = new Dictionary<string, string?>();
+                    foreach (var part in (i + 2 < args.Length ? args[i + 2] : "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        if (int.TryParse(part, out int pid)) { try { map[pid.ToString()] = WinMac.SystemControl.Win.AudioPolicyRouting.Get(f, pid); } catch (Exception) { } }
+                    Out(new { ok = true, outputs = map }); return 0;
+                }
+                case "set":
+                {
+                    if (i + 3 >= args.Length || !int.TryParse(args[i + 2], out int pid)) { Out(new { ok = false, why = "faltan datos" }); return 0; }
+                    string? dev = args[i + 3] == "default" ? null : args[i + 3];
+                    var err = WinMac.SystemControl.Win.AudioPolicyRouting.Set(f, pid, dev);
+                    Out(new { ok = err is null, why = err }); return 0;
+                }
+                default: Out(new { ok = false, why = "orden desconocida" }); return 0;
+            }
+        }
+        catch (Exception e) { Out(new { ok = false, why = e.GetType().Name + (e is System.Runtime.InteropServices.COMException c ? $" 0x{c.HResult:X8}" : "") }); return 0; }
+        finally { WinMac.SystemControl.Win.AudioPolicyRouting.Release(f); }
     }
 
     private static int RunBar(string[] args)

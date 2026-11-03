@@ -250,16 +250,6 @@ public class PanelBuilderTests
     }
 
     [Fact]
-    public void The_audio_output_list_is_switchable_only_when_the_unofficial_api_is_compatible_and_offers_restore()
-    {
-        var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos", false) };
-        var ok = PanelBuilder.SoundPanel(Ctx(Nothing with { Audio = new AudioState(true, 30, false, outs), OutputSwitchOk = true, CanRestoreOutput = true }));
-        Assert.True(ok.Widgets.Single(w => w.Id == "out:b").Enabled); Assert.Contains(ok.Widgets, w => w.Id == "audio-restore"); Assert.DoesNotContain(ok.Widgets, w => w.Id == "noswitch");
-        var no = PanelBuilder.SoundPanel(Ctx(Nothing with { Audio = new AudioState(true, 30, false, outs), OutputSwitchOk = false, OutputSwitchReason = "usa Configuración" }));
-        Assert.False(no.Widgets.Single(w => w.Id == "out:b").Enabled); Assert.Contains(no.Widgets, w => w.Id == "noswitch" && w.Text == "usa Configuración"); Assert.Contains(no.Widgets, w => w.Id == "open:ms-settings:sound"); Assert.DoesNotContain(no.Widgets, w => w.Id == "audio-restore");
-    }
-
-    [Fact]
     public void Dark_mode_tells_apps_and_windows_theme_apart_and_never_pretends()
     {
         Assert.Equal("Activado", PanelBuilder.AppearanceText(new AppearanceState(true, true, SystemDark: true)));
@@ -271,52 +261,84 @@ public class PanelBuilderTests
     }
 
     [Fact]
-    public void The_sound_menu_is_a_mixer_in_the_requested_order_with_real_sessions_only()
+    public void Wm035_the_sound_menu_is_wide_compact_and_in_the_requested_order()
+    {
+        var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos USB", false) };
+        var mics = new List<AudioDevice> { new("m1", "Micrófono interno", true), new("m2", "USB", false) };
+        var apps = new List<AudioSession> { new("s1", 10, "Spotify", @"C:\s.exe", 80, false, false, true), new("s2", 11, "Discord", @"C:\d.exe", 40, true, false, false) };
+        var sys = Nothing with { Audio = new AudioState(true, 35, false, outs), OutputSwitchOk = true, CanRestoreOutput = true, Input = new AudioInputState(true, 60, false, true, mics), Sessions = new AudioSessionsState(true, apps) };
+        var m = PanelBuilder.SoundPanel(Ctx(sys));
+        var ids = m.Widgets.Select(w => w.Id).ToList(); int I(string id) => ids.IndexOf(id);
+        Assert.True(I("volume") < I("pick:out") && I("pick:out") < I("pick:in") && I("pick:in") < I("mic") && I("mic") < I("s1") && I("s1") < I("open:ms-settings:apps-volume"));
+        Assert.Equal(PanelBuilder.MixerWidth, m.Width); Assert.Equal(PanelBuilder.MixerMaxHeight, m.MaxHeight);
+        Assert.Equal("35 %", m.Widgets.Single(w => w.Id == "volume").Sub); Assert.Equal("mute", m.Widgets.Single(w => w.Id == "volume").Data);   // silenciar en el icono del deslizador
+        Assert.Equal("Altavoces", ((SelectData)m.Widgets.Single(w => w.Id == "pick:out").Data!).Current);   // el dispositivo activo, a la vista
+        Assert.Equal("Micrófono interno", ((SelectData)m.Widgets.Single(w => w.Id == "pick:in").Data!).Current);
+        Assert.All(m.Widgets.Where(w => w.Kind == WidgetKind.AppRow), w => Assert.True(((AppRowData)w.Data!).Compact));
+        Assert.All(m.Widgets.Where(w => w.Kind == WidgetKind.AppRow), w => Assert.Null(((AppRowData)w.Data!).Output));   // sin la función experimental: sin selector de salida
+        Assert.DoesNotContain(m.Widgets, w => w.Kind == WidgetKind.Note);   // sin texto explicativo de relleno
+        Assert.Contains(m.Widgets, w => w.Id == "audio-restore");
+        Assert.Equal(34, PanelLayout.HeightOf(m.Widgets.Single(w => w.Id == "s1")));
+        var f = PanelLayout.Compute(m with { Widgets = m.Widgets.Concat(Enumerable.Range(0, 12).Select(i => new Widget(WidgetKind.AppRow, "x" + i, "App", Data: new AppRowData(null, "App", 50, false, true, Compact: true)))).ToList() });
+        Assert.True(f.Height <= PanelBuilder.MixerMaxHeight + 0.5); Assert.NotNull(f.View);   // muchas apps: alto máximo y desplazamiento interno
+    }
+
+    [Fact]
+    public void Wm035_sessions_of_one_app_are_grouped_but_keep_their_own_volume()
+    {
+        var apps = new List<AudioSession> { new("c1", 20, "Chrome", @"C:\chrome.exe", 70, false, false, true), new("sp", 21, "Spotify", @"C:\s.exe", 50, false, false, true), new("c2", 22, "Chrome", @"C:\chrome.exe", 30, true, false, false) };
+        var rows = PanelBuilder.MixerRows(apps, null, []).ToList();
+        Assert.Equal(["c1", "c2", "sp"], rows.Select(r => r.Id));   // las de Chrome juntas
+        var c2 = (AppRowData)rows[1].Data!; Assert.True(c2.SubRow); Assert.Equal("Sesión 2", c2.Name); Assert.Equal(30, c2.Volume); Assert.True(c2.Muted);   // ni se suma ni se iguala
+        Assert.Equal(70, ((AppRowData)rows[0].Data!).Volume);
+        var many = Enumerable.Range(0, 30).Select(i => new AudioSession("a" + i, i, "App" + i, null, 50, false, false, true)).ToList();
+        Assert.Equal(PanelBuilder.MixerMaxApps, PanelBuilder.MixerRows(many, null, []).Count());
+    }
+
+    [Fact]
+    public void Wm035_per_app_output_is_offered_only_when_enabled_and_confirmed_and_says_why_otherwise()
+    {
+        var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos USB", false) };
+        var apps = new List<AudioSession> { new("d", 11, "Discord", null, 40, false, false, true), new("s", 10, "Spotify", null, 80, false, false, true) };
+        var routing = new AppRoutingState(true, null, new Dictionary<int, string?> { [11] = "b", [10] = null });
+        var sys = Nothing with { Audio = new AudioState(true, 35, false, outs), OutputSwitchOk = true, Sessions = new AudioSessionsState(true, apps), Routing = routing };
+        var on = PanelBuilder.SoundPanel(Ctx(sys, new BarConfig { AppOutputRouting = true }));
+        Assert.Equal("Audífonos USB", ((AppRowData)on.Widgets.Single(w => w.Id == "d").Data!).Output);
+        Assert.Equal("Predeterminada", ((AppRowData)on.Widgets.Single(w => w.Id == "s").Data!).Output);
+        var off = PanelBuilder.SoundPanel(Ctx(sys));   // ajuste experimental apagado: nada
+        Assert.Null(((AppRowData)off.Widgets.Single(w => w.Id == "d").Data!).Output);
+        var refused = PanelBuilder.SoundPanel(Ctx(sys with { Routing = AppRoutingState.Off("Windows no la acepta en esta versión") }, new BarConfig { AppOutputRouting = true }));
+        Assert.Null(((AppRowData)refused.Widgets.Single(w => w.Id == "d").Data!).Output);   // no se aparenta un selector que no funciona
+        Assert.Contains("Windows no la acepta", refused.Widgets.Single(w => w.Id == "route-off").Text);
+        Assert.Equal("No conectada", PanelBuilder.OutputLabel("zz", outs));
+    }
+
+    [Fact]
+    public void Wm035_without_a_compatible_switch_the_device_selectors_are_disabled_with_the_reason_and_the_simple_menu_remains()
     {
         var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos", false) };
-        var mics = new List<AudioDevice> { new("m1", "Micrófono interno", true), new("m2", "USB", false) };
-        var apps = new List<AudioSession> { new("s1", 10, "Spotify", null, 80, false, false, true), new("s2", 11, "Discord", null, 40, true, false, false) };
-        var sys = Nothing with { Audio = new AudioState(true, 35, false, outs), OutputSwitchOk = true, Input = new AudioInputState(true, 60, false, true, mics), Sessions = new AudioSessionsState(true, apps) };
+        var sys = Nothing with { Audio = new AudioState(true, 30, false, outs), OutputSwitchOk = false, OutputSwitchReason = "usa Configuración", Input = AudioInputState.None("Sin micrófono"), Sessions = new AudioSessionsState(true, []) };
         var m = PanelBuilder.SoundPanel(Ctx(sys));
-        var ids = m.Widgets.Select(w => w.Id).ToList();
-        int I(string id) => ids.IndexOf(id);
-        Assert.True(I("volume") < I("outputs") && I("outputs") < I("inputs") && I("inputs") < I("apps") && I("apps") < I("open:ms-settings:apps-volume") && I("open:ms-settings:apps-volume") < I("open:ms-settings:sound"));
-        Assert.Equal("35 %", m.Widgets.Single(w => w.Id == "volume").Sub);
-        Assert.True(m.Widgets.Single(w => w.Id == "in:m2").Enabled); Assert.True(m.Widgets.Single(w => w.Id == "in:m1").On);
-        Assert.Equal("60 %", m.Widgets.Single(w => w.Id == "mic").Sub); Assert.Equal("mic-mute", m.Widgets.Single(w => w.Id == "mic").Data);
-        var rows = m.Widgets.Where(w => w.Kind == WidgetKind.AppRow).ToList();
-        Assert.Equal(["s1", "s2"], rows.Select(r => r.Id)); Assert.True(((AppRowData)rows[1].Data!).Muted); Assert.False(((AppRowData)rows[1].Data!).Active);
-        Assert.Contains(m.Widgets, w => w.Id == "app-output");   // la salida por aplicación no se aparenta: se explica y se abre el mezclador de Windows
-        Assert.DoesNotContain(m.Widgets, w => w.Id.StartsWith("appout:"));
-        Assert.Equal(1, m.PinTop); Assert.Equal(2, m.PinBottom);
-        var f = PanelLayout.Compute(m, maxHeight: 360);   // pantalla baja: la cabecera y los ajustes quedan fijos, el centro se desplaza
-        Assert.NotNull(f.View); Assert.True(f.Height <= 360.5);
+        Assert.False(m.Widgets.Single(w => w.Id == "pick:out").Enabled); Assert.Equal("usa Configuración", m.Widgets.Single(w => w.Id == "pick:out").Reason);
+        Assert.False(m.Widgets.Single(w => w.Id == "pick:in").Enabled); Assert.DoesNotContain(m.Widgets, w => w.Id == "mic");
+        Assert.Contains(m.Widgets, w => w.Id == "apps-none");
+        var simple = PanelBuilder.SoundPanel(Ctx(sys, new BarConfig { SoundMixer = false }));
+        Assert.False(simple.Widgets.Single(w => w.Id == "out:b").Enabled); Assert.Contains(simple.Widgets, w => w.Id == "noswitch");   // el menú sencillo de antes, igual
     }
 
     [Fact]
-    public void The_sound_mixer_says_why_when_there_are_no_apps_or_microphone_and_can_be_turned_off()
+    public void Wm035_compact_rows_align_columns_and_route_clicks_to_mute_output_or_slider()
     {
-        var outs = new List<AudioDevice> { new("a", "Altavoces", true) };
-        var sys = Nothing with { Audio = new AudioState(true, 35, false, outs), OutputSwitchOk = false, Input = AudioInputState.None("Sin micrófono"), Sessions = new AudioSessionsState(true, []) };
-        var m = PanelBuilder.SoundPanel(Ctx(sys));
-        Assert.Contains(m.Widgets, w => w.Id == "in-none" && w.Text == "Sin micrófono");
-        Assert.Contains(m.Widgets, w => w.Id == "apps-none" && w.Text.StartsWith("Ninguna"));
-        Assert.DoesNotContain(m.Widgets, w => w.Kind == WidgetKind.AppRow);
-        var off = PanelBuilder.SoundPanel(Ctx(sys, new BarConfig { SoundMixer = false }));
-        Assert.DoesNotContain(off.Widgets, w => w.Id is "inputs" or "apps" or "mic" or "open:ms-settings:apps-volume");
-        Assert.Null(off.Widgets.Single(w => w.Id == "volume").Sub);   // el menú de antes, igual que estaba
-        var many = Nothing with { Audio = new AudioState(true, 35, false, outs), Sessions = new AudioSessionsState(true, Enumerable.Range(0, 20).Select(i => new AudioSession("s" + i, i, "App " + i, null, 50, false, false, true)).ToList()) };
-        Assert.Equal(PanelBuilder.MixerMaxApps, PanelBuilder.SoundPanel(Ctx(many)).Widgets.Count(w => w.Kind == WidgetKind.AppRow));
-    }
-
-    [Fact]
-    public void The_input_list_is_not_switchable_when_the_default_device_api_is_not_compatible()
-    {
-        var mics = new List<AudioDevice> { new("m1", "Interno", true), new("m2", "USB", false) };
-        var sys = Nothing with { Audio = new AudioState(true, 35, false, [new("a", "Altavoces", true)]), OutputSwitchOk = false, Input = new AudioInputState(true, 60, false, false, mics, "Sin control de volumen") };
-        var m = PanelBuilder.SoundPanel(Ctx(sys));
-        Assert.False(m.Widgets.Single(w => w.Id == "in:m2").Enabled); Assert.True(m.Widgets.Single(w => w.Id == "in:m1").Enabled);
-        Assert.False(m.Widgets.Single(w => w.Id == "mic").Enabled); Assert.Null(m.Widgets.Single(w => w.Id == "mic").Sub);
+        var row = new Widget(WidgetKind.AppRow, "d", "Discord", Value: 40, Data: new AppRowData(null, "Discord", 40, false, true, Compact: true, Output: "Altavoces"));
+        var plain = row with { Id = "s", Data = new AppRowData(null, "Spotify", 40, false, true, Compact: true) };
+        var c = new PanelController(); c.SetModel(new PanelModel(PanelKind.Sound, "", [row, plain], PanelBuilder.MixerWidth));
+        var f = c.Frame.Items[0]; var g = c.Frame.Items[1];
+        Assert.Equal(PanelLayout.AppSliderTrack(f).Left, PanelLayout.AppSliderTrack(g).Left);   // los deslizadores empiezan en la misma columna
+        c.PointerDown(f.X + f.Width - 10, f.Y + 17); Assert.Equal("appout:d", c.PointerUp(f.X + f.Width - 10, f.Y + 17)!.Id);
+        double mx = f.X + f.Width - PanelLayout.AppOutW - 10;
+        c.PointerDown(mx, f.Y + 17); Assert.Equal("appmute:d", c.PointerUp(mx, f.Y + 17)!.Id);
+        var (l, r) = PanelLayout.AppSliderTrack(f);
+        Assert.Equal(PanelEventKind.SliderChange, c.PointerDown((l + r) / 2, f.Y + 17)!.Kind);
     }
 
     [Fact]

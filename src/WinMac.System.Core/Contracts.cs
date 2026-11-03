@@ -81,4 +81,23 @@ public interface ISessionService
 /// <summary>Todo lo que el Control Center necesita, en un solo punto (se sustituye entero en las pruebas).</summary>
 public sealed record SystemServices(
     IAudioService Audio, IWifiService Wifi, IBluetoothService Bluetooth, IBrightnessService Brightness,
-    IPowerService Power, IAppearanceService Appearance, IDisplayService Display, ISessionService Session);
+    IPowerService Power, IAppearanceService Appearance, IDisplayService Display, ISessionService Session)
+{
+    /// <summary>WM-035 (experimental): salida de audio por aplicación. Null = no disponible en este equipo o desactivada.</summary>
+    public IAppAudioRouting? Routing { get; init; }
+}
+
+/// <summary>
+/// WM-035 (EXPERIMENTAL, desactivado por defecto): elegir la salida de audio de una app. Windows no tiene una API pública para esto; la implementación usa la misma interfaz
+/// interna que su página «Volumen de la aplicación y preferencias de dispositivo», en un proceso aparte (si algo fallara, no cae la barra) y comprueba el resultado leyéndolo
+/// de vuelta: nunca da por aplicado un cambio que Windows no confirma.
+/// </summary>
+public interface IAppAudioRouting
+{
+    /// <summary>¿Funciona en este Windows? (sin cambiar nada).</summary>
+    AppRoutingState Probe();
+    /// <summary>Salida guardada por Windows para cada proceso (id de dispositivo; null = la predeterminada del sistema).</summary>
+    IReadOnlyDictionary<int, string?> Read(IReadOnlyList<int> pids);
+    /// <summary>Aplica y comprueba. <paramref name="deviceId"/> null = volver a la predeterminada del sistema.</summary>
+    ServiceResult Set(int pid, string? deviceId);
+}

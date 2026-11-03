@@ -62,7 +62,10 @@ public sealed record ChartSeries(IReadOnlyList<double> Values, string Color);
 public sealed record ChartData(IReadOnlyList<ChartSeries> Series, double Max, string? MaxLabel);
 public sealed record MeterData(string Color, string? Detail = null);
 public sealed record SelectData(string Glyph, string Label, string Current);
-public sealed record AppRowData(string? ExePath, string Name, int Volume, bool Muted, bool Active);
+/// <param name="Compact">WM-035: una sola línea (icono · nombre · deslizador · % · silencio · salida), la del menú Sonido.</param>
+/// <param name="Output">WM-035: salida de audio de esta app (selector), solo si la función experimental está activa y comprobada. Null = sin selector.</param>
+/// <param name="SubRow">Otra sesión de la misma app: va debajo de la primera, sin repetir icono ni nombre (agrupada a la vista, cada sesión con su propio volumen).</param>
+public sealed record AppRowData(string? ExePath, string Name, int Volume, bool Muted, bool Active, bool Compact = false, string? Output = null, bool SubRow = false);
 public sealed record StatItem(string Arrow, string Value, string Label, string Color);
 public sealed record StatsData(StatItem Left, StatItem Right, string? Pill);
 public sealed record WeatherHeadData(string Place, bool Located, string Temp, string IconKey, string Description, string? HighLow);
@@ -100,7 +103,7 @@ public sealed record MonthData(IReadOnlyList<CalendarDay> Days, IReadOnlyList<st
 /// <param name="Pad">Margen interior (DIP); null = el de siempre (14). Los menús usan uno pequeño.</param>
 /// <param name="Spacing">Separación entre elementos (DIP); null = la de siempre (8). Los menús van seguidos.</param>
 public sealed record PanelModel(PanelKind Kind, string Title, IReadOnlyList<Widget> Widgets, double Width = PanelLayout.Width, (int From, int To)? Card = null, int PinTop = 0, int PinBottom = 0, bool FillHeight = false,
-    double? Pad = null, double? Spacing = null);
+    double? Pad = null, double? Spacing = null, double? MaxHeight = null);
 
 public sealed record WidgetFrame(Widget W, double X, double Y, double Width, double Height);
 public sealed record CardRect(double X, double Y, double W, double H);
@@ -133,7 +136,7 @@ public static class PanelLayout
         WidgetKind.KeyValue => 22,
         WidgetKind.Stats => 54,
         WidgetKind.Select => 32,
-        WidgetKind.AppRow => 54,
+        WidgetKind.AppRow => w.Data is AppRowData { Compact: true } ? 34 : 54,
         WidgetKind.WeatherHead => 96,
         WidgetKind.Strip => 92,
         WidgetKind.CityRow => 30,
@@ -170,6 +173,7 @@ public static class PanelLayout
     /// </summary>
     public static PanelFrame Compute(PanelModel m, double maxHeight = double.PositiveInfinity, double scroll = 0)
     {
+        if (m.MaxHeight is { } cap) maxHeight = Math.Min(maxHeight, cap);   // WM-035: el menú Sonido tiene un alto máximo propio; el centro se desplaza
         double Pad = m.Pad ?? PanelLayout.Pad, Gap = m.Spacing ?? PanelLayout.Gap;   // márgenes del modelo (los menús los quieren pequeños)
         var items = new List<WidgetFrame>(); double y = Pad, inner = m.Width - 2 * Pad, half = (inner - Gap) / 2;
         var ws = m.Widgets; double? cardTop = null; double cardBottom = 0; bool cardOpen = false;
@@ -236,9 +240,25 @@ public static class PanelLayout
 
     // ── Geometría de las filas con sub-áreas pulsables (la usan el dibujo y el controlador: una sola fuente)
     /// <summary>Fila de aplicación: icono a la izquierda, pista del volumen bajo el nombre, porcentaje y silencio a la derecha.</summary>
-    public static (double Left, double Right) AppSliderTrack(WidgetFrame f) => (f.X + 46, f.X + f.Width - 86);
-    public static bool AppMuteHit(WidgetFrame f, double x, double y) => x >= f.X + f.Width - 30 && x <= f.X + f.Width && y >= f.Y + 4 && y <= f.Y + f.Height - 4;
-    public static bool AppSliderHit(WidgetFrame f, double x, double y) { var (l, r) = AppSliderTrack(f); return x >= l - 8 && x <= r + 8 && y >= f.Y + f.Height - 30 && y <= f.Y + f.Height; }
+    // WM-035: fila compacta del menú Sonido. Columnas fijas para que nombres, deslizadores, porcentajes y botones queden alineados entre filas.
+    public const double AppNameW = 112, AppPctW = 40, AppMuteW = 26, AppOutW = 96;
+    private static bool Compact(WidgetFrame f) => f.W.Data is AppRowData { Compact: true };
+    private static double OutW(WidgetFrame f) => f.W.Data is AppRowData { Compact: true, Output: not null } ? AppOutW : 0;
+    public static (double Left, double Right) AppSliderTrack(WidgetFrame f) => Compact(f)
+        ? (f.X + 34 + AppNameW + 8, f.X + f.Width - OutW(f) - AppMuteW - AppPctW - 6)
+        : (f.X + 46, f.X + f.Width - 86);
+    public static bool AppMuteHit(WidgetFrame f, double x, double y)
+    {
+        if (!Compact(f)) return x >= f.X + f.Width - 30 && x <= f.X + f.Width && y >= f.Y + 4 && y <= f.Y + f.Height - 4;
+        double r = f.X + f.Width - OutW(f); return x >= r - AppMuteW && x <= r && y >= f.Y && y <= f.Y + f.Height;
+    }
+    /// <summary>Selector de salida de la app (solo filas compactas con <see cref="AppRowData.Output"/>).</summary>
+    public static bool AppOutputHit(WidgetFrame f, double x, double y) => OutW(f) > 0 && x >= f.X + f.Width - OutW(f) && x <= f.X + f.Width && y >= f.Y && y <= f.Y + f.Height;
+    public static bool AppSliderHit(WidgetFrame f, double x, double y)
+    {
+        var (l, r) = AppSliderTrack(f);
+        return Compact(f) ? x >= l - 8 && x <= r + 8 && y >= f.Y && y <= f.Y + f.Height : x >= l - 8 && x <= r + 8 && y >= f.Y + f.Height - 30 && y <= f.Y + f.Height;
+    }
     /// <summary>Deslizador con icono de silencio a la izquierda (Data = id del clic de silencio): pulsar el icono silencia, pulsar la pista arrastra.</summary>
     public static bool SliderMuteHit(WidgetFrame f, double x) => f.W.Data is string && x < f.X + 36;
     /// <summary>Botón de unidad de las estadísticas (arriba a la derecha).</summary>

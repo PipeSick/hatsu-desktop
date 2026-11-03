@@ -95,6 +95,8 @@ public sealed record BarConfig
     public bool SoundMixer { get; init; } = true;
     /// <summary>WinMac Connect: indicador del iPhone (batería real y estado). Solo aparece con el módulo activo y datos reales.</summary>
     public bool ShowPhone { get; init; } = true;
+    /// <summary>WM-035 (EXPERIMENTAL): elegir la salida de audio de cada app desde el menú Sonido. APAGADO por defecto: usa una interfaz interna de Windows (la de su propio mezclador).</summary>
+    public bool AppOutputRouting { get; init; } = false;
 
     // ── Centro de Notificaciones (panel lateral; se abre con el reloj, como en macOS)
     /// <summary>El reloj abre el Centro de Notificaciones de WinMac. false = abre el calendario desplegable de antes.</summary>

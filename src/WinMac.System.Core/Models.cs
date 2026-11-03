@@ -22,6 +22,12 @@ public sealed record AudioInputState(bool Available, int Volume, bool Muted, boo
 /// </summary>
 public sealed record AudioSession(string Id, int Pid, string Name, string? ExePath, int Volume, bool Muted, bool IsSystemSounds, bool Active);
 
+/// <summary>WM-035: estado de la salida por aplicación (experimental). <see cref="Outputs"/>: proceso → dispositivo (null = predeterminada).</summary>
+public sealed record AppRoutingState(bool Available, string? Reason, IReadOnlyDictionary<int, string?> Outputs)
+{
+    public static AppRoutingState Off(string reason) => new(false, reason, new Dictionary<int, string?>());
+}
+
 public sealed record AudioSessionsState(bool Available, IReadOnlyList<AudioSession> Sessions, string? Reason = null)
 {
     public static AudioSessionsState None(string reason) => new(false, [], reason);

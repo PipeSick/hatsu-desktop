@@ -37,3 +37,30 @@ Fecha: 2026-11-03 · Rama `claude/relaxed-turing-cijzko` (WinMac y NotchWin) · 
 | Sí | Sí | El Dock se oculta y reaparece al tocar el borde de la pantalla; la barra de Windows sigue oculta; las maximizadas llegan al borde |
 
 Para cada combinación: cursor al borde, maximizar y restaurar, 150 %, cambiar el ajuste en caliente, reiniciar y cerrar WinMac, reiniciar el Explorador, y desactivar la ocultación (la barra vuelve con tu ajuste original).
+
+## Etapa B — Mezclador de sonido (WM-035)
+
+| Problema | Cambio |
+|---|---|
+| Panel alto y estrecho | 400 DIP de ancho, alto máximo de 560 DIP con desplazamiento interno. Título y volumen general quedan fijos arriba; los accesos a Windows, fijos abajo. Se adapta a pantallas pequeñas: el centro se desplaza. |
+| Controles separados y desalineados | Fila de aplicación compacta de 34 DIP: icono · nombre (columna fija) · deslizador (misma columna en todas las filas) · % (columna fija) · silencio · [salida]. |
+| Dispositivos en listas largas | Selectores desplegables de **Salida** y **Entrada** con el dispositivo activo a la vista, y deslizador del micrófono con % y silencio en su icono. |
+| Aplicaciones duplicadas | Las sesiones de una misma app se **agrupan**: la primera lleva icono y nombre; las demás van debajo como «Sesión 2…», unidas por una guía. **Cada una conserva su volumen**: no se suman ni se igualan. |
+| Texto explicativo innecesario | Fuera. Solo quedan los motivos reales (sin aplicaciones, sin micrófono, salida por app no disponible). |
+| Accesos de Windows | «Mezclador de Windows» y «Sonido de Windows», en una fila. |
+
+Con «Mezclador en el menú Sonido» desactivado sigue el menú sencillo de antes, igual que estaba.
+
+### Salida de audio por aplicación (experimental, desactivada por defecto)
+
+- **Interfaz:** Windows no tiene API pública. Se usa la **interfaz interna `Windows.Media.Internal.AudioPolicyConfig`** (`IAudioPolicyConfigFactory`), la misma de «Volumen de la aplicación y preferencias de dispositivo» de Configuración, que también usan proyectos abiertos como EarTrumpet (MIT).
+  - Hay dos variantes conocidas: Windows 10 1803–21H1 y Windows 11/21H2+. Se prueban las dos.
+  - Con `Get` y `Set` sobre `SetPersistedDefaultAudioEndpoint`, para los roles multimedia y consola, como Configuración.
+- **Aislamiento:** todo ocurre en un **proceso auxiliar** (`WinMac.Bar.App --audio-route probe|get|set`), con un tiempo máximo de 5 s. Si la interfaz no encaja con tu Windows, el que falla es ese proceso, no la Barra, y queda anotado en `bar.log`.
+- **Verificación:** cada cambio se **lee de vuelta**. Si Windows no lo guardó, se informa del fallo y nunca se da por aplicado. Un cambio solo afecta a la app elegida (su proceso).
+- **Persistencia:** la preferencia la guarda Windows por aplicación, como al elegirla en Configuración, así que sobrevive a que la app reinicie su sesión de audio. «Predeterminada del sistema» la borra.
+- **Uso:** Ajustes › Barra › Sonido › «Salida por aplicación (experimental)». Con ella activa y aceptada por Windows, cada fila muestra una píldora con su salida («Predeterminada», «Audífonos USB»…) y al tocarla se elige. Si Windows no la acepta, no hay píldoras y una línea dice por qué. El mezclador de Windows sigue a un toque.
+- **No validado en hardware:** el CI no tiene dispositivos de audio. Pruébalo así: Spotify → altavoces, Discord → audífonos USB, Chrome → altavoces. Después reinicia cada app y comprueba que la preferencia se mantiene. Vuelve a «Predeterminada».
+
+Archivos: `PanelBuilder.SoundPanel`/`MixerRows`/`OutputLabel`, `PanelModel` (fila compacta, `MaxHeight`), `PanelController` (selector de salida), `PanelOperations` (`appout:`/`approute:`), `SystemHub.RefreshRouting`, `IAppAudioRouting` (System.Core), `AudioPolicyRouting` (System.Win), `AppAudioRoutingClient` (Bar.Win), `WinMac.Bar.App --audio-route`, `PanelPainter.Hub` (fila compacta), ajuste `appOutputRouting`.
+Pruebas: orden y medidas del menú, % y silencio, dispositivo activo visible, agrupado sin mezclar volúmenes, límite de filas, alto máximo con desplazamiento, salida solo con la función activa y aceptada, motivo cuando no, columnas alineadas y clics en silencio, salida y deslizador. Bar.Core: 433 pruebas.

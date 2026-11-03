@@ -5,7 +5,7 @@ namespace WinMac.Bar;
 
 /// <summary>Última lectura de los servicios del sistema (la rellena un hilo de trabajo; la interfaz solo lee).</summary>
 public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothState Bluetooth, BrightnessState Brightness, PowerModeState Power, AppearanceState Appearance,
-    bool OutputSwitchOk, string? OutputSwitchReason, bool CanRestoreOutput, AudioInputState? Input = null, AudioSessionsState? Sessions = null)
+    bool OutputSwitchOk, string? OutputSwitchReason, bool CanRestoreOutput, AudioInputState? Input = null, AudioSessionsState? Sessions = null, AppRoutingState? Routing = null)
 {
     public AudioInputState Mic => Input ?? AudioInputState.None("Leyendo…");
     public AudioSessionsState AppSessions => Sessions ?? AudioSessionsState.None("Leyendo…");
@@ -207,16 +207,75 @@ public static partial class PanelBuilder
     }
 
     /// <summary>
-    /// Menú Sonido del icono de volumen (iteración 4: mezclador). Orden: volumen general con %, silencio, salida predeterminada, entrada predeterminada,
-    /// volumen por aplicación (sesiones reales de Windows: icono, nombre, deslizador, %, silencio y actividad) y ajustes avanzados de Windows.
-    /// La salida POR APLICACIÓN no tiene API pública en Windows: no se ofrece un selector que lo aparente; se abre el mezclador de Windows, que sí la tiene.
-    /// Con <see cref="BarConfig.SoundMixer"/> desactivado queda el menú de antes (volumen y salida). El centro se desplaza si no cabe: la cabecera y los ajustes quedan fijos.
+    /// Menú Sonido del icono de volumen. WM-035 (rediseño): ancho (400 DIP), compacto y alineado, con alto máximo y desplazamiento interno.
+    /// Arriba, fijos: título y volumen general (% y silencio en su icono). Después: dispositivos (salida y entrada en selectores, volumen del micrófono) y las aplicaciones,
+    /// una fila por sesión real (icono · nombre · deslizador · % · silencio), con las sesiones de una misma app agrupadas bajo un solo icono y nombre: cada una conserva su
+    /// volumen (no se suman ni se igualan). Salida por aplicación: solo si la función experimental está activa y Windows la acepta en este equipo (selector por fila).
+    /// Abajo, fijos: el mezclador y la configuración de sonido de Windows. Con <see cref="BarConfig.SoundMixer"/> desactivado queda el menú sencillo de antes.
     /// </summary>
     public static PanelModel SoundPanel(PanelContext c)
     {
+        var s = c.Sys.Audio;
+        if (!c.Cfg.SoundMixer) return SimpleSoundPanel(c);
+        var w = new List<Widget> { Back("Sonido") };
+        w.Add(new Widget(WidgetKind.Slider, "volume", "", Sub: s.Available ? (s.Muted ? "Silencio" : $"{s.Volume} %") : null, Value: s.Volume, Enabled: s.Available, Reason: s.Reason, Glyph: s.Muted ? "sound-muted" : "sound", Data: "mute"));
+        int pinTop = w.Count;
+
+        w.Add(new Widget(WidgetKind.Header, "devices", "Dispositivos", Glyph: "section"));
+        string outName = s.Outputs.FirstOrDefault(o => o.IsDefault)?.Name ?? (s.Available ? "Dispositivo predeterminado" : "No disponible");
+        w.Add(new Widget(WidgetKind.Select, "pick:out", "Salida", Enabled: s.Available && s.Outputs.Count > 1 && c.Sys.OutputSwitchOk, Reason: !c.Sys.OutputSwitchOk ? c.Sys.OutputSwitchReason ?? "Windows no deja cambiarla desde WinMac en este equipo" : s.Reason,
+            Data: new SelectData("sound", "Salida", BusyOr(c, "pick:out", outName) ?? outName)));
+        var mic = c.Sys.Mic;
+        string micName = mic.Devices.FirstOrDefault(d => d.IsDefault)?.Name ?? (mic.Available ? "Micrófono predeterminado" : "Sin micrófono");
+        w.Add(new Widget(WidgetKind.Select, "pick:in", "Entrada", Enabled: mic.Available && mic.Devices.Count > 1 && c.Sys.OutputSwitchOk, Reason: mic.Reason, Data: new SelectData("mic", "Entrada", micName)));
+        if (mic.Available) w.Add(new Widget(WidgetKind.Slider, "mic", "", Sub: mic.VolumeControllable ? (mic.Muted ? "Silencio" : $"{mic.Volume} %") : null, Value: mic.Volume, Enabled: mic.VolumeControllable,
+            Reason: mic.VolumeControllable ? null : mic.Reason, Glyph: mic.Muted ? "mic-muted" : "mic", Data: "mic-mute"));
+        if (c.Sys.CanRestoreOutput) w.Add(new Widget(WidgetKind.Button, "audio-restore", "Volver a la salida anterior"));
+
+        var ses = c.Sys.AppSessions; var routing = c.Cfg.AppOutputRouting ? c.Sys.Routing : null;
+        w.Add(new Widget(WidgetKind.Header, "apps", "Aplicaciones", ses.Available && ses.Sessions.Count > 0 ? ses.Sessions.Count.ToString() : null, Glyph: "section"));
+        if (!ses.Available) w.Add(new Widget(WidgetKind.Note, "apps-none", ses.Reason ?? "No se pudieron leer las aplicaciones con audio."));
+        else if (ses.Sessions.Count == 0) w.Add(new Widget(WidgetKind.Note, "apps-none", "Ninguna aplicación está usando el audio."));
+        else foreach (var row in MixerRows(ses.Sessions, routing, s.Outputs)) w.Add(row);
+        if (c.Cfg.AppOutputRouting && routing is { Available: false } off) w.Add(new Widget(WidgetKind.Note, "route-off", "Salida por aplicación no disponible: " + (off.Reason ?? "Windows no la acepta en este equipo") + "."));
+
+        Msg(w, c);
+        w.Add(new Widget(WidgetKind.Button, "open:ms-settings:apps-volume", "Mezclador de Windows", Col: 0));
+        w.Add(new Widget(WidgetKind.Button, "open:ms-settings:sound", "Sonido de Windows", Col: 1));
+        return new PanelModel(PanelKind.Sound, "Sonido", w, MixerWidth, PinTop: pinTop, PinBottom: 2, MaxHeight: MixerMaxHeight);
+    }
+
+    public const double MixerWidth = 400, MixerMaxHeight = 560;
+
+    /// <summary>
+    /// Una fila por sesión de audio real, agrupadas por app (mismo ejecutable): la primera lleva icono y nombre; las demás van debajo como «Sesión 2…» con su propio volumen.
+    /// Los grupos, en el orden en que Windows da las sesiones (las activas suelen ir primero). Como mucho <see cref="MixerMaxApps"/> filas.
+    /// </summary>
+    public static IEnumerable<Widget> MixerRows(IReadOnlyList<AudioSession> sessions, AppRoutingState? routing, IReadOnlyList<AudioDevice> outputs)
+    {
+        int rows = 0;
+        foreach (var g in sessions.GroupBy(a => a.ExePath ?? a.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            int k = 0;
+            foreach (var a in g)
+            {
+                if (rows++ >= MixerMaxApps) yield break;
+                k++;
+                string? output = routing is { Available: true } r && a.Pid > 0 ? OutputLabel(r.Outputs.TryGetValue(a.Pid, out var dev) ? dev : null, outputs) : null;
+                yield return new Widget(WidgetKind.AppRow, a.Id, k == 1 ? a.Name : $"Sesión {k}", Value: a.Volume,
+                    Data: new AppRowData(a.ExePath, k == 1 ? a.Name : $"Sesión {k}", a.Volume, a.Muted, a.Active, Compact: true, Output: output, SubRow: k > 1));
+            }
+        }
+    }
+
+    /// <summary>Nombre corto de la salida elegida para una app («Predeterminada» si sigue la del sistema; un dispositivo que ya no existe se dice).</summary>
+    public static string OutputLabel(string? deviceId, IReadOnlyList<AudioDevice> outputs) =>
+        deviceId is null ? "Predeterminada" : outputs.FirstOrDefault(o => string.Equals(o.Id, deviceId, StringComparison.OrdinalIgnoreCase))?.Name ?? "No conectada";
+
+    private static PanelModel SimpleSoundPanel(PanelContext c)
+    {
         var s = c.Sys.Audio; var w = new List<Widget> { Back("Sonido") };
-        bool mixer = c.Cfg.SoundMixer;
-        w.Add(new Widget(WidgetKind.Slider, "volume", "Volumen", Sub: mixer && s.Available ? $"{s.Volume} %" : null, Value: s.Volume, Enabled: s.Available, Reason: s.Reason, Glyph: s.Muted ? "sound-muted" : "sound"));
+        w.Add(new Widget(WidgetKind.Slider, "volume", "Volumen", Value: s.Volume, Enabled: s.Available, Reason: s.Reason, Glyph: s.Muted ? "sound-muted" : "sound"));
         if (s.Available)
         {
             w.Add(new Widget(WidgetKind.Row, "mute", "Silenciar", s.Muted ? "Silenciado" : "Con sonido", On: s.Muted));
@@ -226,34 +285,9 @@ public static partial class PanelBuilder
             if (!canSwitch) w.Add(new Widget(WidgetKind.Note, "noswitch", c.Sys.OutputSwitchReason ?? "No se puede cambiar la salida desde WinMac en este equipo."));
             if (c.Sys.CanRestoreOutput) w.Add(new Widget(WidgetKind.Button, "audio-restore", "Volver a la salida anterior"));
         }
-
-        if (mixer)
-        {
-            var mic = c.Sys.Mic;
-            w.Add(new Widget(WidgetKind.Header, "inputs", "Entrada", Glyph: "section"));
-            if (!mic.Available) w.Add(new Widget(WidgetKind.Note, "in-none", mic.Reason ?? "No hay micrófono disponible."));
-            else
-            {
-                bool inSwitch = c.Sys.OutputSwitchOk;   // el mismo mecanismo (IPolicyConfig) cambia la entrada: si no está, tampoco se aparenta
-                foreach (var d in mic.Devices) w.Add(new Widget(WidgetKind.Row, "in:" + d.Id, d.Name, BusyOr(c, "in:" + d.Id, d.IsDefault ? "Predeterminada" : inSwitch ? "Toca para usar esta entrada" : null), On: d.IsDefault, Enabled: inSwitch || d.IsDefault, Glyph: d.IsDefault ? "check" : null));
-                if (mic.Devices.Count == 0) w.Add(new Widget(WidgetKind.Note, "in-none", "No hay micrófonos activos."));
-                w.Add(new Widget(WidgetKind.Slider, "mic", "", Sub: mic.VolumeControllable ? $"{mic.Volume} %" : null, Value: mic.Volume, Enabled: mic.VolumeControllable, Reason: mic.VolumeControllable ? null : mic.Reason,
-                    Glyph: mic.Muted ? "mic-muted" : "mic", Data: "mic-mute"));
-            }
-
-            var ses = c.Sys.AppSessions;
-            w.Add(new Widget(WidgetKind.Header, "apps", "Por aplicación", Glyph: "section"));
-            if (!ses.Available) w.Add(new Widget(WidgetKind.Note, "apps-none", ses.Reason ?? "No se pudieron leer las aplicaciones con audio."));
-            else if (ses.Sessions.Count == 0) w.Add(new Widget(WidgetKind.Note, "apps-none", "Ninguna aplicación tiene sesión de audio ahora."));
-            else foreach (var app in ses.Sessions.Take(MixerMaxApps)) w.Add(new Widget(WidgetKind.AppRow, app.Id, app.Name, Value: app.Volume, Data: new AppRowData(app.ExePath, app.Name, app.Volume, app.Muted, app.Active)));
-            w.Add(new Widget(WidgetKind.Note, "app-output", "Windows no ofrece una API pública para elegir la salida de cada aplicación; se hace en su mezclador."));
-        }
-
         Msg(w, c);
-        int pinBottom = 1;
-        if (mixer) { w.Add(new Widget(WidgetKind.Button, "open:ms-settings:apps-volume", "Salida por aplicación (mezclador de Windows)…")); pinBottom++; }
-        w.Add(new Widget(WidgetKind.Button, "open:ms-settings:sound", "Configuración de sonido de Windows…"));
-        return new PanelModel(PanelKind.Sound, "Sonido", w, PinTop: 1, PinBottom: pinBottom);
+        w.Add(new Widget(WidgetKind.Button, "open:ms-settings:sound", "Abrir configuración de sonido…"));
+        return new PanelModel(PanelKind.Sound, "Sonido", w);
     }
 
     /// <summary>

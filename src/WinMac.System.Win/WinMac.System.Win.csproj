@@ -4,6 +4,7 @@
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>WinMac.SystemControl.Win</RootNamespace>
     <Platforms>AnyCPU</Platforms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>   <!-- WM-035: llamada por tabla virtual a la interfaz interna de Audio Policy (solo en el proceso auxiliar) -->
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinMac.System.Core\WinMac.System.Core.csproj" />
