@@ -54,6 +54,29 @@ public static class NotchFeed
     /// <summary>Identity of a snapshot (ids and times): equal keys mean nothing to send.</summary>
     public static string SnapshotKey(IReadOnlyList<AppNotification> list) => string.Join(",", list.OrderBy(n => n.Id).Select(n => n.Id + ":" + n.Time.ToUnixTimeMilliseconds()));
 
+    // ───────────── WinMac Connect: las del iPhone en la Isla, con el mismo formato (la Isla no cambia: las distingue el nombre «iPhone · App»)
+    /// <summary>Id de la Isla para una notificación del iPhone: nunca choca con las de Windows (32 bits) ni con las de otra sesión ANCS.</summary>
+    public static long PhoneIslandId(WinMac.Connect.ConnectWire.Item i) => PhoneInbox.IslandIdBase + ((i.Session & 0xFF) << 32) + i.Uid;
+
+    /// <summary>Lista combinada para la pestaña Notificaciones: Windows (si está activado) y el iPhone (si está activado), la más reciente primero, como mucho 60.</summary>
+    public static object Snapshot(IReadOnlyList<AppNotification> windows, IReadOnlyList<WinMac.Connect.ConnectWire.Item> phone) => new
+    {
+        kind = "notifications",
+        items = windows.Select(n => (at: n.Time.ToUnixTimeMilliseconds(), o: (object)new { id = (long)n.Id, app = n.DisplayApp, appId = string.IsNullOrWhiteSpace(n.AppId) ? null : n.AppId, title = n.Title, body = n.Body, at = n.Time.ToUnixTimeMilliseconds() }))
+            .Concat(phone.Select(i => { var (t, b) = PhoneInbox.Text(i); return (at: i.At, o: (object)new { id = PhoneIslandId(i), app = "iPhone · " + i.App, appId = (string?)null, title = t, body = b, at = i.At }); }))
+            .OrderByDescending(x => x.at).Take(60).Select(x => x.o).ToArray(),
+    };
+
+    public static string SnapshotKey(IReadOnlyList<AppNotification> windows, IReadOnlyList<WinMac.Connect.ConnectWire.Item> phone) =>
+        SnapshotKey(windows) + "|" + string.Join(",", phone.Select(i => i.Key + ":" + i.At + ":" + (i.Title?.Length ?? 0) + ":" + (i.Body?.Length ?? 0)));
+
+    /// <summary>Aviso emergente de una notificación nueva del iPhone (sin «Abrir»: no se puede abrir una app del iPhone desde el PC).</summary>
+    public static object PhoneNotification(WinMac.Connect.ConnectWire.Item i)
+    {
+        var (t, b) = PhoneInbox.Text(i);
+        return new { kind = "notification", id = PhoneIslandId(i), app = "iPhone · " + i.App, title = t, body = b, icon = (string?)null, iconW = 0, iconH = 0 };
+    }
+
     /// <summary>Modo «No molestar» / presentación / pantalla completa: <c>SHQueryUserNotificationState</c> distinto de <c>QUNS_ACCEPTS_NOTIFICATIONS</c> (5).
     /// Desconocido (la llamada falla) cuenta como «acepta», igual que hace Windows con sus propias notificaciones.</summary>
     public static bool Quiet(int? userNotificationState) => userNotificationState is { } s && s != 5;

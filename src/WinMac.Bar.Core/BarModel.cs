@@ -1,6 +1,6 @@
 namespace WinMac.Bar;
 
-public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather, TrayMenu }
+public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather, TrayMenu, Phone }
 
 /// <summary>
 /// Un elemento de la barra. <see cref="Text"/> puede estar vacío (solo icono). <see cref="GlyphWidth"/> es el ancho fijo del icono (0 = sin icono).
@@ -38,6 +38,9 @@ public static class BarModel
         if (c.ShowBluetooth && s.Bt.Present) right.Add(new BarItem(BarItemKind.Bluetooth, "", IconW));
         if (c.ShowNetwork && s.Network.Kind != NetKind.Unknown) right.Add(new BarItem(BarItemKind.Network, "", IconW));
         if (c.ShowVolume && s.Volume.Available) right.Add(new BarItem(BarItemKind.Volume, "", IconW));
+        // WinMac Connect: solo con el módulo activo y un iPhone conocido. El porcentaje, solo si es real y reciente (desconectado: el icono sin número).
+        if (c.ShowPhone && s.Phone is { DeviceName: not null } ph && ph.Status is not (WinMac.Connect.PhoneLinkStatus.NoDevice or WinMac.Connect.PhoneLinkStatus.NoBluetooth) && ph.BatteryStatus != WinMac.Connect.PhoneFeatureStatus.Off)
+            right.Add(new BarItem(BarItemKind.Phone, WinMac.Connect.PhoneStatusText.CurrentBattery(ph, s.Now.ToUniversalTime()) is { } pb ? $"{pb}%" : "", IconW));
         if (c.ShowBattery && s.Battery.Present) right.Add(new BarItem(BarItemKind.Battery, c.ShowBatteryPercent ? $"{s.Battery.Percent}%" : "", BatteryW));
         if (c.ShowControlCenter) right.Add(new BarItem(BarItemKind.ControlCenter, "", IconW));
         right.Add(new BarItem(BarItemKind.Clock, ClockFormat.Format(s.Now, c), 0));
@@ -58,6 +61,7 @@ public static class BarModel
         BarItemKind.Hub => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Hub),
         BarItemKind.Weather => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Weather),
         BarItemKind.TrayMenu => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Tray),
+        BarItemKind.Phone => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Phone),
         _ => new BarAction(BarActionKind.None),
     };
 

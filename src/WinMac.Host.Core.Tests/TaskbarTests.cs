@@ -77,18 +77,31 @@ public class TaskbarTests
 public class ConnectSettingsTests
 {
     [Fact]
-    public void Connect_page_has_only_real_actions_and_no_fake_device_data()
+    public void Connect_is_off_by_default_and_its_page_has_only_real_controls()
     {
+        Assert.False(new HostConfig().Modules["connect"].Enabled);
+        Assert.Contains(HostConfig.Known, k => k.Id == "connect" && k.Optional);   // sin el ejecutable: «no instalado», no un fallo
         var page = SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "connect");
-        var rows = page.Groups.SelectMany(g => g.Rows).ToList();
-        Assert.All(rows, r => Assert.Contains(r.Kind, new[] { RowKind.Info, RowKind.Button }));   // ni interruptores ni estados de un teléfono que WinMac no lee
-        Assert.Equal(["connect.phonelink", "connect.bt"], rows.Where(r => r.Kind == RowKind.Button).Select(r => r.Id));
+        var rows = page.Groups.SelectMany(g => g.Rows).ToDictionary(r => r.Id);
+        Assert.False(rows["connect.module"].On); Assert.False(rows["connect.notifs"].Enabled);   // apagado: lo demás atenuado con su motivo
+        Assert.DoesNotContain(rows.Keys, k => k.Contains("phonelink") || k.Contains("answer") || k.Contains("reject"));   // ni Phone Link ni contestar/rechazar sin validar
+        Assert.Equal(SettingsBuilder.ContentNames.Length, rows["connect.content"].Options!.Count);
+    }
+
+    [Fact]
+    public void Connect_settings_are_saved_and_published_to_the_module()
+    {
         string f = Path.Combine(Path.GetTempPath(), "winmac-cn-" + Guid.NewGuid().ToString("N") + ".json");
-        var opened = new List<string>(); var a = new SettingsActions(new ConfigService(f, new HostConfig()), () => { }, _ => { });
-        Assert.False(a.Apply(new SettingsEdit("connect.phonelink", "button")));   // sin host no se finge
-        a.OpenUri = opened.Add;
-        Assert.True(a.Apply(new SettingsEdit("connect.phonelink", "button"))); Assert.True(a.Apply(new SettingsEdit("connect.bt", "button")));
-        Assert.Equal([SettingsActions.PhoneLinkApp, "ms-settings:bluetooth"], opened);
-        Assert.False(File.Exists(f));
+        try
+        {
+            var cfg = new ConfigService(f, new HostConfig()); var opened = new List<string>(); var a = new SettingsActions(cfg, () => { }, _ => { }) { OpenUri = opened.Add };
+            Assert.True(a.Apply(new SettingsEdit("connect.module", "toggle", On: true))); Assert.True(cfg.Current.Modules["connect"].Enabled);
+            Assert.True(a.Apply(new SettingsEdit("connect.content", "segment", Index: 2))); Assert.Equal(WinMac.Connect.ContentLevel.AppOnly, cfg.Connect.Content);
+            Assert.True(a.Apply(new SettingsEdit("connect.device", "text", Text: "  iPhone de PipeSick "))); Assert.Equal("iPhone de PipeSick", cfg.Connect.DeviceName);
+            Assert.True(a.Apply(new SettingsEdit("connect.calls", "toggle", On: false))); Assert.False(cfg.Connect.Calls);
+            Assert.True(a.Apply(new SettingsEdit("connect.bt", "button"))); Assert.Equal(["ms-settings:bluetooth"], opened);
+            var back = HostConfig.Load(f); Assert.Equal(cfg.Connect, back.Connect); Assert.True(back.Modules["connect"].Enabled);
+        }
+        finally { File.Delete(f); }
     }
 }

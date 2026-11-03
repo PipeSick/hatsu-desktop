@@ -22,7 +22,7 @@ if (Test-Path (Join-Path $env:LOCALAPPDATA 'WinMac\taskbar-restore.json')) {
   if (Test-Path $exe) { Start-Process -FilePath $exe -ArgumentList '--restore-taskbar', '--quiet' -Wait -WindowStyle Hidden } elseif (Test-Path $rt) { & $rt }
   Write-Host 'Barra de tareas de Windows restaurada.'
 }
-$left = Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'WinMac.Ext.Demos' -ErrorAction SilentlyContinue |
+$left = Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'WinMac.Connect.App', 'NotchWin.App', 'WinMac.Ext.Demos' -ErrorAction SilentlyContinue |
   Where-Object { $_.Path -and $_.Path.StartsWith((Resolve-Path $InstallDir).Path, [StringComparison]::OrdinalIgnoreCase) }
 if ($left) { Write-Host "Esperando a $($left.Count) proceso(s)…"; $left | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue }
 

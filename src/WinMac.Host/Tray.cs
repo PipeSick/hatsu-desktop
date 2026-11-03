@@ -51,7 +51,7 @@ internal sealed class Tray : IDisposable
         return Native.DefWindowProc(h, msg, w, l);
     }
 
-    private static string Label(string id) => id switch { "bar" => "Barra superior", "dock" => "Dock", "notch" => "Isla", _ => id };
+    private static string Label(string id) => id switch { "bar" => "Barra superior", "dock" => "Dock", "notch" => "Isla", "connect" => "WinMac Connect", _ => id };
     private static string Text(ModuleState s) => s switch
     {
         ModuleState.Running => "en ejecución", ModuleState.Starting => "iniciando…", ModuleState.Stopping => "cerrando…", ModuleState.Stopped => "detenido", ModuleState.Crashed => "reiniciando…",

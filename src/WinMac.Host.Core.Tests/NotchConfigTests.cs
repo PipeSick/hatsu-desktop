@@ -148,7 +148,7 @@ public class HostControllerTests
     [Fact]
     public void Start_publishes_the_current_notch_settings_as_retained_state()
     {
-        var (f, _, h, file) = Make(); try { h.Start(); lock (f.Bus.Published) { Assert.Equal(2, f.Bus.Published.Count); Assert.Equal(NotchSettings.Topic, f.Bus.Published[0].Topic); Assert.Equal(HostController.BarTopic, f.Bus.Published[1].Topic); } } finally { File.Delete(file); }
+        var (f, _, h, file) = Make(); try { h.Start(); lock (f.Bus.Published) { Assert.Equal(3, f.Bus.Published.Count); Assert.Equal(NotchSettings.Topic, f.Bus.Published[0].Topic); Assert.Equal(HostController.BarTopic, f.Bus.Published[1].Topic); Assert.Equal(WinMac.Connect.ConnectTopics.Config, f.Bus.Published[2].Topic); } } finally { File.Delete(file); }
     }
 
     [Fact]

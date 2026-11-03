@@ -58,6 +58,12 @@ public sealed class ConfigService
     });
 
     public bool SetAutostartFlag(bool on) => Update(c => c.Autostart == on ? c : c with { Autostart = on });
+    public WinMac.Connect.ConnectSettings Connect => Current.Connect ?? new WinMac.Connect.ConnectSettings();
+    public bool UpdateConnect(Func<WinMac.Connect.ConnectSettings, WinMac.Connect.ConnectSettings> change) => Update(c =>
+    {
+        var cur = c.Connect ?? new WinMac.Connect.ConnectSettings(); var n = change(cur).Sanitize();
+        return n == cur ? c : c with { Connect = n };
+    });
     public bool SetHideTaskbar(bool on) => Update(c => c.HideTaskbar == on ? c : c with { HideTaskbar = on });
 }
 
@@ -81,6 +87,7 @@ public sealed class HostController
     private void OnModuleState(string module, ModuleState state)
     {
         if (module == "notch" && state is ModuleState.Crashed or ModuleState.Failed or ModuleState.Stopped or ModuleState.Stopping or ModuleState.Disabled or ModuleState.NotInstalled) ReleaseNotchSpace();
+        if (module == "connect" && state is ModuleState.Failed or ModuleState.Stopped or ModuleState.Disabled) ConnectOff();   // un estado viejo del iPhone no se muestra como actual
     }
 
     private void ReleaseNotchSpace() => _bus.Publish(NotchSettings.RectsTopic, new { rects = Array.Empty<object>() });
@@ -96,7 +103,12 @@ public sealed class HostController
     /// <summary>Abrir la ventana de Ajustes, en una sección o null.</summary>
     public Action<string?>? SettingsRequested { get; set; }
 
-    public void Start() { _bus.Publish(NotchSettings.Topic, _cfg.Notch.ToWire()); _bus.Publish(BarTopic, BarWire(_cfg.Bar)); }
+    public void Start() { _bus.Publish(NotchSettings.Topic, _cfg.Notch.ToWire()); _bus.Publish(BarTopic, BarWire(_cfg.Bar)); _bus.Publish(WinMac.Connect.ConnectTopics.Config, ConnectWire(_cfg.Connect)); }
+
+    /// <summary>WinMac Connect se apagó (o se detuvo): el estado y la lista retenidos dejan de valer y la barra deja de mostrar el iPhone.</summary>
+    public void ConnectOff() { _bus.Publish(WinMac.Connect.ConnectTopics.State, WinMac.Connect.ConnectWire.Off); _bus.Publish(WinMac.Connect.ConnectTopics.Notifications, new { items = Array.Empty<object>() }); }
+
+    private static object ConnectWire(WinMac.Connect.ConnectSettings c) => JsonSerializer.SerializeToElement(c, WinMac.Connect.ConnectSettings.Wire);
 
     /// <summary>La configuración de la Barra tal como viaja (camelCase, enums como texto).</summary>
     private static object BarWire(BarConfig b) => JsonDocument.Parse(b.ToWireJson()).RootElement.Clone();
@@ -130,6 +142,8 @@ public sealed class HostController
     {
         if (!ConfigService.SameNotch(old.Notch ?? new NotchSettings(), @new.Notch ?? new NotchSettings()) || old.Notch is null != @new.Notch is null) _bus.Publish(NotchSettings.Topic, (@new.Notch ?? new NotchSettings()).ToWire());
         if ((old.Bar ?? new BarConfig()) != (@new.Bar ?? new BarConfig()) || old.Bar is null != @new.Bar is null) _bus.Publish(BarTopic, BarWire(@new.Bar ?? new BarConfig()));
+        if ((old.Connect ?? new()) != (@new.Connect ?? new())) _bus.Publish(WinMac.Connect.ConnectTopics.Config, ConnectWire(@new.Connect ?? new()));
+        if (old.Modules.TryGetValue("connect", out var oc) && oc.Enabled && @new.Modules.TryGetValue("connect", out var nc2) && !nc2.Enabled) ConnectOff();
         foreach (var (id, m) in @new.Modules)
             if (!old.Modules.TryGetValue(id, out var o) || o.Enabled != m.Enabled)
             {

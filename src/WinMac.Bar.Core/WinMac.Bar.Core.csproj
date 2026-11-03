@@ -4,5 +4,5 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>WinMac.Bar</RootNamespace>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\WinMac.System.Core\WinMac.System.Core.csproj" /><ProjectReference Include="..\WinMac.Apps.Core\WinMac.Apps.Core.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\WinMac.System.Core\WinMac.System.Core.csproj" /><ProjectReference Include="..\WinMac.Apps.Core\WinMac.Apps.Core.csproj" /><ProjectReference Include="..\WinMac.Connect.Core\WinMac.Connect.Core.csproj" /></ItemGroup>
 </Project>

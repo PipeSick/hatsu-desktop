@@ -32,7 +32,7 @@ public sealed partial class BarHost
     public Action<object>? NotchActivity { get; set; }
 
     /// <summary>Ajustes centrales de la Isla (tópico retenido): qué quiere recibir.</summary>
-    public void ApplyNotchOptions(NotchFeedOptions o) { _notchOpts = o; _notchSnapshotKey = null; if (!o.Notifications) Post(_notchTracker.Reset); }   // the Island (re)connected: it gets the snapshot again
+    public void ApplyNotchOptions(NotchFeedOptions o) { _notchOpts = o; _notchSnapshotKey = null; if (!o.Notifications) Post(_notchTracker.Reset); Post(SendNotchSnapshot); }   // the Island (re)connected: it gets the snapshot again
 
     private void Send(object payload)
     {
@@ -47,7 +47,7 @@ public sealed partial class BarHost
         if (now < _nextNotchRead || _notchReading) return;
         _nextNotchRead = now + NotchNotifyEvery;
         // WM-025: Windows is read whenever WinMac shows Windows' notifications (also with the pill off): the Island's tab mirrors the centre; pills stay optional
-        if (!_cfg.NotificationsFromWindows || _ncSrc is not { } src) { _notchTracker.Reset(); return; }
+        if (!_cfg.NotificationsFromWindows || _ncSrc is not { } src) { _notchTracker.Reset(); if (_notchWin.Count > 0) { _notchWin = []; SendNotchSnapshot(); } return; }
         _notchReading = true;
         Task.Run(() =>
         {
@@ -58,8 +58,7 @@ public sealed partial class BarHost
             {
                 _notchReading = false;
                 if (list is null) { _notchTracker.Reset(); return; }
-                var key = NotchFeed.SnapshotKey(list);
-                if (key != _notchSnapshotKey) { _notchSnapshotKey = key; Send(NotchFeed.Snapshot(list)); }
+                _notchWin = list; SendNotchSnapshot();   // Windows + iPhone (WinMac Connect) en la misma lista
                 var fresh = _notchTracker.Observe(list, DateTimeOffset.Now);
                 if (fresh.Count == 0 || !_notchOpts.Notifications) return;
                 if (NotchFeed.Quiet(UserNotificationState())) { _log($"[isla] {fresh.Count} notificación(es) sin mostrar: No molestar / presentación / pantalla completa"); return; }

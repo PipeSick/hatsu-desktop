@@ -16,7 +16,7 @@ public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothS
 /// <summary>Estado de interfaz de los paneles: mes visible, día elegido, operaciones en curso («Conectando…») y el último error.</summary>
 public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo Battery, DateTime Now, IReadOnlyList<CalendarEvent> Events, int ViewYear, int ViewMonth,
     DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null, string? ForegroundApp = null, IReadOnlyList<Tray.TrayIcon>? Tray = null,
-    BatteryDetails? BatteryDetail = null, SessionUser? User = null, bool BatteryDetailsOpen = false)
+    BatteryDetails? BatteryDetail = null, SessionUser? User = null, bool BatteryDetailsOpen = false, WinMac.Connect.PhoneState? Phone = null)
 {
     public static PanelContext Initial(BarConfig cfg, DateTime now) => new(SystemSnapshot.Empty, cfg, BatteryInfo.None, now, [], now.Year, now.Month, null, new Dictionary<string, string>(), null);
 }
@@ -47,6 +47,7 @@ public static partial class PanelBuilder
         PanelKind.Notifications => NotificationCenter(c),
         PanelKind.AppleMenu => AppleMenu(c),
         PanelKind.Tray => TrayMenu(c),
+        PanelKind.Phone => PhonePanel(c),
         _ => ControlCenter(c),
     };
 
@@ -262,6 +263,41 @@ public static partial class PanelBuilder
     public static string AppearanceText(AppearanceState a) => !a.Available ? "No disponible"
         : a.SystemDark is { } sys && sys != a.Dark ? (a.Dark ? "Mixto: apps oscuras" : "Mixto: apps claras")
         : a.Dark ? "Activado" : "Desactivado";
+
+    /// <summary>
+    /// WinMac Connect: el iPhone (nombre, estado de conexión, batería real y su hora). Sin conexión se dice cuándo fue la última lectura, nunca como si fuera actual.
+    /// El estado de carga no se muestra: el servicio de batería de Bluetooth solo da el porcentaje.
+    /// </summary>
+    public static PanelModel PhonePanel(PanelContext c)
+    {
+        var w = new List<Widget>(); var p = c.Phone; var now = c.Now.ToUniversalTime();
+        if (p is null)
+        {
+            w.Add(new Widget(WidgetKind.Note, "phone-off", "WinMac Connect no está activo. Actívalo en Ajustes › WinMac Connect."));
+            w.Add(new Widget(WidgetKind.Button, "phone:settings", "Ajustes de WinMac Connect…", Glyph: "gear"));
+            return new PanelModel(PanelKind.Phone, "iPhone", w);
+        }
+        w.Add(new Widget(WidgetKind.Info, "phone-name", p.DeviceName ?? "iPhone", WinMac.Connect.PhoneStatusText.Status(p), On: p.Status == WinMac.Connect.PhoneLinkStatus.Connected));
+        if (WinMac.Connect.PhoneStatusText.CurrentBattery(p, now) is { } pct)
+            w.Add(new Widget(WidgetKind.MeterRow, "phone-battery", "Batería", $"{pct} %", Value: pct / 100.0, Data: new MeterData(pct >= 50 ? "green" : pct >= 20 ? "yellow" : "red")));
+        else if (p.Battery is { } last)
+            w.Add(new Widget(WidgetKind.Info, "phone-battery", "Batería", $"Última lectura: {last} % · {WinMac.Connect.PhoneStatusText.Ago(p.BatteryAtUtc, now)}"));
+        else if (p.BatteryStatus != WinMac.Connect.PhoneFeatureStatus.Off)
+            w.Add(new Widget(WidgetKind.Info, "phone-battery", "Batería", p.BatteryStatus == WinMac.Connect.PhoneFeatureStatus.Unavailable ? "El iPhone no la ofrece ahora" : "Sin lectura todavía"));
+        if (p.Battery is not null) w.Add(new Widget(WidgetKind.Info, "phone-when", "Actualizada", WinMac.Connect.PhoneStatusText.Ago(p.BatteryAtUtc, now)));
+        w.Add(new Widget(WidgetKind.Info, "phone-charge", "Carga", "Bluetooth no indica si está cargando"));
+        string notifs = p.NotificationsStatus switch
+        {
+            WinMac.Connect.PhoneFeatureStatus.Active => "Activas", WinMac.Connect.PhoneFeatureStatus.Starting => "Conectando…", WinMac.Connect.PhoneFeatureStatus.NotAuthorized => "Sin permiso en el iPhone",
+            WinMac.Connect.PhoneFeatureStatus.Unavailable => "No disponibles ahora", _ => "Desactivadas",
+        };
+        w.Add(new Widget(WidgetKind.Info, "phone-notifs", "Notificaciones", notifs));
+        if (p.Status != WinMac.Connect.PhoneLinkStatus.Connected && p.LastSeenUtc is { } seen) w.Add(new Widget(WidgetKind.Info, "phone-seen", "Última conexión", WinMac.Connect.PhoneStatusText.Ago(seen, now)));
+        if (!string.IsNullOrWhiteSpace(p.Message)) w.Add(new Widget(WidgetKind.Note, "phone-msg", p.Message!));
+        w.Add(new Widget(WidgetKind.Button, "phone:settings", "Ajustes de WinMac Connect…", Glyph: "gear"));
+        w.Add(new Widget(WidgetKind.Button, "open:ms-settings:bluetooth", "Bluetooth de Windows…"));
+        return new PanelModel(PanelKind.Phone, "iPhone", w);
+    }
 
     /// <summary>Aplicaciones como máximo en el mezclador del menú Sonido (el resto, en el mezclador de Windows).</summary>
     public const int MixerMaxApps = 12;

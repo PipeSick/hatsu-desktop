@@ -212,12 +212,13 @@ public sealed class PanelController
             case WidgetKind.NcSection: return PanelLayout.NcSectionActionHit(f, x) && w.Data is NcSectionData sd ? new PanelEvent(PanelEventKind.Click, sd.ActionId!) : null;
             case WidgetKind.NotifGroup:
                 return w.Data is not NotifGroupData gd ? null
-                    : new PanelEvent(PanelEventKind.Click, (PanelLayout.NotifGroupClearHit(f, x) ? "ngclear:" : "ngtoggle:") + gd.GroupKey);
+                    : new PanelEvent(PanelEventKind.Click, (PanelLayout.NotifGroupClearHit(f, x) ? gd.Origin == "iphone" ? "pgclear:" : "ngclear:" : "ngtoggle:") + gd.GroupKey);
             case WidgetKind.NotifCard:
             {
                 if (w.Data is not NotifCardData cd) return null;
-                if (PanelLayout.NotifDismissHit(f, x, y)) return new PanelEvent(PanelEventKind.Click, "ndismiss:" + cd.NotificationId);
-                return new PanelEvent(PanelEventKind.Click, cd.Stacked > 0 ? "ngtoggle:" + cd.GroupKey : "nopen:" + cd.NotificationId);   // tarjeta apilada: despliega el grupo; si no, abre la app
+                if (PanelLayout.NotifDismissHit(f, x, y)) return new PanelEvent(PanelEventKind.Click, (cd.Origin == "iphone" ? "pdismiss:" : "ndismiss:") + cd.NotificationId);
+                if (cd.Stacked > 0) return new PanelEvent(PanelEventKind.Click, "ngtoggle:" + cd.GroupKey);
+                return cd.Origin == "iphone" ? null : new PanelEvent(PanelEventKind.Click, "nopen:" + cd.NotificationId);   // una app del iPhone no se puede abrir desde el PC   // tarjeta apilada: despliega el grupo; si no, abre la app
             }
             default: return new PanelEvent(PanelEventKind.Click, w.Id);
         }

@@ -100,6 +100,11 @@ internal static class Program
             link.Subscribe("capture.edit", d => { if (d is { ValueKind: System.Text.Json.JsonValueKind.Object } e && e.TryGetProperty("path", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.String) host.RequestEdit(p.GetString()); });
             link.Subscribe("config.notch", d => host.ApplyNotchOptions(WinMac.Bar.Notch.NotchFeedOptions.Parse(d)));
             host.NotchEvent = payload => link.Event(WinMac.Bar.Notch.NotchFeed.Topic, payload);
+            // WinMac Connect (opcional): estado, lista y avisos del iPhone. Sin el módulo no llega nada.
+            link.Subscribe(WinMac.Connect.ConnectTopics.Config, d => host.ApplyConnectConfig(WinMac.Connect.ConnectSettings.Parse(d)));
+            link.Subscribe(WinMac.Connect.ConnectTopics.State, d => host.ApplyPhoneState(WinMac.Connect.ConnectWire.ParseState(d)));
+            link.Subscribe(WinMac.Connect.ConnectTopics.Notifications, d => host.ApplyPhoneList(WinMac.Connect.ConnectWire.ParseList(d)));
+            link.Subscribe(WinMac.Connect.ConnectTopics.Alert, d => { if (WinMac.Connect.ConnectWire.ParseItem(d) is { } it) host.OnPhoneAlert(it); });
             host.NotchActivity = payload => link.Event("notch.activity", payload);
             host.NotchCommand = payload => link.Event("notch.cmd", payload);
             host.ModuleEvent = (topic, payload) => link.Event(topic, payload);

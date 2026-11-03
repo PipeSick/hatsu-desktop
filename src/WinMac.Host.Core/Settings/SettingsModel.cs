@@ -55,6 +55,7 @@ public static class SettingsBuilder
         ("captureCopyToClipboard", "Copiar también al portapapeles", b => b.CaptureCopyToClipboard),
         ("captureQuickLook", "Miniatura flotante al guardar", b => b.CaptureQuickLook),
         ("soundMixer", "Mezclador en el menú Sonido", b => b.SoundMixer),
+        ("showPhone", "Indicador del iPhone en la barra superior", b => b.ShowPhone),
     ];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];
@@ -120,6 +121,7 @@ public static class SettingsBuilder
             new("Módulos", [
                 new(RowKind.Toggle, "mod:bar", "Barra superior", "Reloj, indicadores y el panel de WinMac", On("bar")),
                 new(RowKind.Toggle, "mod:dock", "Dock", "Apps abiertas y ancladas, con vista previa de ventanas", On("dock")),
+                new(RowKind.Toggle, "mod:connect", "WinMac Connect", "Batería y notificaciones del iPhone (opcional)", On("connect")),
                 new(RowKind.Toggle, "mod:notch", "Isla", "Música, actividades y más en la parte superior", installed && On("notch"), installed, installed ? null : noNotch),
             ], "Cada módulo es un proceso aparte: si uno falla, los demás siguen."),
             new("Sistema", [
@@ -242,8 +244,9 @@ public static class SettingsBuilder
         notch.Add(new(null, [new(RowKind.Button, "notch.local", "Rutas y datos de la Isla…", Enabled: installed, Reason: why)]));
         var notchPage = new SettingsPage("notch", "Isla", "island", notch);
 
+        var connectPage = ConnectPage(input, On("connect"));
         _bar = null;
-        return [general, dockPage, barPage, notchPage, capturePage, spotPage, ncPage, weatherPage, clipPage, ConnectPage(), ExtensionsPage(input.Extensions)];
+        return [general, dockPage, barPage, notchPage, capturePage, spotPage, ncPage, weatherPage, clipPage, connectPage, ExtensionsPage(input.Extensions)];
     }
 
     /// <summary>WM-019 / WM-001: tamaño del Dock (preajustes compactos y ajuste fino) y comportamiento. Escribe en dock.json, que el Dock vuelve a leer al cambiar.</summary>
@@ -282,24 +285,43 @@ public static class SettingsBuilder
     }
 
     /// <summary>
-    /// WinMac Connect (fase D, docs/38 §5): lo que es viable HOY con un iPhone sin app propia, verificado. WinMac no implementa un enlace propio en esta beta:
-    /// no lee el iPhone, no simula batería, mensajes ni llamadas y no muestra un indicador en la barra sin datos reales. Abre lo que sí funciona (Enlace Móvil de Microsoft).
+    /// WinMac Connect (docs/39, fases 1 y 2): batería, estado y notificaciones del iPhone por Bluetooth, sin app en el iPhone y sin Phone Link. Todo opcional:
+    /// el módulo viene APAGADO y cada función se puede quitar. Solo controles que hacen algo de verdad; contestar o rechazar llamadas NO se ofrece (sin validar).
     /// </summary>
-    private static SettingsPage ConnectPage() => new("connect", "WinMac Connect", "phone",
-    [
-        new("Con tu iPhone", [
-            new(RowKind.Info, "connect.state", "WinMac no se conecta al iPhone por su cuenta en esta versión: no lee datos del teléfono, no guarda credenciales de Apple y no envía nada a ningún servidor."),
-            new(RowKind.Button, "connect.phonelink", "Abrir Enlace Móvil (Phone Link) de Microsoft…"),
-            new(RowKind.Button, "connect.bt", "Configuración de Bluetooth de Windows…"),
-        ], "Enlace Móvil es gratuito, viene con Windows 11 y empareja el iPhone por Bluetooth con la app «Enlace a Windows» del App Store."),
-        new("Qué es posible y con qué", [
-            new(RowKind.Info, "connect.m1", "Notificaciones del iPhone en el PC: con Enlace Móvil. Sin app sería posible con ANCS (servicio Bluetooth documentado por Apple), aún no implementado."),
-            new(RowKind.Info, "connect.m2", "Llamadas (contestar, marcar) y SMS / iMessage: con Enlace Móvil (sin grupos ni archivos en mensajes). WinMac no puede hacerlo sin APIs privadas: no se hará."),
-            new(RowKind.Info, "connect.m3", "Archivos y fotos: Enlace Móvil (versiones recientes) o el cable y la app Fotos de Windows. Transferencia propia por la red local: requiere emparejamiento cifrado, pendiente."),
-            new(RowKind.Info, "connect.m4", "Batería y cobertura del iPhone: el iPhone no las publica por Bluetooth a un PC sin una app propia: no viable sin app complementaria."),
-            new(RowKind.Info, "connect.m5", "Portapapeles universal y Handoff: dependen de iCloud y de APIs privadas de Apple: no viable. Enlaces: compártelos con Enlace Móvil."),
-        ]),
-    ]);
+    private static SettingsPage ConnectPage(SettingsInput input, bool on)
+    {
+        var c = input.Cfg.Connect ?? new WinMac.Connect.ConnectSettings(); var bar = input.Cfg.Bar ?? new BarConfig();
+        string? off = on ? null : "Activa WinMac Connect arriba";
+        return new("connect", "WinMac Connect", "phone",
+        [
+            new("WinMac Connect", [
+                new(RowKind.Toggle, "connect.module", "Conectar con el iPhone", "Batería y notificaciones por Bluetooth. Sin app en el iPhone ni Phone Link", on),
+            ], "Un módulo aparte, como la Barra y el Dock: si falla, lo demás sigue. Desactivado, no usa el Bluetooth ni consume nada."),
+            new("iPhone", [
+                new(RowKind.Field, "connect.device", "Nombre del iPhone", "Parte del nombre que muestra Windows. Vacío: el primer iPhone emparejado", Text: c.DeviceName ?? "", Placeholder: "Automático"),
+                new(RowKind.Button, "connect.bt", "Emparejar o quitar en Configuración de Bluetooth…"),
+                new(RowKind.Info, "connect.pair", "Para emparejar: Configuración › Bluetooth y dispositivos › Agregar dispositivo › Bluetooth › tu iPhone; compara el código en las dos pantallas. En el iPhone, Ajustes › Bluetooth › (i) junto a este PC › activa «Compartir notificaciones del sistema»."),
+            ]),
+            new("Qué mostrar", [
+                new(RowKind.Toggle, "connect.battery", "Batería y estado de conexión", "El porcentaje real que da el iPhone; sin conexión no se muestra un porcentaje viejo", c.Battery, on, off),
+                Bar(35, "Solo aparece con datos reales del iPhone"),
+                new(RowKind.Toggle, "connect.notifs", "Notificaciones del iPhone", "En el Centro de Notificaciones de WinMac; las que ya tenías entran sin avisos", c.Notifications, on, off),
+                new(RowKind.Toggle, "connect.calls", "Avisos de llamadas", "Entrantes y perdidas. Contestar y rechazar desde el PC aún no está disponible", c.Calls, on && c.Notifications, on ? null : off),
+                new(RowKind.Toggle, "connect.island", "También en la Isla", "Pestaña Notificaciones de la Isla", c.Island, on && c.Notifications, on ? null : off),
+                new(RowKind.Toggle, "connect.alerts", "Aviso emergente para las nuevas", "En la Isla, como las de Windows", c.Alerts, on && c.Notifications && c.Island, on ? null : off),
+            ]),
+            new("Privacidad", [
+                new(RowKind.Segmented, "connect.content", "Contenido de las notificaciones", "Lo que no se elige ni siquiera se pide al iPhone", Options: ContentNames, Selected: (int)c.Content, Enabled: on && c.Notifications, Reason: on ? null : off),
+            ], "El contenido vive solo en memoria mientras WinMac está abierto: no se guarda en disco, no se registra y no sale del PC. Quitar el iPhone en Windows borra el vínculo."),
+            new("Qué no hace (todavía)", [
+                new(RowKind.Info, "connect.m1", "Mensajes (SMS e iMessage): fase posterior. Ahora WinMac no lee, envía ni borra mensajes."),
+                new(RowKind.Info, "connect.m2", "Hablar por el PC (micrófono y altavoces): Windows lo restringe a apps autorizadas por Microsoft; no se intenta."),
+                new(RowKind.Info, "connect.m3", "Estado de carga del iPhone: Bluetooth solo da el porcentaje. Portapapeles universal y Handoff: dependen de servicios privados de Apple."),
+            ]),
+        ]);
+    }
+
+    public static readonly string[] ContentNames = ["Completo", "Solo título", "Solo la app"];
 
     public const double DockFineMax = 96;
     public static double DockFineValue(double size) => Math.Clamp((size - WinMac.Dock.DockSettings.MinIconSize) / (DockFineMax - WinMac.Dock.DockSettings.MinIconSize) * 100, 0, 100);

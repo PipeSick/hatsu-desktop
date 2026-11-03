@@ -2,7 +2,7 @@ using WinMac.Calendar;
 
 namespace WinMac.Bar;
 
-public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications, AppleMenu, Tray, AppMenu }
+public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications, AppleMenu, Tray, AppMenu, Phone }
 
 public enum WidgetKind
 {
@@ -75,12 +75,13 @@ public sealed record TrayGridData(IReadOnlyList<TrayCellData> Cells, int Columns
 public sealed record NcSectionData(string? ActionId, string? ActionLabel);
 /// <param name="IconKey">Clave del icono de la app para el dibujo (null = sin icono: se dibuja la inicial).</param>
 /// <param name="ClearLabel">Texto del botón del grupo («Borrar» elimina en Windows, «Ocultar» solo en WinMac); null = sin botón.</param>
-public sealed record NotifGroupData(string GroupKey, string? IconKey, string AppName, int Count, bool Expanded, string? ClearLabel);
+public sealed record NotifGroupData(string GroupKey, string? IconKey, string AppName, int Count, bool Expanded, string? ClearLabel, string? Origin = null);
 /// <param name="Secondary">Segunda línea (el cuerpo cuando hay título); null = una sola línea.</param>
 /// <param name="CanDismiss">Muestra la «×» (Eliminar u Ocultar según el ajuste).</param>
 /// <param name="Stacked">Cuántas notificaciones más de la misma app hay debajo (grupo plegado): se dibujan como tarjetas apiladas.</param>
 /// <param name="ShowApp">Muestra el nombre de la app en la tarjeta (las tarjetas de un grupo desplegado no lo repiten).</param>
-public sealed record NotifCardData(uint NotificationId, string GroupKey, string? IconKey, string AppName, string Primary, string? Secondary, string When, bool CanDismiss, int Stacked, bool ShowApp);
+/// <param name="Origin">null = Windows; «iphone» = WinMac Connect (sus acciones solo ocultan en WinMac y no abren nada).</param>
+public sealed record NotifCardData(uint NotificationId, string GroupKey, string? IconKey, string AppName, string Primary, string? Secondary, string When, bool CanDismiss, int Stacked, bool ShowApp, string? Origin = null);
 
 /// <summary>
 /// Un elemento del panel. NO hay controles decorativos: un control cuyo respaldo no existe en este equipo lleva <c>Enabled = false</c> y su <see cref="Reason"/> (se dibuja atenuado con el motivo debajo).

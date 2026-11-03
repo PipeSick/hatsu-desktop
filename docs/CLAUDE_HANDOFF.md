@@ -2,7 +2,12 @@
 
 Actualizado: 2026-11-03. Complementa `docs/ESTADO-SESION.md` (contexto anterior: repos, PC del usuario, reglas de trabajo).
 
-## Fase actual: cuarta iteración (WM-022…WM-034, sonido, WinMac Connect) — informe: docs/38-informe-iteracion-4.md
+## WinMac Connect fases 1-2 (docs/40; investigación docs/39)
+Módulo `connect` (src/WinMac.Connect.Core puro + src/WinMac.Connect.App WinRT), desactivado por defecto, supervisado por el host. Tópicos: config.connect,
+connect.state, connect.notifications (retenidos), connect.alert (evento); el host publica ConnectWire.Off al apagarse. Barra: BarHost.Connect.cs, PhoneInbox,
+PanelKind.Phone, sección «iPhone» del Centro de Notificaciones, lista combinada para la Isla (ids ≥ 2^40). NotchWin sin cambios. Sin contestar/rechazar, sin audio, sin mensajes.
+
+## Fase anterior: cuarta iteración (WM-022…WM-034, sonido, WinMac Connect) — informe: docs/38-informe-iteracion-4.md
 Piezas nuevas: mezclador en `PanelBuilder.SoundPanel` (ajuste `bar.soundMixer`; micrófono y sesiones solo con el menú abierto), ocultación de la barra de
 tareas en el HOST (`Host/TaskbarHider.cs` + `Host.Core/TaskbarLease.cs`: registro `%LOCALAPPDATA%\WinMac\taskbar-restore.json`, guardián
 `--taskbar-guard <pid>`, `--restore-taskbar`, `tools/Restore-Taskbar.ps1`; `hideTaskbar` en winmac.json, APAGADO por defecto), página de Ajustes

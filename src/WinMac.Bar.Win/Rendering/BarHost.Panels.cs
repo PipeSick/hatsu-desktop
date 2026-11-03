@@ -48,7 +48,7 @@ public sealed partial class BarHost : IPanelUi
         _weather = new WeatherService(_hubSvc.Weather, new WeatherCache(cache), () => DateTime.UtcNow, Bg, Post, _log); _rt = new HubRuntime(_hubMon, _speed, _weather);
         try { _ncSrc = new WinNotificationSource(_log); } catch (Exception e) { _log("[notificaciones] fuente no disponible: " + e.GetType().Name + ": " + e.Message); }
         _nc = new NotificationStore(_ncSrc, Bg, Post, _log, () => DateTime.UtcNow); _nc.SetEnabled(_cfg.NotificationsFromWindows); _nc.Changed += OnNcChanged;
-        _hub.Changed += OnHubChanged; _ops = new PanelOperations(_hub, this, _log, rt: _rt, nc: _nc);
+        _hub.Changed += OnHubChanged; _ops = new PanelOperations(_hub, this, _log, rt: _rt, nc: _nc) { Phone = _phone };
         _hubMon.Changed += OnHubPanelDataChanged; _speed.Changed += OnHubPanelDataChanged; _weather.Changed += () => { SetStateAll(); OnHubPanelDataChanged(); };
         ConfigureWeather();
     }
@@ -121,7 +121,7 @@ public sealed partial class BarHost : IPanelUi
         var net = _network.Kind == NetKind.Wifi && s.Wifi.Available && s.Wifi.Connected ? _network with { Ssid = s.Wifi.Ssid, Bars = s.Wifi.Bars } : _network;
         var bt = s.Bluetooth.Available ? new BluetoothInfo(true, s.Bluetooth.RadioOn, s.Bluetooth.ConnectedCount) : BluetoothInfo.None;
         var wx = _weather.Current(); var wbar = wx.Snapshot is { } sn ? new WeatherBarInfo(WeatherCodes.Icon(sn.Main.Code, sn.Main.IsDay), TempFormat.Bar(sn.Main.TempC, _cfg.WeatherFahrenheit)) : WeatherBarInfo.None;
-        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar, _cfg.ShowTrayIcons ? _trayStore.Visible : null, TrayOpen: _popover is { IsOpen: true } && _pkind == PanelKind.Tray);
+        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar, _cfg.ShowTrayIcons ? _trayStore.Visible : null, TrayOpen: _popover is { IsOpen: true } && _pkind == PanelKind.Tray, Phone: _phone.State);
     }
 
     private void OnHubChanged() { SetStateAll(); if (_popover is { IsOpen: true }) RebuildPanel(); }
@@ -165,7 +165,7 @@ public sealed partial class BarHost : IPanelUi
     {
         _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
         _popSource = src; _pkind = kind; _anchorX = anchorX; _alignRight = alignRight; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
-        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab, Tray = _trayStore.Visible }; _pctx = _pctx with { Hub = MakeHubData() };
+        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab, Tray = _trayStore.Visible }; _pctx = WithPhone(_pctx with { Hub = MakeHubData() });
         if (kind == PanelKind.Notifications) { OpenNotificationCenter(src); return; }
         var model = PanelBuilder.Build(kind, _pctx);
         _popover.Show(model, anchorX, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight);   // se abre en el monitor donde se hizo clic, escalado a SU DPI
@@ -182,7 +182,7 @@ public sealed partial class BarHost : IPanelUi
         _battery = SystemProviders.Battery();
         double widthDip = NcGeometry.Width(src.MonitorRect.W / src.Scale);
         var rect = NcGeometry.Place(src.Top + src.Height, src.MonitorRect, src.Info.Work, src.Scale, widthDip);
-        _pctx = _pctx with { Battery = _battery, Nc = new NcView(_nc.State, new HashSet<string>(StringComparer.OrdinalIgnoreCase), widthDip) };
+        _pctx = WithPhone(_pctx with { Battery = _battery, Nc = new NcView(_nc.State, new HashSet<string>(StringComparer.OrdinalIgnoreCase), widthDip) });
         _popover!.ShowSide(PanelBuilder.Build(PanelKind.Notifications, _pctx), rect, src.MonitorRect, src.Scale, _theme, _cfg.Background == BarBackground.Glass);
         _lastNcPoll = DateTime.UtcNow; _nc.Activate(); _weather.Refresh(); LoadEvents();
     }
@@ -196,7 +196,7 @@ public sealed partial class BarHost : IPanelUi
         }
 
         _pkind = kind; _pctx = _pctx with { Message = null, Busy = new Dictionary<string, string>() };
-        _popover.SetModel(PanelBuilder.Build(kind, _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now })); RefreshFor(kind, firstOpen: false);
+        _popover.SetModel(PanelBuilder.Build(kind, WithPhone(_pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now }))); RefreshFor(kind, firstOpen: false);
     }
 
     private void RefreshFor(PanelKind kind, bool firstOpen)
@@ -264,7 +264,7 @@ public sealed partial class BarHost : IPanelUi
         // El menú de una app no sale de PanelBuilder ni usa el contexto de los paneles (que puede no existir aún): se rehace desde su propio árbol.
         // Antes caía aquí, _pctx era null → NullReferenceException en el bucle de la barra → la barra se cerraba y el host la reiniciaba (P1, visto en el CI).
         if (_pkind == PanelKind.AppMenu) { if (_amTop is not null) _popover.SetModel(WinMac.Bar.Menus.AppMenuPanel.Build(_amTop, _amPath)); return; }
-        _pctx = _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData(), Nc = _pctx.Nc is { } v ? v with { State = _nc.State } : null, Tray = _trayStore.Visible };
+        _pctx = WithPhone(_pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData(), Nc = _pctx.Nc is { } v ? v with { State = _nc.State } : null, Tray = _trayStore.Visible });
         _popover.SetModel(PanelBuilder.Build(_pkind, _pctx));
     }
 
@@ -370,7 +370,7 @@ public sealed partial class BarHost : IPanelUi
             _appleReturn = BarNative.GetForegroundWindow();
             _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
             _popSource = src; _pkind = PanelKind.AppleMenu;
-            _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, ForegroundApp = SessionService.ForegroundProcessName(), User = SessionUserInfo() };
+            _pctx = WithPhone(PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, ForegroundApp = SessionService.ForegroundProcessName(), User = SessionUserInfo() });
             _anchorX = 0; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
             var model = PanelBuilder.AppleMenu(_pctx);
             int left = src.Left + (int)((item?.X ?? 0) * src.Scale), anchor = left + (int)Math.Round(model.Width * src.Scale / 2);   // el borde izquierdo del menú bajo el icono

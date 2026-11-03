@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- WinMac Connect (docs/39): módulo opcional, un proceso supervisado por el host como la Barra y el Dock. Bluetooth LE con la API pública de Windows (WinRT). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>WinMac.Connect.App</RootNamespace>
+    <AssemblyName>WinMac.Connect.App</AssemblyName>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinMac.Connect.Core\WinMac.Connect.Core.csproj" />
+    <ProjectReference Include="..\WinMac.Ipc\WinMac.Ipc.csproj" />
+  </ItemGroup>
+</Project>

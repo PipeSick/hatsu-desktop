@@ -93,6 +93,8 @@ public sealed record BarConfig
     public bool ShowTrayIcons { get; init; } = true;
     /// <summary>El menú Sonido de la barra incluye el mezclador: entrada predeterminada y volumen por aplicación. false = solo volumen general y salida (sin leer micrófono ni sesiones).</summary>
     public bool SoundMixer { get; init; } = true;
+    /// <summary>WinMac Connect: indicador del iPhone (batería real y estado). Solo aparece con el módulo activo y datos reales.</summary>
+    public bool ShowPhone { get; init; } = true;
 
     // ── Centro de Notificaciones (panel lateral; se abre con el reloj, como en macOS)
     /// <summary>El reloj abre el Centro de Notificaciones de WinMac. false = abre el calendario desplegable de antes.</summary>

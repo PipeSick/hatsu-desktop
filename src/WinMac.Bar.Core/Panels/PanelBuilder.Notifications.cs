@@ -5,7 +5,8 @@ using WinMac.Calendar;
 namespace WinMac.Bar;
 
 /// <summary>Lo que el Centro de Notificaciones necesita además del contexto común: el estado de las notificaciones, los grupos desplegados y el ancho para este monitor.</summary>
-public sealed record NcView(NcState State, IReadOnlySet<string> Expanded, double Width = 356);
+/// <param name="Phone">WinMac Connect: grupos de notificaciones del iPhone (null = módulo apagado o sin notificaciones activadas).</param>
+public sealed record NcView(NcState State, IReadOnlySet<string> Expanded, double Width = 356, IReadOnlyList<NotificationGroup>? Phone = null);
 
 public static partial class PanelBuilder
 {
@@ -24,6 +25,7 @@ public static partial class PanelBuilder
         var (day, date) = NotificationText.Header(c.Now, c.Cfg.Language);
         var w = new List<Widget> { new(WidgetKind.NcHeader, "nc-head", day, date, Data: new NcHeaderData(day, date)) };
         NotificationsSection(w, c, nc);
+        PhoneSection(w, c, nc);
         WidgetsSection(w, c);
         Msg(w, c);
         w.Add(new Widget(WidgetKind.Button, "open:ms-settings:notifications", "Configuración de notificaciones…", Glyph: "gear"));
@@ -90,6 +92,42 @@ public static partial class PanelBuilder
         int shown = reachable, total = st.Count;
         if (shown < total) w.Add(new Widget(WidgetKind.Note, "nc-more", $"Se muestran {shown} de {total}. Las demás siguen en el centro de notificaciones de Windows."));
         if (st.Message is not null) w.Add(new Widget(WidgetKind.Note, "nc-msg", st.Message));
+    }
+
+    /// <summary>
+    /// WinMac Connect: las notificaciones del iPhone, aparte de las de Windows y con el mismo aspecto. «Ocultar» solo las quita de WinMac (no se borran del iPhone);
+    /// las que se borran en el iPhone desaparecen solas. Sin el módulo, o con las notificaciones desactivadas, no hay sección.
+    /// </summary>
+    private static void PhoneSection(List<Widget> w, PanelContext c, NcView nc)
+    {
+        if (nc.Phone is not { } groups || c.Phone is not { } ph) return;
+        int count = groups.Sum(g => g.Items.Count);
+        w.Add(new Widget(WidgetKind.NcSection, "nc-phone", "iPhone", count == 0 ? null : count.ToString(), Data: new NcSectionData(count == 0 ? null : "pclearall", count == 0 ? null : "Ocultar todo")));
+        if (count == 0)
+        {
+            string why = ph.NotificationsStatus switch
+            {
+                WinMac.Connect.PhoneFeatureStatus.NotAuthorized => "En el iPhone: Ajustes › Bluetooth › (i) junto a este PC › activa «Compartir notificaciones del sistema».",
+                WinMac.Connect.PhoneFeatureStatus.Active => "Las notificaciones nuevas del iPhone aparecerán aquí.",
+                _ => ph.Status == WinMac.Connect.PhoneLinkStatus.Connected ? "Conectando con las notificaciones del iPhone…" : "El iPhone no está conectado.",
+            };
+            w.Add(new Widget(WidgetKind.Note, "nc-phone-empty", why)); return;
+        }
+        var now = new DateTimeOffset(c.Now); int cards = 0;
+        foreach (var g in groups.Take(NcMaxGroups))
+        {
+            if (cards >= NcMaxCards) break;
+            Widget Card(AppNotification n, bool showApp, int stacked)
+            {
+                var (p, s) = NotificationText.Lines(n); cards++;
+                return new Widget(WidgetKind.NotifCard, "pn:" + n.Id, p, s, Data: new NotifCardData(n.Id, g.Key, null, g.AppName, p, s, NotificationText.When(n.Time, now, c.Cfg.Use24Hour), true, stacked, showApp, "iphone"));
+            }
+            if (g.Items.Count == 1) { w.Add(Card(g.Items[0], true, 0)); continue; }
+            bool open = nc.Expanded.Contains(g.Key);
+            w.Add(new Widget(WidgetKind.NotifGroup, "png:" + g.Key, g.AppName, g.Items.Count.ToString(), On: open, Data: new NotifGroupData(g.Key, null, g.AppName, g.Items.Count, open, "Ocultar", "iphone")));
+            if (!open) { w.Add(Card(g.Items[0], false, g.Items.Count - 1)); continue; }
+            foreach (var n in g.Items) { if (cards >= NcMaxCards) break; w.Add(Card(n, false, 0)); }
+        }
     }
 
     private static void WidgetsSection(List<Widget> w, PanelContext c)

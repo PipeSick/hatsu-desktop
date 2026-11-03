@@ -41,6 +41,9 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
     /// <summary>El brillo que pidió el usuario desde la barra se aplicó de verdad (porcentaje, pantalla): la Isla lo muestra. Los monitores DDC/CI no avisan de cambios por sí solos.</summary>
     public event Action<int, string>? BrightnessApplied;
 
+    /// <summary>WinMac Connect: las notificaciones del iPhone que muestra el panel (null = módulo apagado).</summary>
+    public Notifications.PhoneInbox? Phone { get; set; }
+
     private readonly TimeSpan _notifyDelay = notificationDelay ?? TimeSpan.FromMilliseconds(250);
 
     private void SetMessage(string? m) => ui.Ctx = ui.Ctx with { Message = m };
@@ -131,6 +134,11 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
         }
 
         if (id.StartsWith("ngclear:")) { nc?.ClearGroup(id[8..], win); return true; }
+        // WinMac Connect: ocultar en WinMac (nunca se borra del iPhone)
+        if (id == "pclearall") { Phone?.HideAll(); ui.Rebuild(); return true; }
+        if (id.StartsWith("pgclear:")) { Phone?.HideGroup(id[8..]); ui.Rebuild(); return true; }
+        if (id.StartsWith("pdismiss:") && uint.TryParse(id[9..], out var pid)) { Phone?.Hide(pid); ui.Rebuild(); return true; }
+        if (id == "phone:settings") { ui.HidePanel(); ui.OpenSettings("connect"); return true; }
         if (id.StartsWith("ndismiss:") && uint.TryParse(id[9..], out var did)) { nc?.Dismiss(did, win); return true; }
         if (id.StartsWith("nopen:") && uint.TryParse(id[6..], out var oid))
         {

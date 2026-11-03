@@ -74,7 +74,7 @@ internal sealed class SettingsWindow : IDisposable
         if (section == "weather") _ctl.SelectPage("weather");
         if (section is "sound" or "system" or "network" or "disks") _ctl.SelectPage("bar");   // «Panel de WinMac» está en Barra superior
         if (section == "notifications") _ctl.SelectPage("nc");
-        if (section is "dock" or "capture" or "spot" or "clip" or "general" or "notch" or "ext") _ctl.SelectPage(section);
+        if (section is "dock" or "capture" or "spot" or "clip" or "general" or "notch" or "ext" or "connect") _ctl.SelectPage(section);
         if (section == "weather" && _ctl.RowOf("hub.city") is { } city)
         {
             double y = city.Y; if (y < 0 || y > SettingsLayout.ViewportH - 120) _ctl.Scroll(y - 40);

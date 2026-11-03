@@ -109,6 +109,7 @@ public sealed class BarPainter : IDisposable
                 case BarItemKind.Volume: DrawVolume(x, cy, s.Volume); break;
                 case BarItemKind.Battery: DrawBattery(x, cy, s.Battery); break;
                 case BarItemKind.TrayMenu: DrawTrayMenu(x, cy, s.TrayOpen); break;
+                case BarItemKind.Phone: DrawPhone(x, cy, s.Phone?.Status == WinMac.Connect.PhoneLinkStatus.Connected); break;
             }
             x += (float)(f.Item.GlyphWidth + (string.IsNullOrEmpty(f.Item.Text) ? 0 : _m.GlyphTextGap));
         }
@@ -238,6 +239,14 @@ public sealed class BarPainter : IDisposable
         for (int i = 0; i < 3; i++) { using var a = Arc(ox, oy, radii[i], -3 * Math.PI / 4, -Math.PI / 4); Stroke(a, 1.4f, off ? 0.30f : i < active ? 1f : 0.28f); }
         Brush(Fg(off ? 0.30f : 1f)); _ctx.FillEllipse(new Ellipse(new Vector2(ox, oy - 0.2f), 1.5f, 1.5f), _solid);
         if (off) { Brush(Fg()); _ctx.DrawLine(new Vector2(x + 2, cy - 6), new Vector2(x + 14, cy + 6.5f), _solid, 1.5f, _round); }
+    }
+
+    /// <summary>WinMac Connect: un iPhone de perfil (contorno redondeado con la isla arriba). Atenuado sin conexión.</summary>
+    private void DrawPhone(float x, float cy, bool connected)
+    {
+        float cx = x + 8, a = connected ? 1f : 0.4f; Brush(Fg(a));
+        _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.2f, cy - 7.2f, cx + 4.2f, cy + 7.2f), RadiusX = 2.2f, RadiusY = 2.2f }, _solid, 1.3f);
+        _ctx.DrawLine(new Vector2(cx - 1.4f, cy - 5.1f), new Vector2(cx + 1.4f, cy - 5.1f), _solid, 1.3f, _round);
     }
 
     private void DrawBluetooth(float x, float cy, bool on)

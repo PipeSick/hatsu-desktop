@@ -35,7 +35,6 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
 
     /// <summary>Abre una URI o una app (WinMac Connect). La da el host; null = no hace nada.</summary>
     public Action<string>? OpenUri { get; set; }
-    public const string PhoneLinkApp = @"shell:AppsFolder\Microsoft.YourPhone_8wekyb3d8bbwe!App";
 
     /// <summary>Extension operations, provided by the host (null when extensions are not available).</summary>
     public IExtensionOps? Extensions { get; set; }
@@ -133,7 +132,14 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("notch.hudsec", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int hs)) cfg.UpdateNotch(n => n with { PillHudSeconds = hs }); return true;
             case ("notch.notifsec", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int ns)) cfg.UpdateNotch(n => n with { PillNotifySeconds = ns }); return true;
             case ("notch.local", "button"): openLocal(); return true;
-            case ("connect.phonelink", "button"): if (OpenUri is null) return false; OpenUri(PhoneLinkApp); return true;
+            case ("mod:connect", "toggle") or ("connect.module", "toggle"): cfg.SetModuleEnabled("connect", e.On); return true;
+            case ("connect.battery", "toggle"): return cfg.UpdateConnect(c => c with { Battery = e.On }) || true;
+            case ("connect.notifs", "toggle"): return cfg.UpdateConnect(c => c with { Notifications = e.On }) || true;
+            case ("connect.calls", "toggle"): return cfg.UpdateConnect(c => c with { Calls = e.On }) || true;
+            case ("connect.island", "toggle"): return cfg.UpdateConnect(c => c with { Island = e.On }) || true;
+            case ("connect.alerts", "toggle"): return cfg.UpdateConnect(c => c with { Alerts = e.On }) || true;
+            case ("connect.content", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.ContentNames.Length: return cfg.UpdateConnect(c => c with { Content = (WinMac.Connect.ContentLevel)e.Index }) || true;
+            case ("connect.device", "text"): { var t = (e.Text ?? "").Trim(); return cfg.UpdateConnect(c => c with { DeviceName = t.Length == 0 ? null : t }) || true; }
             case ("connect.bt", "button"): if (OpenUri is null) return false; OpenUri("ms-settings:bluetooth"); return true;
         }
 

@@ -16,7 +16,7 @@ $root = Resolve-Path (Join-Path $PSScriptRoot '..'); Set-Location $root
 $dest = Join-Path $root $Out
 if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
-foreach ($p in @('src/WinMac.Host/WinMac.Host.csproj', 'src/WinMac.Bar.App/WinMac.Bar.App.csproj', 'src/WinMac.Dock.App/WinMac.Dock.App.csproj')) {
+foreach ($p in @('src/WinMac.Host/WinMac.Host.csproj', 'src/WinMac.Bar.App/WinMac.Bar.App.csproj', 'src/WinMac.Dock.App/WinMac.Dock.App.csproj', 'src/WinMac.Connect.App/WinMac.Connect.App.csproj')) {
   Write-Host "Publicando $p …"
   # Autocontenido (docs/36): la beta pedía instalar .NET a mano. Los tres comparten carpeta y la misma versión del runtime (los archivos son idénticos).
   & dotnet publish $p -c $Configuration -r win-x64 --self-contained true -o $dest
@@ -37,7 +37,7 @@ if (Test-Path $notchProj) {
   & dotnet publish $notchProj -c $Configuration -p:Platform=x64 -r win-x64 --self-contained true -o (Join-Path $dest 'NotchWin')
   if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de NotchWin" }
 } else { Write-Host "NotchWin no incluido (no hay clon en $NotchPath): WinMac funciona sin la Isla." -ForegroundColor Yellow }
-$exes = 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe'
+$exes = 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'WinMac.Connect.App.exe'
 $missing = $exes | Where-Object { -not (Test-Path (Join-Path $dest $_)) }
 if ($missing) { throw "Faltan en $dest : $($missing -join ', ')" }
 Write-Host ""
