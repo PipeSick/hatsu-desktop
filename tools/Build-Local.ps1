@@ -3,7 +3,7 @@
   Construye WinMac (host + Barra superior + Dock) en UNA carpeta para probarlo en tu PC: dist\WinMac\WinMac.exe.
 .DESCRIPTION
   Requiere el SDK de .NET 10 (el mismo que ya usaste para el Dock). No instala nada, no toca el registro, no necesita administrador.
-  Publica framework-dependiente (usa el runtime de .NET 10 instalado). Los tres ejecutables comparten carpeta: WinMac.exe los encuentra por su nombre.
+  Publica AUTOCONTENIDO (incluye el runtime de .NET 10: el PC que lo use no necesita instalar nada). Los tres ejecutables comparten carpeta y runtime.
   Uso:   pwsh tools\Build-Local.ps1            (o  powershell -File tools\Build-Local.ps1)
          dist\WinMac\WinMac.exe                inicia el host con la Barra superior y el Dock
          dist\WinMac\WinMac.exe --quit         lo cierra (cierra también sus módulos)
@@ -18,12 +18,13 @@ if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 foreach ($p in @('src/WinMac.Host/WinMac.Host.csproj', 'src/WinMac.Bar.App/WinMac.Bar.App.csproj', 'src/WinMac.Dock.App/WinMac.Dock.App.csproj')) {
   Write-Host "Publicando $p …"
-  & dotnet publish $p -c $Configuration -r win-x64 --self-contained false -o $dest
+  # Autocontenido (docs/36): la beta pedía instalar .NET a mano. Los tres comparten carpeta y la misma versión del runtime (los archivos son idénticos).
+  & dotnet publish $p -c $Configuration -r win-x64 --self-contained true -o $dest
   if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de $p" }
 }
 # Extensiones de demostración (docs/30): se distribuyen en «extensions\<id>» para instalarlas desde Ajustes › Extensiones (no se activan solas)
 $extTmp = Join-Path $dest '_ext-build'
-& dotnet publish 'src/WinMac.Ext.Demos/WinMac.Ext.Demos.csproj' -c $Configuration -r win-x64 --self-contained false -o $extTmp
+& dotnet publish 'src/WinMac.Ext.Demos/WinMac.Ext.Demos.csproj' -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o $extTmp
 if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de las extensiones de demostración" }
 foreach ($id in 'pomodoro', 'uptime') {
   $to = Join-Path $dest "extensions\$id"; New-Item -ItemType Directory -Force -Path $to | Out-Null
