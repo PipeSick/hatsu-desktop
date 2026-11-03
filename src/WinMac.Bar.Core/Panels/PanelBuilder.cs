@@ -81,6 +81,7 @@ public static partial class PanelBuilder
             new("apple:Sleep", "moon", "Suspender"), new("apple:Restart", "restart", "Reiniciar"), new("apple:Shutdown", "power", "Apagar"),
             new("apple:LogOff", "logout", "Cerrar sesión"), new("apple:Lock", "lock", "Bloquear")])));
         Line();
+        w.Add(new Widget(WidgetKind.MenuItem, "apple:winmac-settings", "Ajustes de WinMac…"));
         w.Add(new Widget(WidgetKind.MenuItem, "apple:" + SystemActionKind.About, SystemActions.Get(SystemActionKind.About).Label));
         w.Add(new Widget(WidgetKind.MenuItem, "apple:" + SystemActionKind.ForceQuit, c.ForegroundApp is { } app ? $"Forzar salida de «{app}»…" : "Forzar salida…", Enabled: c.ForegroundApp is not null));
         Line();

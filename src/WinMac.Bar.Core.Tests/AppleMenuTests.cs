@@ -18,7 +18,7 @@ public class AppleMenuTests
         Assert.Equal(["volume", "brightness"], m.Widgets.Where(w => w.Kind == WidgetKind.Slider).Select(w => w.Id));
         var strip = (ActionStripData)m.Widgets.Single(w => w.Kind == WidgetKind.ActionStrip).Data!;
         Assert.Equal(["apple:Sleep", "apple:Restart", "apple:Shutdown", "apple:LogOff", "apple:Lock"], strip.Actions.Select(a => a.Id));   // the same actions (and confirmations) as before
-        Assert.Equal(["apple:About", "apple:ForceQuit", "apple:reserve", "apple:quitbar"], m.Widgets.Where(w => w.Kind == WidgetKind.MenuItem).Select(w => w.Id));
+        Assert.Equal(["apple:winmac-settings", "apple:About", "apple:ForceQuit", "apple:reserve", "apple:quitbar"], m.Widgets.Where(w => w.Kind == WidgetKind.MenuItem).Select(w => w.Id));
         Assert.Equal("Forzar salida de «LeagueClientUx»…", m.Widgets.Single(w => w.Id == "apple:ForceQuit").Text);
         Assert.True(m.Widgets.Single(w => w.Id == "apple:reserve").On);
         Assert.False(m.Widgets.Single(w => w.Id == "open:wifi").Enabled);   // no state yet: no fake «connected»
@@ -45,7 +45,7 @@ public class AppleMenuTests
         ctl.PointerDown(head.X + 30, head.Y + 25); Assert.Null(ctl.PointerUp(head.X + 30, head.Y + 25));   // the name is not a button
         var off = PanelBuilder.AppleMenu(Ctx(app: null)); ctl.SetModel(off); var d = ctl.Frame.Items.Single(i => i.W.Id == "apple:ForceQuit");
         ctl.PointerDown(d.X + 20, d.Y + 10); Assert.Null(ctl.PointerUp(d.X + 20, d.Y + 10));
-        var hgt = PanelLayout.Compute(PanelBuilder.AppleMenu(Ctx())).Height; Assert.True(hgt < 640, "alto " + hgt);   // worst case (every control disabled with its reason); 150 % on 1080p still fits under the bar
+        var hgt = PanelLayout.Compute(PanelBuilder.AppleMenu(Ctx())).Height; Assert.True(hgt < 660, "alto " + hgt);   // worst case (every control disabled with its reason); 150 % on 1080p still fits under the bar
     }
 }
 
