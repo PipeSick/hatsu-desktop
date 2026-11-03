@@ -165,7 +165,7 @@ public class SettingsActionsTests
             Assert.False(rows["dock.reserve"].Enabled); Assert.False(string.IsNullOrEmpty(rows["dock.reserve"].Reason));   // con autoocultación no hay espacio que reservar: se dice por qué
             Assert.Equal("Otro", rows["dock.size"].Options![rows["dock.size"].Selected]);   // 28 no es un preajuste
             var none = SettingsBuilder.Build(new SettingsInput(cfg.Current, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "dock");
-            Assert.All(none.Groups.SelectMany(g => g.Rows), r => Assert.Equal(RowKind.Info, r.Kind));   // sin dock.json legible: ningún control falso
+            Assert.All(none.Groups.SelectMany(g => g.Rows).Where(r => !r.Id.StartsWith("host.")), r => Assert.Equal(RowKind.Info, r.Kind));   // sin dock.json legible: ningún control falso del Dock (la barra de tareas no depende de dock.json)
             a.LoadDock = null; Assert.False(a.Apply(new SettingsEdit("dock.size", "segment", Index: 1)));
         }
         finally { File.Delete(f); }

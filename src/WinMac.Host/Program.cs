@@ -3,6 +3,7 @@
 //   WinMac.exe                      inicia el host (y con él los módulos habilitados en %APPDATA%\WinMac\winmac.json)
 //   WinMac.exe --background         igual; es lo que registra el inicio automático
 //   WinMac.exe --quit               pide al host en ejecución que se cierre normalmente (cierra sus módulos)
+//   WinMac.exe --restore-taskbar    vuelve a mostrar la barra de tareas de Windows y su «Ocultar automáticamente» como estaba (WM-034), aunque WinMac no pueda arrancar
 //   WinMac.exe --install-autostart  crea UNA clave HKCU\...\Run («WinMac») · --remove-autostart la borra
 //   WinMac.exe --render-settings <general|bar|hub|notch> --out f.png [--theme light|dark] [--scale 2] [--scroll N] [--suggest] [--no-notch]   dibuja Ajustes fuera de pantalla (CI)
 //   Solo pruebas: --config <ruta> · --log <ruta> · --no-tray · --fast · --pipe-name <nombre> · --autostart-name <nombre>
@@ -20,6 +21,8 @@ internal static class Program
             if (args.Contains("--install-autostart")) { Autostart.Install(exe, name); Console.WriteLine($"Inicio automático activado ({name} → {Autostart.Current(name)})."); return 0; }
             if (args.Contains("--remove-autostart")) { Console.WriteLine(Autostart.Remove(name) ? "Inicio automático desactivado." : "El inicio automático no estaba activado."); return 0; }
             if (args.Contains("--quit")) return HostApp.SignalQuit();
+            if (args.Contains("--restore-taskbar")) return TaskbarHider.RestoreFromCommandLine(quiet: args.Contains("--quiet"));   // WM-034: recuperación manual, sin arrancar WinMac
+            if (args.Contains("--taskbar-guard")) return int.TryParse(HostOptions.Arg(args, "--taskbar-guard", ""), out int hostPid) ? TaskbarHider.RunGuard(hostPid) : 2;
             if (args.Contains("--render-settings")) return SettingsOffscreen.Run(args);
             if (args.Contains("--render-tray-panel"))   // solo CI: el panel de la bandeja con estados de MUESTRA
             {

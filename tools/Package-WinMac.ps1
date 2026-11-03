@@ -15,6 +15,7 @@ $sha = (git -C $root rev-parse --short HEAD).Trim(); $when = [DateTime]::Parse((
 "WinMac $version (commit $sha, $($when.ToString('yyyy-MM-dd')))`nSoftware libre (ver LICENSE). Compilación no firmada: no es una versión oficial publicada." | Set-Content (Join-Path $DistDir 'VERSION.txt') -Encoding UTF8
 foreach ($f in 'LICENSE', 'NOTICE', 'THIRD_PARTY.md') { if (Test-Path (Join-Path $root $f)) { Copy-Item (Join-Path $root $f) $DistDir -Force } }
 Copy-Item (Join-Path $PSScriptRoot 'Uninstall-WinMac.ps1') $DistDir -Force
+Copy-Item (Join-Path $PSScriptRoot 'Restore-Taskbar.ps1') $DistDir -Force   # WM-034: recuperación sin WinMac.exe
 Get-ChildItem $DistDir -Recurse -File | ForEach-Object { $_.LastWriteTimeUtc = $when }
 $sums = Get-ChildItem $DistDir -Recurse -File | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object FullName | ForEach-Object {
   '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.FullName.Substring((Resolve-Path $DistDir).Path.Length + 1).Replace('\', '/')

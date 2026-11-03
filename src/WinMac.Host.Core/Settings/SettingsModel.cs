@@ -28,6 +28,8 @@ public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, M
     public string LocationPermission { get; init; } = "";
     /// <summary>Installed extensions with their live status (docs/30). Null: the page says extensions are not available.</summary>
     public IReadOnlyList<(Extensions.InstalledExtension Ext, string Status)>? Extensions { get; init; }
+    /// <summary>WM-034: estado real de la ocultación de la barra de tareas («Oculta», «Suspendida: …»). Vacío si no se sabe.</summary>
+    public string TaskbarStatus { get; init; } = "";
 }
 
 /// <summary>Construye las páginas de Ajustes a partir de la configuración vigente. Puro: se prueba sin Windows.</summary>
@@ -126,7 +128,7 @@ public static class SettingsBuilder
             ]),
         ]);
 
-        var dockPage = DockPage(input.Dock, On("dock"));
+        var dockPage = DockPage(input.Dock, On("dock"), input);
 
         var barPage = new SettingsPage("bar", "Barra superior", "bar",
         [
@@ -245,9 +247,9 @@ public static class SettingsBuilder
     }
 
     /// <summary>WM-019 / WM-001: tamaño del Dock (preajustes compactos y ajuste fino) y comportamiento. Escribe en dock.json, que el Dock vuelve a leer al cambiar.</summary>
-    private static SettingsPage DockPage(WinMac.Dock.DockConfig? d, bool enabled)
+    private static SettingsPage DockPage(WinMac.Dock.DockConfig? d, bool enabled, SettingsInput input)
     {
-        if (d is null) return new SettingsPage("dock", "Escritorio y Dock", "dock", [new(null, [new(RowKind.Info, "dock.none", "No se pudo leer la configuración del Dock (dock.json). Ábrelo una vez para crearla.")])]);
+        if (d is null) return new SettingsPage("dock", "Escritorio y Dock", "dock", [new(null, [new(RowKind.Info, "dock.none", "No se pudo leer la configuración del Dock (dock.json). Ábrelo una vez para crearla.")]), TaskbarGroup(input)]);
         string? off = enabled ? null : "El Dock está desactivado en General";
         var presets = WinMac.Dock.DockSettings.Presets;
         int sel = Array.FindIndex(presets.ToArray(), p => Math.Abs(p.Size - d.IconSize) < 0.5);
@@ -265,7 +267,18 @@ public static class SettingsBuilder
                 new(RowKind.Toggle, "dock.previews", "Vista previa de ventanas", "Al pasar el ratón sobre una app abierta", d.PreviewsEnabled, enabled, off),
                 new(RowKind.Toggle, "dock.minimize", "Clic en la app activa la minimiza", "Como en Windows; desactivado, como en macOS", d.ClickActiveMinimizes, enabled, off),
             ], "Al salir de WinMac el espacio reservado se devuelve a Windows."),
+            TaskbarGroup(input),
         ]);
+    }
+
+    /// <summary>WM-034: independiente del Dock (las cuatro combinaciones con «Ocultar automáticamente» del Dock son válidas).</summary>
+    private static SettingsGroup TaskbarGroup(SettingsInput input)
+    {
+        var rows = new List<SettingsRow> { new(RowKind.Toggle, "host.hidetaskbar", "Ocultar barra de tareas de Windows", "En todas las pantallas, mientras WinMac está abierto. Se restaura al desactivarlo y al salir", input.Cfg.HideTaskbar) };
+        if (input.Cfg.HideTaskbar && input.TaskbarStatus.Length > 0) rows.Add(new(RowKind.Info, "host.taskbarstate", "Ahora: " + input.TaskbarStatus));
+        return new SettingsGroup("Barra de tareas de Windows", rows,
+            "No se cierra ni se modifica Explorer: se ocultan sus ventanas y se activa temporalmente su «Ocultar automáticamente» para que no reserve espacio; al restaurar vuelve tu ajuste. " +
+            "Si WinMac falla, un proceso guardián la devuelve. Si algo queda mal: ejecuta «WinMac.exe --restore-taskbar», reinicia el Explorador o cierra sesión.");
     }
 
     public const double DockFineMax = 96;

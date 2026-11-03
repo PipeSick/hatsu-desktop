@@ -9,7 +9,7 @@ function Check([string]$n, [bool]$ok, [string]$d = '') { if ($ok) { Write-Host "
 $dir = Join-Path ([IO.Path]::GetTempPath()) ('winmac-zip-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 Expand-Archive -Path $Zip -DestinationPath $dir
 $root = Join-Path $dir 'WinMac'
-foreach ($f in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'NotchWin\NotchWin.App.exe', 'Uninstall-WinMac.ps1', 'VERSION.txt', 'LICENSE', 'SHA256SUMS.txt') {
+foreach ($f in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'NotchWin\NotchWin.App.exe', 'Uninstall-WinMac.ps1', 'Restore-Taskbar.ps1', 'VERSION.txt', 'LICENSE', 'SHA256SUMS.txt') {
   Check "contiene $f" (Test-Path (Join-Path $root $f))
 }
 # Autocontenido: el runtime de .NET viaja en el paquete (el usuario no instala nada)

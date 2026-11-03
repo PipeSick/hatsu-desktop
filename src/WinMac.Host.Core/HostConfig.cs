@@ -20,6 +20,8 @@ public sealed record HostConfig
 {
     public int Version { get; init; } = BetaMigration.Version;
     public bool Autostart { get; init; } = false;
+    /// <summary>WM-034: ocultar la barra de tareas de Windows mientras WinMac está abierto. APAGADO por defecto; se restaura al desactivarlo, al salir y, si WinMac falla, desde el guardián.</summary>
+    public bool HideTaskbar { get; init; } = false;
     public Dictionary<string, ModuleConfig> Modules { get; init; } = new()
     {
         ["bar"] = new ModuleConfig(), ["dock"] = new ModuleConfig(), ["notch"] = new ModuleConfig(),   // habilitada por defecto cuando viene incluida; si falta el ejecutable el host la marca «no instalada» y sigue

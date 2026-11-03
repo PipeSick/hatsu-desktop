@@ -80,11 +80,16 @@ internal static class HostApp
         controller.QuitRequested = () => uiActions.Enqueue(RequestQuit);
         Tray? tray = null; SettingsWindow? settings = null;
         string exePath = Environment.ProcessPath ?? "WinMac.exe";
+        var taskbar = new TaskbarHider(exePath, log);   // WM-034
+        try { taskbar.RecoverStale(); } catch (Exception e) { log("[barra de tareas] no se pudo revisar la sesión anterior: " + e.Message); }
+        config.Changed += (old, now) => { if (old.HideTaskbar && !now.HideTaskbar) uiActions.Enqueue(taskbar.RestoreNow); };   // al desactivar: al instante, en el hilo de interfaz
         try
         {
             settings = new SettingsWindow(config, () => sup.States, controller.OpenNotchLocalSettings, exePath, log);
             var win = settings; controller.SettingsRequested = section => uiActions.Enqueue(() => win.Show(section));
             tray = new Tray(() => sup.States, RequestQuit, id => { if (sup.States.TryGetValue(id, out var st) && st == ModuleState.Disabled) config.SetModuleEnabled(id, true); else sup.Restart(id); }, settings.Show, log, showIcon: !o.NoTray);
+            tray.TaskbarCreated = () => taskbar.OnTaskbarCreated(config.Current.HideTaskbar);
+            settings.TaskbarStatus = () => taskbar.Status;
         }
         catch (Exception e) { log("[host] sin ventana/bandeja: " + e.Message); }
 
@@ -113,10 +118,12 @@ internal static class HostApp
             }
             if (reopen.WaitOne(0)) { var ids = sup.RestartStopped(); log("[host] reapertura pedida: " + (ids.Count == 0 ? "nada que reabrir" : string.Join(", ", ids))); }
             if (quit.WaitOne(0)) { log("[host] señal de cierre recibida (--quit)"); break; }
+            taskbar.Tick(config.Current.HideTaskbar, DateTime.UtcNow);
             Native.MsgWaitForMultipleObjectsEx(0, null, 100, Native.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);
         }
 
         log("[host] cerrando…");
+        try { taskbar.RestoreNow(); } catch (Exception e) { log("[barra de tareas] no se pudo restaurar al salir: " + e.Message + " (el guardián o «WinMac.exe --restore-taskbar» la devuelven)"); }   // lo primero: la barra vuelve al instante
         tray?.RemoveIcon();
         sup.StopAllAsync().GetAwaiter().GetResult();
         log("[host] módulos cerrados: " + string.Join(", ", sup.States.Select(kv => $"{kv.Key}={kv.Value}")));

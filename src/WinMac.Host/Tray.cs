@@ -13,6 +13,9 @@ internal sealed class Tray : IDisposable
     private readonly bool _showIcon; private IntPtr _hwnd; private uint _taskbarCreated; private bool _added;
     public IntPtr Handle => _hwnd;
 
+    /// <summary>Explorer se reinició (WM-034: su barra de tareas nueva aparece visible).</summary>
+    public Action? TaskbarCreated { get; set; }
+
     public Tray(Func<IReadOnlyDictionary<string, ModuleState>> states, Action quit, Action<string> open, Action settings, Action<string> log, bool showIcon)
     {
         _states = states; _quit = quit; _open = open; _settings = settings; _log = log; _showIcon = showIcon; _proc = WndProcImpl;
@@ -39,7 +42,7 @@ internal sealed class Tray : IDisposable
 
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
     {
-        if (_taskbarCreated != 0 && msg == _taskbarCreated) { if (_showIcon) AddIcon(); return IntPtr.Zero; }   // Explorer se reinició
+        if (_taskbarCreated != 0 && msg == _taskbarCreated) { if (_showIcon) AddIcon(); try { TaskbarCreated?.Invoke(); } catch (Exception) { } return IntPtr.Zero; }   // Explorer se reinició
         switch (msg)
         {
             case WM_TRAY when (uint)(long)l is Native.WM_RBUTTONUP or Native.WM_CONTEXTMENU: ShowMenu(); return IntPtr.Zero;

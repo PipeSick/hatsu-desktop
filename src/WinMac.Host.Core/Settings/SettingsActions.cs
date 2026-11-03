@@ -95,6 +95,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("mod:bar", "toggle"): cfg.SetModuleEnabled("bar", e.On); return true;
             case ("mod:dock", "toggle"): cfg.SetModuleEnabled("dock", e.On); return true;
             case ("mod:notch", "toggle"): cfg.SetModuleEnabled("notch", e.On); return true;
+            case ("host.hidetaskbar", "toggle"): cfg.SetHideTaskbar(e.On); return true;
             case ("autostart", "toggle"): setAutostart(e.On); cfg.SetAutostartFlag(e.On); return true;
             case ("bar.bg", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.BackgroundValues.Length: cfg.ApplyBarPatch(Patch("background", SettingsBuilder.BackgroundValues[e.Index])); return true;
             case ("bar.theme", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.ThemeValues.Length: cfg.ApplyBarPatch(Patch("theme", SettingsBuilder.ThemeValues[e.Index])); return true;

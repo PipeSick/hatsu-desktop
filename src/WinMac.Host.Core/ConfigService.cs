@@ -58,6 +58,7 @@ public sealed class ConfigService
     });
 
     public bool SetAutostartFlag(bool on) => Update(c => c.Autostart == on ? c : c with { Autostart = on });
+    public bool SetHideTaskbar(bool on) => Update(c => c.HideTaskbar == on ? c : c with { HideTaskbar = on });
 }
 
 /// <summary>

@@ -47,6 +47,8 @@ internal sealed class SettingsWindow : IDisposable
     /// <summary>Extensions (docs/30): operations and the list to show; set by the host.</summary>
     public WinMac.Host.IExtensionOps? ExtensionOps { get => _actions.Extensions; set => _actions.Extensions = value; }
     public Action? ClearClipboard { get => _actions.ClearClipboard; set => _actions.ClearClipboard = value; }
+    /// <summary>WM-034: estado real de la ocultación de la barra de tareas para la página Escritorio y Dock.</summary>
+    public Func<string>? TaskbarStatus { get; set; }
     public Func<IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension Ext, string Status)>>? ExtensionList { get; set; }
     /// <summary>Redraw with fresh data (safe from any thread).</summary>
     public void Refresh() { if (_hwnd != IntPtr.Zero) Native.PostMessage(_hwnd, WM_REFRESH, IntPtr.Zero, IntPtr.Zero); }
@@ -165,7 +167,7 @@ internal sealed class SettingsWindow : IDisposable
     {
         IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension, string)>? exts = null;
         try { exts = ExtensionList?.Invoke(); } catch (Exception e) { _log("[extensiones] lista no disponible: " + e.Message); }
-        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent() }));
+        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "" }));
         PositionEdit();
     }
 
