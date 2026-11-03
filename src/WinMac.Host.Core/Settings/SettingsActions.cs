@@ -33,6 +33,10 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
         return true;
     }
 
+    /// <summary>Abre una URI o una app (WinMac Connect). La da el host; null = no hace nada.</summary>
+    public Action<string>? OpenUri { get; set; }
+    public const string PhoneLinkApp = @"shell:AppsFolder\Microsoft.YourPhone_8wekyb3d8bbwe!App";
+
     /// <summary>Extension operations, provided by the host (null when extensions are not available).</summary>
     public IExtensionOps? Extensions { get; set; }
 
@@ -129,6 +133,8 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("notch.hudsec", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int hs)) cfg.UpdateNotch(n => n with { PillHudSeconds = hs }); return true;
             case ("notch.notifsec", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int ns)) cfg.UpdateNotch(n => n with { PillNotifySeconds = ns }); return true;
             case ("notch.local", "button"): openLocal(); return true;
+            case ("connect.phonelink", "button"): if (OpenUri is null) return false; OpenUri(PhoneLinkApp); return true;
+            case ("connect.bt", "button"): if (OpenUri is null) return false; OpenUri("ms-settings:bluetooth"); return true;
         }
 
         return false;

@@ -243,7 +243,7 @@ public static class SettingsBuilder
         var notchPage = new SettingsPage("notch", "Isla", "island", notch);
 
         _bar = null;
-        return [general, dockPage, barPage, notchPage, capturePage, spotPage, ncPage, weatherPage, clipPage, ExtensionsPage(input.Extensions)];
+        return [general, dockPage, barPage, notchPage, capturePage, spotPage, ncPage, weatherPage, clipPage, ConnectPage(), ExtensionsPage(input.Extensions)];
     }
 
     /// <summary>WM-019 / WM-001: tamaño del Dock (preajustes compactos y ajuste fino) y comportamiento. Escribe en dock.json, que el Dock vuelve a leer al cambiar.</summary>
@@ -280,6 +280,26 @@ public static class SettingsBuilder
             "No se cierra ni se modifica Explorer: se ocultan sus ventanas y se activa temporalmente su «Ocultar automáticamente» para que no reserve espacio; al restaurar vuelve tu ajuste. " +
             "Si WinMac falla, un proceso guardián la devuelve. Si algo queda mal: ejecuta «WinMac.exe --restore-taskbar», reinicia el Explorador o cierra sesión.");
     }
+
+    /// <summary>
+    /// WinMac Connect (fase D, docs/38 §5): lo que es viable HOY con un iPhone sin app propia, verificado. WinMac no implementa un enlace propio en esta beta:
+    /// no lee el iPhone, no simula batería, mensajes ni llamadas y no muestra un indicador en la barra sin datos reales. Abre lo que sí funciona (Enlace Móvil de Microsoft).
+    /// </summary>
+    private static SettingsPage ConnectPage() => new("connect", "WinMac Connect", "phone",
+    [
+        new("Con tu iPhone", [
+            new(RowKind.Info, "connect.state", "WinMac no se conecta al iPhone por su cuenta en esta versión: no lee datos del teléfono, no guarda credenciales de Apple y no envía nada a ningún servidor."),
+            new(RowKind.Button, "connect.phonelink", "Abrir Enlace Móvil (Phone Link) de Microsoft…"),
+            new(RowKind.Button, "connect.bt", "Configuración de Bluetooth de Windows…"),
+        ], "Enlace Móvil es gratuito, viene con Windows 11 y empareja el iPhone por Bluetooth con la app «Enlace a Windows» del App Store."),
+        new("Qué es posible y con qué", [
+            new(RowKind.Info, "connect.m1", "Notificaciones del iPhone en el PC: con Enlace Móvil. Sin app sería posible con ANCS (servicio Bluetooth documentado por Apple), aún no implementado."),
+            new(RowKind.Info, "connect.m2", "Llamadas (contestar, marcar) y SMS / iMessage: con Enlace Móvil (sin grupos ni archivos en mensajes). WinMac no puede hacerlo sin APIs privadas: no se hará."),
+            new(RowKind.Info, "connect.m3", "Archivos y fotos: Enlace Móvil (versiones recientes) o el cable y la app Fotos de Windows. Transferencia propia por la red local: requiere emparejamiento cifrado, pendiente."),
+            new(RowKind.Info, "connect.m4", "Batería y cobertura del iPhone: el iPhone no las publica por Bluetooth a un PC sin una app propia: no viable sin app complementaria."),
+            new(RowKind.Info, "connect.m5", "Portapapeles universal y Handoff: dependen de iCloud y de APIs privadas de Apple: no viable. Enlaces: compártelos con Enlace Móvil."),
+        ]),
+    ]);
 
     public const double DockFineMax = 96;
     public static double DockFineValue(double size) => Math.Clamp((size - WinMac.Dock.DockSettings.MinIconSize) / (DockFineMax - WinMac.Dock.DockSettings.MinIconSize) * 100, 0, 100);

@@ -71,6 +71,7 @@ internal sealed class SettingsPainter : IDisposable
             case "bar": RRStroke(cx - s, cy - s * .62, s * 2, s * 1.24, 3, c, 1.6f); Ln(cx - s * .7, cy - s * .22, cx + s * .7, cy - s * .22, c, 1.6f); break;
             case "globe": Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), (float)s, (float)s), _b, 1.5f); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), (float)(s * .42), (float)s), _b, 1.3f); Ln(cx - s, cy, cx + s, cy, c, 1.3f); break;
             case "island": RR(cx - s * .95, cy - s * .38, s * 1.9, s * .76, s * .38, c); break;
+            case "phone": RRStroke(cx - s * .5, cy - s * .9, s, s * 1.8, s * .22, c, 1.6f); Dot(cx, cy + s * .62, 1.6, c); break;
             case "puzzle": RRStroke(cx - s * .7, cy - s * .55, s * 1.25, s * 1.25, s * .2, c, 1.6f); Dot(cx + s * .7, cy + s * .08, 2.4, c); Dot(cx - s * .08, cy - s * .7, 2.4, c); break;
             case "dock": RRStroke(cx - s, cy + s * .05, s * 2, s * .62, s * .2, c, 1.6f); for (int i = -1; i <= 1; i++) RR(cx + i * s * .55 - s * .18, cy - s * .55, s * .36, s * .36, s * .1, c); break;
             case "camera": RRStroke(cx - s, cy - s * .55, s * 2, s * 1.3, s * .25, c, 1.6f); Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)(cy + s * .1)), (float)(s * .38), (float)(s * .38)), _b, 1.5f); break;

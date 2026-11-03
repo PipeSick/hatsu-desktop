@@ -11,7 +11,7 @@ public class SettingsModelTests
     [Fact]
     public void There_are_five_pages_row_ids_are_unique_and_every_bar_option_appears_exactly_once()
     {
-        var pages = Pages(); Assert.Equal(["general", "dock", "bar", "notch", "capture", "spot", "nc", "weather", "clip", "ext"], pages.Select(p => p.Id));
+        var pages = Pages(); Assert.Equal(["general", "dock", "bar", "notch", "capture", "spot", "nc", "weather", "clip", "connect", "ext"], pages.Select(p => p.Id));
         var ids = pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).Select(r => r.Id).ToList(); Assert.Equal(ids.Count, ids.Distinct().Count());
         foreach (var t in SettingsBuilder.BarToggles.Where(t => t.Field != "weatherAutoLocation")) Assert.Single(ids, i => i == "bar:" + t.Field);   // ningún ajuste de la Barra se pierde en el rediseño
         Assert.Single(ids, i => i == "wx.src");   // WM-015: «Usar mi ubicación» es ahora el selector «Origen» (Automática / Ciudad elegida)

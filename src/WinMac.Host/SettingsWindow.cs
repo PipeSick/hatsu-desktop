@@ -39,6 +39,7 @@ internal sealed class SettingsWindow : IDisposable
         }, log);
         _actions.LoadDock = () => { try { return WinMac.Dock.DockSettings.Sanitize(WinMac.Dock.DockConfig.LoadOrDefault(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath, WinMac.Dock.Win.Shell.DockDefaults.Create)); } catch (Exception e) { _log("[host] dock.json no se pudo leer: " + e.Message); return null; } };
         _actions.SaveDock = d => { if (d.TrySave(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath)) { _log("[host] ajustes del Dock guardados (el Dock los vuelve a leer)"); PostRefresh(); } else _log("[host] dock.json no se pudo guardar"); };
+        _actions.OpenUri = uri => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", uri) { UseShellExecute = false }); } catch (Exception e) { _log("[host] no se pudo abrir " + uri + ": " + e.Message); } };
         _cfg.Changed += OnConfigChanged;
     }
 

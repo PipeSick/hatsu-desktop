@@ -73,3 +73,22 @@ public class TaskbarTests
         finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
     }
 }
+
+public class ConnectSettingsTests
+{
+    [Fact]
+    public void Connect_page_has_only_real_actions_and_no_fake_device_data()
+    {
+        var page = SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "connect");
+        var rows = page.Groups.SelectMany(g => g.Rows).ToList();
+        Assert.All(rows, r => Assert.Contains(r.Kind, new[] { RowKind.Info, RowKind.Button }));   // ni interruptores ni estados de un teléfono que WinMac no lee
+        Assert.Equal(["connect.phonelink", "connect.bt"], rows.Where(r => r.Kind == RowKind.Button).Select(r => r.Id));
+        string f = Path.Combine(Path.GetTempPath(), "winmac-cn-" + Guid.NewGuid().ToString("N") + ".json");
+        var opened = new List<string>(); var a = new SettingsActions(new ConfigService(f, new HostConfig()), () => { }, _ => { });
+        Assert.False(a.Apply(new SettingsEdit("connect.phonelink", "button")));   // sin host no se finge
+        a.OpenUri = opened.Add;
+        Assert.True(a.Apply(new SettingsEdit("connect.phonelink", "button"))); Assert.True(a.Apply(new SettingsEdit("connect.bt", "button")));
+        Assert.Equal([SettingsActions.PhoneLinkApp, "ms-settings:bluetooth"], opened);
+        Assert.False(File.Exists(f));
+    }
+}
