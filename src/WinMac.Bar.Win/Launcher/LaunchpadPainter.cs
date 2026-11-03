@@ -41,16 +41,27 @@ internal sealed class LaunchpadPainter : IDisposable
     {
         var g = c.Geometry;
         _ctx.BeginDraw(); _ctx.Clear(new Color4(0, 0, 0, 0));
-        if (Backdrop is not null) _ctx.DrawBitmap(Backdrop, R(0, 0, g.Width, g.Height), opacity, BitmapInterpolationMode.Linear, null);
-        Brush(new Color4(0.04f, 0.04f, 0.06f, (Backdrop is null ? 0.86f : 0.32f) * opacity)); _ctx.FillRectangle(R(0, 0, g.Width, g.Height), _solid);
+        // WM-018: the desktop is only dimmed; the blurred wallpaper (glass) is drawn inside the compact panel, with a hairline border, like the Golden Gate Launchpad mock-up
+        Brush(new Color4(0, 0, 0, 0.28f * opacity)); _ctx.FillRectangle(R(0, 0, g.Width, g.Height), _solid);
+        var pn = g.Panel; var prr = new RoundedRectangle { Rect = R(pn.X, pn.Y, pn.W, pn.H), RadiusX = 22, RadiusY = 22 };
+        if (Backdrop is not null)
+        {
+            using var geo = _ctx.Factory.CreateRoundedRectangleGeometry(prr);
+            _ctx.PushLayer(new LayerParameters1 { ContentBounds = R(pn.X, pn.Y, pn.W, pn.H), GeometricMask = geo, MaskAntialiasMode = AntialiasMode.PerPrimitive, MaskTransform = System.Numerics.Matrix3x2.Identity, Opacity = 1 }, null!);
+            _ctx.DrawBitmap(Backdrop, R(0, 0, g.Width, g.Height), opacity, BitmapInterpolationMode.Linear, null);
+            _ctx.PopLayer();
+        }
+
+        Brush(new Color4(0.08f, 0.08f, 0.12f, (Backdrop is null ? 0.92f : 0.42f) * opacity)); _ctx.FillRoundedRectangle(prr, _solid);
+        Brush(new Color4(1, 1, 1, 0.16f * opacity)); _ctx.DrawRoundedRectangle(prr, _solid, 1);
 
         // Campo de búsqueda
         var s = g.Search; FillRR(s, (float)(s.H / 2), new Color4(1, 1, 1, 0.16f * opacity));
         Brush(new Color4(1, 1, 1, 0.22f * opacity)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(s.X, s.Y, s.W, s.H), RadiusX = (float)(s.H / 2), RadiusY = (float)(s.H / 2) }, _solid, 1);
         DrawMagnifier(s.X + 16, s.Cy, opacity);
-        string text = c.Searching ? c.Query : "Buscar"; Brush(new Color4(1, 1, 1, (c.Searching ? 0.95f : 0.55f) * opacity));
+        string text = c.Searching ? c.Query : "Buscar aplicaciones…"; Brush(new Color4(1, 1, 1, (c.Searching ? 0.95f : 0.55f) * opacity));
         using (var l = _dw.CreateTextLayout(text, _search, (float)(s.W - 44), (float)s.H)) _ctx.DrawTextLayout(new Vector2((float)(s.X + 32), (float)s.Y), l, _solid);
-        if (c.Searching && c.PageItems.Count == 0) { Brush(new Color4(1, 1, 1, 0.6f * opacity)); using var l = _dw.CreateTextLayout("Sin resultados", _search, (float)g.Width, 40); l.TextAlignment = TextAlignment.Center; _ctx.DrawTextLayout(new Vector2(0, (float)(g.Height / 2 - 20)), l, _solid); }
+        if (c.Searching && c.PageItems.Count == 0) { Brush(new Color4(1, 1, 1, 0.6f * opacity)); using var l = _dw.CreateTextLayout("Sin resultados", _search, (float)g.Width, 40); l.TextAlignment = TextAlignment.Center; _ctx.DrawTextLayout(new Vector2(0, (float)(g.Panel.Y + g.Panel.H / 2 - 20)), l, _solid); }
 
         // Cuadrícula
         var items = c.PageItems;

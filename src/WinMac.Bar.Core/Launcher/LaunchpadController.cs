@@ -13,21 +13,24 @@ public sealed record LaunchpadGeometry(double Width, double Height, LpRect Searc
 {
     public int PerPage => Cols * Rows;
 
+    /// <summary>WM-018: the compact panel (search, grid and page dots) centred on the monitor; outside it the desktop shows through, dimmed, and a click closes.</summary>
+    public LpRect Panel { get; init; }
+
     public static LaunchpadGeometry Compute(double w, double h)
     {
         w = Math.Max(320, w); h = Math.Max(240, h);
-        double icon = Math.Clamp(Math.Round(h / 11.5), 48, 96);
-        double top = Math.Max(56, h * 0.07), searchW = Math.Min(260, w - 40), searchH = 30;
-        var search = new LpRect((w - searchW) / 2, top, searchW, searchH);
-        double gridTop = search.Y + searchH + Math.Max(28, h * 0.05), dotsY = h - Math.Max(40, h * 0.06), gridBottom = dotsY - 24;
-        double cellW = icon * 2.05, cellH = icon + 44;
-        int cols = (int)Math.Clamp(Math.Floor(Math.Min(w * 0.86, 7 * cellW + 1) / cellW), 3, 7);
-        int rows = (int)Math.Clamp(Math.Floor((gridBottom - gridTop) / cellH), 1, 5);
-        double gridW = Math.Min(w * 0.86, cols * cellW * 1.25), gridH = Math.Min(gridBottom - gridTop, rows * cellH * 1.25);
-        double cw = gridW / cols, ch = gridH / rows, x0 = (w - gridW) / 2, y0 = gridTop + (gridBottom - gridTop - gridH) / 2;
+        double icon = Math.Clamp(Math.Round(h / 14), 44, 68), cellW = Math.Round(icon * 1.95), cellH = icon + 42;
+        int cols = (int)Math.Clamp(Math.Floor((w * 0.62 - 48) / cellW), 3, 6);
+        double searchH = 30, padX = 24, top = 18, gap = 18, dotsH = 34;
+        int rows = (int)Math.Clamp(Math.Floor((h * 0.66 - top - searchH - gap - dotsH) / cellH), 1, 4);
+        double pw = cols * cellW + 2 * padX, ph = top + searchH + gap + rows * cellH + dotsH;
+        var panel = new LpRect(Math.Round((w - pw) / 2), Math.Round((h - ph) / 2), pw, ph);
+        double searchW = Math.Min(pw - 2 * padX, 300);
+        var search = new LpRect(panel.X + (pw - searchW) / 2, panel.Y + top, searchW, searchH);
+        double x0 = panel.X + padX, y0 = search.Y + searchH + gap;
         var cells = new List<LpRect>(cols * rows);
-        for (int r = 0; r < rows; r++) for (int c = 0; c < cols; c++) cells.Add(new LpRect(x0 + c * cw, y0 + r * ch, cw, ch));
-        return new LaunchpadGeometry(w, h, search, cells, cols, rows, icon, dotsY);
+        for (int r = 0; r < rows; r++) for (int c = 0; c < cols; c++) cells.Add(new LpRect(x0 + c * cellW, y0 + r * cellH, cellW, cellH));
+        return new LaunchpadGeometry(w, h, search, cells, cols, rows, icon, panel.Y + ph - dotsH / 2) { Panel = panel };
     }
 
     /// <summary>Rectángulo del icono dentro de su casilla (el nombre va debajo).</summary>
@@ -181,8 +184,8 @@ public sealed class LaunchpadController
         if (press is { } p && cell >= 0 && cell == p.Index) return new LpCommand(LpCommandKind.Launch, PageItems[cell]);
         if (cell >= 0) return LpCommand.None;
         for (int i = 0; i < PageCount && PageCount > 1; i++) if (Geometry.Dot(i, PageCount).Contains(x, y)) return GoPage(i);
-        if (Geometry.Search.Contains(x, y)) return LpCommand.None;
-        return LpCommand.Close;   // clic en el fondo: se cierra, como en macOS
+        if (Geometry.Search.Contains(x, y) || Geometry.Panel.Contains(x, y)) return LpCommand.None;   // inside the panel but on no icon: nothing
+        return LpCommand.Close;   // clic fuera del panel: se cierra, como en macOS
     }
 
     public LpCommand RightClick(double x, double y)

@@ -112,8 +112,9 @@ public class LaunchpadControllerTests
     public void GeometryIsAMacStyleGridThatFitsTheScreen()
     {
         var g = LaunchpadGeometry.Compute(1920, 1080);
-        Assert.Equal(7, g.Cols); Assert.Equal(5, g.Rows); Assert.Equal(35, g.PerPage);
-        Assert.All(g.Cells, c => Assert.True(c.X >= 0 && c.Y > g.Search.Y && c.X + c.W <= 1920 && c.Y + c.H <= g.DotsY));
+        Assert.Equal(6, g.Cols); Assert.Equal(4, g.Rows); Assert.Equal(24, g.PerPage);   // WM-018: compact, like the mock-up
+        Assert.All(g.Cells, c => Assert.True(c.X >= g.Panel.X && c.Y > g.Search.Y && c.X + c.W <= g.Panel.X + g.Panel.W && c.Y + c.H <= g.DotsY));
+        Assert.InRange(g.Panel.W, 600, 1920 * 0.62); Assert.InRange(g.Panel.X + g.Panel.W / 2, 959, 961); Assert.InRange(g.Panel.Y + g.Panel.H / 2, 539, 541);   // centred, about a third of the screen
         var small = LaunchpadGeometry.Compute(1024, 640);
         Assert.InRange(small.PerPage, 6, 35); Assert.All(small.Cells, c => Assert.True(c.X + c.W <= 1024 && c.Y + c.H <= small.DotsY));
     }
@@ -122,16 +123,17 @@ public class LaunchpadControllerTests
     public void PagesKeyboardAndWheel()
     {
         var c = Make(80);
-        Assert.Equal(3, c.PageCount); Assert.Equal(35, c.PageItems.Count);
+        int per = c.Geometry.PerPage, cols = c.Geometry.Cols, pages = (80 + per - 1) / per;
+        Assert.Equal(pages, c.PageCount); Assert.Equal(per, c.PageItems.Count);
         Assert.Equal(LpCommandKind.Redraw, c.Key(0x27).Kind); Assert.Equal(0, c.Selected);           // → selecciona la primera
-        for (int i = 0; i < 6; i++) c.Key(0x27);
-        Assert.Equal(6, c.Selected); c.Key(0x27);                                                        // al final de la fila: página siguiente
+        for (int i = 0; i < cols - 1; i++) c.Key(0x27);
+        Assert.Equal(cols - 1, c.Selected); c.Key(0x27);                                                 // al final de la fila: página siguiente
         Assert.Equal(1, c.Page); Assert.Equal(0, c.Selected);
-        c.Key(0x28); Assert.Equal(7, c.Selected);                                                        // ↓ una fila
-        Assert.Equal("id42", c.Key(0x0D).App!.Id);                                                      // Intro abre la elegida
-        c.Wheel(-120); Assert.Equal(2, c.Page); Assert.Equal(10, c.PageItems.Count);
-        c.Wheel(-120); Assert.Equal(2, c.Page);                                                          // no pasa de la última
-        c.Key(0x21); Assert.Equal(1, c.Page);
+        c.Key(0x28); Assert.Equal(cols, c.Selected);                                                     // ↓ una fila
+        Assert.Equal("id" + (per + cols), c.Key(0x0D).App!.Id);                                         // Intro abre la elegida
+        for (int i = 0; i < pages; i++) c.Wheel(-120);
+        Assert.Equal(pages - 1, c.Page); Assert.Equal(80 - (pages - 1) * per, c.PageItems.Count);       // no pasa de la última
+        c.Key(0x21); Assert.Equal(pages - 2, c.Page);
         Assert.Equal(LpCommandKind.Close, c.Key(0x1B).Kind);                                             // Esc cierra
     }
 
