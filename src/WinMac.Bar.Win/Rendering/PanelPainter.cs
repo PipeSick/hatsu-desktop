@@ -363,6 +363,64 @@ public sealed partial class PanelPainter : IDisposable
     }
 
     private void Line(double x1, double y1, double x2, double y2, Color4 c, float w = 1.5f) { Brush(c); _ctx.DrawLine(new Vector2((float)x1, (float)y1), new Vector2((float)x2, (float)y2), _solid, w, _round); }
+    // ── WM-022: the system's own icon font when present (Segoe Fluent Icons on Windows 11, Segoe MDL2 Assets on 10): the same moon, restart arrow and
+    //    power symbol as the Start menu. Without it, the vector shapes below.
+    private IDWriteTextFormat? _iconFont; private bool _iconFontChecked;
+    private static readonly Dictionary<string, string> SystemGlyphs = new() { ["moon"] = "\uE708", ["restart"] = "\uE777", ["onoff"] = "\uE7E8", ["power"] = "\uE7E8" };
+
+    private bool SystemIcon(string id, double cx, double cy, float s, Color4 c)
+    {
+        if (!SystemGlyphs.TryGetValue(id, out var ch)) return false;
+        if (!_iconFontChecked)
+        {
+            _iconFontChecked = true;
+            using var fonts = _dw.GetSystemFontCollection(false);
+            foreach (var name in new[] { "Segoe Fluent Icons", "Segoe MDL2 Assets" })
+                if (fonts.FindFamilyName(name, out _)) { _iconFont = _dw.CreateTextFormat(name, 16); _iconFont.TextAlignment = TextAlignment.Center; _iconFont.ParagraphAlignment = ParagraphAlignment.Center; break; }
+        }
+        if (_iconFont is null) return false;
+        using var l = _dw.CreateTextLayout(ch, _iconFont, s * 3, s * 3); l.SetFontSize(s * 2.05f, new TextRange(0, 1));
+        Brush(c); _ctx.DrawTextLayout(new Vector2((float)(cx - s * 1.5), (float)(cy - s * 1.5)), l, _solid);
+        return true;
+    }
+
+    // ── WM-022: vector icons built as closed shapes, not loose strokes that read as something else
+    /// <summary>Crescent moon: a disc minus an offset disc (filled), like the system «sleep» and «do not disturb» icons.</summary>
+    private void MoonGlyph(double cx, double cy, float s, Color4 c)
+    {
+        float r = s * .95f;
+        using var outer = _dev.Factory.CreateEllipseGeometry(new Ellipse(new Vector2((float)cx, (float)cy), r, r));
+        using var bite = _dev.Factory.CreateEllipseGeometry(new Ellipse(new Vector2((float)cx + r * .55f, (float)cy - r * .42f), r * .82f, r * .82f));
+        using var moon = _dev.Factory.CreatePathGeometry();
+        using (var sink = moon.Open()) { outer.CombineWithGeometry(bite, CombineMode.Exclude, null, 0.1f, sink); sink.Close(); }
+        Brush(c); _ctx.FillGeometry(moon, _solid);
+    }
+
+    /// <summary>The standard power symbol: a ring open at the top (about 290°) crossed by a vertical bar, round caps.</summary>
+    private void PowerGlyph(double cx, double cy, float s, Color4 c)
+    {
+        double r = s * .82, gap = Math.PI * .22;   // half of the opening at the top
+        using var ring = Arc(cx, cy + s * .06, r, -Math.PI / 2 + gap, -Math.PI / 2 - gap + 2 * Math.PI);
+        Stroke(ring, c, 1.8f);
+        Line(cx, cy - s * 1.0, cx, cy - s * .12, c, 1.9f);
+    }
+
+    /// <summary>Restart: a clockwise circular arrow (about 300°) with a filled triangular head at its end, pointing along the turn.</summary>
+    private void RestartGlyph(double cx, double cy, float s, Color4 c)
+    {
+        double r = s * .78, a0 = -Math.PI / 2 + .55, a1 = -Math.PI / 2 - .25 + 2 * Math.PI;   // gap just right of the top
+        using var arc = Arc(cx, cy, r, a0, a1);
+        Stroke(arc, c, 1.8f);
+        double ex = cx + r * Math.Cos(a1), ey = cy + r * Math.Sin(a1);
+        double tx = -Math.Sin(a1), ty = Math.Cos(a1);   // clockwise tangent (screen Y down)
+        double nx = Math.Cos(a1), ny = Math.Sin(a1);   // outward normal
+        float h = s * .55f, wdt = s * .42f;
+        using var head = Poly(true, new Vector2((float)(ex + tx * h), (float)(ey + ty * h)),
+            new Vector2((float)(ex + nx * wdt - tx * h * .15), (float)(ey + ny * wdt - ty * h * .15)),
+            new Vector2((float)(ex - nx * wdt - tx * h * .15), (float)(ey - ny * wdt - ty * h * .15)));
+        Brush(c); _ctx.FillGeometry(head, _solid);
+    }
+
     private void Stroke(ID2D1Geometry g, Color4 c, float w = 1.5f) { Brush(c); _ctx.DrawGeometry(g, _solid, w, _round); }
 
     /// <summary>Iconos vectoriales propios (sin fuentes ni imágenes de terceros), centrados en (cx, cy) con «radio» s.</summary>
@@ -389,7 +447,7 @@ public sealed partial class PanelPainter : IDisposable
                 Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), s * .45f, s * .45f), _solid, 1.5f);
                 for (int i = 0; i < 8; i++) { double a = i * Math.PI / 4; Line(cx + Math.Cos(a) * s * .75, cy + Math.Sin(a) * s * .75, cx + Math.Cos(a) * s * 1.05, cy + Math.Sin(a) * s * 1.05, c, 1.4f); }
                 break;
-            case "moon": { using var a = Arc(cx, cy, s * .9, -Math.PI * .15, Math.PI * 1.05); Stroke(a, c, 1.6f); using var b = Arc(cx + s * .35, cy - s * .15, s * .75, Math.PI * 1.1, -Math.PI * .1); Stroke(b, c, 1.6f); break; }
+            case "moon": if (!SystemIcon(id, cx, cy, s, c)) MoonGlyph(cx, cy, s, c); break;   // WM-022: system glyph or a filled crescent
             case "power":
                 Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cx - s, cy - s * .55, cx + s * .85, cy + s * .55), RadiusX = 2, RadiusY = 2 }, _solid, 1.5f);
                 Line(cx + s * 1.05, cy - s * .2, cx + s * 1.05, cy + s * .2, c, 1.8f); break;
@@ -399,8 +457,8 @@ public sealed partial class PanelPainter : IDisposable
             case "bell": { using var a = Arc(cx, cy - s * .1, s * .65, Math.PI, 0); Stroke(a, c); Line(cx - s * .65, cy - s * .1, cx - s * .85, cy + s * .55, c); Line(cx + s * .65, cy - s * .1, cx + s * .85, cy + s * .55, c); Line(cx - s * .85, cy + s * .55, cx + s * .85, cy + s * .55, c); FillCircle(cx, cy + s * .85, 1.4f, c); break; }
             case "check": Line(cx - s * .6, cy, cx - s * .1, cy + s * .5, c, 1.9f); Line(cx - s * .1, cy + s * .5, cx + s * .7, cy - s * .5, c, 1.9f); break;
             case "lock": Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cx - s * .7, cy - s * .15, cx + s * .7, cy + s * .8), RadiusX = 1.5f, RadiusY = 1.5f }, _solid, 1.3f); { using var a = Arc(cx, cy - s * .15, s * .45, Math.PI, 0); Stroke(a, c, 1.3f); } break;
-            case "onoff": { using var a = Arc(cx, cy + s * .08, s * .82, -Math.PI * .32, Math.PI * 1.32); Stroke(a, c, 1.7f); Line(cx, cy - s * .95, cx, cy - s * .05, c, 1.8f); break; }
-            case "restart": { using var a = Arc(cx, cy, s * .8, -Math.PI * .05, Math.PI * 1.55); Stroke(a, c, 1.7f); double ax = cx + s * .8, ay = cy - s * .04; Line(ax, ay, ax - s * .42, ay - s * .12, c, 1.7f); Line(ax, ay, ax + s * .1, ay - s * .44, c, 1.7f); break; }
+            case "onoff": if (!SystemIcon(id, cx, cy, s, c)) PowerGlyph(cx, cy, s, c); break;
+            case "restart": if (!SystemIcon(id, cx, cy, s, c)) RestartGlyph(cx, cy, s, c); break;
             case "logout": Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cx - s * .9, cy - s * .85, cx + s * .15, cy + s * .85), RadiusX = 2, RadiusY = 2 }, _solid, 1.5f); Line(cx - s * .25, cy, cx + s * .95, cy, c, 1.7f); Line(cx + s * .95, cy, cx + s * .6, cy - s * .35, c, 1.7f); Line(cx + s * .95, cy, cx + s * .6, cy + s * .35, c, 1.7f); break;
             case "chevron": Line(cx - s * .35, cy - s * .7, cx + s * .35, cy, c, 1.7f); Line(cx + s * .35, cy, cx - s * .35, cy + s * .7, c, 1.7f); break;
             case "down": Line(cx - s * .7, cy - s * .35, cx, cy + s * .35, c, 1.7f); Line(cx, cy + s * .35, cx + s * .7, cy - s * .35, c, 1.7f); break;
