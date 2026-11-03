@@ -148,20 +148,33 @@ public sealed class Supervisor
         while (!stop.IsCancellationRequested)
         {
             r.ReadySeen = false; r.ByeSeen = false;
-            IModuleProcess proc;
+            IModuleProcess? proc = null; Exception? launchError = null;
             try { proc = _launcher.Start(r.Spec, _pipe, _token); r.Proc = proc; lock (_pids) _pids.Add(proc.Id); }
-            catch (Exception ex) { Log($"[{r.Spec.Id}] no se pudo lanzar: {ex.Message}"); r.Set(ModuleState.Failed); r.FirstLaunch.TrySetResult(); return; }   // sin ejecutable: no se reintenta; los demás siguen
+            catch (Exception ex) { launchError = ex; }
+            if (launchError is not null)
+            {   // WM-036: el motivo real (código de Windows); un bloqueo de seguridad o un fallo pasajero se reintenta como una caída, un ejecutable inexistente no
+                Log($"[{r.Spec.Id}] no se pudo lanzar: {LaunchDiagnostics.Explain(launchError)}");
+                r.FirstLaunch.TrySetResult();
+                if (!LaunchDiagnostics.Retryable(launchError)) { r.Set(ModuleState.Failed); return; }   // sin ejecutable: no se reintenta; los demás siguen
+                var t0 = _clock.UtcNow; r.Crashes.Add(t0); r.Crashes.RemoveAll(t => t0 - t > _p.CrashWindow);
+                if (r.Crashes.Count >= _p.MaxCrashes) { Log($"[{r.Spec.Id}] {r.Crashes.Count} intentos fallidos en {_p.CrashWindow.TotalSeconds:0}s: no se reintenta (ábrelo desde la bandeja de WinMac)"); r.Set(ModuleState.Failed); return; }
+                var w0 = TimeSpan.FromMilliseconds(Math.Min(_p.BackoffMax.TotalMilliseconds, _p.BackoffStart.TotalMilliseconds * Math.Pow(2, step++)));
+                r.Set(ModuleState.Crashed); Log($"[{r.Spec.Id}] nuevo intento en {w0.TotalSeconds:0.##}s");
+                try { await _clock.Delay(w0, stop.Token).ConfigureAwait(false); } catch (OperationCanceledException) { return; }
+                continue;
+            }
             r.FirstLaunch.TrySetResult();
+            var started = proc!;
             r.Set(ModuleState.Starting); var startedAt = _clock.UtcNow; r.LastPong = startedAt;
 
-            var outcome = await WatchAsync(r, proc, startedAt, stop).ConfigureAwait(false);
+            var outcome = await WatchAsync(r, started, startedAt, stop).ConfigureAwait(false);
             if (outcome == Outcome.Stop) return;
             int code = 0;
-            if (outcome == Outcome.Exit) { code = await proc.Exited.ConfigureAwait(false); lock (_pids) _pids.Remove(proc.Id); }
+            if (outcome == Outcome.Exit) { code = await started.Exited.ConfigureAwait(false); lock (_pids) _pids.Remove(started.Id); }
             if (outcome == Outcome.Exit && r.ByeSeen && code == 0) { Log($"[{r.Spec.Id}] cierre voluntario: no se reinicia"); r.Set(ModuleState.Stopped); return; }
 
-            if (outcome is Outcome.Hung or Outcome.NeverReady) { Log($"[{r.Spec.Id}] {(outcome == Outcome.Hung ? "sin latido" : "no llegó a estar listo")}: se reinicia"); proc.Kill(); await ExitsWithinAsync(proc, TimeSpan.FromSeconds(2)).ConfigureAwait(false); lock (_pids) _pids.Remove(proc.Id); }
-            else Log($"[{r.Spec.Id}] terminó de forma inesperada (código {code})");
+            if (outcome is Outcome.Hung or Outcome.NeverReady) { Log($"[{r.Spec.Id}] {(outcome == Outcome.Hung ? "sin latido" : "no llegó a estar listo")}: se reinicia"); started.Kill(); await ExitsWithinAsync(started, TimeSpan.FromSeconds(2)).ConfigureAwait(false); lock (_pids) _pids.Remove(started.Id); }
+            else Log($"[{r.Spec.Id}] terminó de forma inesperada ({LaunchDiagnostics.ExitText(code)})");
 
             var now = _clock.UtcNow; r.Crashes.Add(now); r.Crashes.RemoveAll(t => now - t > _p.CrashWindow);
             if (r.Crashes.Count >= _p.MaxCrashes) { Log($"[{r.Spec.Id}] {r.Crashes.Count} caídas en {_p.CrashWindow.TotalSeconds:0}s: cortacircuito abierto, no se reintenta"); r.Set(ModuleState.Failed); return; }

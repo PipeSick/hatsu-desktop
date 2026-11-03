@@ -52,6 +52,31 @@ public class TaskbarTests
     }
 
     [Fact]
+    public void Wm045_the_cursor_revealing_the_taskbar_never_makes_winmac_give_up_and_a_give_up_expires()
+    {
+        var l = new ReshowLimiter(); var t = new DateTime(2026, 11, 3, 10, 0, 0, DateTimeKind.Utc);
+        for (int i = 0; i < 200; i++) Assert.True(l.Allow(t.AddSeconds(i * 1.5)));   // el cursor toca el borde cada 1,5 s durante 5 min: siempre se vuelve a ocultar
+        var fight = new ReshowLimiter(); bool tripped = false;
+        for (int i = 0; i < 40 && !tripped; i++) tripped = !fight.Allow(t.AddMilliseconds(i * 50));   // Explorer la muestra 20 veces por segundo: pelea real
+        Assert.True(tripped);
+        var until = t + TaskbarPolicy.RetryAfter;
+        Assert.True(TaskbarPolicy.Suspended(t.AddSeconds(30), until)); Assert.False(TaskbarPolicy.Suspended(until.AddSeconds(1), until));   // se reintenta solo
+        Assert.Equal(TaskbarStep.Hide, TaskbarPolicy.Decide(true, false, false, true, TaskbarPolicy.Suspended(until.AddSeconds(1), until)));
+    }
+
+    [Fact]
+    public void Wm045_reconciliation_is_idempotent_at_start_after_explorer_restart_and_on_hot_changes()
+    {
+        // inicio con la barra visible → ocultar; ya oculta → nada; Explorer la recreó (visible, registro presente) → ocultar otra vez; desactivar en caliente → restaurar
+        Assert.Equal(TaskbarStep.Hide, TaskbarPolicy.Decide(true, false, false, true, false));
+        Assert.Equal(TaskbarStep.Nothing, TaskbarPolicy.Decide(true, true, true, false, false));
+        Assert.Equal(TaskbarStep.Nothing, TaskbarPolicy.Decide(true, true, true, false, false));
+        Assert.Equal(TaskbarStep.Hide, TaskbarPolicy.Decide(true, true, true, true, false));
+        Assert.Equal(TaskbarStep.Restore, TaskbarPolicy.Decide(false, true, true, false, false));
+        Assert.Equal(TaskbarStep.Nothing, TaskbarPolicy.Decide(false, false, false, true, false));   // apagado y restaurada: la barra queda como la tenga el usuario
+    }
+
+    [Fact]
     public void Wm034_the_lease_is_written_atomically_and_recovery_decisions_are_safe()
     {
         string dir = Path.Combine(Path.GetTempPath(), "winmac-lease-" + Guid.NewGuid().ToString("N")), f = Path.Combine(dir, "taskbar-restore.json");

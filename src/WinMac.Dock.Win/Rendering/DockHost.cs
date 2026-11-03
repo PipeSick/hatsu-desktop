@@ -121,8 +121,9 @@ public sealed class DockHost : IDisposable
         bool inWin = p.X >= _winLeftPx && p.X < _winLeftPx + _winWpx && p.Y >= _winTopPx && p.Y < _winTopPx + _winHpx;
         _ctl.SetPointer(inWin ? new PointerSample(sx, sy) : null);
         _pointerOver = inWin && _view is not null && (InteractiveAt(sx, sy) || _view.HoverIndex >= 0);
-        _ctl.SetEdgeHot(DockSettings.EdgeHot(p.X, p.Y, _monitor.Bottom, _winLeftPx, _winWpx, _winTopPx + _winHpx));
+        _ctl.SetEdgeHot(DockSettings.EdgeHot(p.X, p.Y, _monitor.Bottom, _winLeftPx, _winWpx, _winTopPx + _winHpx, screenEdgeFree: !_taskbarBelow));
         if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000) { _lastFs = DateTime.UtcNow; _ctl.SetSuppressed(FullscreenWatcher.ShouldSuppress()); }
+        if ((DateTime.UtcNow - _lastWorkCheck).TotalSeconds >= 2) { _lastWorkCheck = DateTime.UtcNow; _taskbarBelow = TaskbarVisibleOn(_monitor); RecheckWorkArea(null); }   // por si Windows no avisó (barata: una consulta)
     }
 
     private void UpdateVisibility()
@@ -196,6 +197,45 @@ public sealed class DockHost : IDisposable
         LogSizes("inicio");
     }
 
+    private DateTime _lastWorkCheck; private Native.RECT _lastWork; private bool _taskbarBelow = true;
+
+    /// <summary>¿Hay una barra de tareas de Explorer VISIBLE en el borde inferior de este monitor? (WM-043: oculta por WinMac → el borde de la pantalla queda libre para el Dock).
+    /// Solo ventanas de Explorer: la Barra de WinMac tiene una ventana propia de la misma clase, invisible.</summary>
+    private static bool TaskbarVisibleOn(Native.RECT mon)
+    {
+        bool found = false; var shell = Native2.GetShellWindow(); if (shell == IntPtr.Zero) return false;
+        Native2.GetWindowThreadProcessId(shell, out uint shellPid);
+        foreach (var cls in new[] { "Shell_TrayWnd", "Shell_SecondaryTrayWnd" })
+        {
+            IntPtr h = IntPtr.Zero;
+            while ((h = Native2.FindWindowExW(IntPtr.Zero, h, cls, null)) != IntPtr.Zero)
+            {
+                Native2.GetWindowThreadProcessId(h, out uint pid);
+                if (pid != shellPid || !Native2.IsWindowVisible(h) || !Native2.GetWindowRect(h, out var r)) continue;
+                if (r.Left < mon.Right && r.Right > mon.Left && r.Bottom >= mon.Bottom - 2 && r.Top < mon.Bottom) found = true;   // pegada al borde inferior de este monitor
+            }
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// WM-043/WM-044: si el área de trabajo de este monitor cambió (la barra de tareas de Windows se ocultó o volvió, otra AppBar se fue), el Dock se recoloca contra el
+    /// borde nuevo. Mientras el Dock reserva su propia franja, el aviso es de su propio AppBar y lo resuelve ABN_POSCHANGED (no se entra en bucle).
+    /// </summary>
+    private void RecheckWorkArea(string? why)
+    {
+        if (_hwnd == IntPtr.Zero || _reserving || _monitorGone) return;
+        var pt = new Native.POINT { X = _monitor.Left + (_monitor.Right - _monitor.Left) / 2, Y = _monitor.Top + (_monitor.Bottom - _monitor.Top) / 2 };
+        var mi = new Native.MONITORINFO { cbSize = (uint)Marshal.SizeOf<Native.MONITORINFO>() };
+        if (!Native.GetMonitorInfo(Native.MonitorFromPoint(pt, Native.MONITOR_DEFAULTTOPRIMARY), ref mi)) return;
+        var wk = mi.rcWork;
+        if (wk.Left == _lastWork.Left && wk.Top == _lastWork.Top && wk.Right == _lastWork.Right && wk.Bottom == _lastWork.Bottom) return;
+        bool first = _lastWork.Right == 0 && _lastWork.Bottom == 0; _lastWork = wk;
+        if (first) return;
+        _log($"[dock] el área de trabajo cambió (abajo: {wk.Bottom}, pantalla: {mi.rcMonitor.Bottom}{(why is null ? "" : ", " + why)}): el Dock se recoloca");
+        PlaceWindow(show: false); _force = true;
+    }
+
     private void PlaceWindow(bool show)
     {
         var pt = _screen is { } t ? new Native.POINT { X = t.Left + t.Width / 2, Y = t.Top + t.Height / 2 } : new Native.POINT { X = 0, Y = 0 };
@@ -225,6 +265,7 @@ public sealed class DockHost : IDisposable
         // Posición según la alineación y la altura elegidas (centro + altura normal = la de siempre: centrada justo sobre la barra de tareas).
         (_winLeftPx, _winTopPx) = DockSettings.Place(new PxRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom), new PxRect(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom), _winWpx, _winHpx, _scale, _m, _cfg);
         Native2.SetWindowPos(_hwnd, new IntPtr(-1), _winLeftPx, _winTopPx, _winWpx, _winHpx, show ? 0x0010u | 0x0040u /* NOACTIVATE | SHOWWINDOW */ : 0x0010u);
+        _lastWork = mi.rcWork;
     }
 
     private void ResizeWindow()
@@ -367,7 +408,10 @@ public sealed class DockHost : IDisposable
             }
             case WM_DPICHANGED: _scale = (int)((long)w & 0xFFFF) / 96.0; _dev.SetDpi(_scale); ResizeWindow(); return IntPtr.Zero;
             case WM_DISPLAYCHANGE: ResizeWindow(); return IntPtr.Zero;
-            case WM_SETTINGCHANGE: if ((long)w == 0x14 /* SPI_SETDESKWALLPAPER */) { BuildBackdrop(); _force = true; } return IntPtr.Zero;
+            case WM_SETTINGCHANGE:
+                if ((long)w == 0x14 /* SPI_SETDESKWALLPAPER */) { BuildBackdrop(); _force = true; }
+                else if ((long)w == 0x2F /* SPI_SETWORKAREA */) RecheckWorkArea("aviso de Windows");   // WM-043: la barra de tareas se ocultó o volvió
+                return IntPtr.Zero;
             case WM_DESTROY: Native2.PostQuitMessage(0); return IntPtr.Zero;
         }
         return Native2.DefWindowProc(h, msg, w, l);
@@ -536,6 +580,11 @@ public sealed class DockHost : IDisposable
     {
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern ushort RegisterClassEx(ref WNDCLASSEX c);
         [DllImport("gdi32.dll")] public static extern IntPtr CreateRectRgn(int l, int t, int r, int b);
+        [DllImport("user32.dll")] public static extern IntPtr GetShellWindow();
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string cls, string? title);
+        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+        [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Native.RECT r);
         [DllImport("gdi32.dll")] public static extern int CombineRgn(IntPtr dest, IntPtr a, IntPtr b, int mode);
         [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr o);
         [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr h, IntPtr rgn, bool redraw);

@@ -35,9 +35,14 @@ public sealed record TaskbarLease(int HostPid, bool OriginalAutoHide, DateTime S
 /// Freno contra peleas con Explorer: si Windows vuelve a mostrar la barra muchas veces seguidas (por ejemplo una versión que la redibuja sin parar), WinMac deja de ocultarla
 /// en esta sesión en vez de parpadear. Puro: se prueba sin Windows.
 /// </summary>
-public sealed class ReshowLimiter(int max = 6, TimeSpan? window = null)
+/// <remarks>
+/// WM-045: con «Ocultar automáticamente» de Windows activo, Explorer vuelve a mostrar su barra CADA VEZ que el cursor toca el borde inferior (justo donde está el Dock).
+/// El freno antiguo (6 en 60 s) contaba esas reapariciones normales, se rendía y dejaba la barra visible toda la sesión hasta desactivar y reactivar el ajuste.
+/// Ahora solo una pelea real (muchas reapariciones en pocos segundos, más rápido que una persona) cuenta, y la rendición caduca (<see cref="TaskbarPolicy.RetryAfter"/>).
+/// </remarks>
+public sealed class ReshowLimiter(int max = 20, TimeSpan? window = null)
 {
-    private readonly TimeSpan _window = window ?? TimeSpan.FromSeconds(60);
+    private readonly TimeSpan _window = window ?? TimeSpan.FromSeconds(10);
     private readonly Queue<DateTime> _hits = new();
 
     /// <summary>Anota que hubo que volver a ocultar. Devuelve false si se superó el límite (hay que rendirse y restaurar).</summary>
@@ -56,6 +61,11 @@ public enum TaskbarStep { Nothing, Hide, Restore, GiveUp }
 
 public static class TaskbarPolicy
 {
+    /// <summary>WM-045: tras rendirse (pelea con Explorer o el guardián restauró), se vuelve a intentar sola pasado este tiempo: nunca hace falta desactivar y reactivar el ajuste.</summary>
+    public static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(2);
+
+    public static bool Suspended(DateTime now, DateTime suspendedUntil) => now < suspendedUntil;
+
     /// <param name="enabled">El ajuste está activado.</param>
     /// <param name="leaseExists">El registro de recuperación existe (si el guardián lo borró, WinMac ya no es dueño de la ocultación).</param>
     /// <param name="hiddenByUs">El host ocultó la barra en esta sesión.</param>

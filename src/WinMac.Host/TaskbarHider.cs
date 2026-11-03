@@ -17,10 +17,13 @@ internal sealed class TaskbarHider
 {
     private readonly string _leasePath; private readonly Action<string> _log; private readonly string _exe;
     private readonly ReshowLimiter _limiter = new();
-    private bool _hiddenByUs, _suspended; private DateTime _nextTick, _hideAt = DateTime.MaxValue; private Process? _guard;
+    private bool _hiddenByUs, _enabled; private DateTime _nextTick, _hideAt = DateTime.MaxValue, _suspendedUntil = DateTime.MinValue; private Process? _guard;
+    private bool _suspended => TaskbarPolicy.Suspended(DateTime.UtcNow, _suspendedUntil);
+    // WM-045: aviso inmediato cuando Explorer vuelve a mostrar su barra (accesibilidad pública, fuera de proceso: no se inyecta nada en Explorer)
+    private IntPtr _hook; private uint _hookPid; private readonly WinEventProc _hookProc; private readonly HashSet<IntPtr> _bars = [];
     public string Status { get; private set; } = "";
 
-    public TaskbarHider(string exe, Action<string> log, string? leasePath = null) { _exe = exe; _log = log; _leasePath = leasePath ?? TaskbarLease.DefaultPath; }
+    public TaskbarHider(string exe, Action<string> log, string? leasePath = null) { _exe = exe; _log = log; _leasePath = leasePath ?? TaskbarLease.DefaultPath; _hookProc = OnWinEvent; }
 
     /// <summary>Al arrancar el host: si quedó un registro de un WinMac que ya no está (cierre forzado, apagado), primero se restaura.</summary>
     public void RecoverStale()
@@ -34,6 +37,7 @@ internal sealed class TaskbarHider
     /// <summary>Cada vuelta del bucle del host. Sin el ajuste activo y sin nada que restaurar no hace nada (ni lee ventanas).</summary>
     public void Tick(bool enabled, DateTime now)
     {
+        _enabled = enabled;
         if (!enabled && !_hiddenByUs) return;
         if (now < _nextTick) return;
         _nextTick = now.AddSeconds(2);
@@ -57,22 +61,28 @@ internal sealed class TaskbarHider
         {
             case TaskbarStep.Hide:
                 if (bars.Count == 0) { Status = "No se encontró la barra de tareas de Explorer"; return; }
-                if (_hiddenByUs && !_limiter.Allow(now)) { GiveUp("Windows la volvía a mostrar una y otra vez; se dejó visible para no parpadear. Desactiva y activa el ajuste para reintentar"); return; }
+                if (_hiddenByUs && !_limiter.Allow(now)) { GiveUp("Windows la volvía a mostrar sin parar; se dejó visible para no parpadear y se reintentará en 2 minutos"); return; }
                 if (!leaseExists) { new TaskbarLease(Environment.ProcessId, GetAutoHide(bars[0]), DateTime.UtcNow).Save(_leasePath); }   // SIEMPRE antes de tocar nada
                 EnsureGuard();
-                SetAutoHide(bars[0], true);
+                if (!GetAutoHide(bars[0]))
+                {   // WM-044: Explorer aplica «Ocultar automáticamente» con una animación; si su ventana se esconde antes, puede quedarse con la franja reservada
+                    // (las maximizadas dejaban un hueco abajo). Se activa ahora y se esconde en la siguiente vuelta, cuando ya liberó el espacio.
+                    SetAutoHide(bars[0], true); _hideAt = now.AddSeconds(1.2); _nextTick = now.AddSeconds(1.2); return;
+                }
                 foreach (var h in bars) ShowWindow(h, SW_HIDE);
+                _bars.Clear(); _bars.UnionWith(bars); InstallHook();
+                ReportWorkArea();
                 if (!_hiddenByUs) _log($"[barra de tareas] oculta en {bars.Count} pantalla(s)");
                 _hiddenByUs = true; Status = bars.Count == 1 ? "Oculta" : $"Oculta en {bars.Count} pantallas";
                 break;
             case TaskbarStep.Restore: RestoreNow(); break;
-            case TaskbarStep.GiveUp: GiveUp("el guardián la restauró porque WinMac no respondía; vuelve a activar el ajuste para ocultarla"); break;
+            case TaskbarStep.GiveUp: GiveUp("el guardián la restauró porque WinMac no respondía; se volverá a ocultar en 2 minutos"); break;
         }
     }
 
     private void GiveUp(string why)
     {
-        _suspended = true; Status = "Suspendida: " + why;
+        _suspendedUntil = DateTime.UtcNow + TaskbarPolicy.RetryAfter; RemoveHook(); _limiter.Reset(); Status = "Suspendida: " + why;
         _log("[barra de tareas] se deja de ocultar en esta sesión: " + why);
         if (TaskbarLease.Load(_leasePath) is { } l) Restore(l, _leasePath, _log);
         else foreach (var h in ExplorerTaskbars()) ShowWindow(h, SW_SHOWNA);
@@ -87,7 +97,20 @@ internal sealed class TaskbarHider
         else if (_hiddenByUs) foreach (var h in ExplorerTaskbars()) ShowWindow(h, SW_SHOWNA);
         TaskbarLease.Delete(_leasePath);
         if (_hiddenByUs || lease is not null) _log("[barra de tareas] restaurada");
-        _hiddenByUs = false; _suspended = false; _limiter.Reset(); Status = "";
+        RemoveHook(); _hiddenByUs = false; _suspendedUntil = DateTime.MinValue; _limiter.Reset(); Status = "";
+    }
+
+    /// <summary>WM-044: si tras ocultar la barra Windows aún reserva la franja inferior del monitor principal, se anota (sin tocar nada) para el diagnóstico.</summary>
+    private void ReportWorkArea()
+    {
+        try
+        {
+            var mi = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+            if (!GetMonitorInfoW(MonitorFromPoint(new POINT(), 1 /* MONITOR_DEFAULTTOPRIMARY */), ref mi)) return;
+            int gap = mi.rcMonitor.B - mi.rcWork.B;
+            if (gap > 4) _log($"[barra de tareas] oculta, pero el área de trabajo aún termina {gap} px antes del borde inferior (otra AppBar visible, como el Dock con «Reservar espacio», o Explorer sin liberar su franja)");
+        }
+        catch (Exception) { }
     }
 
     /// <summary>Lo que tocamos de vuelta a su sitio: «Ocultar automáticamente» como estaba (si se sabe) y todas las barras visibles.</summary>
@@ -98,6 +121,32 @@ internal sealed class TaskbarHider
         if (lease.KnowsOriginal && bars.Count > 0) SetAutoHide(bars[0], lease.OriginalAutoHide);
         foreach (var h in bars) ShowWindow(h, SW_SHOWNA);
         _ = leasePath;
+    }
+
+    // ───────────────────────────── WM-045: reocultar al instante
+    private void InstallHook()
+    {
+        var shell = GetShellWindow(); if (shell == IntPtr.Zero) return;
+        GetWindowThreadProcessId(shell, out uint pid);
+        if (_hook != IntPtr.Zero && pid == _hookPid) return;   // ya puesto para este Explorer
+        RemoveHook();
+        _hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, IntPtr.Zero, _hookProc, pid, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        _hookPid = _hook == IntPtr.Zero ? 0 : pid;
+        if (_hook == IntPtr.Zero) _log("[barra de tareas] AVISO: sin aviso inmediato de Windows; se reocultará en la comprobación de cada 2 s");
+    }
+
+    private void RemoveHook() { if (_hook != IntPtr.Zero) { UnhookWinEvent(_hook); _hook = IntPtr.Zero; _hookPid = 0; } }
+
+    /// <summary>Explorer mostró una ventana: si es una de sus barras y la opción sigue activa, se vuelve a ocultar en el acto (el cursor en el borde no la deja visible).</summary>
+    private void OnWinEvent(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        try
+        {
+            if (idObject != 0 /* OBJID_WINDOW */ || !_enabled || !_hiddenByUs || _suspended || !_bars.Contains(hwnd)) return;
+            if (!_limiter.Allow(DateTime.UtcNow)) { GiveUp("Windows la volvía a mostrar sin parar; se dejó visible para no parpadear y se reintentará en 2 minutos"); return; }
+            ShowWindow(hwnd, SW_HIDE);
+        }
+        catch (Exception e) { _log("[barra de tareas] aviso: " + e.GetType().Name); }
     }
 
     // ───────────────────────────── guardián (proceso aparte)
@@ -196,8 +245,16 @@ internal sealed class TaskbarHider
 
     private const int SW_HIDE = 0, SW_SHOWNA = 8; private const uint ABM_GETSTATE = 4, ABM_SETSTATE = 10, SMTO_ABORTIFHUNG = 2; private const long ABS_AUTOHIDE = 1, ABS_ALWAYSONTOP = 2;
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int L, T, R, B; }
+    [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; }
+    [StructLayout(LayoutKind.Sequential)] private struct MONITORINFO { public uint cbSize; public RECT rcMonitor, rcWork; public uint dwFlags; }
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(POINT pt, uint flags);
+    [DllImport("user32.dll")] private static extern bool GetMonitorInfoW(IntPtr h, ref MONITORINFO mi);
     [StructLayout(LayoutKind.Sequential)] private struct APPBARDATA { public uint cbSize; public IntPtr hWnd; public uint uCallbackMessage; public uint uEdge; public RECT rc; public IntPtr lParam; }
     private delegate bool EnumProc(IntPtr h, IntPtr l);
+    private delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+    private const uint EVENT_OBJECT_SHOW = 0x8002, WINEVENT_OUTOFCONTEXT = 0, WINEVENT_SKIPOWNPROCESS = 2;
+    [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
+    [DllImport("user32.dll")] private static extern bool UnhookWinEvent(IntPtr hook);
     [DllImport("shell32.dll")] private static extern IntPtr SHAppBarMessage(uint msg, ref APPBARDATA data);
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc cb, IntPtr l);
     [DllImport("user32.dll")] private static extern IntPtr GetShellWindow();

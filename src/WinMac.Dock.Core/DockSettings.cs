@@ -56,10 +56,18 @@ public static class DockSettings
     /// WM-033: where the hidden Dock wakes up — a thin strip (3 px) at the edge the Dock hides behind: the bottom of its window, i.e. the screen's bottom edge
     /// when Windows' taskbar is hidden, or just above the taskbar when it is shown (the monitor's last pixel would be ON the taskbar), and only across the Dock's width.
     /// </summary>
-    public static bool EdgeHot(int x, int y, int monitorBottom, int winLeft, int winWidth, int winBottom)
+    /// <summary>
+    /// Franja que despierta al Dock oculto (WM-033, WM-043): el borde inferior de su ventana Y, siempre, el borde físico inferior del monitor.
+    /// WM-043: con la barra de tareas de Windows oculta por WinMac, el Dock podía quedar colocado sobre el hueco que dejaba la barra (el área de trabajo
+    /// cambió y el Dock no se recolocó): su franja quedaba ~48 px por encima del borde y el cursor en el borde de la pantalla no lo despertaba nunca.
+    /// Ahora, si NO hay una barra de tareas visible en ese monitor (<paramref name="screenEdgeFree"/>), el último píxel de la pantalla también vale (dentro del ancho del Dock).
+    /// Con la barra de tareas visible se mantiene WM-033: su borde no despierta al Dock (estorbaría al usarla).
+    /// </summary>
+    public static bool EdgeHot(int x, int y, int monitorBottom, int winLeft, int winWidth, int winBottom, bool screenEdgeFree = false)
     {
+        if (x < winLeft || x >= winLeft + winWidth) return false;
         int edge = Math.Min(monitorBottom, winBottom);
-        return x >= winLeft && x < winLeft + winWidth && y >= edge - 3 && y <= edge + 1;
+        return y >= edge - 3 && y <= edge + 1 || screenEdgeFree && y >= monitorBottom - 2 && y < monitorBottom + 1;
     }
 
     public static (int Left, int Top) Place(PxRect monitor, PxRect work, int winW, int winH, double scale, DockMetrics m, DockConfig c)

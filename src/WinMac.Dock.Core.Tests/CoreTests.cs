@@ -216,6 +216,34 @@ public class ControllerTests
     }
 
     [Fact]
+    public void Wm043_with_the_windows_taskbar_hidden_the_screen_bottom_always_wakes_the_dock()
+    {
+        // el Dock quedó colocado sobre el hueco de la barra (ventana hasta 1036): sin barra visible, el borde real (1079) lo despierta
+        Assert.True(DockSettings.EdgeHot(960, 1079, 1080, 400, 1120, 1036, screenEdgeFree: true));
+        Assert.True(DockSettings.EdgeHot(960, 1078, 1080, 400, 1120, 1036, screenEdgeFree: true));
+        Assert.False(DockSettings.EdgeHot(960, 1079, 1080, 400, 1120, 1036, screenEdgeFree: false));   // con la barra visible debajo: WM-033 (no estorbar su uso)
+        Assert.False(DockSettings.EdgeHot(100, 1079, 1080, 400, 1120, 1036, screenEdgeFree: true));    // fuera del ancho del Dock: los clics en las esquinas no se tocan
+        Assert.True(DockSettings.EdgeHot(1500, 1619, 1620, 600, 1680, 1560, screenEdgeFree: true));    // 150 % (píxeles físicos)
+        // las cuatro combinaciones de «ocultar barra de Windows» × «Dock autoocultable»: el Dock siempre es alcanzable
+        foreach (bool taskbarHidden in new[] { false, true })
+        {
+            int winBottom = taskbarHidden ? 1084 : 1036;   // con la barra visible, el Dock termina justo sobre ella
+            int y = taskbarHidden ? 1079 : 1035;
+            Assert.True(DockSettings.EdgeHot(960, y, 1080, 400, 1120, winBottom, screenEdgeFree: taskbarHidden));
+        }
+    }
+
+    [Fact]
+    public void Wm044_the_dock_is_placed_against_the_current_work_area_so_it_follows_the_hidden_taskbar()
+    {
+        var m = new DockMetrics(); var c = new DockConfig();
+        var mon = new PxRect(0, 0, 1920, 1080);
+        var (_, topWithTaskbar) = DockSettings.Place(mon, new PxRect(0, 0, 1920, 1032), 1120, 120, 1, m, c);
+        var (_, topWithout) = DockSettings.Place(mon, mon, 1120, 120, 1, m, c);
+        Assert.Equal(48, topWithout - topWithTaskbar);   // al ocultar la barra (área de trabajo hasta 1080) el Dock baja al borde real
+    }
+
+    [Fact]
     public void Autohide_does_not_hide_while_pointer_is_over_dock()
     {
         var c = Make(new DockConfig { AutoHide = true, HideDelaySeconds = 0.3 }); Run(c, 0.1);
