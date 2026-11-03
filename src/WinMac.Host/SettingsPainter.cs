@@ -163,7 +163,7 @@ internal sealed class SettingsPainter : IDisposable
                 var (x0, x1, cy) = SettingsLayout.SliderTrack(r); double v = c.Dragging is { } dg && dg.Id == row.Id ? dg.Value : row.Value, px = x0 + (x1 - x0) * v / 100;
                 RR(x0, cy - 2, x1 - x0, 4, 2, Off); RR(x0, cy - 2, px - x0, 4, 2, new Color4(Tint.R, Tint.G, Tint.B, dim));
                 Dot(px, cy + 1, 13, new Color4(0, 0, 0, 0.18f)); Dot(px, cy, 12, new Color4(1, 1, 1, dim)); RRStroke(px - 12, cy - 12, 24, 24, 12, new Color4(0, 0, 0, _dark ? 0.35f : 0.12f), 0.8f);
-                Text(((int)Math.Round(v)).ToString(), _small, x1 + 8, r.Y, 36, r.H, Secondary, right: true); break;
+                Text(row.SliderLabel(v), _small, x1 + 2, r.Y, 44, r.H, Secondary, right: true); break;
             }
         }
     }

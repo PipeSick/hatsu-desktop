@@ -8,14 +8,14 @@ public sealed record PageFrame(IReadOnlyList<GroupFrame> Groups, IReadOnlyList<R
 /// <summary>Reparto de la ventana de Ajustes (DIP, estilo «lista agrupada» de iOS). Coordenadas LOCALES al área de contenido (origen = esquina del área a la derecha de la barra lateral, bajo el título). Puro.</summary>
 public static class SettingsLayout
 {
-    public const double WinW = 820, WinH = 580, SidebarW = 212, TitleH = 76, Pad = 28, GroupGap = 22, HeaderH = 30, Radius = 12;
+    public const double WinW = 860, WinH = 580, SidebarW = 240, TitleH = 76, Pad = 28, GroupGap = 22, HeaderH = 30, Radius = 12;
     public const double SwitchW = 51, SwitchH = 31, ControlH = 32, ArrowW = 30;
     public static double ContentW => WinW - SidebarW;
     public static double ViewportH => WinH - TitleH;
     public static double ColW => ContentW - 2 * Pad;
 
     /// <summary>Ancho reservado a la derecha para el control de la fila (una sola fuente: el dibujo y el cálculo de alturas).</summary>
-    public static double ControlSpace(SettingsRow r) => r.Kind switch { RowKind.Toggle => r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Segmented => 200, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
+    public static double ControlSpace(SettingsRow r) => r.Kind switch { RowKind.Toggle => r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Segmented => SegmentWidth(r, ColW) + 16, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
 
     /// <summary>Texto secundario que se ve en la fila: el motivo si está desactivada, si no el subtítulo.</summary>
     public static string? SubText(SettingsRow r) => !r.Enabled && !string.IsNullOrEmpty(r.Reason) ? r.Reason : r.Subtitle;
@@ -67,7 +67,14 @@ public static class SettingsLayout
     public static (double X, double Y, double W, double H) SwitchRect(RowFrame f) => (f.X + f.W - 16 - SwitchW, f.Y + (f.H - SwitchH) / 2, SwitchW, SwitchH);
     public static (double X, double Y, double W, double H) DownRect(RowFrame f) { var s = SwitchRect(f); return (s.X - 10 - ArrowW, f.Y + (f.H - ControlH) / 2, ArrowW, ControlH); }
     public static (double X, double Y, double W, double H) UpRect(RowFrame f) { var d = DownRect(f); return (d.X - 4 - ArrowW, d.Y, ArrowW, ControlH); }
-    public static (double X, double Y, double W, double H) SegmentRect(RowFrame f) { int n = Math.Max(1, f.Row.Options?.Count ?? 1); double w = Math.Min(f.W * 0.62, 84.0 * n); return (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
+    /// <summary>Equal segments wide enough for the longest label (WM-013: «Ciudad elegida» was cut), at most 62 % of the row.</summary>
+    public static double SegmentWidth(SettingsRow r, double rowW)
+    {
+        int n = Math.Max(1, r.Options?.Count ?? 1); int longest = r.Options is { Count: > 0 } o ? o.Max(t => t.Length) : 4;
+        return Math.Min(rowW * 0.62, n * Math.Max(84.0, longest * 7.4 + 24));
+    }
+
+    public static (double X, double Y, double W, double H) SegmentRect(RowFrame f) { double w = SegmentWidth(f.Row, f.W); return (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
     public static (double X, double Y, double W, double H) FieldRect(RowFrame f) { double w = Math.Min(f.W * 0.56, 290); return (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
     public static (double X0, double X1, double Cy) SliderTrack(RowFrame f) => (f.X + f.W - 16 - 250, f.X + f.W - 16 - 46, f.Y + f.H / 2);
     public static double SliderValueAt(RowFrame f, double x) { var (x0, x1, _) = SliderTrack(f); return Math.Clamp((x - x0) / (x1 - x0) * 100, 0, 100); }

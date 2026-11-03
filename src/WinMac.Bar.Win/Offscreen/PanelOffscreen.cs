@@ -91,7 +91,10 @@ public static class PanelOffscreen
                 Nc = new NcView(store.State, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Microsoft.OutlookForWindows" }, 356) };
             model = PanelBuilder.NotificationCenter(ctx); if (double.IsInfinity(maxHeight)) maxHeight = 1040;
         }
-        else if (kind == "apple") model = PanelBuilder.AppleMenu(ctx with { ForegroundApp = "Spotify" });
+        else if (kind == "apple") model = PanelBuilder.AppleMenu(ctx with { ForegroundApp = "Spotify", User = new SessionUser("Usuario de prueba", "EQUIPO-CI") });
+        else if (kind is "battery" or "battery-partial")   // WM-010: DATOS DE MUESTRA del panel de energía; «battery-partial» = un controlador que no informa de ciclos ni capacidad de diseño
+            model = PanelBuilder.BatteryPanel(ctx with { Battery = new BatteryInfo(true, 64, false, false, 3 * 3600 + 20 * 60),
+                BatteryDetail = kind == "battery" ? new BatteryDetails(57_000, 52_440, 33_560, -9_800, 212) : new BatteryDetails(null, 52_440, 33_560, null, null) });
         else model = kind == "weather" ? PanelBuilder.WeatherPanel(ctx) : PanelBuilder.HubPanel(ctx);
         var frame = PanelLayout.Compute(model, maxHeight, scroll);
         using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new PanelPainter(dev) { Theme = theme };

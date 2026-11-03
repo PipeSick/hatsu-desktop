@@ -209,6 +209,10 @@ public class SettingsActionsTests
         Assert.True(SettingsLayout.RowHeight(longRow) > SettingsLayout.RowHeight(shortRow));
         Assert.Equal(0, (SettingsLayout.RowHeight(longRow) - SettingsLayout.RowHeight(shortRow)) % SettingsLayout.SubLineH, 3);
         Assert.True(SettingsLayout.SideItemRect(9).Y + SettingsLayout.SideItemH <= SettingsLayout.WinH - 8);   // las diez secciones caben en la barra lateral
+        var seg = new SettingsRow(RowKind.Segmented, "wx.src", "Origen", "Subtítulo", Options: ["Automática", "Ciudad elegida"]);
+        Assert.True(SettingsLayout.SegmentWidth(seg, SettingsLayout.ColW) / 2 >= "Ciudad elegida".Length * 7.4);   // CI: «Ciudad eleg…» salía recortado
+        Assert.True(SettingsLayout.ControlSpace(seg) >= SettingsLayout.SegmentWidth(seg, SettingsLayout.ColW));      // el subtítulo no se mete bajo el control
+        Assert.Equal("48 pt", new SettingsRow(RowKind.Slider, "dock.fine", "x", SliderMin: 28, SliderMax: 96, Unit: "pt").SliderLabel(SettingsBuilder.DockFineValue(48)));
     }
 
     [Fact]

@@ -15,9 +15,16 @@ public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothS
 
 /// <summary>Estado de interfaz de los paneles: mes visible, día elegido, operaciones en curso («Conectando…») y el último error.</summary>
 public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo Battery, DateTime Now, IReadOnlyList<CalendarEvent> Events, int ViewYear, int ViewMonth,
-    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null, string? ForegroundApp = null, IReadOnlyList<Tray.TrayIcon>? Tray = null)
+    DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null, string? ForegroundApp = null, IReadOnlyList<Tray.TrayIcon>? Tray = null,
+    BatteryDetails? BatteryDetail = null, SessionUser? User = null)
 {
     public static PanelContext Initial(BarConfig cfg, DateTime now) => new(SystemSnapshot.Empty, cfg, BatteryInfo.None, now, [], now.Year, now.Month, null, new Dictionary<string, string>(), null);
+}
+
+/// <summary>WM-009: who is signed in, for the header of the WinMac panel. Name from Windows (display name or user name); the avatar is the initials.</summary>
+public sealed record SessionUser(string Name, string Machine)
+{
+    public string Initials => string.Concat(Name.Split([' ', '.', '_', '-'], StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0]))) is { Length: > 0 } i ? i : "?";
 }
 
 /// <summary>
@@ -54,18 +61,36 @@ public static partial class PanelBuilder
     /// </summary>
     public static PanelModel AppleMenu(PanelContext c)
     {
-        var w = new List<Widget>(); int sep = 0;
-        void Item(SystemActionKind k, string? label = null, bool enabled = true) => w.Add(new Widget(WidgetKind.MenuItem, "apple:" + k, label ?? SystemActions.Get(k).Label, Enabled: enabled));
+        // WM-009: Control Center de WinMac: quién ha iniciado sesión, controles reales, acciones de sesión y energía con confirmación y las opciones del menú de antes.
+        var s = c.Sys; var cfg = c.Cfg; var w = new List<Widget>(); int sep = 0;
         void Line() => w.Add(new Widget(WidgetKind.Separator, "apple-sep" + sep++));
-        Item(SystemActionKind.About); Line();
-        Item(SystemActionKind.Settings); Item(SystemActionKind.Store); Line();
-        Item(SystemActionKind.ForceQuit, c.ForegroundApp is { } app ? $"Forzar salida de «{app}»…" : "Forzar salida…", enabled: c.ForegroundApp is not null); Line();
-        Item(SystemActionKind.Sleep); Item(SystemActionKind.Restart); Item(SystemActionKind.Shutdown); Line();
-        Item(SystemActionKind.Lock); Item(SystemActionKind.LogOff); Line();
+        var user = c.User ?? new SessionUser(Environment.UserName, Environment.MachineName);
+        w.Add(new Widget(WidgetKind.UserHeader, "apple:user", user.Name, "Sesión en " + user.Machine, Data: new UserHeaderData(user.Initials, "apple:Shutdown")));
+        int col = 0;
+        void Tile(Widget t) { w.Add(t with { Col = col }); col = 1 - col; }
+        Tile(new Widget(WidgetKind.Tile, "open:wifi", "Wi-Fi", !s.Wifi.Available ? "No disponible" : s.Wifi.Connected ? s.Wifi.Ssid : s.Wifi.Reason is not null ? "Requiere ubicación" : "Sin conexión", On: s.Wifi.Available && s.Wifi.Connected, Enabled: s.Wifi.Available, Reason: s.Wifi.Reason, Glyph: "wifi", Bars: s.Wifi.Bars));
+        Tile(new Widget(WidgetKind.Tile, "open:bluetooth", "Bluetooth", !s.Bluetooth.Available ? "No disponible" : s.Bluetooth.RadioOn ? (s.Bluetooth.ConnectedCount > 0 ? $"{s.Bluetooth.ConnectedCount} conectado(s)" : "Activado") : "Desactivado", On: s.Bluetooth.Available && s.Bluetooth.RadioOn, Enabled: s.Bluetooth.Available, Reason: s.Bluetooth.Reason, Glyph: "bluetooth"));
+        // «No molestar»: Windows no ofrece una API pública para activarlo; el mosaico abre su ajuste (no finge un interruptor)
+        Tile(new Widget(WidgetKind.Tile, "open:ms-settings:notifications", "No molestar", "Ajuste de Windows", Glyph: "moon"));
+        Tile(new Widget(WidgetKind.Tile, "open:display", "Pantallas", "Duplicar / extender", Glyph: "display"));
+        Tile(new Widget(WidgetKind.Tile, "open:battery", "Modo de energía", s.Power.Available ? PowerModeState.Label(s.Power.Mode) : c.Battery.Present ? $"Batería {c.Battery.Percent}%" : "No disponible", Glyph: "power", On: c.Battery.Present && c.Battery.Charging));
+        Tile(new Widget(WidgetKind.Tile, "open:ms-settings:", "Configuración", "De Windows", Glyph: "gear"));
+        w.Add(new Widget(WidgetKind.Slider, "volume", "", Value: s.Audio.Volume, Enabled: s.Audio.Available, Reason: s.Audio.Reason, Glyph: s.Audio.Muted ? "sound-muted" : "sound"));   // compact: the icon says what it is
+        w.Add(new Widget(WidgetKind.Slider, "brightness", "", Value: s.Brightness.Percent, Enabled: s.Brightness.Available, Reason: s.Brightness.Reason, Glyph: "sun"));
+        w.Add(new Widget(WidgetKind.ActionStrip, "apple:session", "", Data: new ActionStripData([
+            new("apple:Sleep", "moon", "Suspender"), new("apple:Restart", "restart", "Reiniciar"), new("apple:Shutdown", "power", "Apagar"),
+            new("apple:LogOff", "logout", "Cerrar sesión"), new("apple:Lock", "lock", "Bloquear")])));
+        Line();
+        w.Add(new Widget(WidgetKind.MenuItem, "apple:" + SystemActionKind.About, SystemActions.Get(SystemActionKind.About).Label));
+        w.Add(new Widget(WidgetKind.MenuItem, "apple:" + SystemActionKind.ForceQuit, c.ForegroundApp is { } app ? $"Forzar salida de «{app}»…" : "Forzar salida…", Enabled: c.ForegroundApp is not null));
+        Line();
         w.Add(new Widget(WidgetKind.MenuItem, "apple:reserve", "Reservar espacio arriba", On: c.Cfg.ReserveSpace));
         w.Add(new Widget(WidgetKind.MenuItem, "apple:quitbar", "Salir de la barra superior"));
-        return new PanelModel(PanelKind.AppleMenu, "WinMac", w, MenuWidth, Pad: 5, Spacing: 0);
+        Msg(w, c);
+        return new PanelModel(PanelKind.AppleMenu, "WinMac", w, AppleWidth, Pad: 10, Spacing: 4);
     }
+
+    public const double AppleWidth = 320;
 
     public const int TrayColumns = 5;
     /// <summary>Prefijo de la clave de icono de una app en segundo plano (el resto es su HICON); el anfitrión la resuelve con los píxeles del icono.</summary>
@@ -184,12 +209,30 @@ public static partial class PanelBuilder
         return new PanelModel(PanelKind.Sound, "Sonido", w);
     }
 
+    /// <summary>
+    /// WM-010: only what Windows and the battery report. Percent, state and Windows' time estimate always; capacities, health and cycles only when the
+    /// battery driver gives them (many do not report cycles). Nothing estimated, nothing from the mock-ups.
+    /// </summary>
     public static PanelModel BatteryPanel(PanelContext c)
     {
-        var b = c.Battery; var p = c.Sys.Power; var w = new List<Widget> { Back("Energía") };
-        w.Add(b.Present
-            ? new Widget(WidgetKind.Info, "battery", $"Batería {b.Percent}%", b.Charging ? "Cargando" : b.Plugged ? "Conectada a la corriente" : b.Low ? "Batería baja" : "Con batería", On: b.Charging)
-            : new Widget(WidgetKind.Info, "battery", "Sin batería", "Equipo de sobremesa o batería no detectada"));
+        var b = c.Battery; var p = c.Sys.Power; var d = c.BatteryDetail; var w = new List<Widget> { Back("Energía") };
+        if (b.Present)
+        {
+            w.Add(new Widget(WidgetKind.Info, "battery", $"Batería {b.Percent}%", BatteryText.State(b), On: b.Charging));
+            if (!b.Plugged && BatteryText.TimeLeft(b.SecondsLeft) is { } left) w.Add(new Widget(WidgetKind.KeyValue, "bat-left", "Tiempo restante", left.Replace("Quedan ", "")));
+            else if (!b.Plugged) w.Add(new Widget(WidgetKind.KeyValue, "bat-left", "Tiempo restante", "Windows lo está calculando"));
+            if (d is not null)
+            {
+                if (d.FullMWh is { } full) w.Add(new Widget(WidgetKind.KeyValue, "bat-full", "Capacidad a plena carga", BatteryText.MWh(full)));
+                if (d.DesignMWh is { } design) w.Add(new Widget(WidgetKind.KeyValue, "bat-design", "Capacidad de diseño", BatteryText.MWh(design)));
+                if (d.HealthPercent is { } health) w.Add(new Widget(WidgetKind.KeyValue, "bat-health", "Salud (plena carga / diseño)", health + " %"));
+                if (d.Cycles is { } cycles) w.Add(new Widget(WidgetKind.KeyValue, "bat-cycles", "Ciclos de carga", cycles.ToString()));
+                if (d.RateMW is { } rate) w.Add(new Widget(WidgetKind.KeyValue, "bat-rate", rate > 0 ? "Carga a" : "Consumo", BatteryText.MWh(Math.Abs(rate)).Replace(" Wh", " W")));
+                if (d.Cycles is null || d.HealthPercent is null) w.Add(new Widget(WidgetKind.Note, "bat-missing", "La batería no informa de " + (d.Cycles is null && d.HealthPercent is null ? "sus ciclos ni de su capacidad" : d.Cycles is null ? "sus ciclos" : "su capacidad de diseño") + "."));
+            }
+            else w.Add(new Widget(WidgetKind.Note, "bat-reading", "Leyendo los datos de la batería…"));
+        }
+        else w.Add(new Widget(WidgetKind.Info, "battery", "Sin batería", "Equipo de sobremesa o batería no detectada"));
         w.Add(new Widget(WidgetKind.Header, "modes", "Modo de energía", Glyph: "section"));
         foreach (var m in Enum.GetValues<PowerMode>())
             w.Add(new Widget(WidgetKind.Row, "power:" + m, PowerModeState.Label(m), BusyOr(c, "power:" + m, null), On: p.Available && p.Mode == m, Enabled: p.Available, Reason: p.Reason, Glyph: p.Available && p.Mode == m ? "check" : null));

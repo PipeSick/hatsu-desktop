@@ -9,7 +9,12 @@ public enum RowKind { Toggle, Segmented, Field, Slider, Button, Info }
 /// <see cref="Index"/> identifica la posición de una pestaña de la Isla (filas «notch.sec:i»).
 /// </summary>
 public sealed record SettingsRow(RowKind Kind, string Id, string Title, string? Subtitle = null, bool On = false, bool Enabled = true, string? Reason = null,
-    IReadOnlyList<string>? Options = null, int Selected = 0, string? Text = null, string? Placeholder = null, double Value = 0, bool CanUp = false, bool CanDown = false);
+    IReadOnlyList<string>? Options = null, int Selected = 0, string? Text = null, string? Placeholder = null, double Value = 0, bool CanUp = false, bool CanDown = false,
+    double SliderMin = 0, double SliderMax = 100, string? Unit = null)
+{
+    /// <summary>What the slider shows for a 0–100 position: the real value in its unit (WM-019: the Dock's fine size showed «29» for 48 points).</summary>
+    public string SliderLabel(double v) => Math.Round(SliderMin + Math.Clamp(v, 0, 100) / 100 * (SliderMax - SliderMin)) + (Unit is null ? "" : " " + Unit);
+}
 
 public sealed record SettingsGroup(string? Header, IReadOnlyList<SettingsRow> Rows, string? Footer = null);
 public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOnlyList<SettingsGroup> Groups);
@@ -248,8 +253,8 @@ public static class SettingsBuilder
         return new SettingsPage("dock", "Escritorio y Dock", "dock",
         [
             new("Tamaño", [
-                new(RowKind.Segmented, "dock.size", "Tamaño de los iconos", $"{d.IconSize:0} puntos; en pantallas al 150 % ocupa 1,5 veces más píxeles", Enabled: enabled, Reason: off, Options: names, Selected: sel),
-                new(RowKind.Slider, "dock.fine", "Ajuste fino", $"De {WinMac.Dock.DockSettings.MinIconSize:0} a {DockFineMax:0} puntos", Enabled: enabled, Reason: off, Value: DockFineValue(d.IconSize)),
+                new(RowKind.Segmented, "dock.size", "Tamaño de los iconos", $"{d.IconSize:0} puntos (a 150 % de escala, 1,5 veces más píxeles)", Enabled: enabled, Reason: off, Options: names, Selected: sel),
+                new(RowKind.Slider, "dock.fine", "Ajuste fino", $"De {WinMac.Dock.DockSettings.MinIconSize:0} a {DockFineMax:0} puntos", Enabled: enabled, Reason: off, Value: DockFineValue(d.IconSize), SliderMin: WinMac.Dock.DockSettings.MinIconSize, SliderMax: DockFineMax, Unit: "pt"),
                 new(RowKind.Toggle, "dock.magnify", "Ampliación al pasar el ratón", null, d.MagnificationEnabled, enabled, off),
             ], "El tamaño se ajusta a la escala de cada monitor (DPI): el mismo valor se ve igual de grande en todas las pantallas."),
             new("Comportamiento", [

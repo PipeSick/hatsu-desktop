@@ -192,6 +192,34 @@ public sealed partial class PanelPainter : IDisposable
                 if (subW > 0) TextAlign(w.Sub!, _body, x + wd - subW - 10, y, subW, h, hot ? tc : Fg(w.Enabled ? 0.5f : 0.3f), TextAlignment.Trailing);
                 break;
             }
+            case WidgetKind.UserHeader when w.Data is UserHeaderData uh:
+            {
+                // WM-009: avatar with the initials, name and session; the round power button on the right (Apagar, with confirmation)
+                double r = 19, ax = x + 4 + r, ay = y + h / 2;
+                FillCircle(ax, ay, (float)r, Accent); TextAlign(uh.Initials, _title, ax - r, ay - r, 2 * r, 2 * r, new Color4(1, 1, 1, 1), TextAlignment.Center);
+                Text(w.Text, _title, ax + r + 10, y + 7, wd - 2 * r - 70, 22, Fg(0.95f));
+                if (w.Sub is { } sub) Text(sub, _small, ax + r + 10, y + 29, wd - 2 * r - 70, 18, Fg(0.55f));
+                var pr = PanelLayout.UserPowerRect(f);
+                bool hot = hover && HoverPoint is { } hp1 && hp1.X >= pr.X - 4;
+                FillCircle(pr.X + pr.W / 2, pr.Y + pr.H / 2, (float)(pr.W / 2), Fill(hot ? 0.24f : 0.12f));
+                Glyph("onoff", pr.X + pr.W / 2, pr.Y + pr.H / 2, 8, Fg(0.9f));
+                break;
+            }
+            case WidgetKind.ActionStrip when w.Data is ActionStripData sd:
+            {
+                // WM-009: Suspender · Reiniciar · Apagar · Cerrar sesión · Bloquear — round buttons with a label, all with the same confirmations as before
+                double cw = wd / sd.Actions.Count;
+                for (int i = 0; i < sd.Actions.Count; i++)
+                {
+                    var a = sd.Actions[i]; double cx = x + cw * i + cw / 2, cy = y + 20;
+                    bool hot = hover && HoverPoint is { } hp2 && hp2.X >= x + cw * i && hp2.X < x + cw * (i + 1);
+                    FillCircle(cx, cy, 17, Fill(hot ? 0.26f : 0.13f));
+                    Glyph(a.Glyph == "power" ? "onoff" : a.Glyph, cx, cy, 8, Fg(0.92f));
+                    TextAlign(a.Label, _small, x + cw * i, y + 41, cw, 18, Fg(0.7f), TextAlignment.Center);
+                }
+
+                break;
+            }
             case WidgetKind.TrayGrid when w.Data is TrayGridData g:
             {
                 double cs = PanelLayout.TrayCell;
@@ -281,6 +309,9 @@ public sealed partial class PanelPainter : IDisposable
             case "bell": { using var a = Arc(cx, cy - s * .1, s * .65, Math.PI, 0); Stroke(a, c); Line(cx - s * .65, cy - s * .1, cx - s * .85, cy + s * .55, c); Line(cx + s * .65, cy - s * .1, cx + s * .85, cy + s * .55, c); Line(cx - s * .85, cy + s * .55, cx + s * .85, cy + s * .55, c); FillCircle(cx, cy + s * .85, 1.4f, c); break; }
             case "check": Line(cx - s * .6, cy, cx - s * .1, cy + s * .5, c, 1.9f); Line(cx - s * .1, cy + s * .5, cx + s * .7, cy - s * .5, c, 1.9f); break;
             case "lock": Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cx - s * .7, cy - s * .15, cx + s * .7, cy + s * .8), RadiusX = 1.5f, RadiusY = 1.5f }, _solid, 1.3f); { using var a = Arc(cx, cy - s * .15, s * .45, Math.PI, 0); Stroke(a, c, 1.3f); } break;
+            case "onoff": { using var a = Arc(cx, cy + s * .08, s * .82, -Math.PI * .32, Math.PI * 1.32); Stroke(a, c, 1.7f); Line(cx, cy - s * .95, cx, cy - s * .05, c, 1.8f); break; }
+            case "restart": { using var a = Arc(cx, cy, s * .8, -Math.PI * .05, Math.PI * 1.55); Stroke(a, c, 1.7f); double ax = cx + s * .8, ay = cy - s * .04; Line(ax, ay, ax - s * .42, ay - s * .12, c, 1.7f); Line(ax, ay, ax + s * .1, ay - s * .44, c, 1.7f); break; }
+            case "logout": Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cx - s * .9, cy - s * .85, cx + s * .15, cy + s * .85), RadiusX = 2, RadiusY = 2 }, _solid, 1.5f); Line(cx - s * .25, cy, cx + s * .95, cy, c, 1.7f); Line(cx + s * .95, cy, cx + s * .6, cy - s * .35, c, 1.7f); Line(cx + s * .95, cy, cx + s * .6, cy + s * .35, c, 1.7f); break;
             case "chevron": Line(cx - s * .35, cy - s * .7, cx + s * .35, cy, c, 1.7f); Line(cx + s * .35, cy, cx - s * .35, cy + s * .7, c, 1.7f); break;
             case "back": Line(cx + s * .35, cy - s * .7, cx - s * .35, cy, c, 1.7f); Line(cx - s * .35, cy, cx + s * .35, cy + s * .7, c, 1.7f); break;
             default: HubGlyph(id, cx, cy, s, c); break;

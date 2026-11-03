@@ -137,8 +137,8 @@ public sealed partial class BarHost : IPanelUi
         {
             case PanelKind.Wifi: _hub.RefreshWifi(scan: _panelTicks % 2 == 0); break;   // el escaneo de Windows se pide cada ~5 s
             case PanelKind.Bluetooth: _hub.RefreshBluetooth(true); break;
-            case PanelKind.Sound or PanelKind.ControlCenter: _hub.RefreshAudio(); break;
-            case PanelKind.Battery: _battery = SystemProviders.Battery(); _hub.RefreshSlow(); break;
+            case PanelKind.Sound or PanelKind.ControlCenter or PanelKind.AppleMenu: _hub.RefreshAudio(); break;
+            case PanelKind.Battery: _battery = SystemProviders.Battery(); _hub.RefreshSlow(); if (_panelTicks % 8 == 0) ReadBatteryDetails(); break;
         }
 
         if (_pkind is PanelKind.Calendar or PanelKind.Notifications && (now - _lastEvents).TotalSeconds > 60) LoadEvents();
@@ -205,9 +205,30 @@ public sealed partial class BarHost : IPanelUi
         if (kind is PanelKind.ControlCenter or PanelKind.Wifi) _hub.RefreshWifi(scan: true);
         if (kind is PanelKind.ControlCenter or PanelKind.Bluetooth) _hub.RefreshBluetooth(true);
         if (kind is PanelKind.ControlCenter or PanelKind.Sound or PanelKind.Battery) _hub.RefreshSlow();
+        if (kind == PanelKind.Battery) ReadBatteryDetails();
         if (kind == PanelKind.Calendar) LoadEvents();
         _ = firstOpen;
     }
+
+    /// <summary>WM-010: capacities and cycles straight from the battery, off the UI thread; the panel shows only what came back.</summary>
+    private void ReadBatteryDetails()
+    {
+        Task.Run(() =>
+        {
+            var d = Shell.BatteryDetailsProvider.Read();
+            Post(() => { _pctx = _pctx with { BatteryDetail = d }; if (MenuDiagOn) _log($"[batería] detalles: diseño {d.DesignMWh?.ToString() ?? "—"} mWh, plena carga {d.FullMWh?.ToString() ?? "—"} mWh, ciclos {d.Cycles?.ToString() ?? "—"}"); RebuildPanel(); });
+        });
+    }
+
+    /// <summary>WM-009: the signed-in user's display name (GetUserNameEx NameDisplay), or the account name; the machine name.</summary>
+    private static SessionUser SessionUserInfo()
+    {
+        string name = Environment.UserName;
+        try { var sb = new System.Text.StringBuilder(256); uint n = 256; if (GetUserNameExW(3 /* NameDisplay */, sb, ref n) && sb.Length > 0) name = sb.ToString(); } catch (Exception) { }
+        return new SessionUser(name, Environment.MachineName);
+    }
+
+    [System.Runtime.InteropServices.DllImport("secur32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] private static extern bool GetUserNameExW(int format, System.Text.StringBuilder name, ref uint size);
 
     private void RebuildPanel()
     {
@@ -281,7 +302,7 @@ public sealed partial class BarHost : IPanelUi
 
     private void OnPanelEvent(PanelEvent e)
     {
-        if (_pkind == PanelKind.AppleMenu) { AppleAction(e); return; }
+        if (_pkind == PanelKind.AppleMenu && e.Id.StartsWith("apple:", StringComparison.Ordinal)) { AppleAction(e); return; }   // WM-009: tiles and sliders of the panel go to the same operations as the Control Center
         if (_pkind == PanelKind.Tray) { TrayPanelAction(e); return; }
         if (_pkind == PanelKind.AppMenu) { AppMenuAction(e); return; }
         _ops.Handle(e);
@@ -314,10 +335,12 @@ public sealed partial class BarHost : IPanelUi
             _appleReturn = BarNative.GetForegroundWindow();
             _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
             _popSource = src; _pkind = PanelKind.AppleMenu;
-            _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { ForegroundApp = SessionService.ForegroundProcessName() };
+            _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, ForegroundApp = SessionService.ForegroundProcessName(), User = SessionUserInfo() };
+            _anchorX = 0; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
             var model = PanelBuilder.AppleMenu(_pctx);
             int left = src.Left + (int)((item?.X ?? 0) * src.Scale), anchor = left + (int)Math.Round(model.Width * src.Scale / 2);   // el borde izquierdo del menú bajo el icono
             _popover.Show(model, anchor, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight: false);
+            _hub.RefreshAudio(); _hub.RefreshWifi(scan: false); _hub.RefreshBluetooth(true); _hub.RefreshSlow();   // live state for the tiles and sliders
         }
         catch (Exception e) { _log("Menú falló: " + e.Message); }
     }

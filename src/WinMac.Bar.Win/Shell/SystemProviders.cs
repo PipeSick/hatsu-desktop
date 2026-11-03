@@ -15,7 +15,7 @@ public static class SystemProviders
         {
             if (!BarNative.GetSystemPowerStatus(out var s)) return BatteryInfo.None;
             bool present = (s.BatteryFlag & 128) == 0 && s.BatteryFlag != 255 && s.BatteryLifePercent <= 100;   // 128 = sin batería; 255 = desconocido
-            return present ? new BatteryInfo(true, s.BatteryLifePercent, (s.BatteryFlag & 8) != 0, s.ACLineStatus == 1) : BatteryInfo.None;
+            return present ? new BatteryInfo(true, s.BatteryLifePercent, (s.BatteryFlag & 8) != 0, s.ACLineStatus == 1, s.BatteryLifeTime is > 0 and < 0x7FFFFFFF ? (int)s.BatteryLifeTime : null) : BatteryInfo.None;   // 0xFFFFFFFF = Windows does not know
         }
         catch (Exception) { return BatteryInfo.None; }
     }

@@ -9,14 +9,18 @@ public class AppleMenuTests
     private static PanelContext Ctx(string? app = "LeagueClientUx", bool reserve = true) => PanelContext.Initial(new BarConfig { ReserveSpace = reserve }, new DateTime(2026, 11, 2)) with { ForegroundApp = app };
 
     [Fact]
-    public void It_has_the_same_real_actions_in_macos_order_with_thin_separators()
+    public void Wm009_it_is_a_control_center_with_the_user_real_tiles_session_actions_and_the_old_options()
     {
-        var m = PanelBuilder.AppleMenu(Ctx());
-        var items = m.Widgets.Where(w => w.Kind == WidgetKind.MenuItem).Select(w => w.Id).ToList();
-        Assert.Equal(["apple:About", "apple:Settings", "apple:Store", "apple:ForceQuit", "apple:Sleep", "apple:Restart", "apple:Shutdown", "apple:Lock", "apple:LogOff", "apple:reserve", "apple:quitbar"], items);
-        Assert.Equal(5, m.Widgets.Count(w => w.Kind == WidgetKind.Separator));
+        var m = PanelBuilder.AppleMenu(Ctx() with { User = new SessionUser("Ana María Pérez", "PORTATIL") });
+        var head = m.Widgets[0]; Assert.Equal(WidgetKind.UserHeader, head.Kind); Assert.Equal("Ana María Pérez", head.Text); Assert.Equal("AM", ((UserHeaderData)head.Data!).Initials);
+        Assert.Equal(["open:wifi", "open:bluetooth", "open:ms-settings:notifications", "open:display", "open:battery", "open:ms-settings:"], m.Widgets.Where(w => w.Kind == WidgetKind.Tile).Select(w => w.Id));
+        Assert.Equal(["volume", "brightness"], m.Widgets.Where(w => w.Kind == WidgetKind.Slider).Select(w => w.Id));
+        var strip = (ActionStripData)m.Widgets.Single(w => w.Kind == WidgetKind.ActionStrip).Data!;
+        Assert.Equal(["apple:Sleep", "apple:Restart", "apple:Shutdown", "apple:LogOff", "apple:Lock"], strip.Actions.Select(a => a.Id));   // the same actions (and confirmations) as before
+        Assert.Equal(["apple:About", "apple:ForceQuit", "apple:reserve", "apple:quitbar"], m.Widgets.Where(w => w.Kind == WidgetKind.MenuItem).Select(w => w.Id));
         Assert.Equal("Forzar salida de «LeagueClientUx»…", m.Widgets.Single(w => w.Id == "apple:ForceQuit").Text);
         Assert.True(m.Widgets.Single(w => w.Id == "apple:reserve").On);
+        Assert.False(m.Widgets.Single(w => w.Id == "open:wifi").Enabled);   // no state yet: no fake «connected»
         Assert.Equal(PanelKind.AppleMenu, PanelBuilder.Build(PanelKind.AppleMenu, Ctx()).Kind);
     }
 
@@ -29,19 +33,41 @@ public class AppleMenuTests
     }
 
     [Fact]
-    public void Rows_are_compact_and_contiguous_and_other_panels_keep_their_spacing()
+    public void Wm009_session_buttons_and_the_power_button_are_real_clicks_and_dimmed_items_do_nothing()
     {
-        var f = PanelLayout.Compute(PanelBuilder.AppleMenu(Ctx()));
-        var rows = f.Items.Where(i => i.W.Kind == WidgetKind.MenuItem).ToList();
-        Assert.Equal(5, f.Items[0].X); Assert.Equal(5, f.Items[0].Y); Assert.Equal(PanelBuilder.MenuWidth - 10, f.Items[0].Width);
-        Assert.Equal(rows[0].Y + 24, rows[1].Y - 8, 6);   // About → separador (8) → Configuración: sin huecos extra
-        Assert.Equal(rows[1].Y + 24, rows[2].Y, 6);
-        Assert.True(f.Height < 340);
-        var cc = PanelLayout.Compute(PanelBuilder.ControlCenter(PanelContext.Initial(new BarConfig(), DateTime.Now)));
-        Assert.Equal(PanelLayout.Pad, cc.Items[0].X);   // el Control Center no cambia
-        var ctl = new PanelController(); ctl.SetModel(PanelBuilder.AppleMenu(Ctx())); var r = ctl.Frame.Items.Single(i => i.W.Id == "apple:Lock");
-        ctl.PointerDown(r.X + 20, r.Y + 10); Assert.Equal("apple:Lock", ctl.PointerUp(r.X + 20, r.Y + 10)!.Id);
+        var ctl = new PanelController(); ctl.SetModel(PanelBuilder.AppleMenu(Ctx()));
+        var strip = ctl.Frame.Items.Single(i => i.W.Kind == WidgetKind.ActionStrip); double cw = strip.Width / 5;
+        ctl.PointerDown(strip.X + cw * 4.5, strip.Y + 20); Assert.Equal("apple:Lock", ctl.PointerUp(strip.X + cw * 4.5, strip.Y + 20)!.Id);
+        ctl.PointerDown(strip.X + cw * 0.5, strip.Y + 20); Assert.Equal("apple:Sleep", ctl.PointerUp(strip.X + cw * 0.5, strip.Y + 20)!.Id);
+        var head = ctl.Frame.Items[0];
+        ctl.PointerDown(head.X + head.Width - 20, head.Y + 25); Assert.Equal("apple:Shutdown", ctl.PointerUp(head.X + head.Width - 20, head.Y + 25)!.Id);
+        ctl.PointerDown(head.X + 30, head.Y + 25); Assert.Null(ctl.PointerUp(head.X + 30, head.Y + 25));   // the name is not a button
         var off = PanelBuilder.AppleMenu(Ctx(app: null)); ctl.SetModel(off); var d = ctl.Frame.Items.Single(i => i.W.Id == "apple:ForceQuit");
-        ctl.PointerDown(d.X + 20, d.Y + 10); Assert.Null(ctl.PointerUp(d.X + 20, d.Y + 10));   // atenuada: no hace nada
+        ctl.PointerDown(d.X + 20, d.Y + 10); Assert.Null(ctl.PointerUp(d.X + 20, d.Y + 10));
+        var hgt = PanelLayout.Compute(PanelBuilder.AppleMenu(Ctx())).Height; Assert.True(hgt < 640, "alto " + hgt);   // worst case (every control disabled with its reason); 150 % on 1080p still fits under the bar
+    }
+}
+
+public class BatteryPanelWm010Tests
+{
+    private static PanelContext Ctx(BatteryInfo b, BatteryDetails? d) => PanelContext.Initial(new BarConfig(), new DateTime(2026, 11, 3)) with { Battery = b, BatteryDetail = d };
+
+    [Fact]
+    public void Shows_only_what_the_battery_reports_and_says_what_it_does_not()
+    {
+        var full = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 64, false, false, 12_000), new BatteryDetails(57_000, 52_440, 33_560, -9_800, 212)));
+        var kv = full.Widgets.Where(w => w.Kind == WidgetKind.KeyValue).ToDictionary(w => w.Id, w => w.Sub);
+        Assert.Equal("3 h 20 min", kv["bat-left"]); Assert.Equal("92 %", kv["bat-health"]); Assert.Equal("212", kv["bat-cycles"]); Assert.Equal("57,0 Wh", kv["bat-design"]);
+        Assert.DoesNotContain(full.Widgets, w => w.Id == "bat-missing");
+
+        var partial = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 64, false, false), new BatteryDetails(null, 52_440, null, null, null)));
+        Assert.DoesNotContain(partial.Widgets, w => w.Id is "bat-health" or "bat-cycles" or "bat-design");   // never invented
+        Assert.Contains(partial.Widgets, w => w.Id == "bat-missing");
+        Assert.Equal("Windows lo está calculando", partial.Widgets.Single(w => w.Id == "bat-left").Sub);
+
+        var charging = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 80, true, true, null), null));
+        Assert.DoesNotContain(charging.Widgets, w => w.Id == "bat-left");   // plugged in: no «time left»
+        Assert.Equal("Cargando", charging.Widgets.Single(w => w.Id == "battery").Sub);
+        Assert.Null(new BatteryDetails(0, 52_000, null, null, null).HealthPercent);   // a driver reporting 0 as design capacity: no health
     }
 }

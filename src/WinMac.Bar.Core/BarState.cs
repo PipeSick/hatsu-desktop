@@ -3,7 +3,8 @@ namespace WinMac.Bar;
 public enum NetKind { Unknown, Offline, Wifi, Ethernet }
 
 /// <summary><see cref="Percent"/> 0–100. Sin batería (equipo de sobremesa) → <see cref="Present"/> = false y el indicador no se muestra.</summary>
-public sealed record BatteryInfo(bool Present, int Percent, bool Charging, bool Plugged)
+/// <param name="SecondsLeft">Windows' estimate of the time left on battery (GetSystemPowerStatus); null when Windows does not know it (charging, just unplugged).</param>
+public sealed record BatteryInfo(bool Present, int Percent, bool Charging, bool Plugged, int? SecondsLeft = null)
 {
     public static readonly BatteryInfo None = new(false, 0, false, false);
     public double Fill => Math.Clamp(Percent, 0, 100) / 100.0;
@@ -44,4 +45,31 @@ public sealed record BarState(DateTime Now, string? ActiveApp, BatteryInfo Batte
     public WeatherBarInfo Weather => WeatherInfo ?? WeatherBarInfo.None;
     public BluetoothInfo Bt => Bluetooth ?? BluetoothInfo.None;
     public static BarState Empty(DateTime now) => new(now, null, BatteryInfo.None, VolumeInfo.None, NetworkInfo.Unknown);
+}
+
+/// <summary>
+/// WM-010: what the battery itself reports, read when the Energy panel opens: capacities (Windows.Devices.Power), charge rate and the cycle count
+/// (IOCTL_BATTERY_QUERY_INFORMATION). Each value is null when the battery or its driver does not report it — never estimated or invented.
+/// </summary>
+public sealed record BatteryDetails(int? DesignMWh, int? FullMWh, int? RemainingMWh, int? RateMW, int? Cycles, string? Chemistry = null)
+{
+    public static readonly BatteryDetails Unknown = new(null, null, null, null, null);
+
+    /// <summary>Health = full-charge capacity over design capacity, only when both are real (some drivers report 0 or the same placeholder).</summary>
+    public int? HealthPercent => DesignMWh is > 0 and var d && FullMWh is > 0 and var f ? (int)Math.Round(100.0 * f / d) : null;
+}
+
+public static class BatteryText
+{
+    /// <summary>«Quedan 3 h 20 min» / «Quedan 45 min»; null without an estimate.</summary>
+    public static string? TimeLeft(int? seconds)
+    {
+        if (seconds is not > 0) return null;
+        var t = TimeSpan.FromSeconds(seconds.Value);
+        return t.TotalHours >= 1 ? $"Quedan {(int)t.TotalHours} h {t.Minutes} min" : $"Quedan {Math.Max(1, t.Minutes)} min";
+    }
+
+    public static string State(BatteryInfo b) => b.Charging ? (b.Percent >= 100 ? "Cargada" : "Cargando") : b.Plugged ? "Conectada, sin cargar" : b.Low ? "Batería baja" : "Con batería";
+
+    public static string MWh(int mwh) => (mwh / 1000.0).ToString("0.0", System.Globalization.CultureInfo.GetCultureInfo("es-ES")) + " Wh";
 }

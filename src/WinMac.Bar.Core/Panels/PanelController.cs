@@ -48,7 +48,7 @@ public sealed class PanelController
     }
 
     private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav or WidgetKind.Tabs or WidgetKind.TabHeader or WidgetKind.Select or WidgetKind.AppRow or WidgetKind.Stats or WidgetKind.CityRow
-        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem or WidgetKind.TrayGrid
+        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem or WidgetKind.TrayGrid or WidgetKind.UserHeader or WidgetKind.ActionStrip
         || (w.Kind == WidgetKind.Header && w.Id == "back");
 
     private static string ScrollKey(PanelModel m) => m.PinTop > 0 && m.PinTop <= m.Widgets.Count ? m.Kind + "/" + m.Widgets[m.PinTop - 1].Id : m.Kind.ToString();
@@ -138,6 +138,8 @@ public sealed class PanelController
                 return cell >= 0 && w.Data is TrayGridData g ? new PanelEvent(PanelEventKind.Click, "trayitem:" + g.Cells[cell].Key) : null;
             }
             case WidgetKind.NcHeader: return PanelLayout.NcCloseHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "nc:close") : null;
+            case WidgetKind.UserHeader: return w.Data is UserHeaderData uh && PanelLayout.UserPowerHit(f, x) ? new PanelEvent(PanelEventKind.Click, uh.PowerId) : null;
+            case WidgetKind.ActionStrip: { int k = PanelLayout.StripActionAt(f, x); return w.Data is ActionStripData sd2 && k >= 0 && k < sd2.Actions.Count ? new PanelEvent(PanelEventKind.Click, sd2.Actions[k].Id) : null; }
             case WidgetKind.NcSection: return PanelLayout.NcSectionActionHit(f, x) && w.Data is NcSectionData sd ? new PanelEvent(PanelEventKind.Click, sd.ActionId!) : null;
             case WidgetKind.NotifGroup:
                 return w.Data is not NotifGroupData gd ? null

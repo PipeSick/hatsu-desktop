@@ -123,7 +123,7 @@ foreach ($pv in @(@{ n = 'bar-light-glass'; t = 'light'; b = 'glass' }, @{ n = '
   }
 }
 # Centro de Notificaciones en el log (escala 1, datos de MUESTRA): permite revisar el dibujo desde el sandbox sin descargar artefactos.
-foreach ($pv in @(@{ n = 'apple-dark'; k = 'apple'; t = 'dark' }, @{ n = 'nc-dark'; k = 'notifications'; t = 'dark' }, @{ n = 'nc-light'; k = 'notifications'; t = 'light' }, @{ n = 'nc-off'; k = 'notifications-off'; t = 'dark' })) {
+foreach ($pv in @(@{ n = 'apple-dark'; k = 'apple'; t = 'dark' }, @{ n = 'apple-light'; k = 'apple'; t = 'light' }, @{ n = 'battery-dark'; k = 'battery'; t = 'dark' }, @{ n = 'battery-partial'; k = 'battery-partial'; t = 'dark' }, @{ n = 'nc-dark'; k = 'notifications'; t = 'dark' }, @{ n = 'nc-light'; k = 'notifications'; t = 'light' }, @{ n = 'nc-off'; k = 'notifications-off'; t = 'dark' })) {
   $f = Join-Path $OutDir "preview-$($pv.n).png"
   Run "Vista previa $($pv.n)" $bar @('--render-panel', $pv.k, '--theme', $pv.t, '--out', "`"$f`"", '--scale', '1') 90
   if (Test-Path $f) {
