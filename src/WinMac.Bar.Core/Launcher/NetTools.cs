@@ -14,7 +14,7 @@ public static class PingReport
     {
         var l = new List<string>();
         int ok = replies.Count(r => r.Ok), sent = replies.Count;
-        string? addr = replies.FirstOrDefault(r => r.Address is not null).Address;
+        string? addr = replies.FirstOrDefault(r => r.Address is not null and not "0.0.0.0" and not "::").Address;   // a timeout reports 0.0.0.0: not a real address
         l.Add("Destino: " + host + (addr is not null && addr != host ? $" ({addr})" : ""));
         string state = error is not null ? "Error" : cancelled ? "Cancelado" : running ? $"Enviando… {sent}/{Count}" : ok == sent && sent > 0 ? "Responde" : ok > 0 ? "Responde con pérdidas" : "Sin respuesta";
         l.Add("Estado: " + state);
@@ -24,13 +24,16 @@ public static class PingReport
             int loss = (int)Math.Round(100.0 * (sent - ok) / sent);
             l.Add($"Paquetes: {sent} enviados · {ok} recibidos · {loss} % perdidos");
             var ms = replies.Where(r => r.Ok).Select(r => r.Ms).ToList();
-            if (ms.Count > 0) l.Add($"Latencia: mín. {ms.Min()} ms · media {Math.Round(ms.Average())} ms · máx. {ms.Max()} ms");
+            if (ms.Count > 0) l.Add($"Latencia: mín. {Ms(ms.Min())} · media {Ms((long)Math.Round(ms.Average()))} · máx. {Ms(ms.Max())}");
             var fails = replies.Where(r => !r.Ok).Select(r => Explain(r.Status)).Distinct().ToList();
             foreach (var f in fails.Take(2)) l.Add(f);
         }
 
         return l;
     }
+
+    /// <summary>Windows reports whole milliseconds: 0 means «under one», not «instant».</summary>
+    public static string Ms(long ms) => ms <= 0 ? "<1 ms" : ms + " ms";
 
     /// <summary>Windows' statuses and exceptions in plain words.</summary>
     public static string Explain(string status) => status switch

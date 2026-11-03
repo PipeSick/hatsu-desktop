@@ -72,6 +72,10 @@ internal sealed class SettingsPainter : IDisposable
             case "globe": Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), (float)s, (float)s), _b, 1.5f); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), (float)(s * .42), (float)s), _b, 1.3f); Ln(cx - s, cy, cx + s, cy, c, 1.3f); break;
             case "island": RR(cx - s * .95, cy - s * .38, s * 1.9, s * .76, s * .38, c); break;
             case "puzzle": RRStroke(cx - s * .7, cy - s * .55, s * 1.25, s * 1.25, s * .2, c, 1.6f); Dot(cx + s * .7, cy + s * .08, 2.4, c); Dot(cx - s * .08, cy - s * .7, 2.4, c); break;
+            case "dock": RRStroke(cx - s, cy + s * .05, s * 2, s * .62, s * .2, c, 1.6f); for (int i = -1; i <= 1; i++) RR(cx + i * s * .55 - s * .18, cy - s * .55, s * .36, s * .36, s * .1, c); break;
+            case "camera": RRStroke(cx - s, cy - s * .55, s * 2, s * 1.3, s * .25, c, 1.6f); Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)(cy + s * .1)), (float)(s * .38), (float)(s * .38)), _b, 1.5f); break;
+            case "search": Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)(cx - s * .18), (float)(cy - s * .18)), (float)(s * .58), (float)(s * .58)), _b, 1.7f); Ln(cx + s * .25, cy + s * .25, cx + s * .85, cy + s * .85, c, 2f); break;
+            case "clipboard": RRStroke(cx - s * .72, cy - s * .7, s * 1.44, s * 1.6, s * .2, c, 1.6f); RR(cx - s * .35, cy - s * .9, s * .7, s * .34, s * .1, c); break;
             case "bell": RRStroke(cx - s * .62, cy - s * .78, s * 1.24, s * 1.3, s * .55, c, 1.6f); Ln(cx - s * .9, cy + s * .5, cx + s * .9, cy + s * .5, c, 1.6f); Dot(cx, cy + s * .82, 1.4, c); break;
             case "chevron": Ln(cx - s * .3, cy - s * .62, cx + s * .3, cy, c, 1.8f); Ln(cx + s * .3, cy, cx - s * .3, cy + s * .62, c, 1.8f); break;
             case "up": Ln(cx - s * .55, cy + s * .25, cx, cy - s * .3, c, 1.8f); Ln(cx, cy - s * .3, cx + s * .55, cy + s * .25, c, 1.8f); break;
@@ -142,7 +146,7 @@ internal sealed class SettingsPainter : IDisposable
         if (row.Kind == RowKind.Info) { Glyph("info", x + 10, midY, 9, Secondary); Text(row.Title, _sub, x + 30, r.Y + 4, r.W - 62, r.H - 8, Secondary, wrap: true); return; }
         double tw = r.W - 32 - ControlSpace(row);
         if (row.Kind == RowKind.Button) { Text(row.Title, _body, x, r.Y, r.W - 60, r.H, row.Enabled ? Tint : Label(0.42f)); if (row.Enabled) Glyph("chevron", r.X + r.W - 20, midY, 6, Secondary); return; }
-        if (hasSub) { Text(row.Title, _body, x, r.Y + 8, tw, 22, Label(dim)); Text(!row.Enabled && !string.IsNullOrEmpty(row.Reason) ? row.Reason : row.Subtitle, _sub, x, r.Y + 30, Math.Max(40, tw), 20, Secondary, top: true); }
+        if (hasSub) { var sub = SettingsLayout.SubText(row); Text(row.Title, _body, x, r.Y + 8, tw, 22, Label(dim)); Text(sub, _sub, x, r.Y + 30, Math.Max(40, tw), SettingsLayout.SubLineH * SettingsLayout.Lines(sub, tw) + 3, Secondary, wrap: true, top: true); }
         else Text(row.Title, _body, x, r.Y, tw, r.H, Label(dim));
         switch (row.Kind)
         {
@@ -164,7 +168,7 @@ internal sealed class SettingsPainter : IDisposable
         }
     }
 
-    private static double ControlSpace(SettingsRow r) => r.Kind switch { RowKind.Toggle => r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Segmented => 200, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
+    private static double ControlSpace(SettingsRow r) => SettingsLayout.ControlSpace(r);
 
     private void DrawSwitch((double X, double Y, double W, double H) s, bool on, float dim)
     {

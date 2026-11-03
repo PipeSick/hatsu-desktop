@@ -130,6 +130,8 @@ public class PingReportTests
     {
         Assert.Contains("Estado: Enviando… 1/4", PingReport.Lines("google.com", [new(true, 9, "Success", "142.250.0.1")], running: true));
         Assert.Contains("Destino: google.com (142.250.0.1)", PingReport.Lines("google.com", [new(true, 9, "Success", "142.250.0.1")], running: true));
+        Assert.Contains("Destino: 10.255.255.1", PingReport.Lines("10.255.255.1", [new(false, 0, "TimedOut", "0.0.0.0")], running: false));   // un tiempo agotado no tiene dirección (CI: salía «(0.0.0.0)»)
+        Assert.Contains("Latencia: mín. <1 ms · media <1 ms · máx. <1 ms", PingReport.Lines("127.0.0.1", [new(true, 0, "Success", "127.0.0.1")], running: false));
         Assert.Contains("Estado: Cancelado", PingReport.Lines("x.com", [], running: false, cancelled: true));
         var unknown = PingReport.Lines("no-existe.invalid", [], running: false, error: "No such host is known.");
         Assert.Contains("No existe ese nombre: el DNS no lo encontró", unknown);

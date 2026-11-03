@@ -17,6 +17,10 @@ public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOn
 /// <param name="WeatherStatus">Texto de estado de la búsqueda de ciudad (qué se eligió, cómo pedir otra).</param>
 public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, ModuleState> States, bool Autostart, string WeatherStatus = "")
 {
+    /// <summary>Configuración del Dock (su propio archivo dock.json). Null: no se pudo leer; la página lo dice y no muestra controles falsos.</summary>
+    public WinMac.Dock.DockConfig? Dock { get; init; }
+    /// <summary>Permiso de ubicación de Windows para las apps de escritorio, leído sin pedirlo: «Permitido», «Denegado» o vacío si no se sabe.</summary>
+    public string LocationPermission { get; init; } = "";
     /// <summary>Installed extensions with their live status (docs/30). Null: the page says extensions are not available.</summary>
     public IReadOnlyList<(Extensions.InstalledExtension Ext, string Status)>? Extensions { get; init; }
 }
@@ -42,7 +46,10 @@ public static class SettingsBuilder
         ("spotlightFiles", "Buscar también archivos", b => b.SpotlightFiles),
         ("captureHotkeys", "Atajos Ctrl+Mayús+3 / 4 / 5", b => b.CaptureHotkeys),
         ("captureCopyToClipboard", "Copiar también al portapapeles", b => b.CaptureCopyToClipboard),
+        ("captureQuickLook", "Miniatura flotante al guardar", b => b.CaptureQuickLook),
     ];
+    public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
+    public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];
     public static readonly string[] CaptureFormatNames = ["PNG", "JPG"], CaptureFormatValues = ["Png", "Jpg"];
     public static readonly string[] SpotKeyNames = ["Alt+Espacio", "Ctrl+Espacio", "Desactivado"], SpotKeyValues = ["AltSpace", "CtrlSpace", "Off"];
 
@@ -99,57 +106,70 @@ public static class SettingsBuilder
         const string noNotch = "La Isla (NotchWin) no está instalada junto a WinMac.";
         bool On(string m) => cfg.Modules.TryGetValue(m, out var mc) ? mc.Enabled : true;
 
+        // WM-013/014: una sección por tema, en el orden en que se usan. Cada fila está en UN sitio; los textos se parten en líneas (sin «…»).
         var general = new SettingsPage("general", "General", "gear",
         [
             new("Módulos", [
-                new(RowKind.Toggle, "mod:bar", "Barra superior", "Reloj, Wi-Fi, volumen y el panel de WinMac", On("bar")),
+                new(RowKind.Toggle, "mod:bar", "Barra superior", "Reloj, indicadores y el panel de WinMac", On("bar")),
                 new(RowKind.Toggle, "mod:dock", "Dock", "Apps abiertas y ancladas, con vista previa de ventanas", On("dock")),
-                new(RowKind.Toggle, "mod:notch", "Isla", "Notch con música, agentes de IA y más", installed && On("notch"), installed, installed ? null : noNotch),
+                new(RowKind.Toggle, "mod:notch", "Isla", "Música, actividades y más en la parte superior", installed && On("notch"), installed, installed ? null : noNotch),
             ], "Cada módulo es un proceso aparte: si uno falla, los demás siguen."),
-            new("Sistema", [new(RowKind.Toggle, "autostart", "Iniciar con Windows", "Abre WinMac al iniciar sesión", input.Autostart)]),
+            new("Sistema", [
+                new(RowKind.Toggle, "autostart", "Iniciar con Windows", "Abre WinMac al iniciar sesión", input.Autostart),
+                Bar(10, "Pide confirmación antes de reiniciar, apagar o cerrar la sesión"),
+            ]),
         ]);
+
+        var dockPage = DockPage(input.Dock, On("dock"));
 
         var barPage = new SettingsPage("bar", "Barra superior", "bar",
         [
             new("Apariencia", [
-                new(RowKind.Segmented, "bar.bg", "Fondo", Options: SettingsBuilder.BackgroundNames, Selected: Index(BackgroundValues, bar.Background.ToString())),
                 new(RowKind.Segmented, "bar.theme", "Tema", Options: ThemeNames, Selected: Index(ThemeValues, bar.Theme.ToString())),
+                new(RowKind.Segmented, "bar.bg", "Fondo", Options: SettingsBuilder.BackgroundNames, Selected: Index(BackgroundValues, bar.Background.ToString())),
             ]),
             new("Elementos", [Bar(0), Bar(1), Bar(2), Bar(3), Bar(4), Bar(5), Bar(6), Bar(7), Bar(8), Bar(28, "Los de la bandeja de Windows; siguen también en la barra de tareas")]),
-            new("Comportamiento", [Bar(9, "El resto de ventanas no se superpone a la barra"), Bar(10), Bar(11), Bar(12, "Apps con menú de Windows o accesible; los menús originales siguen en la app")]),
-            new("Launchpad", [Bar(29, "Solo al pulsarla sola; los atajos con Windows siguen igual. Ctrl+Esc abre el menú Inicio")], "Desactivado, la tecla Windows vuelve a abrir el menú Inicio."),
+            new("Comportamiento", [
+                Bar(9, "Las ventanas maximizadas empiezan debajo de la barra y no quedan tapadas"),
+                Bar(11),
+                Bar(12, "Solo para apps con menú de Windows o accesible; los menús originales siguen en la app"),
+            ]),
+            new("Centro de control", [Bar(13), Bar(14), Bar(15), Bar(16), Bar(17), Bar(18), Bar(19), Bar(20)], "Qué controles aparecen en el panel de la Barra."),
+            new("Panel de WinMac", [
+                Bar(21),
+                new(RowKind.Field, "hub.ms", "Leer sensores cada (ms)", "Solo mientras el panel está abierto", Text: bar.HubRefreshMs.ToString(), Placeholder: "1000"),
+                new(RowKind.Segmented, "hub.rate", "Unidad de red", Options: RateNames, Selected: Index(RateValues, bar.RateUnit.ToString())),
+            ]),
+            new("Atajos de teclado", HotkeyRows(bar), "Estado real: lo que Windows aceptó al registrarlos. Windows no dice qué programa tiene un atajo rechazado, y los atajos que otra app usa solo dentro de su ventana no se pueden detectar."),
+        ]);
+
+        var capturePage = new SettingsPage("capture", "Capturas y grabación", "camera",
+        [
             new("Capturas", [
-                Bar(31, "Ctrl+Mayús+3: pantalla · 4: región · 5: barra de captura · 6: grabar/detener. Si otro programa ya los usa, Windows los rechaza (queda en bar.log)"),
+                Bar(31, "Ctrl+Mayús+3: pantalla · 4: región · 5: barra de captura · 6: grabar o detener"),
+                new(RowKind.Segmented, "bar.capdelay", "Retardo", "Para capturar menús abiertos: cuenta atrás antes de la captura", Options: CaptureDelayNames, Selected: Math.Max(0, Array.IndexOf(CaptureDelayValues, bar.CaptureDelaySeconds))),
                 new(RowKind.Segmented, "bar.capfmt", "Formato", Options: CaptureFormatNames, Selected: Index(CaptureFormatValues, bar.CaptureFormat)),
                 Bar(32),
+                Bar(33, "Unos segundos en la esquina; un clic abre la vista previa con acciones"),
                 new(RowKind.Field, "bar.capdir", "Carpeta", Text: bar.CaptureFolder ?? "", Placeholder: "Imágenes\\Capturas de pantalla"),
-            ], "Las capturas se guardan en esa carpeta y aparecen en la galería de la Isla. Las grabaciones (solo vídeo, nunca el micrófono) van a Vídeos\\Screen Recordings."),
-            new("Atajos de teclado", HotkeyRows(bar), "Estado real: lo que Windows aceptó al registrarlos. Windows no dice qué programa tiene un atajo rechazado, y los atajos que otra app usa solo dentro de su ventana no se pueden detectar."),
-            new("Spotlight Pro y espacios de trabajo", [
-                new(RowKind.Info, "bar.spotpro", "En Spotlight: acciones de WinMac, «ip», «red», «ping …» y «dns …» (solo con Intro), «ssh usuario@equipo», «> …» (nunca se ejecuta: abre la terminal o lo copia), «20% de 150»."),
-                new(RowKind.Info, "bar.scripts", "Scripts propios: %APPDATA%\\WinMac\\spotlight-scripts.json. Se ejecutan con doble Intro y tus permisos, nunca elevados."),
-                new(RowKind.Info, "bar.workspaces", "Espacios de trabajo: «Guardar espacio de trabajo», «Restaurar …», «Ventanas lado a lado» o «en cuadrícula». Se guardan en %APPDATA%\\WinMac\\workspaces.json; ninguna app se abre sola."),
+            ], "Si otro programa ya usa un atajo, Windows lo rechaza y se indica en «Atajos de teclado». Las capturas aparecen en la galería de la Isla."),
+            new("Grabación de pantalla", [
+                new(RowKind.Info, "bar.rec", "Solo vídeo (nunca el micrófono ni el sonido), siempre con indicador visible y solo cuando tú la inicias. Se guarda en Vídeos\\Screen Recordings."),
             ]),
+        ]);
+
+        var spotPage = new SettingsPage("spot", "Spotlight y Launchpad", "search",
+        [
             new("Spotlight", [
                 new(RowKind.Segmented, "bar.spot", "Atajo", Options: SpotKeyNames, Selected: Index(SpotKeyValues, bar.SpotlightHotkey.ToString())),
                 Bar(30, "Recientes de Windows y el índice de Windows Search; no indexa nada por su cuenta"),
             ], "Alt+Espacio sustituye al menú de ventana de Windows mientras WinMac está abierto."),
-            new("Calendario", [new(RowKind.Field, "bar.ics", "Archivo .ics", Text: bar.CalendarIcsPath ?? "", Placeholder: "Sin archivo")], "Opcional. Solo lectura: el calendario muestra los eventos del archivo."),
-            new("Control Center", [Bar(13), Bar(14), Bar(15), Bar(16), Bar(17), Bar(18), Bar(19), Bar(20)], "Qué controles aparecen en el panel de la Barra."),
-        ]);
-
-        var hub = new SettingsPage("hub", "Panel y Tiempo", "globe",
-        [
-            new("Iconos de la barra", [Bar(21), Bar(22)]),
-            new("Panel de WinMac", [
-                new(RowKind.Field, "hub.ms", "Leer sensores cada (ms)", "Solo mientras el panel está abierto", Text: bar.HubRefreshMs.ToString(), Placeholder: "1000"),
-                new(RowKind.Segmented, "hub.rate", "Unidad de red", Options: RateNames, Selected: Index(RateValues, bar.RateUnit.ToString())),
+            new("Herramientas", [
+                new(RowKind.Info, "bar.spotpro", "Acciones de WinMac, «ip», «red», «ping …» y «dns …» (solo con Intro), «ssh usuario@equipo», «> …» (nunca se ejecuta: abre la terminal o lo copia) y cálculos como «20% de 150»."),
+                new(RowKind.Info, "bar.scripts", "Scripts propios: %APPDATA%\\WinMac\\spotlight-scripts.json. Se ejecutan con doble Intro y tus permisos, nunca elevados."),
+                new(RowKind.Info, "bar.workspaces", "Espacios de trabajo: «Guardar espacio de trabajo», «Restaurar …», «Ventanas lado a lado» o «en cuadrícula». Ninguna app se abre sola."),
             ]),
-            new("Tiempo", [
-                new(RowKind.Field, "hub.city", "Ciudad", Text: WinMac.Bar.Hub.GeoPoint.Parse(bar.WeatherCity)?.Name ?? "", Placeholder: "Escribe una ciudad…"),
-                new(RowKind.Field, "hub.favs", "Otras ciudades", Text: string.Join(", ", WinMac.Bar.Hub.GeoPoint.ParseList(bar.WeatherFavorites).Select(g => g.Name)), Placeholder: "Santiago, Valparaíso"),
-                Bar(23), Bar(24, "Windows pedirá permiso de ubicación"),
-            ], string.IsNullOrWhiteSpace(input.WeatherStatus) ? "Escribe el nombre y elige de la lista. Si hay varias con el mismo nombre, añade el país: «Molina, Chile»." : input.WeatherStatus),
+            new("Launchpad", [Bar(29, "Solo al pulsarla sola; los atajos con Windows siguen igual. Ctrl+Esc abre el menú Inicio")], "Desactivado, la tecla Windows vuelve a abrir el menú Inicio."),
         ]);
 
         var wrows = NcWidgetRows(bar); int enabledCount = wrows.Count(r => r.On);
@@ -158,10 +178,27 @@ public static class SettingsBuilder
             new("Centro de Notificaciones", [
                 Bar(25, "Desactivado, el reloj abre el calendario de antes"),
                 Bar(26, "Con el permiso de Windows. Solo en memoria: no se guarda en disco"),
-                Bar(27, "Desactivado, «×» y «Ocultar» solo las ocultan en WinMac durante la sesión"),
-            ], "Las notificaciones que se ven son las que Windows guarda en su centro (Win+N)."),
+                Bar(27, "Desactivado, «×» y «Borrar» solo las ocultan en WinMac durante la sesión"),
+            ], "Se muestran todas las que Windows guarda en su centro (Win+N) y deja leer; las que una app no envía ahí no se pueden ver."),
             new("Widgets", wrows.Select((r, i) => new SettingsRow(RowKind.Toggle, "nc.w:" + r.Kind.ToString().ToLowerInvariant(), NcWidgetNames[r.Kind], null, r.On,
-                CanUp: r.On && i > 0, CanDown: r.On && i < enabledCount - 1)).ToList(), "La batería solo aparece en equipos con batería. El Tiempo usa la ciudad del panel del Tiempo."),
+                CanUp: r.On && i > 0, CanDown: r.On && i < enabledCount - 1)).ToList(), "La batería solo aparece en equipos con batería. El Tiempo usa la ubicación de «Clima y ciudades»."),
+            new("Calendario", [new(RowKind.Field, "bar.ics", "Archivo .ics", "Opcional. Solo lectura: se muestran los eventos del archivo", Text: bar.CalendarIcsPath ?? "", Placeholder: "Sin archivo")]),
+        ]);
+
+        var weatherPage = WeatherPage(bar, input);
+
+        var clipPage = new SettingsPage("clip", "Portapapeles", "clipboard",
+        [
+            new("Historial", [
+                new(RowKind.Field, "notch.cliplimit", "Elementos en el historial", Enabled: installed, Reason: installed ? null : noNotch, Text: n.ClipboardLimit.ToString(), Placeholder: "50"),
+                new(RowKind.Toggle, "notch.clippersist", "Conservar al reiniciar", n.ClipboardPersist ? "Activado: el historial se guarda cifrado para tu usuario de Windows (DPAPI)" : "Desactivado: nada del historial se guarda en disco", n.ClipboardPersist, installed, installed ? null : noNotch),
+                new(RowKind.Button, "notch.clipclear", "Borrar el historial del portapapeles", Enabled: installed, Reason: installed ? null : noNotch),
+            ], "Solo en este equipo: el historial nunca se sincroniza ni se registra."),
+            new("Privacidad", [
+                new(RowKind.Toggle, "notch.clipsecrets", "No guardar contraseñas ni claves", "Detecta claves privadas, tokens y contraseñas generadas; ignora siempre a los gestores de contraseñas", n.ClipboardSkipSecrets, installed, installed ? null : noNotch),
+                new(RowKind.Toggle, "notch.clipexcl", "Ignorar las apps de la lista", "Lo que copien no entra en el historial (se identifican por el nombre de su proceso)", n.ClipboardExclusionsOn, installed, installed ? null : noNotch),
+                new(RowKind.Field, "notch.clipapps", "Apps excluidas", Enabled: installed && n.ClipboardExclusionsOn, Reason: !installed ? noNotch : "Activa «Ignorar las apps de la lista»", Text: string.Join(", ", NotchSettings.ParseApps(n.ClipboardExcludedApps)), Placeholder: "KeePass, 1Password, … (separadas por comas)"),
+            ]),
         ]);
 
         var rows = new List<SettingsRow>();
@@ -177,7 +214,7 @@ public static class SettingsBuilder
             new(RowKind.Toggle, "notch.music", "Música", "Muestra lo que suena en tu reproductor", n.MusicEnabled, installed, why),
             new(RowKind.Segmented, "notch.player", "Reproductor", Enabled: installed, Reason: why, Options: PlayerNames, Selected: Index(NotchSettings.Players, n.MusicPlayer)),
             new(RowKind.Field, "notch.path", "Ruta del reproductor", Enabled: installed && custom, Reason: installed && !custom ? "Solo con «Otro»" : why, Text: n.CustomPlayerPath ?? "", Placeholder: "C:\\…\\reproductor.exe"),
-            new(RowKind.Toggle, "notch.lyrics", "Letras sincronizadas", "Envía título y artista a NetEase para buscar la letra", n.LyricsEnabled, installed, why),
+            new(RowKind.Toggle, "notch.lyrics", "Letras sincronizadas", "Envía título, artista y duración a NetEase y, si no la tiene, a LRCLIB para buscar la letra", n.LyricsEnabled, installed, why),
             new(RowKind.Toggle, "notch.pill", "Letra en el notch cerrado", null, n.LyricsInPill, installed && n.LyricsEnabled, installed && !n.LyricsEnabled ? "Activa las letras sincronizadas" : why),
         ]));
         notch.Add(new("Notch cerrado", [
@@ -188,14 +225,6 @@ public static class SettingsBuilder
             new(RowKind.Field, "notch.notifsec", "Notificaciones durante (s)", Enabled: installed, Reason: why, Text: n.PillNotifySeconds.ToString(), Placeholder: "5"),
             new(RowKind.Toggle, "notch.pillanim", "Animaciones", "La píldora crece y vuelve con una transición", n.PillAnimations, installed, why),
         ], "Lo que el notch muestra un momento sin abrirse."));
-        notch.Add(new("Portapapeles", [
-            new(RowKind.Field, "notch.cliplimit", "Elementos en el historial", Enabled: installed, Reason: why, Text: n.ClipboardLimit.ToString(), Placeholder: "50"),
-            new(RowKind.Toggle, "notch.clipsecrets", "No guardar contraseñas ni claves", "Detecta claves privadas, tokens y contraseñas generadas; ignora siempre a los gestores de contraseñas", n.ClipboardSkipSecrets, installed, why),
-            new(RowKind.Toggle, "notch.clippersist", "Conservar al reiniciar", n.ClipboardPersist ? "Activado: el historial se guarda cifrado para tu usuario de Windows (DPAPI)" : "Desactivado: nada del historial se guarda en disco", n.ClipboardPersist, installed, why),
-            new(RowKind.Toggle, "notch.clipexcl", "Ignorar las apps de la lista", "Lo que copien no entra en el historial (se identifican por el nombre de su proceso)", n.ClipboardExclusionsOn, installed, why),
-            new(RowKind.Field, "notch.clipapps", "Apps excluidas", Enabled: installed && n.ClipboardExclusionsOn, Reason: !installed ? why : "Activa «Ignorar las apps de la lista»", Text: string.Join(", ", NotchSettings.ParseApps(n.ClipboardExcludedApps)), Placeholder: "KeePass, 1Password, … (separadas por comas; vacío = lista por defecto)"),
-            new(RowKind.Button, "notch.clipclear", "Borrar el historial del portapapeles", Enabled: installed, Reason: why),
-        ], "Solo en este equipo: el historial nunca se sincroniza ni se registra."));
         notch.Add(new("Agentes de IA", [
             new(RowKind.Toggle, "notch.agents", "Agentes de IA", "Estado de tus agentes en el notch", n.AgentsEnabled, installed, why),
             new(RowKind.Field, "notch.poll", "Actualizar cada (s)", Enabled: installed, Reason: why, Text: n.PollIntervalSeconds.ToString(), Placeholder: "30"),
@@ -205,8 +234,60 @@ public static class SettingsBuilder
         var notchPage = new SettingsPage("notch", "Isla", "island", notch);
 
         _bar = null;
-        return [general, barPage, hub, ncPage, notchPage, ExtensionsPage(input.Extensions)];
+        return [general, dockPage, barPage, notchPage, capturePage, spotPage, ncPage, weatherPage, clipPage, ExtensionsPage(input.Extensions)];
     }
+
+    /// <summary>WM-019 / WM-001: tamaño del Dock (preajustes compactos y ajuste fino) y comportamiento. Escribe en dock.json, que el Dock vuelve a leer al cambiar.</summary>
+    private static SettingsPage DockPage(WinMac.Dock.DockConfig? d, bool enabled)
+    {
+        if (d is null) return new SettingsPage("dock", "Escritorio y Dock", "dock", [new(null, [new(RowKind.Info, "dock.none", "No se pudo leer la configuración del Dock (dock.json). Ábrelo una vez para crearla.")])]);
+        string? off = enabled ? null : "El Dock está desactivado en General";
+        var presets = WinMac.Dock.DockSettings.Presets;
+        int sel = Array.FindIndex(presets.ToArray(), p => Math.Abs(p.Size - d.IconSize) < 0.5);
+        var names = presets.Select(p => p.Name).ToList(); if (sel < 0) { names.Add("Otro"); sel = names.Count - 1; }
+        return new SettingsPage("dock", "Escritorio y Dock", "dock",
+        [
+            new("Tamaño", [
+                new(RowKind.Segmented, "dock.size", "Tamaño de los iconos", $"{d.IconSize:0} puntos; en pantallas al 150 % ocupa 1,5 veces más píxeles", Enabled: enabled, Reason: off, Options: names, Selected: sel),
+                new(RowKind.Slider, "dock.fine", "Ajuste fino", $"De {WinMac.Dock.DockSettings.MinIconSize:0} a {DockFineMax:0} puntos", Enabled: enabled, Reason: off, Value: DockFineValue(d.IconSize)),
+                new(RowKind.Toggle, "dock.magnify", "Ampliación al pasar el ratón", null, d.MagnificationEnabled, enabled, off),
+            ], "El tamaño se ajusta a la escala de cada monitor (DPI): el mismo valor se ve igual de grande en todas las pantallas."),
+            new("Comportamiento", [
+                new(RowKind.Toggle, "dock.autohide", "Ocultar automáticamente", "Aparece al llevar el ratón al borde inferior", d.AutoHide, enabled, off),
+                new(RowKind.Toggle, "dock.reserve", "Reservar espacio para el Dock", "Las ventanas maximizadas terminan encima del Dock y sus controles quedan visibles", d.ReserveSpace && !d.AutoHide, enabled && !d.AutoHide, !enabled ? off : d.AutoHide ? "Con ocultación automática el Dock no ocupa espacio" : null),
+                new(RowKind.Toggle, "dock.previews", "Vista previa de ventanas", "Al pasar el ratón sobre una app abierta", d.PreviewsEnabled, enabled, off),
+                new(RowKind.Toggle, "dock.minimize", "Clic en la app activa la minimiza", "Como en Windows; desactivado, como en macOS", d.ClickActiveMinimizes, enabled, off),
+            ], "Al salir de WinMac el espacio reservado se devuelve a Windows."),
+        ]);
+    }
+
+    public const double DockFineMax = 96;
+    public static double DockFineValue(double size) => Math.Clamp((size - WinMac.Dock.DockSettings.MinIconSize) / (DockFineMax - WinMac.Dock.DockSettings.MinIconSize) * 100, 0, 100);
+    public static double DockFineSize(double value) => Math.Round(WinMac.Dock.DockSettings.MinIconSize + Math.Clamp(value, 0, 100) / 100 * (DockFineMax - WinMac.Dock.DockSettings.MinIconSize));
+
+    /// <summary>WM-015: ubicación principal (automática con Windows o ciudad elegida), lista editable de ciudades adicionales, unidades, fuente y permiso.</summary>
+    private static SettingsPage WeatherPage(BarConfig bar, SettingsInput input)
+    {
+        bool auto = bar.WeatherAutoLocation; var city = WinMac.Bar.Hub.GeoPoint.Parse(bar.WeatherCity);
+        var favs = WinMac.Bar.Hub.GeoPoint.ParseList(bar.WeatherFavorites);
+        string perm = input.LocationPermission switch { "" => "", var p => " Permiso de ubicación de Windows: " + p + "." };
+        string state = auto ? $"Ubicación de Windows; si no está disponible se usa {(city is null ? "la ciudad elegida (ninguna todavía)" : city.Name)}.{perm}" : city is null ? "Sin ciudad: el Tiempo no hace peticiones." : $"Ciudad elegida: {city.Name}.";
+        var favRows = favs.Select((g, i) => new SettingsRow(RowKind.Toggle, "wx.fav:" + i, g.Name, "Desactiva para quitarla · flechas para ordenar", true, CanUp: i > 0, CanDown: i < favs.Count - 1)).ToList<SettingsRow>();
+        if (favRows.Count == 0) favRows.Add(new(RowKind.Info, "wx.nofavs", "Sin ciudades adicionales. Añade una abajo: aparecerán en el panel del Tiempo."));
+        favRows.Add(new(RowKind.Field, "hub.favadd", "Añadir ciudad", Text: "", Placeholder: "Escribe una ciudad y pulsa Intro"));
+        return new SettingsPage("weather", "Clima y ciudades", "globe",
+        [
+            new("Ubicación principal", [
+                new(RowKind.Segmented, "wx.src", "Origen", auto ? "Windows puede pedir permiso de ubicación la primera vez" : null, Options: WeatherSourceNames, Selected: auto ? 0 : 1),
+                new(RowKind.Field, "hub.city", auto ? "Ciudad de respaldo" : "Ciudad", Text: city?.Name ?? "", Placeholder: "Escribe una ciudad…"),
+                new(RowKind.Info, "wx.state", "Ahora: " + state),
+            ], string.IsNullOrWhiteSpace(input.WeatherStatus) ? "Escribe el nombre y elige de la lista. Si hay varias con el mismo nombre, añade el país: «Molina, Chile»." : input.WeatherStatus),
+            new("Ciudades adicionales", favRows),
+            new("Unidades y barra", [Bar(23), Bar(22)], "Datos de Open-Meteo (sin cuenta ni clave). Solo se envían las coordenadas de las ciudades."),
+        ]);
+    }
+
+    public static readonly string[] WeatherSourceNames = ["Automática", "Ciudad elegida"];
 
     /// <summary>Extensions (docs/30): each one with its permissions and live state; off by default after installing; install from a folder, uninstall.</summary>
     private static SettingsPage ExtensionsPage(IReadOnlyList<(Extensions.InstalledExtension Ext, string Status)>? exts)

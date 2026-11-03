@@ -238,7 +238,7 @@ if ($res -match '\(-?\d+,(-?\d+)\)-\(-?\d+,-?\d+\)' -and $mr -match '^(-?\d+),(-
   # una ventana maximizada sobresale unos píxeles de borde invisible (DWM): se tolera hasta 16 px
   Note "  - WM-001: borde inferior de la ventana $mBottom px; franja del Dock desde $bandTop px → $(if ($mBottom -le $bandTop + 16) { 'NO la tapa (correcto)' } else { 'la ventana sigue bajo el Dock' })"
 } else { Note '  - WM-001: no se pudo medir (falta la línea de reserva o la ventana)' }
-Shot '33-dock-ventana-maximizada' 'WM-001: ventana maximizada con el Dock reservando su franja (los controles inferiores quedan visibles)'
+Shot '32b-dock-ventana-maximizada' 'WM-001: ventana maximizada con el Dock reservando su franja (los controles inferiores quedan visibles)'
 Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 1500
 $capAfter = @(Get-ChildItem $shotsDir -Filter 'Captura *' -ErrorAction SilentlyContinue)
@@ -500,7 +500,7 @@ if (SpotOpen) {
   [System.Windows.Forms.SendKeys]::SendWait('portapapeles'); Start-Sleep -Milliseconds 1200;
   Select-String -Path $barLog -SimpleMatch '[spotlight] portapapeles:' -ErrorAction SilentlyContinue | Select-Object -Last 1 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) }
   Note "  - (registro de la Isla: $((Get-Content $pillLog -ErrorAction SilentlyContinue).Count) líneas; últimas:)"; Get-Content $pillLog -ErrorAction SilentlyContinue | Select-Object -Last 3 | ForEach-Object { Note ('    ' + $_) }
-  Start-Sleep -Milliseconds 500; Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch ' clip query ' | Select-Object -Last 3 | ForEach-Object { Note ('  - Isla: ' + $_.Line) } SpotShot '19e-spotlight-portapapeles' 'Spotlight Pro: historial del portapapeles de la Isla (solo lo admitido por la privacidad)'
+  Start-Sleep -Milliseconds 500; Get-Content $pillLog -ErrorAction SilentlyContinue | Select-String -SimpleMatch ' clip query ' | Select-Object -Last 3 | ForEach-Object { Note ('  - Isla: ' + $_.Line) }; SpotShot '19e-spotlight-portapapeles' 'Spotlight Pro: historial del portapapeles de la Isla (solo lo admitido por la privacidad)'
   [System.Windows.Forms.SendKeys]::SendWait('{TAB}'); Start-Sleep -Milliseconds 300; SpotShot '19f-spotlight-tab' 'Spotlight Pro: Tab mueve la selección (la vista previa la sigue)'
   if (Test-Path $barLog) { Select-String -Path $barLog -SimpleMatch '[spotlight] herramienta' | Select-Object -Last 3 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) } }
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
@@ -544,7 +544,7 @@ $excL = @(Select-String -Path $barLog -Pattern 'CIERRE INESPERADO|ERROR|\] error
 $excL | Select-Object -Last 4 | ForEach-Object { Note ('    ' + (($_.Line -replace '^\S+ ', '') -replace '(.{220}).*', '$1…')) }
 # ── 1j. Ajustes nuevos dibujados FUERA de pantalla con el pintor real (valida el dibujo, no el ratón): atajos, portapapeles, extensiones
 Note ''; Note '### Ajustes (fuera de pantalla)'
-foreach ($r in @(@('bar', 1500, '49a-ajustes-atajos'), @('bar', 2300, '49b-ajustes-spotlight-espacios'), @('notch', 900, '49c-ajustes-portapapeles'), @('ext', 0, '49d-ajustes-extensiones'))) {
+foreach ($r in @(@('bar', 1300, '49a-ajustes-atajos'), @('spot', 0, '49b-ajustes-spotlight-espacios'), @('clip', 0, '49c-ajustes-portapapeles'), @('ext', 0, '49d-ajustes-extensiones'), @('dock', 0, '49e-ajustes-dock'), @('weather', 0, '49f-ajustes-clima'), @('capture', 0, '49g-ajustes-capturas'), @('general', 0, '49h-ajustes-general'))) {
   $png = Join-Path $OutDir ($r[2] + '.png')
   Start-Process -FilePath $hostExe -ArgumentList @('--render-settings', $r[0], '--scroll', $r[1], '--out', "`"$png`"", '--scale', '1') -Wait -WindowStyle Hidden | Out-Null
   Note "- **$($r[2]).png**: Ajustes › $($r[0]) desplazado $($r[1]) DIP (los atajos solo muestran su estado real en la ventana viva: aquí no hay Barra que informe)"

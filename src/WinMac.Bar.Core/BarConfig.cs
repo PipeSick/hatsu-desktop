@@ -84,6 +84,10 @@ public sealed record BarConfig
     public string? CaptureFolder { get; init; }
     /// <summary>Modificadores de los atajos de captura (con 3, 4, 5 y 6): CtrlShift (por defecto), CtrlAlt o AltShift.</summary>
     public string CaptureModifiers { get; init; } = "CtrlShift";
+    /// <summary>WM-002: segundos de cuenta atrás antes de capturar (0, 3, 5 o 10), para capturar menús abiertos sin que el clic de la captura los cierre.</summary>
+    public int CaptureDelaySeconds { get; init; } = 0;
+    /// <summary>Quick Look: al guardar una captura, miniatura flotante unos segundos en la esquina; un clic abre la vista previa con acciones.</summary>
+    public bool CaptureQuickLook { get; init; } = true;
 
     /// <summary>Iconos de la bandeja de Windows (apps en segundo plano) en la barra. WinMac recibe los iconos como lo hace la bandeja y se los reenvía a Explorer.</summary>
     public bool ShowTrayIcons { get; init; } = true;
@@ -109,6 +113,7 @@ public sealed record BarConfig
         CenterGap = double.IsFinite(CenterGap) ? Math.Clamp(CenterGap, 0, 0.6) : 0.30,
         CalendarIcsPath = string.IsNullOrWhiteSpace(CalendarIcsPath) ? null : CalendarIcsPath.Trim().Trim('"'),
         HubRefreshMs = Math.Clamp(HubRefreshMs, 500, 10_000),
+        CaptureDelaySeconds = CaptureDelaySeconds switch { <= 0 => 0, <= 3 => 3, <= 5 => 5, _ => 10 },
         WeatherCity = Hub.GeoPoint.Parse(WeatherCity)?.Serialize(),
         WeatherFavorites = Hub.GeoPoint.ParseList(WeatherFavorites) is { Count: > 0 } favs ? Hub.GeoPoint.SerializeList(favs) : null,
         NcWidgets = Notifications.NcWidgets.Serialize(Notifications.NcWidgets.Parse(NcWidgets ?? Notifications.NcWidgets.Default)),

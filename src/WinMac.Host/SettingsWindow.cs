@@ -37,6 +37,8 @@ internal sealed class SettingsWindow : IDisposable
             try { if (on) Autostart.Install(_exe); else Autostart.Remove(); }
             catch (Exception e) { _log("[host] no se pudo cambiar el inicio automático: " + e.Message); throw new InvalidOperationException(e.Message); }
         }, log);
+        _actions.LoadDock = () => { try { return WinMac.Dock.DockSettings.Sanitize(WinMac.Dock.DockConfig.LoadOrDefault(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath, WinMac.Dock.Win.Shell.DockDefaults.Create)); } catch (Exception e) { _log("[host] dock.json no se pudo leer: " + e.Message); return null; } };
+        _actions.SaveDock = d => { if (d.TrySave(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath)) { _log("[host] ajustes del Dock guardados (el Dock los vuelve a leer)"); PostRefresh(); } else _log("[host] dock.json no se pudo guardar"); };
         _cfg.Changed += OnConfigChanged;
     }
 
@@ -51,7 +53,7 @@ internal sealed class SettingsWindow : IDisposable
 
     public void Show() => Show(null);
 
-    /// <param name="section">Sección pedida desde el panel de la Barra: «weather» abre Panel y Tiempo con el campo de ciudad listo; «sound», «system», «network», «disks» abren Panel y Tiempo.</param>
+    /// <param name="section">Sección pedida desde el panel de la Barra: «weather» abre Clima y ciudades con el campo de ciudad listo; «sound», «system», «network», «disks» abren Barra superior; también el id de cualquier sección.</param>
     public void Show(string? section)
     {
         try
@@ -66,8 +68,10 @@ internal sealed class SettingsWindow : IDisposable
 
     private void GoTo(string section)
     {
-        if (section is "weather" or "sound" or "system" or "network" or "disks") _ctl.SelectPage("hub");
+        if (section == "weather") _ctl.SelectPage("weather");
+        if (section is "sound" or "system" or "network" or "disks") _ctl.SelectPage("bar");   // «Panel de WinMac» está en Barra superior
         if (section == "notifications") _ctl.SelectPage("nc");
+        if (section is "dock" or "capture" or "spot" or "clip" or "general" or "notch" or "ext") _ctl.SelectPage(section);
         if (section == "weather" && _ctl.RowOf("hub.city") is { } city)
         {
             double y = city.Y; if (y < 0 || y > SettingsLayout.ViewportH - 120) _ctl.Scroll(y - 40);
@@ -140,11 +144,28 @@ internal sealed class SettingsWindow : IDisposable
 
     private void Invalidate() { if (_hwnd != IntPtr.Zero) Native.InvalidateRect(_hwnd, IntPtr.Zero, false); }
 
+    /// <summary>
+    /// WM-015: permiso de ubicación tal como lo guarda Windows (Configuración › Privacidad › Ubicación), leído del registro del usuario SIN pedirlo ni cambiarlo.
+    /// Vacío si no se puede leer: la página no inventa el estado.
+    /// </summary>
+    private static string LocationConsent()
+    {
+        try
+        {
+            const string key = @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location";
+            string? v(Microsoft.Win32.RegistryKey root, string sub) { using var k = root.OpenSubKey(sub); return k?.GetValue("Value") as string; }
+            string? machine = v(Microsoft.Win32.Registry.LocalMachine, key), user = v(Microsoft.Win32.Registry.CurrentUser, key), desktop = v(Microsoft.Win32.Registry.CurrentUser, key + @"\NonPackaged");
+            if (machine == "Deny" || user == "Deny" || desktop == "Deny") return "Denegado (Configuración › Privacidad › Ubicación)";
+            return user == "Allow" || desktop == "Allow" ? "Permitido" : "";
+        }
+        catch (Exception) { return ""; }
+    }
+
     private void RebuildPages()
     {
         IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension, string)>? exts = null;
         try { exts = ExtensionList?.Invoke(); } catch (Exception e) { _log("[extensiones] lista no disponible: " + e.Message); }
-        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { Extensions = exts }));
+        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent() }));
         PositionEdit();
     }
 
@@ -272,6 +293,7 @@ internal sealed class SettingsWindow : IDisposable
         {
             case "hub.city": _ = ResolveCityAsync(text); break;
             case "hub.favs": _ = ResolveFavoritesAsync(text); break;
+            case "hub.favadd": _ = AddFavoriteAsync(text); break;
             default: _actions.Apply(new SettingsEdit(id, "text", Text: text)); break;
         }
     }
@@ -365,6 +387,26 @@ internal sealed class SettingsWindow : IDisposable
             _weatherStatus = problems.Count == 0 ? _weatherStatus : string.Join(" · ", problems);
         }
         catch (Exception e) { _weatherStatus = "No se pudieron buscar las ciudades"; _log("[host] ciudades: " + e.GetType().Name + ": " + e.Message); }
+        PostRefresh();
+    }
+
+    /// <summary>WM-015: añade UNA ciudad a la lista de ciudades adicionales (sin duplicados), resuelta con el mismo buscador que la principal.</summary>
+    private async Task AddFavoriteAsync(string text)
+    {
+        text = text.Trim(); if (text.Length == 0) return;
+        try
+        {
+            _weatherStatus = "Buscando…"; PostRefresh();
+            var r = await CityResolver.ResolveOneAsync(text, WeatherSource, CancellationToken.None, HomeCountry()).ConfigureAwait(false);
+            if (r.Place is { } p)
+            {
+                var favs = WinMac.Bar.Hub.GeoPoint.ParseList((_cfg.Current.Bar ?? new WinMac.Bar.BarConfig()).WeatherFavorites).ToList();
+                if (favs.Any(f => Math.Abs(f.Lat - p.Lat) < 0.01 && Math.Abs(f.Lon - p.Lon) < 0.01)) _weatherStatus = CityResolver.DisplayLabel(p) + " ya está en la lista";
+                else { favs.Add(p); _cfg.ApplyBarPatch(Patch("weatherFavorites", WinMac.Bar.Hub.GeoPoint.SerializeList(favs))); _weatherStatus = "Añadida: " + CityResolver.DisplayLabel(p); }
+            }
+            else _weatherStatus = r.Message;
+        }
+        catch (Exception e) { _weatherStatus = "No se pudo buscar la ciudad"; _log("[host] ciudad adicional: " + e.GetType().Name + ": " + e.Message); }
         PostRefresh();
     }
 

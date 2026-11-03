@@ -21,6 +21,18 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
     /// <summary>Clears the Island's clipboard history (pinned included); provided by the host.</summary>
     public Action? ClearClipboard { get; set; }
 
+    /// <summary>WM-019: lectura y guardado de dock.json (el Dock lo vuelve a leer al cambiar). Los da el host; null = sin página del Dock.</summary>
+    public Func<WinMac.Dock.DockConfig?>? LoadDock { get; set; }
+    public Action<WinMac.Dock.DockConfig>? SaveDock { get; set; }
+
+    private bool Dock(Func<WinMac.Dock.DockConfig, WinMac.Dock.DockConfig> change)
+    {
+        if (LoadDock?.Invoke() is not { } d || SaveDock is null) return false;
+        var n = WinMac.Dock.DockSettings.Sanitize(change(d));
+        if (n != d) SaveDock(n);
+        return true;
+    }
+
     /// <summary>Extension operations, provided by the host (null when extensions are not available).</summary>
     public IExtensionOps? Extensions { get; set; }
 
@@ -54,8 +66,32 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             cfg.ApplyBarPatch(Patch("ncWidgets", WinMac.Bar.Notifications.NcWidgets.Serialize(list))); return true;
         }
 
+        if (id.StartsWith("wx.fav:", StringComparison.Ordinal) && int.TryParse(id[7..], out int fi))
+        {
+            var favs = WinMac.Bar.Hub.GeoPoint.ParseList((cfg.Current.Bar ?? new BarConfig()).WeatherFavorites).ToList();
+            if (fi < 0 || fi >= favs.Count) return true;
+            switch (e.Kind)
+            {
+                case "toggle" when !e.On: favs.RemoveAt(fi); break;
+                case "up" when fi > 0: (favs[fi - 1], favs[fi]) = (favs[fi], favs[fi - 1]); break;
+                case "down" when fi < favs.Count - 1: (favs[fi + 1], favs[fi]) = (favs[fi], favs[fi + 1]); break;
+                default: return true;
+            }
+
+            cfg.ApplyBarPatch(Patch("weatherFavorites", favs.Count == 0 ? null : WinMac.Bar.Hub.GeoPoint.SerializeList(favs))); return true;
+        }
+
         switch (id, e.Kind)
         {
+            case ("dock.size", "segment") when e.Index >= 0 && e.Index < WinMac.Dock.DockSettings.Presets.Length: return Dock(d => WinMac.Dock.DockSettings.WithIconSize(d, WinMac.Dock.DockSettings.Presets[e.Index].Size));
+            case ("dock.fine", "slider"): return Dock(d => WinMac.Dock.DockSettings.WithIconSize(d, SettingsBuilder.DockFineSize(e.Number)));
+            case ("dock.magnify", "toggle"): return Dock(d => d with { MagnificationEnabled = e.On });
+            case ("dock.autohide", "toggle"): return Dock(d => d with { AutoHide = e.On });
+            case ("dock.reserve", "toggle"): return Dock(d => d with { ReserveSpace = e.On });
+            case ("dock.previews", "toggle"): return Dock(d => d with { PreviewsEnabled = e.On });
+            case ("dock.minimize", "toggle"): return Dock(d => d with { ClickActiveMinimizes = e.On });
+            case ("bar.capdelay", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.CaptureDelayValues.Length: cfg.ApplyBarPatch(Patch("captureDelaySeconds", SettingsBuilder.CaptureDelayValues[e.Index])); return true;
+            case ("wx.src", "segment") when e.Index is 0 or 1: cfg.ApplyBarPatch(Patch("weatherAutoLocation", e.Index == 0)); return true;
             case ("mod:bar", "toggle"): cfg.SetModuleEnabled("bar", e.On); return true;
             case ("mod:dock", "toggle"): cfg.SetModuleEnabled("dock", e.On); return true;
             case ("mod:notch", "toggle"): cfg.SetModuleEnabled("notch", e.On); return true;

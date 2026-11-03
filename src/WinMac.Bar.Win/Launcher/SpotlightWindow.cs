@@ -205,28 +205,42 @@ internal sealed class SpotlightWindow : IDisposable
         var p = _ctl.PreviewRect;
         Brush(new Color4(1, 1, 1, 0.10f)); _ctx!.FillRectangle(R(p.X, p.Y, 1, p.H), _solid!);
         float x = (float)(p.X + 20), w = (float)(p.W - 36), y = (float)(p.Y + 14);
-        DrawItemIcon(it, new LpRect(x, y, 56, 56)); y += 68;
-        Brush(new Color4(1, 1, 1, 0.96f));
-        using (var l = _dw.CreateTextLayout(it.Title, _title!, w, 60)) { l.WordWrapping = WordWrapping.Wrap; _ctx.DrawTextLayout(new Vector2(x, y), l, _solid!); y += l.Metrics.Height + 4; }
-        Brush(new Color4(1, 1, 1, 0.5f));
-        using (var l = _dw.CreateTextLayout(it.Section, _sub!, w, 18)) { _ctx.DrawTextLayout(new Vector2(x, y), l, _solid!); y += 24; }
+        bool tool = it.Kind == SpotKind.Tool && (it.Target.StartsWith("tool:ping", StringComparison.Ordinal) || it.Target.StartsWith("tool:dns", StringComparison.Ordinal));
+        if (tool)
+        {
+            // WM-021: compact header (small icon + title on one row) so destination, state, packets, latency and errors fit above the buttons
+            DrawItemIcon(it, new LpRect(x, y, 30, 30));
+            Brush(new Color4(1, 1, 1, 0.96f));
+            using (var l = _dw.CreateTextLayout(it.Title, _title!, w - 40, 30)) { l.ParagraphAlignment = ParagraphAlignment.Center; _ctx.DrawTextLayout(new Vector2(x + 40, y), l, _solid!); }
+            y += 40;
+        }
+        else
+        {
+            DrawItemIcon(it, new LpRect(x, y, 56, 56)); y += 68;
+            Brush(new Color4(1, 1, 1, 0.96f));
+            using (var l = _dw.CreateTextLayout(it.Title, _title!, w, 60)) { l.WordWrapping = WordWrapping.Wrap; _ctx.DrawTextLayout(new Vector2(x, y), l, _solid!); y += l.Metrics.Height + 4; }
+            Brush(new Color4(1, 1, 1, 0.5f));
+            using (var l = _dw.CreateTextLayout(it.Section, _sub!, w, 18)) { _ctx.DrawTextLayout(new Vector2(x, y), l, _solid!); y += 24; }
+        }
+
         var (lines, keys) = SpotPro.Preview(it);
+        float textLimit = (float)(p.Y + p.H - (tool ? 70 : 30));   // tools: room for the button row and the key hint below the text, never on top of it
         foreach (var line in lines.Take(8))
         {
             Brush(new Color4(1, 1, 1, 0.78f));
             using var l = _dw.CreateTextLayout(line, _sub!, w, 40); l.WordWrapping = WordWrapping.Wrap;
-            if (y + l.Metrics.Height > p.Y + p.H - 30) break;
+            if (y + l.Metrics.Height > textLimit) break;
             _ctx.DrawTextLayout(new Vector2(x, y), l, _solid!); y += l.Metrics.Height + 3;
         }
 
         // Tool panel (ping / DNS): Repetir · Cancelar (while running) · Copiar — real actions on the real result
         _toolButtons.Clear();
-        if (it.Kind == SpotKind.Tool && (it.Target.StartsWith("tool:ping", StringComparison.Ordinal) || it.Target.StartsWith("tool:dns", StringComparison.Ordinal)))
+        if (tool)
         {
             bool running = it.Details?.Any(d => d.StartsWith("Estado: Enviando", StringComparison.Ordinal) || d.StartsWith("Estado: Resolviendo", StringComparison.Ordinal)) == true;
             var buttons = new List<(string Id, string Label)> { (running ? "cancel" : "repeat", running ? "Cancelar" : (it.Details is null ? "Ejecutar" : "Repetir")) };
             if (it.Details is { Count: > 0 } && !running) buttons.Add(("copy", "Copiar"));
-            float bx = x, by = (float)(p.Y + p.H - 62);
+            float bx = x, by = Math.Min(y + 8, (float)(p.Y + p.H - 62));
             foreach (var (id, label) in buttons)
             {
                 using var bl = _dw.CreateTextLayout(label, _sub!, 200, 26); float bw = bl.Metrics.Width + 22;

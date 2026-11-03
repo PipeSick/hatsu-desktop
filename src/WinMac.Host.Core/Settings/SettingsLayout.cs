@@ -14,15 +14,34 @@ public static class SettingsLayout
     public static double ViewportH => WinH - TitleH;
     public static double ColW => ContentW - 2 * Pad;
 
-    public static double RowHeight(SettingsRow r) => r.Kind switch
+    /// <summary>Ancho reservado a la derecha para el control de la fila (una sola fuente: el dibujo y el cálculo de alturas).</summary>
+    public static double ControlSpace(SettingsRow r) => r.Kind switch { RowKind.Toggle => r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Segmented => 200, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
+
+    /// <summary>Texto secundario que se ve en la fila: el motivo si está desactivada, si no el subtítulo.</summary>
+    public static string? SubText(SettingsRow r) => !r.Enabled && !string.IsNullOrEmpty(r.Reason) ? r.Reason : r.Subtitle;
+
+    /// <summary>
+    /// WM-013: los subtítulos ya no se recortan con «…»: se parten en líneas y la fila crece. Estimación conservadora del ancho medio de carácter de la letra
+    /// secundaria (12 px Segoe UI ≈ 6,4 DIP) para que el cálculo puro coincida con lo que DirectWrite pinta.
+    /// </summary>
+    public static int Lines(string? text, double width) => string.IsNullOrEmpty(text) ? 0 : Math.Max(1, (int)Math.Ceiling(text.Length * 6.4 / Math.Max(60, width)));
+    public const double SubLineH = 17;
+
+    public static double RowHeight(SettingsRow r)
     {
-        RowKind.Toggle => string.IsNullOrEmpty(r.Subtitle) && (r.Enabled || string.IsNullOrEmpty(r.Reason)) ? 46 : 58,
-        RowKind.Segmented or RowKind.Field => string.IsNullOrEmpty(r.Subtitle) && (r.Enabled || string.IsNullOrEmpty(r.Reason)) ? 52 : 62,
-        RowKind.Slider => 54,
-        RowKind.Button => 48,
-        RowKind.Info => 54,
-        _ => 46,
-    };
+        string? sub = SubText(r);
+        if (r.Kind == RowKind.Info) return Math.Max(54, 16 + SubLineH * Lines(r.Title, ColW - 62));
+        if (r.Kind == RowKind.Button) return 48;
+        if (r.Kind == RowKind.Slider && string.IsNullOrEmpty(sub)) return 54;
+        int extra = Math.Max(0, Lines(sub, ColW - 32 - ControlSpace(r)) - 1);
+        double baseH = r.Kind switch
+        {
+            RowKind.Toggle => string.IsNullOrEmpty(sub) ? 46 : 58,
+            RowKind.Segmented or RowKind.Field or RowKind.Slider => string.IsNullOrEmpty(sub) ? 52 : 62,
+            _ => 46,
+        };
+        return baseH + extra * SubLineH;
+    }
 
     public static double FooterHeight(string? footer) => string.IsNullOrWhiteSpace(footer) ? 0 : 8 + 17 * Math.Max(1, Math.Ceiling(footer.Length / 74.0));
 
@@ -54,7 +73,7 @@ public static class SettingsLayout
     public static double SliderValueAt(RowFrame f, double x) { var (x0, x1, _) = SliderTrack(f); return Math.Clamp((x - x0) / (x1 - x0) * 100, 0, 100); }
 
     // ── Barra lateral
-    public const double SideItemH = 40, SideTop = 96;
+    public const double SideItemH = 36, SideTop = 92;   // diez secciones (WM-013) caben sin desplazar la barra lateral
     public static (double X, double Y, double W, double H) SideItemRect(int i) => (12, SideTop + i * (SideItemH + 4), SidebarW - 24, SideItemH);
 
     // ── Lista de sugerencias bajo un campo (coordenadas locales)

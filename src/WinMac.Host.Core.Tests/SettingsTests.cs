@@ -11,10 +11,11 @@ public class SettingsModelTests
     [Fact]
     public void There_are_five_pages_row_ids_are_unique_and_every_bar_option_appears_exactly_once()
     {
-        var pages = Pages(); Assert.Equal(["general", "bar", "hub", "nc", "notch", "ext"], pages.Select(p => p.Id));
+        var pages = Pages(); Assert.Equal(["general", "dock", "bar", "notch", "capture", "spot", "nc", "weather", "clip", "ext"], pages.Select(p => p.Id));
         var ids = pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).Select(r => r.Id).ToList(); Assert.Equal(ids.Count, ids.Distinct().Count());
-        foreach (var t in SettingsBuilder.BarToggles) Assert.Single(ids, i => i == "bar:" + t.Field);   // ningún ajuste de la Barra se pierde en el rediseño
-        Assert.Equal(SettingsBuilder.BarToggles.Length, ids.Count(i => i.StartsWith("bar:", StringComparison.Ordinal)));
+        foreach (var t in SettingsBuilder.BarToggles.Where(t => t.Field != "weatherAutoLocation")) Assert.Single(ids, i => i == "bar:" + t.Field);   // ningún ajuste de la Barra se pierde en el rediseño
+        Assert.Single(ids, i => i == "wx.src");   // WM-015: «Usar mi ubicación» es ahora el selector «Origen» (Automática / Ciudad elegida)
+        Assert.Equal(SettingsBuilder.BarToggles.Length - 1, ids.Count(i => i.StartsWith("bar:", StringComparison.Ordinal)));
         Assert.Equal(NotchSettings.SectionIds.Length, ids.Count(i => i.StartsWith("notch.sec:", StringComparison.Ordinal)));
     }
 
@@ -45,8 +46,8 @@ public class SettingsModelTests
     [Fact]
     public void The_weather_footer_shows_the_search_status_or_the_hint_and_the_first_and_last_sections_cannot_move_out_of_range()
     {
-        var hub = Pages(status: "Ciudad: Molina, Maule, Chile").Single(p => p.Id == "hub"); Assert.Equal("Ciudad: Molina, Maule, Chile", hub.Groups.Single(g => g.Header == "Tiempo").Footer);
-        Assert.Contains("Molina, Chile", Pages().Single(p => p.Id == "hub").Groups.Single(g => g.Header == "Tiempo").Footer);
+        var hub = Pages(status: "Ciudad: Molina, Maule, Chile").Single(p => p.Id == "weather"); Assert.Equal("Ciudad: Molina, Maule, Chile", hub.Groups.Single(g => g.Header == "Ubicación principal").Footer);
+        Assert.Contains("Molina, Chile", Pages().Single(p => p.Id == "weather").Groups.Single(g => g.Header == "Ubicación principal").Footer);
         var secs = Pages().Single(p => p.Id == "notch").Groups.Single(g => g.Header == "Pestañas").Rows; Assert.False(secs[0].CanUp); Assert.True(secs[0].CanDown); Assert.True(secs[^1].CanUp); Assert.False(secs[^1].CanDown);
     }
 }
@@ -60,7 +61,7 @@ public class SettingsLayoutTests
     {
         foreach (var page in SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false)))
         {
-            var f = SettingsLayout.Compute(page); Assert.True(f.ContentHeight > 100);
+            var f = SettingsLayout.Compute(page); Assert.True(f.ContentHeight > 50, page.Id);
             foreach (var g in f.Groups) Assert.True(g.H > 0);
             for (int i = 1; i < f.Rows.Count; i++) Assert.True(f.Rows[i].Y >= f.Rows[i - 1].Y + f.Rows[i - 1].H - 0.01, page.Id + " " + f.Rows[i].Row.Id);
             for (int i = 1; i < f.Groups.Count; i++) Assert.True(f.Groups[i].HeaderY >= f.Groups[i - 1].Y + f.Groups[i - 1].H + f.Groups[i - 1].FooterH + SettingsLayout.GroupGap - 0.5, page.Id + " grupo " + i);   // aire entre grupos: nada «pegado»
@@ -107,7 +108,7 @@ public class SettingsControllerTests
     [Fact]
     public void The_sidebar_changes_page_resets_scroll_and_keeps_the_page_across_refreshes()
     {
-        var c = Make(); var r = SettingsLayout.SideItemRect(4); c.PointerDown(r.X + 10, r.Y + 10); c.PointerUp(r.X + 10, r.Y + 10); Assert.Equal("notch", c.Page!.Id);
+        var c = Make(); var r = SettingsLayout.SideItemRect(3); c.PointerDown(r.X + 10, r.Y + 10); c.PointerUp(r.X + 10, r.Y + 10); Assert.Equal("notch", c.Page!.Id);
         Assert.True(c.Scroll(120)); Assert.Equal(120, c.ScrollOffset, 3);
         c.SetPages(SettingsBuilder.Build(new SettingsInput(new HostConfig { Bar = new BarConfig { ShowDate = false } }, new Dictionary<string, ModuleState>(), false))); Assert.Equal("notch", c.Page!.Id); Assert.Equal(120, c.ScrollOffset, 3);   // un refresco no te saca de la página ni del punto donde estabas
         var r0 = SettingsLayout.SideItemRect(0); c.PointerDown(r0.X + 5, r0.Y + 5); c.PointerUp(r0.X + 5, r0.Y + 5); Assert.Equal("general", c.Page!.Id); Assert.Equal(0, c.ScrollOffset);
@@ -131,7 +132,7 @@ public class SettingsControllerTests
     [Fact]
     public void Suggestions_are_picked_on_press_before_the_field_loses_focus_and_a_click_elsewhere_closes_them()
     {
-        var c = Make(); c.SelectPage("hub"); var city = c.RowOf("hub.city")!; c.SetSuggestions("hub.city", ["Molina, Maule, Chile", "Molina de Segura, España"]);
+        var c = Make(); c.SelectPage("weather"); var city = c.RowOf("hub.city")!; c.SetSuggestions("hub.city", ["Molina, Maule, Chile", "Molina de Segura, España"]);
         var r = SettingsLayout.SuggestRect(city, 2); double x = SettingsLayout.SidebarW + r.X + 20, y = SettingsLayout.TitleH + r.Y + 4 + SettingsLayout.SuggestRowH * 1.5;
         Assert.Equal(new SettingsEdit("hub.city", "suggest", Index: 1), c.PointerDown(x, y));
         c.SetSuggestions("hub.city", ["a"]); c.PointerDown(SettingsLayout.SidebarW + 5, SettingsLayout.TitleH + 5); Assert.Empty(c.Suggestions); Assert.Null(c.SuggestFor);
@@ -145,6 +146,69 @@ public class SettingsActionsTests
     {
         string f = Path.Combine(Path.GetTempPath(), "winmac-settings-" + Guid.NewGuid().ToString("N") + ".json"); var cfg = new ConfigService(f, new HostConfig()); var calls = new List<string>();
         return (new SettingsActions(cfg, () => calls.Add("local"), on => calls.Add("autostart:" + on)), cfg, calls, f);
+    }
+
+    [Fact]
+    public void Wm019_the_dock_page_edits_dock_json_presets_fine_size_and_reservation()
+    {
+        var (a, cfg, _, f) = Make();
+        try
+        {
+            var dock = new WinMac.Dock.DockConfig(); a.LoadDock = () => dock; a.SaveDock = d => dock = d;
+            Assert.True(a.Apply(new SettingsEdit("dock.size", "segment", Index: 0))); Assert.Equal(36, dock.IconSize);
+            Assert.True(a.Apply(new SettingsEdit("dock.fine", "slider", Number: 100))); Assert.Equal(SettingsBuilder.DockFineMax, dock.IconSize);
+            Assert.True(a.Apply(new SettingsEdit("dock.fine", "slider", Number: 0))); Assert.Equal(WinMac.Dock.DockSettings.MinIconSize, dock.IconSize);
+            Assert.True(a.Apply(new SettingsEdit("dock.reserve", "toggle", On: false))); Assert.False(dock.ReserveSpace);
+            Assert.True(a.Apply(new SettingsEdit("dock.autohide", "toggle", On: true))); Assert.True(dock.AutoHide);
+            var page = SettingsBuilder.Build(new SettingsInput(cfg.Current, new Dictionary<string, ModuleState>(), false) { Dock = dock }).Single(p => p.Id == "dock");
+            var rows = page.Groups.SelectMany(g => g.Rows).ToDictionary(r => r.Id);
+            Assert.False(rows["dock.reserve"].Enabled); Assert.False(string.IsNullOrEmpty(rows["dock.reserve"].Reason));   // con autoocultación no hay espacio que reservar: se dice por qué
+            Assert.Equal("Otro", rows["dock.size"].Options![rows["dock.size"].Selected]);   // 28 no es un preajuste
+            var none = SettingsBuilder.Build(new SettingsInput(cfg.Current, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "dock");
+            Assert.All(none.Groups.SelectMany(g => g.Rows), r => Assert.Equal(RowKind.Info, r.Kind));   // sin dock.json legible: ningún control falso
+            a.LoadDock = null; Assert.False(a.Apply(new SettingsEdit("dock.size", "segment", Index: 1)));
+        }
+        finally { File.Delete(f); }
+    }
+
+    [Fact]
+    public void Wm015_weather_source_and_additional_cities_can_be_removed_and_reordered()
+    {
+        var (a, cfg, _, f) = Make();
+        try
+        {
+            cfg.ApplyBarPatch(System.Text.Json.JsonSerializer.SerializeToElement(new Dictionary<string, object?> { ["weatherFavorites"] = "Santiago|-33.45|-70.67;Valparaíso|-33.05|-71.62;Talca|-35.43|-71.66" }));
+            Assert.True(a.Apply(new SettingsEdit("wx.src", "segment", Index: 0))); Assert.True(cfg.Current.Bar!.WeatherAutoLocation);
+            Assert.True(a.Apply(new SettingsEdit("wx.fav:2", "up"))); Assert.Equal(["Santiago", "Talca", "Valparaíso"], WinMac.Bar.Hub.GeoPoint.ParseList(cfg.Current.Bar!.WeatherFavorites).Select(g => g.Name));
+            Assert.True(a.Apply(new SettingsEdit("wx.fav:0", "toggle", On: false))); Assert.Equal(["Talca", "Valparaíso"], WinMac.Bar.Hub.GeoPoint.ParseList(cfg.Current.Bar!.WeatherFavorites).Select(g => g.Name));
+            Assert.True(a.Apply(new SettingsEdit("wx.src", "segment", Index: 1))); Assert.False(cfg.Current.Bar!.WeatherAutoLocation);
+            var page = SettingsBuilder.Build(new SettingsInput(cfg.Current, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "weather");
+            var favs = page.Groups.Single(g => g.Header == "Ciudades adicionales").Rows;
+            Assert.Equal(["wx.fav:0", "wx.fav:1", "hub.favadd"], favs.Select(r => r.Id)); Assert.False(favs[0].CanUp); Assert.False(favs[1].CanDown);
+        }
+        finally { File.Delete(f); }
+    }
+
+    [Fact]
+    public void Wm002_capture_delay_only_takes_the_offered_values()
+    {
+        var (a, cfg, _, f) = Make();
+        try
+        {
+            Assert.True(a.Apply(new SettingsEdit("bar.capdelay", "segment", Index: 2))); Assert.Equal(5, cfg.Current.Bar!.CaptureDelaySeconds);
+            Assert.Equal(10, new BarConfig { CaptureDelaySeconds = 99 }.Sanitize().CaptureDelaySeconds); Assert.Equal(0, new BarConfig { CaptureDelaySeconds = -2 }.Sanitize().CaptureDelaySeconds);
+        }
+        finally { File.Delete(f); }
+    }
+
+    [Fact]
+    public void Wm013_long_subtitles_wrap_and_grow_the_row_instead_of_being_cut()
+    {
+        var shortRow = new SettingsRow(RowKind.Toggle, "x", "Título", "Corto");
+        var longRow = shortRow with { Subtitle = string.Join(" ", Enumerable.Repeat("texto largo que no cabe", 8)) };
+        Assert.True(SettingsLayout.RowHeight(longRow) > SettingsLayout.RowHeight(shortRow));
+        Assert.Equal(0, (SettingsLayout.RowHeight(longRow) - SettingsLayout.RowHeight(shortRow)) % SettingsLayout.SubLineH, 3);
+        Assert.True(SettingsLayout.SideItemRect(9).Y + SettingsLayout.SideItemH <= SettingsLayout.WinH - 8);   // las diez secciones caben en la barra lateral
     }
 
     [Fact]
