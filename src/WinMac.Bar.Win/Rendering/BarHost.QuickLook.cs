@@ -25,10 +25,7 @@ public sealed partial class BarHost
             var dh = FindWindowW("WinMacDock", null);
             if (dh != IntPtr.Zero && IsWindowVisible(dh) && GetWindowRect(dh, out var r)) dock = new CaptureRect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
             QuickLookWindow? me = null;
-            me = new QuickLookWindow(path, px, area.W, area.H, mon, OnQuickLookAction, () => { if (ReferenceEquals(_quickLook, me)) _quickLook = null; }, _log)
-            {
-                ShowInCaptures = MenuDiagOn && Environment.GetEnvironmentVariable("WINMAC_QUICKLOOK_IN_CAPTURES") == "1",
-            };
+            me = new QuickLookWindow(path, px, area.W, area.H, mon, OnQuickLookAction, () => { if (ReferenceEquals(_quickLook, me)) _quickLook = null; }, _log);
             _quickLook = me; me.PreviewOpened = QuickLookDiag;
             me.ShowThumbnail(dock);
             _log($"[quicklook] miniatura {me.ThumbBounds.W}x{me.ThumbBounds.H} en {me.ThumbBounds.X},{me.ThumbBounds.Y}");

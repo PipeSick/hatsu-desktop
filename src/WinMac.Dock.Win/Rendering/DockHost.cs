@@ -88,7 +88,6 @@ public sealed class DockHost : IDisposable
             _tracker?.Pump();
             PollInputs();
             Housekeeping();
-            CiMenuTick();
             if (_quitting || _monitorGone) return 0;
             if (selfTest) { _force = true; if (clock.Elapsed.TotalSeconds > 10) throw new TimeoutException("selftest: no se alcanzaron los frames en 10 s"); }
             double now = clock.Elapsed.TotalSeconds, dt = Math.Min(now - last, 0.1); last = now;
@@ -298,7 +297,7 @@ public sealed class DockHost : IDisposable
     // ------------------------------------------------------------------ mensajes
     private DockAppBar? _appBar; private bool _reserving;
     private const int WM_APPBAR = 0x8000 + 0x51;   // WM_APP + 0x51: AppBar notifications
-    private uint _taskbarCreated; private bool? _diagInteractive;
+    private uint _taskbarCreated;
 
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
     {
@@ -311,12 +310,6 @@ public sealed class DockHost : IDisposable
             case WM_NCHITTEST:
             {
                 int x = (short)((long)l & 0xFFFF), y = (short)(((long)l >> 16) & 0xFFFF);
-                if (MenuDiag)
-                {
-                    bool ia = InteractiveAt((x - _winLeftPx) / _scale, (y - _winTopPx) / _scale);
-                    if (ia != _diagInteractive) { _diagInteractive = ia; _log($"[dock] diag ratón en {x},{y}: {(ia ? "interactivo" : "transparente")} (ventana en {_winLeftPx},{_winTopPx}, escala {_scale:0.##}, oculto {_view?.HideT ?? -1:0.##}, barra {_view?.BarLeft ?? 0:0}+{_view?.BarWidth ?? 0:0} alto {_view?.WindowHeight ?? 0:0})"); }
-                }
-
                 return InteractiveAt((x - _winLeftPx) / _scale, (y - _winTopPx) / _scale) ? (IntPtr)1 : (IntPtr)(-1); // HTCLIENT / HTTRANSPARENT: el resto deja pasar el ratón
             }
             case WM_LBUTTONDOWN:
@@ -357,7 +350,6 @@ public sealed class DockHost : IDisposable
             }
             case WM_RBUTTONUP:
             {
-                _log($"[dock] clic derecho en {(short)((long)l & 0xFFFF)},{(short)(((long)l >> 16) & 0xFFFF)} (cliente)");
                 if (_view is null || _ctl.PreviewContains((short)((long)l & 0xFFFF) / _scale, (short)(((long)l >> 16) & 0xFFFF) / _scale)) return IntPtr.Zero;
                 _ctl.DismissPreview();
                 int hit = HitIndex((short)((long)l & 0xFFFF) / _scale);
@@ -446,9 +438,7 @@ public sealed class DockHost : IDisposable
         try
         {
             Native.GetCursorPos(out var cp); _modal = true;
-            _log($"[dock] menú oscuro: abriendo en {cp.X},{cp.Y} ({entries.Count} entradas)");
             var r = DarkMenuWindow.Show(entries, cp.X, cp.Y, _scale, _log);
-            _log("[dock] menú oscuro: " + (r is null ? "cerrado sin elegir" : "eligió " + r.Kind));
             return r;
         }
         catch (Exception e) { _log("Menú oscuro no disponible, se usa el de Windows: " + e.GetType().Name + ": " + e.Message); }
@@ -456,23 +446,8 @@ public sealed class DockHost : IDisposable
         return ShowNativeMenu(entries);
     }
 
-    private static readonly bool MenuDiag = Environment.GetEnvironmentVariable("WINMAC_MENU_DIAG") == "1";
 
-    /// <summary>
-    /// SOLO CI (WINMAC_MENU_DIAG=1): el evento «Local\WinMacDockMenuTest» abre el menú del primer icono exactamente como el clic derecho (mismas entradas, mismo
-    /// ShowMenu). En el runner el clic derecho inyectado no llega a la ventana del Dock aunque esta lo marca interactivo; así se valida el menú en sí.
-    /// </summary>
-    private EventWaitHandle? _ciMenu;
-    private void CiMenuTick()
-    {
-        if (!MenuDiag) return;
-        try { _ciMenu ??= new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\WinMacDockMenuTest"); } catch (Exception) { return; }
-        if (!_ciMenu.WaitOne(0) || _view is null) return;
-        _log("[dock] menú de prueba del CI pedido");
-        var entries = _view.Items.Count() > 0 ? _ctl.MenuFor(0) : DockMenu.ForBackground(_ctl.Config);
-        var chosen = ShowMenu(entries); if (chosen is not null) ExecuteAction(chosen);
-        _force = true;
-    }
+
 
     /// <summary>Menú contextual NATIVO de Windows (respaldo), con submenús y marcas de selección. Devuelve la acción elegida o null.</summary>
     private DockAction? ShowNativeMenu(IReadOnlyList<MenuEntry> entries)

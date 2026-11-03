@@ -68,16 +68,8 @@ Info 'NotchWin REAL (WinUI 3) llega a Running bajo el host y se enlaza' $notchRu
 if ($notchRunning) { Info 'NotchWin REAL sigue vivo tras unos segundos' (WaitFor { (Get-Process -Name 'NotchWin.App' -ErrorAction SilentlyContinue).Count -ge 1 } 5) }
 if ($notchRunning) {
   # La Isla informativa: volumen, silencio, brillo y una notificación llegan por el canal real (Barra → host → Isla), el árbitro decide y la ventana cambia de tamaño.
-  Add-Type -AssemblyName System.Drawing
   $pillLog = Join-Path $OutDir 'pill-selftest.log'
-  function PillShot([string]$path) {
-    $sc = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $w = [Math]::Min(640, $sc.Width); $x = $sc.X + [int](($sc.Width - $w) / 2)
-    $bmp = New-Object System.Drawing.Bitmap $w, 90; $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($x, $sc.Y, 0, 0, (New-Object System.Drawing.Size $w, 90), [System.Drawing.CopyPixelOperation]::SourceCopy); $g.Dispose(); $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
-  }
-  Add-Type -AssemblyName System.Windows.Forms
-  if (WaitFor { LogHas $pillLog 'level=65 muted=False' } 40) { Start-Sleep -Milliseconds 600; PillShot (Join-Path $OutDir 'notch-pill-volume.png') }
-  if (WaitFor { LogHas $pillLog 'pill Notification' } 25) { Start-Sleep -Milliseconds 600; PillShot (Join-Path $OutDir 'notch-pill-notification.png') }
+  $null = WaitFor { LogHas $pillLog 'pill Notification' } 40
   $null = WaitFor { (Test-Path $pillLog) -and ((Get-Content $pillLog | Select-Object -Last 1) -match 'pill none$') -and ((Select-String -Path $pillLog -SimpleMatch 'pill Notification').Count -ge 2) } 25
   $pl = @(if (Test-Path $pillLog) { Get-Content $pillLog } else { @() })
   $pl | ForEach-Object { Write-Host "  isla> $_" }
@@ -90,7 +82,6 @@ if ($notchRunning) {
   Check 'Isla: notificación con icono; la píldora crece (380×52 DIP)' ($n1 -gt $br -and $pl[$n1].Contains('icon=yes') -and $pl[$n1].Contains('size=380x52')) ($(if ($n1 -ge 0) { $pl[$n1] }))
   Check 'Isla: un cambio de volumen interrumpe la notificación y ésta vuelve después (no se pierde)' ($v30 -gt $n1 -and $n2 -gt $v30)
   Check 'Isla: al terminar vuelve al contenido habitual' ($pl.Count -gt 0 -and $pl[-1].EndsWith('pill none'))
-  Info 'Isla: capturas de la píldora (artefacto integracion-notchwin)' ((Test-Path (Join-Path $OutDir 'notch-pill-volume.png')) -and (Test-Path (Join-Path $OutDir 'notch-pill-notification.png')))
 
   # La Barra recorta su ventana donde la Isla ocupa espacio (sin depender del orden Z); informativo porque depende de que el runner tenga monitor (si no, la Isla no tiene huella).
   $cut = WaitFor { [BarRgn]::Kind() -ge 2 } 15

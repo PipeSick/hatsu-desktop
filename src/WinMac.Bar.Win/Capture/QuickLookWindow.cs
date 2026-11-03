@@ -233,12 +233,9 @@ internal sealed class QuickLookWindow : IDisposable
         _act(id, this);
     }
 
-    /// <summary>SOLO CI: la auditoría fotografía la pantalla con GDI, que respeta la exclusión; con esto se ve la miniatura en sus capturas (el registro lo dice).</summary>
-    public bool ShowInCaptures { get; init; }
 
     private void ExcludeFromCapture(IntPtr h)
     {
-        if (ShowInCaptures) { _log("[quicklook] excluida de capturas: no (solo CI, para fotografiarla)"); return; }
         _log("[quicklook] excluida de capturas: " + (SetWindowDisplayAffinity(h, 0x11 /* WDA_EXCLUDEFROMCAPTURE */) ? "sí" : "no (Windows anterior a 10 2004)"));
     }
 
