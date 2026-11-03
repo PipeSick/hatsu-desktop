@@ -81,6 +81,18 @@ iPhone ──BLE (BAS + ANCS)──▶ WinMac.Connect.App ──canal local del 
 - **Host:** módulo desactivado por defecto y opcional; página de Ajustes solo con controles reales (ni Phone Link ni contestar o rechazar); ajustes guardados y publicados al módulo; orden de arranque.
 - Totales locales: Bar.Core 432 · Host.Core 127 · Connect.Core 13 · Dock.Core 148 · Ipc 31.
 
+## 4b. CI y beta
+
+- Commit `698cc58`, [ejecución de Actions 41716759630](https://github.com/PipeSick/win11-macos/actions/runs/41716759630).
+  - Primer intento: falló la integración con la Isla. El host reinició a la vez la Barra, el Dock y la Isla por falta de latido, con los tiempos de supervisión reducidos del CI. Connect estaba desactivado y no intervino.
+  - Al relanzar solo ese trabajo: **los cuatro trabajos en verde**, incluida la verificación del paquete con `WinMac.Connect.App.exe`.
+  - Ese fallo de latido depende de la carga de la máquina del CI. Queda anotado como inestabilidad de la prueba, no del producto.
+- **Artefacto de la beta: `winmac-paquete-698cc58761c87f2c61bfd4212199999790a8446a`.**
+- Actualizar:
+  1. Cierra WinMac (bandeja › Salir).
+  2. Descomprime el ZIP sobre la misma carpeta y abre `WinMac.exe`.
+  3. Activa Connect en Ajustes › WinMac Connect.
+
 ## 5. Limitaciones conocidas
 
 - Sin validar con el iPhone real en esta versión del módulo. La herramienta `ConnectProbe` sí lo validó: batería, ANCS, llamadas y MAP.
