@@ -57,6 +57,11 @@ Pendiente: píldora azul de la pestaña seleccionada (sale gris), motor de captu
 9. Configuración unificada  10. Refinamiento visual  11. Auditoría integral  12. Optimización  13. Distribución (sin publicar nada).
 Prioridad absoluta: NO tocar las letras sincronizadas (NotchWindow.Extras.cs, Core/Lyrics). Estado de cada etapa: ver la tabla de abajo (se actualiza).
 
+### Fase de estabilización (informe: docs/35-informe-estabilizacion.md; técnica: docs/34-estabilizacion.md)
+Último CI: 41537664991 (éxito). Memoria de grabación controlada; estabilidad prolongada 0 reinicios; portapapeles en Spotlight, ajustes del portapapeles, atajos con
+estado real, teclado en la Isla: hechos. Pendientes: ceros intermitentes del portapapeles en Spotlight (en observación), Tab sin evidencia visual, extensión
+colgada sin prueba real, validación en PC real. Diagnósticos solo-CI: `--diag gc`, marcador `ci-record-fail`, registros con recuentos (nunca contenido).
+
 ### Estado de las etapas (run 41514708139, commit 603e4a1; detalle en docs/33-informe-winmac-2.md)
 | Etapa | Estado |
 |---|---|

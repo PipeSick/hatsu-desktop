@@ -71,3 +71,5 @@ Limitaciones: «No molestar» de Windows sin API; brillo DDC/CI sin avisos; apps
 2. Portapapeles en Spotlight; lista de apps excluidas en Ajustes; aviso de atajos en conflicto; navegación por teclado en la Isla.
 3. Refinamiento visual fino frente al mockup (tipografías y espaciados de la galería y el editor).
 4. Publicar una versión solo si lo autorizas.
+
+> Actualización: la fase de estabilización (docs/34 y docs/35) resolvió la memoria tras grabar, añadió portapapeles en Spotlight, ajustes del portapapeles, atajos en Ajustes y teclado en la Isla.
