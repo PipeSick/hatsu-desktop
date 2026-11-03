@@ -88,6 +88,7 @@ public sealed class DockHost : IDisposable
             _tracker?.Pump();
             PollInputs();
             Housekeeping();
+            CiMenuTick();
             if (_quitting || _monitorGone) return 0;
             if (selfTest) { _force = true; if (clock.Elapsed.TotalSeconds > 10) throw new TimeoutException("selftest: no se alcanzaron los frames en 10 s"); }
             double now = clock.Elapsed.TotalSeconds, dt = Math.Min(now - last, 0.1); last = now;
@@ -456,6 +457,22 @@ public sealed class DockHost : IDisposable
     }
 
     private static readonly bool MenuDiag = Environment.GetEnvironmentVariable("WINMAC_MENU_DIAG") == "1";
+
+    /// <summary>
+    /// SOLO CI (WINMAC_MENU_DIAG=1): el evento «Local\WinMacDockMenuTest» abre el menú del primer icono exactamente como el clic derecho (mismas entradas, mismo
+    /// ShowMenu). En el runner el clic derecho inyectado no llega a la ventana del Dock aunque esta lo marca interactivo; así se valida el menú en sí.
+    /// </summary>
+    private EventWaitHandle? _ciMenu;
+    private void CiMenuTick()
+    {
+        if (!MenuDiag) return;
+        try { _ciMenu ??= new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\WinMacDockMenuTest"); } catch (Exception) { return; }
+        if (!_ciMenu.WaitOne(0) || _view is null) return;
+        _log("[dock] menú de prueba del CI pedido");
+        var entries = _view.Items.Count() > 0 ? _ctl.MenuFor(0) : DockMenu.ForBackground(_ctl.Config);
+        var chosen = ShowMenu(entries); if (chosen is not null) ExecuteAction(chosen);
+        _force = true;
+    }
 
     /// <summary>Menú contextual NATIVO de Windows (respaldo), con submenús y marcas de selección. Devuelve la acción elegida o null.</summary>
     private DockAction? ShowNativeMenu(IReadOnlyList<MenuEntry> entries)

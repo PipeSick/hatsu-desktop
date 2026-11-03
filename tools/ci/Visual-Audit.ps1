@@ -296,6 +296,16 @@ if ($dkr -match '^(-?\d+),(-?\d+) (\d+)x(\d+)') {
     [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
     if (Test-Path $dockLog) { Get-Content $dockLog -Tail 8 | ForEach-Object { Note ('    dock.log> ' + $_) } }
     Note "  - WM-017: ventana bajo el punto: $([Au]::ClassAt($dx, $dy))"
+    # El clic derecho inyectado no llega a la ventana del Dock en el runner (registro de arriba): se abre el MISMO menú por el evento de prueba del CI
+    try { $ev = [System.Threading.EventWaitHandle]::OpenExisting('Local\WinMacDockMenuTest'); [void]$ev.Set(); $ev.Dispose() } catch { Note "  - WM-017: evento de prueba no disponible: $($_.Exception.Message)" }
+    if (WaitFor { [Au]::Visible('WinMacDockMenu') } 4) {
+      Start-Sleep -Milliseconds 400; Note "  - WM-017: menú oscuro abierto por el evento de prueba ($([Au]::RectOf('WinMacDockMenu')))"
+      Shot '32f-dock-menu-oscuro' 'WM-017: menú contextual del Dock con el estilo oscuro de WinMac (abierto por el evento de prueba del CI: mismas entradas que el clic derecho)'
+      [System.Windows.Forms.SendKeys]::SendWait('{DOWN}'); Start-Sleep -Milliseconds 300; Shot '32g-dock-menu-teclado' 'WM-017: ↓ mueve la selección por las opciones disponibles'
+      [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 400
+      $closed = -not [Au]::Visible('WinMacDockMenu'); Note "  - WM-017: Esc lo cierra: $closed$(if (-not $closed) { ' (sin el foco: abierto sin clic del usuario, Windows no le cede el primer plano)' })"
+      if (-not $closed) { [void][Au]::PostMessage([Au]::FindWindow('WinMacDockMenu', $null), 0x10, [IntPtr]::Zero, [IntPtr]::Zero); Start-Sleep -Milliseconds 400 }   # WM_CLOSE: no dejarlo abierto para el resto de la auditoría
+    } else { Note '  - WM-017: tampoco se abrió con el evento de prueba' }
   }
 }
 Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
