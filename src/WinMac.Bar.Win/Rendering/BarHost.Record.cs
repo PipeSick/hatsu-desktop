@@ -21,7 +21,7 @@ public sealed partial class BarHost
     {
         if (_recorder is not null) { StopRecording(why); return; }
         if (_recStarting) return;
-        BeginCapture(mode, why, record: true);
+        BeginCapture(mode, why, record: true, waited: false, delay: 0);
     }
 
     private void StartRecording(CaptureRect area, IReadOnlyList<CaptureMonitor> monitors)

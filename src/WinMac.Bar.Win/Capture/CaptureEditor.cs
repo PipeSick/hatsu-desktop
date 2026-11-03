@@ -95,6 +95,9 @@ internal sealed class CaptureEditor : IDisposable
 
     private float _strokeWidth = 4;
 
+    /// <summary>Quick Look «Anotar» / «Recortar» open the editor with that tool already chosen.</summary>
+    public void SelectTool(string id) { _tool = ToolOf(id); Render(); }
+
     private void BindTarget()
     {
         _ctx!.Target = null; _target?.Dispose();
@@ -448,7 +451,7 @@ internal static class SaveDialog
 
     [DllImport("comdlg32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetSaveFileNameW")] private static extern bool GetSaveFileName(ref OPENFILENAME o);
 
-    public static string? Ask(IntPtr owner, string folder, string suggested)
+    public static string? Ask(IntPtr owner, string folder, string suggested, string title = "Guardar captura editada como")
     {
         const int max = 1024; var buf = Marshal.AllocHGlobal(max * 2);
         try
@@ -457,7 +460,7 @@ internal static class SaveDialog
             var o = new OPENFILENAME
             {
                 lStructSize = Marshal.SizeOf<OPENFILENAME>(), hwndOwner = owner, lpstrFilter = "Imagen PNG (*.png)\0*.png\0Imagen JPEG (*.jpg)\0*.jpg\0\0", nFilterIndex = 1,
-                lpstrFile = buf, nMaxFile = max, lpstrInitialDir = folder, lpstrTitle = "Guardar captura editada como", lpstrDefExt = "png",
+                lpstrFile = buf, nMaxFile = max, lpstrInitialDir = folder, lpstrTitle = title, lpstrDefExt = "png",
                 Flags = 0x2 /* OFN_OVERWRITEPROMPT */ | 0x800 /* OFN_PATHMUSTEXIST */ | 0x80000 /* OFN_EXPLORER */ | 0x8 /* OFN_NOCHANGEDIR */,
             };
             return GetSaveFileName(ref o) ? Marshal.PtrToStringUni(buf) : null;

@@ -29,7 +29,11 @@ public readonly record struct CaptureRect(int X, int Y, int W, int H)
 }
 
 /// <summary>A monitor of the virtual screen: its bounds in physical px and its own scale (DPI can differ per monitor).</summary>
-public sealed record CaptureMonitor(CaptureRect Bounds, double Scale, bool Primary);
+/// <param name="Work">The monitor's work area (without the taskbar and the reserved Dock/bar bands); empty = the whole monitor.</param>
+public sealed record CaptureMonitor(CaptureRect Bounds, double Scale, bool Primary, CaptureRect Work = default)
+{
+    public CaptureRect WorkArea => Work.W > 0 && Work.H > 0 ? Work : Bounds;
+}
 
 /// <summary>A top-level window that can be picked in window mode (visible bounds without the invisible resize borders), front to back.</summary>
 public sealed record CaptureWindow(IntPtr Handle, string Title, CaptureRect Bounds);

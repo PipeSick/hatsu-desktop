@@ -81,7 +81,8 @@ internal static class ScreenGrabber
             if (GetMonitorInfo(h, ref mi))
             {
                 double scale = GetDpiForMonitor(h, 0, out uint dx, out _) == 0 && dx >= 48 ? dx / 96.0 : 1.0;
-                list.Add(new CaptureMonitor(new CaptureRect(mi.rcMonitor.L, mi.rcMonitor.T, mi.rcMonitor.R - mi.rcMonitor.L, mi.rcMonitor.B - mi.rcMonitor.T), scale, (mi.dwFlags & 1) != 0));
+                list.Add(new CaptureMonitor(new CaptureRect(mi.rcMonitor.L, mi.rcMonitor.T, mi.rcMonitor.R - mi.rcMonitor.L, mi.rcMonitor.B - mi.rcMonitor.T), scale, (mi.dwFlags & 1) != 0,
+                    new CaptureRect(mi.rcWork.L, mi.rcWork.T, mi.rcWork.R - mi.rcWork.L, mi.rcWork.B - mi.rcWork.T)));
             }
             return true;
         }, IntPtr.Zero);

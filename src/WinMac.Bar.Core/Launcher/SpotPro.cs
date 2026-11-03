@@ -18,6 +18,8 @@ public static partial class SpotPro
     public static readonly (string Title, string Target, string Keywords)[] Actions =
     [
         ("Capturar región", "winmac:capture:region", "captura pantallazo screenshot recorte region imagen"),
+        ("Capturar región en 5 segundos", "winmac:capture:region:5", "captura retardo temporizador menu abierto 5 segundos region"),
+        ("Capturar pantalla en 5 segundos", "winmac:capture:screen:5", "captura retardo temporizador menu abierto 5 segundos pantalla"),
         ("Capturar ventana", "winmac:capture:window", "captura pantallazo screenshot ventana"),
         ("Capturar pantalla completa", "winmac:capture:screen", "captura pantallazo screenshot pantalla completa monitor"),
         ("Capturar todas las pantallas", "winmac:capture:all", "captura pantallazo screenshot monitores todas"),

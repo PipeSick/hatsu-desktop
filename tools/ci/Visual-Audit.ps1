@@ -106,7 +106,7 @@ function TestPng([string]$path, [int]$n, [string]$label) {
 }
 for ($k = 1; $k -le 5; $k++) { $p = Join-Path $shotsDir "captura-de-prueba-$k.png"; TestPng $p $k "Captura de prueba $k"; (Get-Item $p).LastWriteTime = (Get-Date).AddHours(-6 * $k) }
 $barLog = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'; Remove-Item $barLog -ErrorAction SilentlyContinue
-$env:WINMAC_PILL_SELFTEST = $pillLog; $env:WINMAC_MENU_DIAG = '1'
+$env:WINMAC_PILL_SELFTEST = $pillLog; $env:WINMAC_MENU_DIAG = '1'; $env:WINMAC_QUICKLOOK_IN_CAPTURES = '1'   # Quick Look se excluye de las capturas: solo aquí se deja ver para fotografiarlo (el registro lo dice)
 $hostLog = Join-Path $d 'host.log'; $hostExe = Join-Path $DistDir 'WinMac.exe'; $bar = Join-Path $DistDir 'WinMac.Bar.App.exe'
 # Extensiones de demostración (docs/30): se «instalan» como lo haría Ajustes (copia a %LOCALAPPDATA%\WinMac\extensions) y se activan las dos
 $extRoot = Join-Path $env:LOCALAPPDATA 'WinMac\extensions'
@@ -116,7 +116,7 @@ if (Test-Path (Join-Path $DistDir 'extensions')) {
   '["pomodoro","uptime"]' | Set-Content (Join-Path $extRoot 'extensions.json') -Encoding UTF8
 }
 $hp = Start-Process -FilePath $hostExe -ArgumentList @('--no-tray', '--fast', '--notchwin-settings', "`"$(Join-Path $d 'sin.json')`"", '--config', "`"$(Join-Path $d 'winmac.json')`"", '--log', "`"$hostLog`"") -PassThru -WindowStyle Hidden
-Remove-Item Env:WINMAC_PILL_SELFTEST; Remove-Item Env:WINMAC_MENU_DIAG
+Remove-Item Env:WINMAC_PILL_SELFTEST; Remove-Item Env:WINMAC_MENU_DIAG; Remove-Item Env:WINMAC_QUICKLOOK_IN_CAPTURES
 $t0 = Get-Date
 $up = WaitFor { (LogHas $hostLog '[notch] Running') -and (LogHas $hostLog '[bar] Running') } 60
 Note "  (host, Barra e Isla en marcha: $up, $([int]((Get-Date) - $t0).TotalSeconds) s)"
@@ -223,6 +223,39 @@ if (WaitFor { [Au]::Visible('WinMacCapture') } 8) {
 Start-Sleep -Milliseconds 800
 & $bar --capture screen | Out-Null
 if (WaitFor { [Au]::Visible('WinMacCapture') } 8) { Start-Sleep -Milliseconds 400; Shot '32-captura-pantalla' 'Captura de pantalla completa (modo monitor): todo el monitor seleccionado'; [Au]::Click(500, 300); Note "  - pantalla guardada: $(Saved 3)" }
+# ── Quick Look (sección 11): miniatura tras guardar, vista previa al pulsarla, Copiar y Esc
+Note ''; Note '### Quick Look'
+function BarLine([string]$t) { (Select-String -Path $barLog -SimpleMatch $t -ErrorAction SilentlyContinue | Select-Object -Last 1).Line }
+if (WaitFor { LogHas $barLog '[quicklook] miniatura' } 6) {
+  Start-Sleep -Milliseconds 400; Note "  - $((BarLine '[quicklook] miniatura') -replace '^\S+ ', '') · $((BarLine '[quicklook] excluida') -replace '^\S+ ', '')"
+  Shot '32c-quicklook-miniatura' 'Quick Look: miniatura flotante abajo a la derecha, por encima del Dock, tras guardar (desaparece sola a los 5 s)'
+  $m = [regex]::Match((BarLine 'diag miniatura@'), 'miniatura@(\d+),(\d+)')
+  if ($m.Success) {
+    [Au]::Click([int]$m.Groups[1].Value, [int]$m.Groups[2].Value)
+    if (WaitFor { LogHas $barLog '[quicklook] vista previa abierta' } 6) {
+      Start-Sleep -Milliseconds 600; Shot '32d-quicklook-vista-previa' 'Quick Look: vista previa centrada con Copiar, Editar, Anotar, Recortar, Compartir, Guardar como, Abrir y Eliminar'
+      $c = [regex]::Match((BarLine '[quicklook] diag copy@'), 'copy@(\d+),(\d+)')
+      if ($c.Success) { [Au]::Click([int]$c.Groups[1].Value, [int]$c.Groups[2].Value); Start-Sleep -Milliseconds 700; $img = Get-Clipboard -Format Image -ErrorAction SilentlyContinue; Note "  - Copiar: $(if ($img) { "imagen en el portapapeles ($($img.Width)x$($img.Height))" } else { 'NO hay imagen en el portapapeles' })"; Shot '32e-quicklook-copiada' 'Quick Look tras «Copiar» (aviso en la vista previa)' }
+      [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 600
+      Note "  - Esc cierra la vista previa: $(-not [Au]::Visible('WinMacQuickLook'))"
+    } else { Note '  - la vista previa NO se abrió con el clic' }
+  }
+  $gone = WaitFor { -not [Au]::Visible('WinMacQuickLookThumb') } 8; Note "  - la miniatura ya no está: $gone"
+} else { Note '- Quick Look: NO apareció la miniatura tras guardar' }
+# ── WM-002: cuenta atrás de 3 s y un menú abierto en el Bloc de notas: la pantalla se congela con el menú todavía abierto
+Note ''; Note '### WM-002 — captura con retardo y menú abierto'
+$npd = Start-Process notepad.exe -PassThru; Start-Sleep -Milliseconds 1500
+& $bar --capture region-delay3 | Out-Null
+if (WaitFor { LogHas $barLog 'cuenta atrás de 3 s' } 5) {
+  Note "  - $((BarLine 'cuenta atrás de') -replace '^\S+ ', '')"
+  $null = [Au]::SetForegroundWindow($npd.MainWindowHandle); Start-Sleep -Milliseconds 300
+  [System.Windows.Forms.SendKeys]::SendWait('%f'); Start-Sleep -Milliseconds 500   # Alt+F: menú Archivo/File abierto con el teclado
+  Shot '30a-menu-abierto-durante-cuenta' 'WM-002: menú del Bloc de notas abierto durante la cuenta atrás (el indicador está excluido de las capturas)'
+  if (WaitFor { [Au]::Visible('WinMacCapture') } 6) {
+    Start-Sleep -Milliseconds 500; Shot '30b-captura-con-menu-congelado' 'WM-002: al acabar la cuenta, la pantalla congelada CONTIENE el menú abierto'
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 500
+  } else { Note '  - la superposición de captura no apareció tras la cuenta atrás' }
+} else { Note '  - la cuenta atrás no empezó' }
 Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 # ── WM-001: una ventana MAXIMIZADA no queda bajo el Dock (el Dock reserva su franja con SHAppBarMessage; no se toca la opacidad ni el orden Z)
 Note ''; Note '### WM-001 — Dock y ventanas maximizadas'

@@ -14,7 +14,7 @@ namespace WinMac.Bar.Win.Rendering;
 public sealed partial class BarHost
 {
     public static string CaptureEventName(string mode) => @"Local\WinMac.Bar.Capture." + mode;
-    private static readonly string[] CaptureModes = ["region", "window", "screen", "all", "toolbar", "record-region", "record-window", "record-screen", "record-stop", "ws-save", "ws-restore", "ws-side", "ws-grid", "diag-gc"];
+    private static readonly string[] CaptureModes = ["region", "window", "screen", "all", "toolbar", "record-region", "record-window", "record-screen", "record-stop", "ws-save", "ws-restore", "ws-side", "ws-grid", "diag-gc", "region-delay3", "region-delay5", "region-delay10", "window-delay5", "screen-delay5"];
 
     private readonly List<GlobalHotkey> _captureKeys = [];
     private readonly Dictionary<string, EventWaitHandle> _captureEvents = [];
@@ -49,7 +49,9 @@ public sealed partial class BarHost
         catch (Exception) { return false; }
     }
 
-    public void OpenEditor(string path, string why)
+    public void OpenEditor(string path, string why) => OpenEditor(path, why, null);
+
+    public void OpenEditor(string path, string why, string? tool)
     {
         if (!Editable(path)) { _log("[editor] petición rechazada (no es una imagen local legible)"); return; }
         if (_editor is not null) { _editor.Dispose(); _editor = null; }
@@ -65,6 +67,7 @@ public sealed partial class BarHost
                     {
                         _editor = CaptureEditor.Open(path, px, w, h, CopyImage, () => { _editor = null; _log("[editor] cerrado"); }, _log);
                         _editor.PostToUi = Post;
+                        if (tool is not null) _editor.SelectTool(tool);
                         _log($"[editor] abierto ({why}): {Path.GetFileName(path)} {w}x{h}");
                         if (MenuDiagOn)
                         {
@@ -136,8 +139,50 @@ public sealed partial class BarHost
                 }
                 if (m.StartsWith("ws-", StringComparison.Ordinal)) { switch (m) { case "ws-save": SaveWorkspace(null); break; case "ws-restore": RestoreWorkspace(null); break; case "ws-side": ArrangeWindows(false); break; default: ArrangeWindows(true); break; } continue; }
                 if (m.StartsWith("record-", StringComparison.Ordinal)) { ToggleRecording(m switch { "record-window" => CaptureMode.Window, "record-screen" => CaptureMode.Monitor, _ => CaptureMode.Region }, "orden externa " + m); continue; }
-                BeginCapture(m switch { "window" or "toolbar" => CaptureMode.Window, "screen" => CaptureMode.Monitor, "all" => CaptureMode.AllMonitors, _ => CaptureMode.Region }, "orden externa " + m);
+                int dl = m.IndexOf("-delay", StringComparison.Ordinal); int delay = dl > 0 && int.TryParse(m[(dl + 6)..], out var dsec) ? dsec : -1; string mm = dl > 0 ? m[..dl] : m;
+                BeginCapture(mm switch { "window" or "toolbar" => CaptureMode.Window, "screen" => CaptureMode.Monitor, "all" => CaptureMode.AllMonitors, _ => CaptureMode.Region }, "orden externa " + m, delay);
             }
+
+        CountdownTick();
+        _quickLook?.Tick();
+    }
+
+    // ── WM-002: cuenta atrás antes de capturar (para menús abiertos)
+    private CaptureCountdown? _countdown; private RecordingIndicator? _countPill; private static readonly System.Diagnostics.Stopwatch _cdClock = System.Diagnostics.Stopwatch.StartNew();
+
+    /// <summary>Starts the countdown: a small pill (excluded from capture, never activated so the menu stays open), then the screen is frozen as usual.</summary>
+    private void StartCountdown(CaptureMode mode, string why, int seconds)
+    {
+        _lp?.Hide(); _spot?.Hide(); _popover?.Hide();
+        _countdown = new CaptureCountdown(mode, seconds, _cdClock.Elapsed.TotalSeconds);
+        try
+        {
+            var mons = ScreenGrabber.Monitors(); WinMac.Bar.Win.Interop.BarNative.GetCursorPos(out var cp);
+            var mon = CaptureGeometry.MonitorAt(mons, cp.X, cp.Y) ?? mons.FirstOrDefault(m => m.Primary) ?? mons[0];
+            _countPill = new RecordingIndicator(() => Post(() => CancelCountdown("clic en el indicador")), _log, _countdown.Text(_cdClock.Elapsed.TotalSeconds), "Cancelar", 0x0A9EFF /* ámbar (BGR) */, "WinMacCountdown");
+            _countPill.Show(mon);
+            if (MenuDiagOn) _log($"[captura] diag cuenta@{_countPill.Bounds.X + _countPill.Bounds.W / 2},{_countPill.Bounds.Y + _countPill.Bounds.H / 2}");
+        }
+        catch (Exception e) { _log("[captura] sin indicador de cuenta atrás: " + e.Message); }   // the countdown still runs: the capture is what was asked
+        _log($"[captura] cuenta atrás de {_countdown.Seconds} s ({why}), modo {mode}");
+    }
+
+    private void CancelCountdown(string why)
+    {
+        if (_countdown is null) return;
+        _countdown.Cancel(); _countdown = null; _countPill?.Dispose(); _countPill = null;
+        _log("[captura] cuenta atrás cancelada (" + why + ")");
+    }
+
+    private void CountdownTick()
+    {
+        if (_countdown is not { } c) return;
+        double now = _cdClock.Elapsed.TotalSeconds;
+        if (!c.Due(now)) { _countPill?.SetText(c.Text(now)); return; }
+        _countdown = null;
+        var pill = _countPill; _countPill = null; pill?.Hide();
+        // The pill is excluded from capture anyway; it is also hidden and gone from the desktop composition before the copy. No focus change happens.
+        Task.Delay(120).ContinueWith(_ => Post(() => { pill?.Dispose(); BeginCapture(c.Mode, "tras la cuenta atrás", record: false, waited: true, delay: 0); }));
     }
 
     /// <summary>Freezes the screen and shows the overlay in the given mode (the toolbar lets the user switch). Only one at a time.</summary>
@@ -154,12 +199,19 @@ public sealed partial class BarHost
         NotchCommand(new { cmd = "collapse" }); _log("[captura] la Isla estaba abierta: se cierra antes"); return true;
     }
 
-    public void BeginCapture(CaptureMode mode, string why, bool record = false) => BeginCapture(mode, why, record, waited: false);
+    public void BeginCapture(CaptureMode mode, string why, bool record = false) => BeginCapture(mode, why, record, waited: false, delay: -1);
 
-    private void BeginCapture(CaptureMode mode, string why, bool record, bool waited)
+    /// <param name="delay">Seconds of countdown (WM-002); -1 = the configured one; 0 = none. Recording never waits.</param>
+    public void BeginCapture(CaptureMode mode, string why, int delay) => BeginCapture(mode, why, false, waited: false, delay: delay);
+
+    private void BeginCapture(CaptureMode mode, string why, bool record, bool waited, int delay)
     {
+        if (_countdown is not null) { CancelCountdown("se pidió otra captura: " + why); return; }   // the same shortcut again cancels the countdown
         if (_overlay is not null) { _log("[captura] ya hay una captura abierta (" + why + ")"); return; }
-        if (!waited && CollapseIsland()) { Task.Delay(450).ContinueWith(_ => Post(() => BeginCapture(mode, why, record, waited: true))); return; }   // its closing animation must not be in the frozen frame
+        _quickLook?.HideForCapture();   // the floating thumbnail is excluded from capture too; it also leaves so it never covers the area
+        int secs = record ? 0 : delay < 0 ? _cfg.CaptureDelaySeconds : delay;
+        if (secs > 0) { StartCountdown(mode, why, secs); return; }
+        if (!waited && CollapseIsland()) { Task.Delay(450).ContinueWith(_ => Post(() => BeginCapture(mode, why, record, waited: true, delay: 0))); return; }   // its closing animation must not be in the frozen frame
         try
         {
             _lp?.Hide(); _spot?.Hide(); _popover?.Hide();   // our own panels are not part of what the user wants to capture
@@ -201,6 +253,7 @@ public sealed partial class BarHost
                 await ScreenGrabber.SaveAsync(px, t.W, t.H, path, jpeg).ConfigureAwait(false);
                 _log($"[captura] guardada: {Path.GetFileName(path)} ({t.W}x{t.H}, modo {mode}{(title is null ? "" : ", ventana")})");   // el título de la ventana no va al registro
                 if (clip) Post(() => CopyImage(px, t.W, t.H));
+                Post(() => ShowQuickLook(path, px, t));
             }
             catch (Exception e) { _log("[captura] no se pudo guardar: " + e.GetType().Name + ": " + e.Message); }
         });
@@ -226,7 +279,7 @@ public sealed partial class BarHost
     {
         foreach (var k in _captureKeys) k.Dispose(); _captureKeys.Clear();
         foreach (var e in _captureEvents.Values) e.Dispose(); _captureEvents.Clear();
-        EndCapture();
+        EndCapture(); CancelCountdown("cierre de la barra"); _quickLook?.Dispose();
         _editEvent?.Dispose(); _editEvent = null; _editor?.Dispose(); _editor = null;
         if (_recorder is not null) StopRecording("cierre de la barra");
     }

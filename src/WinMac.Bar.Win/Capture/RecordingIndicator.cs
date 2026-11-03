@@ -15,8 +15,26 @@ internal sealed class RecordingIndicator : IDisposable
     private const int WM_PAINT = 0xF, WM_LBUTTONUP = 0x202, WM_SETCURSOR = 0x20;
     private readonly BarNative.WndProc _proc; private readonly Action _stop; private readonly Action<string> _log;
     private IntPtr _hwnd; private string _text = "Grabando 00:00"; private float _s = 1;
+    private readonly string _action = "■ Detener", _cls = "WinMacRecording"; private readonly uint _dot = 0x303BFF;
 
     public RecordingIndicator(Action stop, Action<string> log) { _stop = stop; _log = log; _proc = WndProcImpl; }
+
+    /// <summary>
+    /// WM-002: the same pill for the capture countdown («● Captura en 5 s · Cancelar», amber dot). Excluded from capture too, never activated (taking the focus
+    /// would close the menu the user is about to capture), and a click cancels.
+    /// </summary>
+    public RecordingIndicator(Action click, Action<string> log, string text, string action, uint dotBgr, string windowClass) : this(click, log)
+    {
+        _text = text; _action = action; _dot = dotBgr; _cls = windowClass;
+    }
+
+    public void SetText(string text)
+    {
+        if (text == _text || _hwnd == IntPtr.Zero) return;
+        _text = text; BarNative.InvalidateRect(_hwnd, IntPtr.Zero, false);
+    }
+
+    public void Hide() { if (_hwnd != IntPtr.Zero) BarNative.ShowWindow(_hwnd, 0); }
 
     public CaptureRect Bounds { get; private set; }
 
@@ -25,7 +43,7 @@ internal sealed class RecordingIndicator : IDisposable
         _s = (float)mon.Scale; int w = (int)(220 * _s), h = (int)(34 * _s);
         int x = mon.Bounds.Right - w - (int)(16 * _s), y = mon.Bounds.Y + (int)(44 * _s);
         Bounds = new CaptureRect(x, y, w, h);
-        _hwnd = InstanceWindows.Create("WinMacRecording", 32649 /* IDC_HAND */, _proc, WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "WinMac grabando", WS_POPUP, x, y, w, h);
+        _hwnd = InstanceWindows.Create(_cls, 32649 /* IDC_HAND */, _proc, WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "WinMac grabando", WS_POPUP, x, y, w, h);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("No se pudo crear el indicador de grabación");
         if (!SetWindowDisplayAffinity(_hwnd, 0x11 /* WDA_EXCLUDEFROMCAPTURE */)) _log("[grabación] el indicador no se puede excluir de la captura en este Windows (aparecerá en el vídeo)");
         var rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, h, h); BarNative.SetWindowRgn(_hwnd, rgn, false);
@@ -35,9 +53,7 @@ internal sealed class RecordingIndicator : IDisposable
     public void Update(TimeSpan elapsed)
     {
         var t = elapsed.TotalHours >= 1 ? elapsed.ToString(@"h\:mm\:ss") : elapsed.ToString(@"mm\:ss");
-        var text = "Grabando " + t;
-        if (text == _text || _hwnd == IntPtr.Zero) return;
-        _text = text; BarNative.InvalidateRect(_hwnd, IntPtr.Zero, false);
+        SetText("Grabando " + t);
     }
 
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
@@ -62,7 +78,7 @@ internal sealed class RecordingIndicator : IDisposable
             BarNative.GetClientRect(h, out var rc);
             var bg = CreateSolidBrush(0x1E1C1C); var r = new BarNative.RECT { Left = 0, Top = 0, Right = rc.Right, Bottom = rc.Bottom }; FillRect(dc, ref r, bg); DeleteObject(bg);
             int d = (int)(12 * _s), cy = rc.Bottom / 2, x0 = (int)(14 * _s);
-            var red = CreateSolidBrush(0x303BFF); var oldB = SelectObject(dc, red); var pen = GetStockObject(8 /* NULL_PEN */); var oldP = SelectObject(dc, pen);
+            var red = CreateSolidBrush(_dot); var oldB = SelectObject(dc, red); var pen = GetStockObject(8 /* NULL_PEN */); var oldP = SelectObject(dc, pen);
             Ellipse(dc, x0, cy - d / 2, x0 + d, cy + d / 2); SelectObject(dc, oldB); SelectObject(dc, oldP); DeleteObject(red);
             var font = CreateFontW(-(int)(13 * _s), 0, 0, 0, 600, 0, 0, 0, 1, 0, 0, 5 /* CLEARTYPE */, 0, "Segoe UI"); var oldF = SelectObject(dc, font);
             SetBkMode(dc, 1); SetTextColor(dc, 0xFFFFFF);
@@ -70,7 +86,7 @@ internal sealed class RecordingIndicator : IDisposable
             DrawTextW(dc, _text, -1, ref tr, 0x20 | 0x4 /* SINGLELINE | VCENTER */);
             SetTextColor(dc, 0xD6D1D1);
             var sr = new BarNative.RECT { Left = 0, Top = 0, Right = rc.Right - (int)(14 * _s), Bottom = rc.Bottom };
-            DrawTextW(dc, "■ Detener", -1, ref sr, 0x20 | 0x4 | 0x2 /* RIGHT */);
+            DrawTextW(dc, _action, -1, ref sr, 0x20 | 0x4 | 0x2 /* RIGHT */);
             SelectObject(dc, oldF); DeleteObject(font);
         }
         finally { EndPaint(h, ref ps); }

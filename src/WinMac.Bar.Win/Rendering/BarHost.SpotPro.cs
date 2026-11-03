@@ -83,6 +83,8 @@ public sealed partial class BarHost
         switch (target)
         {
             case "winmac:capture:region": BeginCapture(CaptureMode.Region, "Spotlight"); break;
+            case "winmac:capture:region:5": BeginCapture(CaptureMode.Region, "Spotlight", 5); break;   // WM-002: time to open the menu to capture
+            case "winmac:capture:screen:5": BeginCapture(CaptureMode.Monitor, "Spotlight", 5); break;
             case "winmac:capture:window": BeginCapture(CaptureMode.Window, "Spotlight"); break;
             case "winmac:capture:screen": BeginCapture(CaptureMode.Monitor, "Spotlight"); break;
             case "winmac:capture:all": BeginCapture(CaptureMode.AllMonitors, "Spotlight"); break;
