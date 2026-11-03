@@ -67,8 +67,7 @@ public sealed partial class BarHost
         {
             case SpotKind.Action: RunAction(it.Target); return false;
             case SpotKind.Tool when it.Target is "tool:ip" or "tool:net": CopyText(string.Join(Environment.NewLine, it.Details ?? [])); _log("[spotlight] información de red copiada"); return false;
-            case SpotKind.Tool when it.Details is { Count: > 0 } d && d[0] != "Ejecutando…": CopyText(string.Join(Environment.NewLine, d)); _log("[spotlight] resultado de la herramienta copiado"); return false;
-            case SpotKind.Tool: RunTool(it); return true;
+            case SpotKind.Tool: RunTool(it); return true;   // Intro runs (and repeats); copying is Ctrl+C or the «Copiar» button
             case SpotKind.Command when it.Target.StartsWith("ssh:", StringComparison.Ordinal): Ssh(it.Target[4..]); return false;
             case SpotKind.Command when it.Target == "terminal:": Terminal(); return false;
             case SpotKind.Command when it.Target.StartsWith("copy:", StringComparison.Ordinal): CopyText(it.Target[5..]); _log("[spotlight] comando copiado (no se ha ejecutado)"); return false;
@@ -99,39 +98,57 @@ public sealed partial class BarHost
     }
 
     /// <summary>Ping (3 echoes, 2 s each) or DNS (4 s), cancelled by a new search; the result replaces the item's details in place.</summary>
+    /// <summary>
+    /// Ping (4 real echoes, 2 s each) or DNS (4 s): runs off the UI thread, updates the panel after every reply, can be cancelled (button or a new text) and
+    /// repeated. Only a change of the TEXT cancels it (WM-021: a background refresh used to cancel it, so the ping «did not work»).
+    /// </summary>
     private void RunTool(SpotItem it)
     {
         var parts = it.Target.Split(':', 3); if (parts.Length < 3 || !SpotPro.IsHost(parts[2])) return;
         string kind = parts[1], host = parts[2];
-        _toolCts?.Cancel(); var cts = _toolCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-        _spot?.Controller.Update(it with { Details = ["Ejecutando…"] }); _spot?.Refresh();
+        _toolCts?.Cancel(); var cts = _toolCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        void Show(IReadOnlyList<string> lines) => Post(() => { if (_spot is { IsOpen: true } s) { s.Controller.Update(it with { Details = lines }); s.Refresh(); } });
+        Show(kind == "dns" ? ["Destino: " + host, "Estado: Resolviendo…"] : PingReport.Lines(host, [], running: true));
         _log($"[spotlight] herramienta {kind} iniciada");
         Task.Run(async () =>
         {
-            IReadOnlyList<string> lines;
+            IReadOnlyList<string> lines; var replies = new List<PingEcho>();
             try
             {
                 if (kind == "dns")
                 {
                     var addrs = await System.Net.Dns.GetHostAddressesAsync(host, cts.Token).ConfigureAwait(false);
-                    lines = addrs.Length == 0 ? ["Sin direcciones"] : addrs.Take(8).Select(a => a.ToString()).ToList();
+                    lines = new[] { "Destino: " + host, "Estado: " + (addrs.Length == 0 ? "Sin direcciones" : $"{addrs.Length} dirección(es)") }.Concat(addrs.Take(8).Select(a => a.ToString())).ToList();
                 }
                 else
                 {
-                    var res = new List<string>(); using var ping = new Ping();
-                    for (int i = 0; i < 3 && !cts.IsCancellationRequested; i++)
+                    using var ping = new Ping();
+                    for (int i = 0; i < PingReport.Count && !cts.IsCancellationRequested; i++)
                     {
                         var r = await ping.SendPingAsync(host, TimeSpan.FromSeconds(2), null, null, cts.Token).ConfigureAwait(false);
-                        res.Add(r.Status == IPStatus.Success ? $"Respuesta de {r.Address}: {r.RoundtripTime} ms" : "Sin respuesta (" + r.Status + ")");
+                        replies.Add(new PingEcho(r.Status == IPStatus.Success, r.RoundtripTime, r.Status.ToString(), r.Address?.ToString()));
+                        Show(PingReport.Lines(host, replies, running: i < PingReport.Count - 1));
+                        if (i < PingReport.Count - 1) await Task.Delay(500, cts.Token).ConfigureAwait(false);
                     }
-                    lines = res;
+                    lines = PingReport.Lines(host, replies, running: false);
                 }
             }
-            catch (OperationCanceledException) { lines = ["Cancelado o sin respuesta a tiempo"]; }
-            catch (Exception e) { lines = ["Error: " + (e.InnerException ?? e).Message]; }
-            _log($"[spotlight] herramienta {kind} terminada: {lines.Count} línea(s)");
-            Post(() => { if (_spot is { IsOpen: true } s) { s.Controller.Update(it with { Details = lines }); s.Refresh(); } });   // ignored if the results changed meanwhile
+            catch (OperationCanceledException) { lines = kind == "dns" ? ["Destino: " + host, "Estado: Cancelado"] : PingReport.Lines(host, replies, running: false, cancelled: true); }
+            catch (Exception e) { var msg = (e is PingException && e.InnerException is { } inner ? inner : e).Message; lines = kind == "dns" ? ["Destino: " + host, "Estado: Error", PingReport.Explain(msg)] : PingReport.Lines(host, replies, running: false, error: msg); }
+            _log($"[spotlight] herramienta {kind} terminada: {replies.Count(r => r.Ok)}/{replies.Count} respuestas");
+            Show(lines);
         });
+    }
+
+    /// <summary>The tool panel's buttons (also Ctrl+C): repeat, cancel, copy.</summary>
+    private void ToolAction(SpotItem it, string action)
+    {
+        switch (action)
+        {
+            case "repeat": RunTool(it); break;
+            case "cancel": _toolCts?.Cancel(); break;
+            case "copy": if (_spot?.Controller.Results.FirstOrDefault(r => r.Target == it.Target) is { Details: { Count: > 0 } d }) { CopyText(string.Join(Environment.NewLine, d)); _log("[spotlight] resultado de la herramienta copiado"); } break;
+        }
     }
 
     private static string? SshClient()

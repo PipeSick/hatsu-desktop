@@ -171,6 +171,11 @@ jobs:
       - name: Pruebas de NotchWin, arranque real bajo el host y cierre ordenado
         shell: pwsh
         run: ./tools/ci/Test-Notch.ps1 -DistDir dist/WinMac -NotchPath C:\nw -OutDir notch-out
+      - name: Diagnóstico de letras WM-008 (consulta real al proveedor, solo lectura)
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: ./tools/ci/Lyrics-Diag.ps1
       - name: Auditoría visual (WinMac completo, capturas de la pantalla real)
         if: always()
         continue-on-error: true

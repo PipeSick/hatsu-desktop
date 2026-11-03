@@ -73,6 +73,7 @@ public sealed partial class BarHost
         switch (c.Kind)
         {
             case SpotCommandKind.Close: _spot.Hide(); return;
+            case SpotCommandKind.ToolAction when c.Item is { } tool && c.Action is { } act: ToolAction(tool, act); return;
             case SpotCommandKind.Open when c.Item is { Kind: SpotKind.Clipboard } cb: ClipAction(cb, "copy"); _spot.Hide(); return;
             case SpotCommandKind.Reveal when c.Item is { Kind: SpotKind.Clipboard } cb: ClipAction(cb, "plain"); _spot.Hide(); return;
             case SpotCommandKind.Delete when c.Item is { Kind: SpotKind.Clipboard } cb: ClipAction(cb, "delete"); _clipItems = _clipItems.Where(i => i.Target != cb.Target).ToList(); Search(_spot.Controller.Query, askClipboard: false); return;
@@ -89,13 +90,21 @@ public sealed partial class BarHost
     /// <summary>Lo local (apps, calculadora, Configuración, carpetas, recientes) al instante; Windows Search después, si la búsqueda no cambió entretanto.</summary>
     private void Search(string q) => Search(q, askClipboard: true);
 
+    private IReadOnlyList<SpotItem> _spotFiles = [];
+
+    /// <summary>
+    /// A search. <paramref name="askClipboard"/> = the user changed the text: it starts a new generation (cancels a running ping/DNS, asks the Island,
+    /// queries Windows Search). Without it (the Island's clipboard answer arrived) it only merges what is already known — WM-021: that refresh used to cancel
+    /// the ping the user had just started and to rebuild everything on every answer.
+    /// </summary>
     private void Search(string q, bool askClipboard)
     {
         if (_spot is null) return;
-        int gen = ++_spotGen; _toolCts?.Cancel();   // a new search cancels a running ping/DNS
-        if (askClipboard) AskClipboard(q);
         var recent = _cfg.SpotlightFiles ? SpotlightEngine.MatchRecent(q, _recent) : [];
         IReadOnlyList<SpotItem> Local(IReadOnlyList<SpotItem> files) => FillLocalTools(SpotlightEngine.Query(q, _catalog.Apps, _lprefs.Usage, _folders, files, p => Directory.Exists(p) || File.Exists(p), IsRecording, _scripts, _wsNames, _clipItems));
+        if (!askClipboard) { _spot.Controller.SetResults(Local(recent.Concat(_spotFiles).ToList())); _spot.Refresh(); return; }
+        int gen = ++_spotGen; _toolCts?.Cancel(); _spotFiles = [];   // the text changed: a running ping/DNS is for the old text
+        AskClipboard(q);
         _spot.Controller.SetResults(Local(recent)); _spot.Refresh();
         if (!_cfg.SpotlightFiles || _searchBroken || q.Trim().Length < 3) return;
         Task.Run(async () =>
@@ -107,6 +116,7 @@ public sealed partial class BarHost
             {
                 if (found is null) { _searchBroken = true; return; }
                 if (gen != _spotGen || _spot is not { IsOpen: true }) return;
+                _spotFiles = found;
                 _spot.Controller.SetResults(Local(recent.Concat(found).ToList())); _spot.Refresh();
             });
         });

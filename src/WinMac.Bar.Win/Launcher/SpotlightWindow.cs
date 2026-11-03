@@ -39,6 +39,7 @@ internal sealed class SpotlightWindow : IDisposable
     public SpotlightController Controller => _ctl;
     public bool IsOpen => _open;
     public Func<SpotItem, IconBitmap?>? Icons { get; set; }
+    private readonly List<(string Id, LpRect Rect)> _toolButtons = [];
 
     public void Show(PxRect monitor, double scale)
     {
@@ -47,24 +48,40 @@ internal sealed class SpotlightWindow : IDisposable
         BarNative.SetForegroundWindow(_hwnd);
     }
 
-    public void Hide() { if (!_open) return; _open = false; _ctl.Reset(); BarNative.ShowWindow(_hwnd, 0); }
+    public void Hide()
+    {
+        if (!_open) return; _open = false; _ctl.Reset(); BarNative.ShowWindow(_hwnd, 0);
+        _log($"[spotlight] cerrado: {Relayouts} cambio(s) de tamaño, {Surfaces} superficie(s) creadas");   // WM-021: one surface per open
+        Relayouts = 0; Surfaces = 0;
+    }
 
     /// <summary>Llegaron resultados nuevos (o un icono): cambia la altura si hace falta y se redibuja.</summary>
     public void Refresh() { if (_open) Relayout(force: false); }
 
+    private int _winH;
+
+    /// <summary>
+    /// WM-021: the composition surface (swap chain, DirectComposition target and glass backdrop) is created ONCE per open at the tallest size the panel can
+    /// have; a change in the number of results only resizes the window, which clips the surface. Recreating them on every height change showed an empty
+    /// frame each time — the flicker seen while typing.
+    /// </summary>
     private void Relayout(bool force)
     {
-        int w = (int)Math.Ceiling(SpotlightController.Width * _scale), h = (int)Math.Ceiling(_ctl.Height * _scale);
-        if (force || w != _wPx || h != _hPx)
+        int w = (int)Math.Ceiling(SpotlightController.Width * _scale), h = (int)Math.Ceiling(_ctl.Height * _scale), hMax = (int)Math.Ceiling(SpotlightController.MaxHeight * _scale);
+        if (force || w != _wPx || hMax != _hPx)
         {
-            CreateSurface(w, h);
+            CreateSurface(w, hMax);
             _x = _monitor.X + (_monitor.W - w) / 2; _y = _monitor.Y + (int)(_monitor.H * 0.22);
-            BuildBackdrop();
-            BarNative.SetWindowPos(_hwnd, new IntPtr(-1), _x, _y, w, h, 0x0040u /* SHOWWINDOW */);
+            BuildBackdrop(); _winH = -1;
         }
 
-        _dirty = true; Render();
+        _dirty = true; Render();   // draw first, then show the new size: never an empty frame
+        if (h != _winH) { BarNative.SetWindowPos(_hwnd, new IntPtr(-1), _x, _y, w, h, 0x0040u /* SHOWWINDOW */ | 0x0010u /* NOACTIVATE */); _winH = h; Relayouts++; }
     }
+
+    /// <summary>CI diagnostics: how many times the window changed size / the surface was rebuilt while open.</summary>
+    public int Relayouts { get; private set; }
+    public int Surfaces { get; private set; }
 
     public void Pump() { if (_open && _dirty) Render(); }
 
@@ -90,7 +107,7 @@ internal sealed class SpotlightWindow : IDisposable
 
     private void CreateSurface(int w, int h)
     {
-        DisposeSurface(); _wPx = w; _hPx = h;
+        DisposeSurface(); _wPx = w; _hPx = h; Surfaces++;
         using (var factory = DXGI.CreateDXGIFactory2<IDXGIFactory2>(false))
             _swap = factory.CreateSwapChainForComposition(_dev!.D3D, new SwapChainDescription1
             {
@@ -168,6 +185,13 @@ internal sealed class SpotlightWindow : IDisposable
                 if (it.Section != lastSection) { Brush(new Color4(1, 1, 1, i == _ctl.Selected ? 0.85f : 0.45f)); using var l = _dw.CreateTextLayout(it.Section, _section!, 100, 16); _ctx.DrawTextLayout(new Vector2((float)(r.X + r.W - 104), (float)(r.Y + 15)), l, _solid!); lastSection = it.Section; }
             }
 
+            if (_ctl.Results.Count == 0 && _ctl.Query.Length > 0)
+            {
+                Brush(new Color4(1, 1, 1, 0.45f));
+                using var l = _dw.CreateTextLayout("Sin resultados", _title!, (float)SpotlightController.ListW, 30); l.TextAlignment = TextAlignment.Center;
+                _ctx.DrawTextLayout(new Vector2(0, (float)(SpotlightController.FieldH + 40)), l, _solid!);
+            }
+
             DrawPreview();
             _ctx.EndDraw(); _dcomp.Commit(); _swap.Present(1, PresentFlags.None); _dirty = false;
         }
@@ -193,6 +217,24 @@ internal sealed class SpotlightWindow : IDisposable
             using var l = _dw.CreateTextLayout(line, _sub!, w, 40); l.WordWrapping = WordWrapping.Wrap;
             if (y + l.Metrics.Height > p.Y + p.H - 30) break;
             _ctx.DrawTextLayout(new Vector2(x, y), l, _solid!); y += l.Metrics.Height + 3;
+        }
+
+        // Tool panel (ping / DNS): Repetir · Cancelar (while running) · Copiar — real actions on the real result
+        _toolButtons.Clear();
+        if (it.Kind == SpotKind.Tool && (it.Target.StartsWith("tool:ping", StringComparison.Ordinal) || it.Target.StartsWith("tool:dns", StringComparison.Ordinal)))
+        {
+            bool running = it.Details?.Any(d => d.StartsWith("Estado: Enviando", StringComparison.Ordinal) || d.StartsWith("Estado: Resolviendo", StringComparison.Ordinal)) == true;
+            var buttons = new List<(string Id, string Label)> { (running ? "cancel" : "repeat", running ? "Cancelar" : (it.Details is null ? "Ejecutar" : "Repetir")) };
+            if (it.Details is { Count: > 0 } && !running) buttons.Add(("copy", "Copiar"));
+            float bx = x, by = (float)(p.Y + p.H - 62);
+            foreach (var (id, label) in buttons)
+            {
+                using var bl = _dw.CreateTextLayout(label, _sub!, 200, 26); float bw = bl.Metrics.Width + 22;
+                Brush(id == "cancel" ? new Color4(1f, 0.27f, 0.23f, 0.85f) : new Color4(1, 1, 1, 0.14f));
+                _ctx!.FillRoundedRectangle(new RoundedRectangle { Rect = R(bx, by, bw, 26), RadiusX = 7, RadiusY = 7 }, _solid!);
+                Brush(new Color4(1, 1, 1, 0.95f)); _ctx.DrawTextLayout(new Vector2(bx + 11, by + (26 - bl.Metrics.Height) / 2), bl, _solid!);
+                _toolButtons.Add((id, new LpRect(bx, by, bw, 26))); bx += bw + 8;
+            }
         }
 
         bool pending = _ctl.Pending >= 0 && _ctl.Pending == _ctl.Selected;
@@ -240,7 +282,12 @@ internal sealed class SpotlightWindow : IDisposable
             switch ((int)msg)
             {
                 case WM_MOUSEMOVE: if (_ctl.PointerMove(X(l), Y(l)).Kind != SpotCommandKind.None) { _dirty = true; } return IntPtr.Zero;
-                case WM_LBUTTONUP: { var c = _ctl.Click(X(l), Y(l)); if (c.Kind != SpotCommandKind.None) _onCommand(c, false); return IntPtr.Zero; }
+                case WM_LBUTTONUP:
+                {
+                    var tb = _toolButtons.FirstOrDefault(b => b.Rect.Contains(X(l), Y(l)));
+                    if (tb.Id is not null && _ctl.Current is { } cur) { _onCommand(new SpotCommand(SpotCommandKind.ToolAction, cur, tb.Id), false); return IntPtr.Zero; }
+                    var c = _ctl.Click(X(l), Y(l)); if (c.Kind != SpotCommandKind.None) _onCommand(c, false); return IntPtr.Zero;
+                }
                 case WM_KEYDOWN or WM_SYSKEYDOWN:
                 {
                     bool ctrl = (BarNative.GetKeyState(0x11) & 0x8000) != 0, shift = (BarNative.GetKeyState(0x10) & 0x8000) != 0;

@@ -53,6 +53,7 @@ internal static class HostApp
         var cfg = HostConfig.Load(o.ConfigPath);
         cfg = MigrateNotchOnce(cfg, o, log);
         cfg = WinMac.Host.BarMigration.ImportOnce(cfg, o.BarJsonPath, o.ConfigPath, log);
+        { var (m, changed) = BetaMigration.Apply(cfg); if (changed) { try { HostConfig.Save(o.ConfigPath, m); } catch (Exception e) { log("[host] no se pudo guardar la migración: " + e.Message); } log("[host] configuración actualizada a la versión 3 (menús de app duplicados desactivados)"); } cfg = m; }
         string baseDir = AppContext.BaseDirectory, pipe = o.PipeName ?? PipeNames.ForCurrentUser(), token = PipeNames.NewToken();
         log($"[host] iniciado (pid {Environment.ProcessId}); configuración: {o.ConfigPath}; canal: {pipe}");
 

@@ -142,7 +142,7 @@ public static partial class SpotPro
                 lines.Add(it.Target);
                 keys = SpotlightEngine.IsExecutable(it.Target) ? "Intro mostrar en el Explorador (no se ejecuta)" : "Intro abrir · Ctrl+Intro mostrar en el Explorador"; break;
             case SpotKind.Action: lines.Add("Acción de WinMac"); keys = "Intro ejecutar"; break;
-            case SpotKind.Tool: lines.AddRange(it.Details ?? []); keys = it.Target.StartsWith("tool:ping", StringComparison.Ordinal) || it.Target.StartsWith("tool:dns", StringComparison.Ordinal) ? "Intro ejecutar · Intro de nuevo copia el resultado" : "Intro copiar"; break;
+            case SpotKind.Tool: lines.AddRange(it.Details ?? []); keys = it.Target.StartsWith("tool:ping", StringComparison.Ordinal) || it.Target.StartsWith("tool:dns", StringComparison.Ordinal) ? "Intro ejecutar o repetir · Ctrl+C copiar · Esc cancelar" : "Intro copiar"; break;
             case SpotKind.Command: lines.Add(it.Subtitle ?? ""); keys = "Intro"; break;
             case SpotKind.Clipboard:
                 lines.Add(it.Subtitle ?? ""); if (it.Details is { Count: > 0 } cd) lines.AddRange(cd);

@@ -223,9 +223,10 @@ public static class SpotlightEngine
             .Select(x => new SpotItem(SpotKind.File, x.r.Name, "Reciente", x.r.LinkPath)).ToList();
 }
 
-public enum SpotCommandKind { None, Redraw, Close, Open, Reveal, Delete }
+public enum SpotCommandKind { None, Redraw, Close, Open, Reveal, Delete, ToolAction }
 
-public readonly record struct SpotCommand(SpotCommandKind Kind, SpotItem? Item = null)
+/// <summary><see cref="Action"/>: for <see cref="SpotCommandKind.ToolAction"/>, the tool button pressed («repeat», «cancel», «copy»).</summary>
+public readonly record struct SpotCommand(SpotCommandKind Kind, SpotItem? Item = null, string? Action = null)
 {
     public static readonly SpotCommand None = new(SpotCommandKind.None), Redraw = new(SpotCommandKind.Redraw), Close = new(SpotCommandKind.Close);
 }
@@ -242,7 +243,13 @@ public sealed class SpotlightController
     public int Pending { get; private set; } = -1;
 
     /// <summary>List on the left, preview pane on the right (docs/27); room for the preview even with few results.</summary>
-    public double Height => FieldH + (Results.Count == 0 ? 0 : 8 + Math.Max(Results.Count, MinRows) * RowH + 8);
+    /// <summary>
+    /// Only the field while nothing is typed; once there is text the panel keeps its full height (an empty list shows «Sin resultados»). WM-021: the height
+    /// used to jump between the two on every keystroke that had no results for a moment (typing «ping 8.» → «ping 8.8»), which made the window flicker.
+    /// </summary>
+    public double Height => FieldH + (Results.Count == 0 && Query.Length == 0 ? 0 : 8 + Math.Max(Results.Count, MinRows) * RowH + 8);
+    /// <summary>The tallest the panel can be (the window's surface is created once at this size).</summary>
+    public static double MaxHeight => FieldH + 8 + Math.Max(SpotlightEngine.MaxResults, MinRows) * RowH + 8;
     public LpRect Row(int i) => new(8, FieldH + 8 + i * RowH, ListW - 16, RowH);
     public LpRect PreviewRect => new(ListW, FieldH + 8, Width - ListW - 8, Height - FieldH - 16);
     public SpotItem? Current => Selected >= 0 && Selected < Results.Count ? Results[Selected] : null;
@@ -259,6 +266,9 @@ public sealed class SpotlightController
     public void SetResults(IReadOnlyList<SpotItem> results)
     {
         string? keep = Selected >= 0 && Selected < Results.Count ? Results[Selected].Target : null;
+        // a result that is the same as before keeps what a running tool wrote into it (WM-021: a refresh used to wipe «Ejecutando…»)
+        var old = Results;
+        results = results.Select(r => r.Details is null && old.FirstOrDefault(o => o.Target == r.Target && o.Kind == r.Kind) is { Details: { } d } ? r with { Details = d } : r).ToList();
         Results = results; Pending = -1; int i = keep is null ? -1 : results.ToList().FindIndex(r => r.Target == keep);
         Selected = results.Count == 0 ? -1 : i >= 0 ? i : 0;
     }
@@ -285,6 +295,8 @@ public sealed class SpotlightController
                 Pending = -1; if (Results.Count == 0) return (SpotCommand.None, false);
                 Selected = shift ? (Selected <= 0 ? Results.Count - 1 : Selected - 1) : (Selected >= Results.Count - 1 ? 0 : Selected + 1);
                 return (SpotCommand.Redraw, false);
+            case 0x43 when ctrl && Current is { Kind: SpotKind.Tool, Details.Count: > 0 } tool:   // Ctrl+C: copy the tool's result
+                return (new SpotCommand(SpotCommandKind.ToolAction, tool, "copy"), false);
             case 0x2E when ctrl && Selected >= 0 && Selected < Results.Count && Results[Selected].Kind == SpotKind.Clipboard:
                 return (new SpotCommand(SpotCommandKind.Delete, Results[Selected]), false);
             case 0x26: Pending = -1; if (Results.Count > 0) Selected = Selected <= 0 ? Results.Count - 1 : Selected - 1; return (SpotCommand.Redraw, false);

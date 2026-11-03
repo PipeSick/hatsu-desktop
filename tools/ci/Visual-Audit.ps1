@@ -463,6 +463,18 @@ if (SpotOpen) {
   [System.Windows.Forms.SendKeys]::SendWait('{ENTER}'); $null = WaitFor { LogHas $barLog '[spotlight] herramienta ping terminada' } 10; Start-Sleep -Milliseconds 500
   SpotShot '19b-spotlight-ping-resultado' 'Spotlight Pro: resultado real del ping tras pulsar Intro'
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
+  # WM-021: escritura rápida y borrado repetido (no debe recrear la superficie ni cancelar el ping); destinos reales
+  foreach ($k in 1..3) { [System.Windows.Forms.SendKeys]::SendWait('ping 8.8'); [System.Windows.Forms.SendKeys]::SendWait('{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}') }
+  [System.Windows.Forms.SendKeys]::SendWait('ping 127.0.0.1'); Start-Sleep -Milliseconds 700; [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+  $null = WaitFor { (Select-String -Path $barLog -SimpleMatch 'herramienta ping terminada' -ErrorAction SilentlyContinue).Count -ge 2 } 12; Start-Sleep -Milliseconds 400
+  SpotShot '19g-spotlight-ping-panel' 'Spotlight: panel de ping real (destino, estado, paquetes, pérdida, latencia, Repetir/Copiar) tras escribir y borrar deprisa'
+  foreach ($dest in 'google.com', 'no-existe.invalid', '10.255.255.1') {
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait("ping $dest"); Start-Sleep -Milliseconds 600; [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    $n = @(Select-String -Path $barLog -SimpleMatch 'herramienta ping terminada' -ErrorAction SilentlyContinue).Count; $null = WaitFor { (Select-String -Path $barLog -SimpleMatch 'herramienta ping terminada' -ErrorAction SilentlyContinue).Count -gt $n } 14
+  }
+  Start-Sleep -Milliseconds 400; SpotShot '19h-spotlight-ping-sin-respuesta' 'Spotlight: ping a un destino que no responde (errores comprensibles, nada inventado)'
+  Select-String -Path $barLog -Pattern 'herramienta ping|spotlight\] cerrado' -ErrorAction SilentlyContinue | Select-Object -Last 8 | ForEach-Object { Note ('  - ' + ($_.Line -replace '^\S+ ', '')) }
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
   [System.Windows.Forms.SendKeys]::SendWait('> del /s prueba'); Start-Sleep -Milliseconds 900; SpotShot '19c-spotlight-comando' 'Spotlight Pro: «> …» solo ofrece abrir una terminal o copiar el texto (nunca lo ejecuta)'
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 300
   [System.Windows.Forms.SendKeys]::SendWait('20% de 150'); Start-Sleep -Milliseconds 700; SpotShot '19d-spotlight-porcentaje' 'Spotlight Pro: «20% de 150»'

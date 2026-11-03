@@ -18,7 +18,7 @@ public sealed record ModuleConfig
 /// </summary>
 public sealed record HostConfig
 {
-    public int Version { get; init; } = 2;
+    public int Version { get; init; } = BetaMigration.Version;
     public bool Autostart { get; init; } = false;
     public Dictionary<string, ModuleConfig> Modules { get; init; } = new()
     {

@@ -180,7 +180,7 @@ public class HostConfigTests
     [Fact]
     public void Defaults_start_every_module_including_the_notch_and_autostart_is_off()
     {
-        var c = new HostConfig(); Assert.True(c.Modules["bar"].Enabled && c.Modules["dock"].Enabled && c.Modules["notch"].Enabled); Assert.False(c.Autostart); Assert.Equal(2, c.Version);
+        var c = new HostConfig(); Assert.True(c.Modules["bar"].Enabled && c.Modules["dock"].Enabled && c.Modules["notch"].Enabled); Assert.False(c.Autostart); Assert.Equal(3, c.Version);
     }
 
     [Fact]

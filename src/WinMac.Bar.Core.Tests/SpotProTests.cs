@@ -112,3 +112,46 @@ public class HotkeyAuditTests
         Assert.Contains("no se puede saber cuál", r[3].Problem); Assert.Null(r[4].Problem);
     }
 }
+
+public class PingReportTests
+{
+    [Fact]
+    public void SummaryComesOnlyFromRealReplies()
+    {
+        var r = PingReport.Lines("8.8.8.8", [new(true, 12, "Success", "8.8.8.8"), new(true, 20, "Success", "8.8.8.8"), new(false, 0, "TimedOut"), new(true, 16, "Success")], running: false);
+        Assert.Contains("Estado: Responde con pérdidas", r);
+        Assert.Contains("Paquetes: 4 enviados · 3 recibidos · 25 % perdidos", r);
+        Assert.Contains("Latencia: mín. 12 ms · media 16 ms · máx. 20 ms", r);
+        Assert.Contains(r, l => l.StartsWith("Sin respuesta: el equipo no contestó"));
+    }
+
+    [Fact]
+    public void RunningCancelledAndUnknownHostAreExplained()
+    {
+        Assert.Contains("Estado: Enviando… 1/4", PingReport.Lines("google.com", [new(true, 9, "Success", "142.250.0.1")], running: true));
+        Assert.Contains("Destino: google.com (142.250.0.1)", PingReport.Lines("google.com", [new(true, 9, "Success", "142.250.0.1")], running: true));
+        Assert.Contains("Estado: Cancelado", PingReport.Lines("x.com", [], running: false, cancelled: true));
+        var unknown = PingReport.Lines("no-existe.invalid", [], running: false, error: "No such host is known.");
+        Assert.Contains("No existe ese nombre: el DNS no lo encontró", unknown);
+        Assert.Contains("Estado: Sin respuesta", PingReport.Lines("10.255.255.1", [new(false, 0, "TimedOut"), new(false, 0, "TimedOut")], running: false));
+    }
+}
+
+public class SpotlightStabilityTests
+{
+    [Fact]
+    public void HeightDoesNotJumpWhileTypingAndARefreshKeepsARunningTool()
+    {
+        var ctl = new SpotlightController();
+        foreach (var c in "ping 8.") ctl.Char(c);
+        ctl.SetResults([]);                                       // a moment with no results
+        double empty = ctl.Height;
+        ctl.SetResults([new SpotItem(SpotKind.Tool, "Hacer ping a 8.8", null, "tool:ping:8.8")]);
+        Assert.Equal(empty, ctl.Height);                          // WM-021: same height, no resize while typing
+        Assert.True(ctl.Height <= SpotlightController.MaxHeight);
+        ctl.Update(ctl.Results[0] with { Details = ["Estado: Enviando… 1/4"] });
+        ctl.SetResults([new SpotItem(SpotKind.Tool, "Hacer ping a 8.8", null, "tool:ping:8.8")]);   // a background refresh
+        Assert.Equal(["Estado: Enviando… 1/4"], ctl.Results[0].Details);
+        Assert.Equal(SpotCommandKind.ToolAction, ctl.Key(0x43, true, false).Command.Kind);        // Ctrl+C copies the tool result
+    }
+}

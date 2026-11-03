@@ -38,3 +38,16 @@ public class HotkeySettingsTests
         HotkeyStatus.Set(JsonDocument.Parse("{}").RootElement);
     }
 }
+
+public class BetaMigrationTests
+{
+    [Fact]
+    public void GlobalMenuIsTurnedOffOnceForConfigsFromBeforeVersion3()
+    {
+        var old = new HostConfig { Version = 2, Bar = new WinMac.Bar.BarConfig { AppMenus = true, ShowTrayIcons = false } };
+        var (m, changed) = BetaMigration.Apply(old);
+        Assert.True(changed); Assert.False(m.Bar!.AppMenus); Assert.False(m.Bar.ShowTrayIcons); Assert.Equal(3, m.Version);   // nothing else changes
+        var again = BetaMigration.Apply(m with { Bar = m.Bar with { AppMenus = true } });
+        Assert.False(again.Changed); Assert.True(again.Config.Bar!.AppMenus);                                          // a later choice of the user is respected
+    }
+}
