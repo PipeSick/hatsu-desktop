@@ -126,10 +126,18 @@ public static partial class PanelBuilder
         if (col == 1) w.Add(new Widget(WidgetKind.Separator, "pad"));   // número impar de mosaicos: cierra la fila
         if (cfg.CcSound) w.Add(new Widget(WidgetKind.Slider, "volume", "Sonido", Value: s.Audio.Volume, Enabled: s.Audio.Available, Reason: s.Audio.Reason, Glyph: s.Audio.Muted ? "sound-muted" : "sound"));
         if (cfg.CcSound && s.Audio.Available) w.Add(new Widget(WidgetKind.Row, "open:sound", "Salida de audio", s.Audio.Outputs.FirstOrDefault(o => o.IsDefault)?.Name ?? "Dispositivo predeterminado", Glyph: "chevron"));
-        if (cfg.CcBrightness) w.Add(new Widget(WidgetKind.Slider, "brightness", "Brillo", Value: s.Brightness.Percent, Enabled: s.Brightness.Available, Reason: s.Brightness.Reason, Glyph: "sun"));
+        if (cfg.CcBrightness) w.Add(new Widget(WidgetKind.Slider, "brightness", BrightnessLabel(s.Brightness), Value: s.Brightness.Percent, Enabled: s.Brightness.Available, Reason: s.Brightness.Reason, Glyph: "sun"));
         Msg(w, c);
         return new PanelModel(PanelKind.ControlCenter, "Centro de control", w);
     }
+
+    /// <summary>WM-016: which screens the slider moves — the laptop's own panel (WMI) or external monitors (DDC/CI) — so it is clear what it controls.</summary>
+    public static string BrightnessLabel(BrightnessState b) => b.Monitors.Count switch
+    {
+        0 => "Brillo",
+        1 => b.Monitors[0].Id.StartsWith("wmi:", StringComparison.Ordinal) ? "Brillo · pantalla integrada" : "Brillo · monitor externo (DDC/CI)",
+        var n => b.Monitors.Any(m => m.Id.StartsWith("wmi:", StringComparison.Ordinal)) ? $"Brillo · integrada y {n - 1} externa(s)" : $"Brillo · {n} monitores (DDC/CI)",
+    };
 
     public static PanelModel WifiPanel(PanelContext c)
     {

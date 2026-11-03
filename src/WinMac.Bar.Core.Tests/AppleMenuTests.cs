@@ -1,3 +1,4 @@
+using WinMac.SystemControl;
 using WinMac.Bar;
 using Xunit;
 
@@ -69,5 +70,17 @@ public class BatteryPanelWm010Tests
         Assert.DoesNotContain(charging.Widgets, w => w.Id == "bat-left");   // plugged in: no «time left»
         Assert.Equal("Cargando", charging.Widgets.Single(w => w.Id == "battery").Sub);
         Assert.Null(new BatteryDetails(0, 52_000, null, null, null).HealthPercent);   // a driver reporting 0 as design capacity: no health
+    }
+}
+
+public class BrightnessLabelWm016Tests
+{
+    [Fact]
+    public void The_slider_says_whether_it_moves_the_internal_panel_or_external_monitors()
+    {
+        Assert.Equal("Brillo · pantalla integrada", PanelBuilder.BrightnessLabel(new BrightnessState(true, [new MonitorBrightness("wmi:0", "Pantalla integrada", 50, "WMI")])));
+        Assert.Equal("Brillo · monitor externo (DDC/CI)", PanelBuilder.BrightnessLabel(new BrightnessState(true, [new MonitorBrightness("ddc:1.0", "Pantalla 1", 50, "DDC/CI")])));
+        Assert.Equal("Brillo · integrada y 1 externa(s)", PanelBuilder.BrightnessLabel(new BrightnessState(true, [new MonitorBrightness("wmi:0", "Pantalla integrada", 50, "WMI"), new MonitorBrightness("ddc:2.0", "Pantalla 2", 40, "DDC/CI")])));
+        Assert.Equal("Brillo", PanelBuilder.BrightnessLabel(BrightnessState.None("x")));
     }
 }

@@ -10,7 +10,6 @@ namespace WinMac.SystemControl.Win;
 /// </summary>
 public sealed partial class BrightnessService
 {
-    private const int WbemTimedOut = unchecked((int)0x80043001);
 
     /// <summary>Empieza a escuchar. <paramref name="changed"/> recibe (porcentaje, nombre de la pantalla). null con el motivo si no hay panel interno con brillo.</summary>
     public static IDisposable? WatchInternal(Action<int, string> changed, Action<string> log, out string? why)
@@ -39,18 +38,23 @@ public sealed partial class BrightnessService
         {
             try
             {
-                dynamic? svc = WmiService(); if (svc is null) { log("[brillo] WMI no disponible"); return; }
-                dynamic events = svc.ExecNotificationQuery("SELECT * FROM WmiMonitorBrightnessEvent");
+                using var watcher = new System.Management.ManagementEventWatcher(new System.Management.ManagementScope(@"\\.\root\wmi"), new System.Management.WqlEventQuery("SELECT * FROM WmiMonitorBrightnessEvent"));
+                watcher.Options.Timeout = TimeSpan.FromSeconds(1);
                 int last = -1;
                 while (!_stop)
                 {
-                    dynamic ev;
-                    try { ev = events.NextEvent(1000); }
-                    catch (COMException e) when (e.HResult == WbemTimedOut) { continue; }
-                    int pct = Math.Clamp((int)ev.Brightness, 0, 100);
-                    if (pct == last) continue; last = pct;
-                    try { changed(pct, "Pantalla integrada"); } catch (Exception e) { log("[brillo] aviso: " + e.GetType().Name + ": " + e.Message); }
+                    System.Management.ManagementBaseObject ev;
+                    try { ev = watcher.WaitForNextEvent(); }
+                    catch (System.Management.ManagementException e) when (e.ErrorCode == System.Management.ManagementStatus.Timedout) { continue; }
+                    using (ev)
+                    {
+                        int pct = Math.Clamp(Convert.ToInt32(ev["Brightness"]), 0, 100);
+                        if (pct == last) continue; last = pct;
+                        try { changed(pct, "Pantalla integrada"); } catch (Exception e) { log("[brillo] aviso: " + e.GetType().Name + ": " + e.Message); }
+                    }
                 }
+
+                watcher.Stop();
             }
             catch (Exception e) { log("[brillo] se deja de escuchar el panel interno: " + e.GetType().Name + $" 0x{e.HResult:X8}"); }
         }
