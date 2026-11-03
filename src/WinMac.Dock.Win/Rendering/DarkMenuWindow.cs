@@ -55,8 +55,9 @@ internal sealed class DarkMenuWindow
         {
             if (msg.message == 0x113 /* WM_TIMER */ && msg.hwnd == _hwnd)
             {
-                bool down = (GetAsyncKeyState(0x01) & 0x8000) != 0 || (GetAsyncKeyState(0x02) & 0x8000) != 0;
-                if (down && !wasDown && GetCursorPos(out var cp) && WindowFromPoint(cp) != _hwnd) _done = true;
+                short l = GetAsyncKeyState(0x01), r = GetAsyncKeyState(0x02);
+                bool down = ((l | r) & 0x8000) != 0, pressedSince = ((l | r) & 1) != 0;   // bit 0: pressed since the last call (a very short click)
+                if (((down && !wasDown) || (pressedSince && !down)) && GetCursorPos(out var cp) && WindowFromPoint(cp) != _hwnd) _done = true;
                 wasDown = down; continue;
             }
 

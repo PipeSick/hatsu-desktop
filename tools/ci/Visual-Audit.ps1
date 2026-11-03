@@ -304,7 +304,7 @@ if ($dkr -match '^(-?\d+),(-?\d+) (\d+)x(\d+)') {
       [System.Windows.Forms.SendKeys]::SendWait('{DOWN}'); Start-Sleep -Milliseconds 300; Shot '32g-dock-menu-teclado' 'WM-017: ↓ mueve la selección por las opciones disponibles'
       [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 400
       $closed = -not [Au]::Visible('WinMacDockMenu'); Note "  - WM-017: Esc lo cierra: $closed$(if (-not $closed) { ' (sin el foco: abierto sin clic del usuario, Windows no le cede el primer plano)' })"
-      if (-not $closed) { [Au]::Click(900, 300); Start-Sleep -Milliseconds 500; Note "  - WM-017: un clic fuera lo cierra: $(-not [Au]::Visible('WinMacDockMenu'))" }
+      if (-not $closed) { [Au]::SetCursorPos(900, 300) | Out-Null; Start-Sleep -Milliseconds 120; [Au]::Down(); Start-Sleep -Milliseconds 140; [Au]::Up(); Start-Sleep -Milliseconds 500;   # un clic de duración humana Note "  - WM-017: un clic fuera lo cierra: $(-not [Au]::Visible('WinMacDockMenu'))" }
       if ([Au]::Visible('WinMacDockMenu')) { [void][Au]::PostMessage([Au]::FindWindow('WinMacDockMenu', $null), 0x10, [IntPtr]::Zero, [IntPtr]::Zero); Start-Sleep -Milliseconds 400 }   # WM_CLOSE: no dejarlo abierto para el resto de la auditoría
     } else { Note '  - WM-017: tampoco se abrió con el evento de prueba' }
   }
