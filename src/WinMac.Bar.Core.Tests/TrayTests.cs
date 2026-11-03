@@ -77,16 +77,21 @@ public class TrayTests
         var icons = Enumerable.Range(0, 7).Select(i => new TrayIcon("k" + i, (uint)i + 1, 1, 0, (uint)(0x50 + i), i == 0 ? "Discord\nsegunda línea" : "", 4, false, i)).ToList();
         var ctx = PanelContext.Initial(new BarConfig(), DateTime.Now) with { Tray = icons };
         var m = PanelBuilder.Build(PanelKind.Tray, ctx);
-        var g = (TrayGridData)Assert.Single(m.Widgets).Data!;
+        Assert.Equal(WidgetKind.Caption, m.Widgets[0].Kind);   // WM-004: title
+        var g = (TrayGridData)Assert.Single(m.Widgets, w => w.Kind == WidgetKind.TrayGrid).Data!;
         Assert.Equal(5, g.Columns); Assert.Equal(7, g.Cells.Count); Assert.Equal("tray-icon:80", g.Cells[0].IconKey); Assert.Equal("Discord", g.Cells[0].Name); Assert.Equal("App sin nombre", g.Cells[1].Name);
-        var f = PanelLayout.Compute(m); var grid = f.Items[0];
+        var f = PanelLayout.Compute(m); var grid = f.Items.Single(i => i.W.Kind == WidgetKind.TrayGrid);
         Assert.Equal(5 * PanelLayout.TrayCell + 12, f.Width, 6); Assert.Equal(2 * PanelLayout.TrayCell, grid.Height, 6);   // 7 iconos: 2 filas de hasta 5
         var ctl = new PanelController(); ctl.SetModel(m);
         double cx = grid.X + 1.5 * PanelLayout.TrayCell, cy = grid.Y + 1.5 * PanelLayout.TrayCell;   // fila 2, columna 2 → el 7.º icono
         ctl.PointerDown(cx, cy); Assert.Equal("trayitem:k6", ctl.PointerUp(cx, cy)!.Id);
         Assert.Equal("rclick:trayitem:k6", ctl.RightClick(cx, cy)!.Id);
         Assert.Null(ctl.RightClick(grid.X + 4.5 * PanelLayout.TrayCell, cy));   // casilla vacía
-        var one = PanelLayout.Compute(PanelBuilder.Build(PanelKind.Tray, ctx with { Tray = icons.Take(2).ToList() })); Assert.Equal(2 * PanelLayout.TrayCell + 12, one.Width, 6);
+        var one = PanelLayout.Compute(PanelBuilder.Build(PanelKind.Tray, ctx with { Tray = icons.Take(2).ToList() })); Assert.Equal(196, one.Width, 6);   // a minimum width so the title fits
         Assert.Contains(PanelBuilder.Build(PanelKind.Tray, ctx with { Tray = [] }).Widgets, w => w.Id == "tray-none");
+        // WM-004: keyboard — arrows move over the cells, Intro opens, the menu key opens the app's own menu
+        Assert.Null(ctl.TrayKey(0x27, false)); Assert.Equal(0, ctl.TrayFocus);
+        ctl.TrayKey(0x28, false); Assert.Equal(5, ctl.TrayFocus);
+        Assert.Equal("trayitem:k5", ctl.TrayKey(0x0D, false)!.Id); Assert.Equal("rclick:trayitem:k5", ctl.TrayKey(0x5D, false)!.Id); Assert.Equal("rclick:trayitem:k5", ctl.TrayKey(0x79, true)!.Id);
     }
 }

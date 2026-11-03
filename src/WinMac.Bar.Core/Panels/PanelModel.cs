@@ -228,7 +228,7 @@ public static class PanelLayout
     /// <summary>Botón de unidad de las estadísticas (arriba a la derecha).</summary>
     public static bool StatsPillHit(WidgetFrame f, double x, double y) => f.W.Data is StatsData { Pill: not null } && x >= f.X + f.Width - 46 && y <= f.Y + 30;
     /// <summary>Lado de cada casilla de la cuadrícula de apps en segundo plano (DIP): icono de 16 con margen, como el desplegable de Windows.</summary>
-    public const double TrayCell = 36;
+    public const double TrayCell = 42;
 
     /// <summary>Casilla de la cuadrícula bajo el punto, o -1.</summary>
     public static int TrayCellAt(WidgetFrame f, double x, double y)

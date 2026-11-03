@@ -18,6 +18,27 @@ public sealed class PanelController
     public double ScrollOffset => _frame.View?.Offset ?? 0;
     public bool CanScroll => _frame.View is { MaxOffset: > 0.5 };
 
+    /// <summary>WM-004: keyboard focus inside the background-apps grid (-1 = none). Arrows move it; Intro opens the app, Mayús+F10 or the menu key opens its menu.</summary>
+    public int TrayFocus { get; private set; } = -1;
+
+    public PanelEvent? TrayKey(int vk, bool shift)
+    {
+        var f = _frame.Items.FirstOrDefault(i => i.W.Kind == WidgetKind.TrayGrid); if (f is null || f.W.Data is not TrayGridData g || g.Cells.Count == 0) return null;
+        int n = g.Cells.Count, cols = Math.Max(1, g.Columns), at = TrayFocus;
+        switch (vk)
+        {
+            case 0x27: TrayFocus = at < 0 ? 0 : Math.Min(n - 1, at + 1); return null;            // →
+            case 0x25: TrayFocus = at < 0 ? 0 : Math.Max(0, at - 1); return null;                // ←
+            case 0x28: TrayFocus = at < 0 ? 0 : Math.Min(n - 1, at + cols); return null;         // ↓
+            case 0x26: TrayFocus = at < 0 ? 0 : Math.Max(0, at - cols); return null;             // ↑
+            case 0x0D or 0x20 when at >= 0: return new PanelEvent(PanelEventKind.Click, "trayitem:" + g.Cells[at].Key);
+            case 0x5D when at >= 0: return new PanelEvent(PanelEventKind.Click, "rclick:trayitem:" + g.Cells[at].Key);
+            case 0x79 when shift && at >= 0: return new PanelEvent(PanelEventKind.Click, "rclick:trayitem:" + g.Cells[at].Key);
+        }
+
+        return null;
+    }
+
     public void SetMaxHeight(double maxHeight)
     {
         if (Math.Abs(maxHeight - _maxHeight) < 0.01) return;
