@@ -121,7 +121,7 @@ public sealed class DockHost : IDisposable
         bool inWin = p.X >= _winLeftPx && p.X < _winLeftPx + _winWpx && p.Y >= _winTopPx && p.Y < _winTopPx + _winHpx;
         _ctl.SetPointer(inWin ? new PointerSample(sx, sy) : null);
         _pointerOver = inWin && _view is not null && (InteractiveAt(sx, sy) || _view.HoverIndex >= 0);
-        _ctl.SetEdgeHot(p.Y >= _monitor.Bottom - 2 && p.X >= _winLeftPx && p.X < _winLeftPx + _winWpx);
+        _ctl.SetEdgeHot(DockSettings.EdgeHot(p.X, p.Y, _monitor.Bottom, _winLeftPx, _winWpx, _winTopPx + _winHpx));
         if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000) { _lastFs = DateTime.UtcNow; _ctl.SetSuppressed(FullscreenWatcher.ShouldSuppress()); }
     }
 
@@ -142,6 +142,9 @@ public sealed class DockHost : IDisposable
         var key = DockSettings.LayoutKey(_cfg);
         if (key == _appliedLayout)
         {
+            // WM-033: a change that is not size/position (auto-hide, magnification, previews…) must reach the controller too. It did not: with «Ocultar
+            // automáticamente» on, the controller never hid the Dock while the window was re-placed — the Dock «went up and stayed visible».
+            _ctl.Config = _cfg;
             if ((_cfg.ReserveSpace && !_cfg.AutoHide) != _reserving && _hwnd != IntPtr.Zero) PlaceWindow(show: false);   // only the reservation changed
             return;
         }
@@ -212,7 +215,12 @@ public sealed class DockHost : IDisposable
             int bottom = _appBar.Reserve(mi.rcMonitor, band);
             mi.rcWork.Bottom = bottom;   // place the Dock on its own strip, not above it
         }
-        else _appBar.Remove();
+        else if (_appBar.Registered)
+        {
+            // WM-033: the work area read above still excluded the Dock's own strip; after freeing it, read it again or the Dock is placed one strip too high
+            _appBar.Remove();
+            Native.GetMonitorInfo(Native.MonitorFromPoint(pt, Native.MONITOR_DEFAULTTOPRIMARY), ref mi);
+        }
         _reserving = _appBar.Registered;
         // Posición según la alineación y la altura elegidas (centro + altura normal = la de siempre: centrada justo sobre la barra de tareas).
         (_winLeftPx, _winTopPx) = DockSettings.Place(new PxRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom), new PxRect(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom), _winWpx, _winHpx, _scale, _m, _cfg);

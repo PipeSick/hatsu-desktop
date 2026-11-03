@@ -52,6 +52,16 @@ public static class DockSettings
     /// Esquina superior izquierda de la ventana (px). Centro y altura normal = exactamente la posición de siempre (centrada sobre la barra de tareas).
     /// Izquierda/derecha alinean la BARRA (no la ventana, más ancha por la vista previa) a <see cref="DockConfig.EdgeMargin"/> del borde. Nunca se sale por arriba.
     /// </summary>
+    /// <summary>
+    /// WM-033: where the hidden Dock wakes up — a thin strip (3 px) at the edge the Dock hides behind: the bottom of its window, i.e. the screen's bottom edge
+    /// when Windows' taskbar is hidden, or just above the taskbar when it is shown (the monitor's last pixel would be ON the taskbar), and only across the Dock's width.
+    /// </summary>
+    public static bool EdgeHot(int x, int y, int monitorBottom, int winLeft, int winWidth, int winBottom)
+    {
+        int edge = Math.Min(monitorBottom, winBottom);
+        return x >= winLeft && x < winLeft + winWidth && y >= edge - 3 && y <= edge + 1;
+    }
+
     public static (int Left, int Top) Place(PxRect monitor, PxRect work, int winW, int winH, double scale, DockMetrics m, DockConfig c)
     {
         int inset = (int)Math.Round(m.BarInset * scale), edge = (int)Math.Round(c.EdgeMargin * scale);

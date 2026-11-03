@@ -193,6 +193,29 @@ public class ControllerTests
     }
 
     [Fact]
+    public void Wm033_turning_autohide_on_live_hides_the_dock_downwards_and_off_shows_it()
+    {
+        var c = Make(new DockConfig()); Run(c, 1); Assert.True(c.Step(0).HideT < 0.01);
+        c.Config = c.Config with { AutoHide = true, HideDelaySeconds = 0.3 };   // what the reload of dock.json now does (it did not reach the controller)
+        Run(c, 2); var v = c.Step(0); Assert.True(v.HideT > 0.95);
+        var m = DockMetrics.ForIconSize(DockSettings.DefaultIconSize);
+        Assert.True(v.HideT * m.HideDistance > m.BarHeight + m.ShadowMargin);   // the layer moves DOWN (positive Y) past the window's bottom edge: fully out of sight
+        c.Config = c.Config with { AutoHide = false }; Run(c, 1.5); Assert.True(c.Step(0).HideT < 0.05);
+    }
+
+    [Fact]
+    public void Wm033_the_wake_strip_is_the_edge_the_dock_hides_behind()
+    {
+        // taskbar hidden: the Dock window reaches the screen bottom (1080) → the last 3 px of the screen
+        Assert.True(DockSettings.EdgeHot(960, 1079, 1080, 400, 1120, 1084)); Assert.False(DockSettings.EdgeHot(960, 1070, 1080, 400, 1120, 1084));
+        // taskbar shown (48 px): the Dock window ends at 1036 → just above the taskbar, never on it
+        Assert.True(DockSettings.EdgeHot(960, 1035, 1080, 400, 1120, 1036)); Assert.False(DockSettings.EdgeHot(960, 1079, 1080, 400, 1120, 1036));
+        Assert.False(DockSettings.EdgeHot(100, 1079, 1080, 400, 1120, 1084));   // outside the Dock's width
+        // 150 %: same rule with physical pixels
+        Assert.True(DockSettings.EdgeHot(1500, 1619, 1620, 600, 1680, 1626));
+    }
+
+    [Fact]
     public void Autohide_does_not_hide_while_pointer_is_over_dock()
     {
         var c = Make(new DockConfig { AutoHide = true, HideDelaySeconds = 0.3 }); Run(c, 0.1);
