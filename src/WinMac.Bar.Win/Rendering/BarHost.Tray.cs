@@ -59,6 +59,13 @@ public sealed partial class BarHost
     /// </summary>
     private void TrayPanelAction(PanelEvent e)
     {
+        if (e.Id == "open:windows-tray")   // WM-023: Windows' own overflow (UI Automation); without it, Settings › Taskbar › other tray icons
+        {
+            _popover?.Hide();
+            Task.Run(() => { if (!WinMac.Bar.Win.Menus.AppMenuReader.OpenWindowsTrayOverflow(_log)) Post(() => BarNative.ShellExecuteW(IntPtr.Zero, "open", "ms-settings:taskbar", null, null, 1)); });
+            return;
+        }
+
         bool right = e.Id.StartsWith("rclick:", StringComparison.Ordinal); string id = right ? e.Id[7..] : e.Id;
         if (!id.StartsWith("trayitem:", StringComparison.Ordinal) || _trayStore.Get(id[9..]) is not { } icon) return;
         var src = _popSource; int x = _anchorX, y = src is null ? 0 : src.Top + src.Height;

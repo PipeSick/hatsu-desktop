@@ -26,6 +26,9 @@ public sealed partial class PanelPainter : IDisposable
     /// <summary>WM-022: keyboard focus (drawn as an accent ring around the control or sub-button).</summary>
     public PanelController.FocusTarget? Focus { get; set; }
 
+    /// <summary>WM-023: name of the background app under the pointer or with the keyboard focus, shown in the panel's title line.</summary>
+    private string? TrayHoverName;
+
     private void DrawFocus(PanelFrame f)
     {
         if (Focus is not { } fc || fc.Item < 0 || fc.Item >= f.Items.Count) return;
@@ -74,6 +77,13 @@ public sealed partial class PanelPainter : IDisposable
             FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, rad, Dark ? new Color4(0.12f, 0.12f, 0.14f, a) : new Color4(0.96f, 0.96f, 0.97f, a));
         }
         Brush(Fill(0.14f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(0.5, 0.5, f.Width - 0.5, f.Height - 0.5), RadiusX = rad, RadiusY = rad }, _solid, 1f);
+        TrayHoverName = null;
+        if (m.Kind == PanelKind.Tray && f.Items.FirstOrDefault(it => it.W.Kind == WidgetKind.TrayGrid) is { W.Data: TrayGridData tg } gf)
+        {
+            int cell = HoverPoint is { } hp ? PanelLayout.TrayCellAt(gf, hp.X, hp.Y) : -1; if (cell < 0) cell = TrayFocus;
+            if (cell >= 0 && cell < tg.Cells.Count) TrayHoverName = tg.Cells[cell].Name;
+        }
+
         var v = f.View; int i = 0;
         if (v is not null) for (; i < v.From; i++) DrawWidget(f.Items[i], i == hover);   // logotipo, pestañas y título: fijos, sin recorte
         if (v is not null) _ctx.PushAxisAlignedClip(R(0, v.Top, f.Width, v.Bottom), AntialiasMode.Aliased);   // lo desplazado no invade las pestañas ni el pie

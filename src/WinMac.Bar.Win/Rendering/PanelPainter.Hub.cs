@@ -75,7 +75,7 @@ public sealed partial class PanelPainter
             case WidgetKind.Tabs: DrawTabs(f); break;
             case WidgetKind.TabHeader:
                 TextAlign(w.Text, _cap, x + 4, y, wd - 30, h, Fg(0.62f)); Glyph("sliders", x + wd - 14, y + h / 2, 7.5f, Fg(hover ? 0.95f : 0.6f)); break;
-            case WidgetKind.Caption: TextAlign(w.Text, _boldSmall, x + 2, y, wd - 4, h, Fg(0.6f)); break;
+            case WidgetKind.Caption: TextAlign(w.Id == "tray-title" && TrayHoverName is { } hn ? hn : w.Text, _boldSmall, x + 2, y, wd - 4, h, Fg(0.6f)); break;   // WM-023: the app under the pointer (tooltip)
             case WidgetKind.Separator: if (_kind is PanelKind.Hub or PanelKind.Weather) Line(x + 2, y + h / 2, x + wd - 2, y + h / 2, Fill(0.13f), 1f); break;   // línea fina entre secciones (solo en estos paneles)
             case WidgetKind.Chart: DrawChart(f); break;
             case WidgetKind.MeterRow: DrawMeterRow(f); break;

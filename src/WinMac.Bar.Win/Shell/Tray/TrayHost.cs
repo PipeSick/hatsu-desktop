@@ -56,6 +56,7 @@ public sealed class TrayHost : IDisposable
             SetTimer(_hwnd, (UIntPtr)1, 3000, IntPtr.Zero);
             _log($"[bandeja] lista: {(ExplorerFound ? "bandeja de Explorer encontrada" : "SIN bandeja de Explorer")}, {(IsPrimary ? "las apps encuentran la de WinMac" : "las apps aún encuentran la de Explorer")}");
             PostMessage(HWND_BROADCAST, _taskbarCreated, IntPtr.Zero, IntPtr.Zero);   // las apps vuelven a registrar sus iconos (pasan por aquí y se reenvían)
+            SetTimer(_hwnd, (UIntPtr)2, 10_000, IntPtr.Zero);   // WM-023: un segundo aviso a los 10 s, para las apps que estaban ocupadas arrancando
         }
         catch (Exception e) { _log("[bandeja] no arrancó: " + e.GetType().Name + ": " + e.Message); return; }
         finally { _ready.Set(); }
@@ -112,6 +113,7 @@ public sealed class TrayHost : IDisposable
                     }
                     return result;
                 }
+                case WM_TIMER when w == (IntPtr)2: KillTimer(h, (UIntPtr)2); PostMessage(HWND_BROADCAST, _taskbarCreated, IntPtr.Zero, IntPtr.Zero); return IntPtr.Zero;
                 case WM_TIMER: Reassert(); return IntPtr.Zero;
                 case WM_CLOSE: DestroyWindow(h); return IntPtr.Zero;
                 case WM_DESTROY: KillTimer(h, (UIntPtr)1); PostQuitMessage(0); return IntPtr.Zero;

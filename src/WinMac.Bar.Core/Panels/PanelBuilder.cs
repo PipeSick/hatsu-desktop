@@ -104,11 +104,14 @@ public static partial class PanelBuilder
     {
         const double pad = 6;
         var icons = c.Tray ?? [];
-        if (icons.Count == 0) return new PanelModel(PanelKind.Tray, "Apps en segundo plano", [new Widget(WidgetKind.Note, "tray-none", "No hay apps en segundo plano.")], 200, Pad: 8, Spacing: 0);
+        // WM-023: WinMac only sees the icons apps register while it runs (or again when told «TaskbarCreated»); some apps never re-register and Windows does not
+        // let a third party read Explorer's list without reading its memory. The last row opens Windows' own overflow, so no icon is out of reach.
+        var winTray = new Widget(WidgetKind.Row, "open:windows-tray", "Ver la bandeja de Windows", "Incluye las apps que no se registraron en WinMac", Glyph: "chevron");
+        if (icons.Count == 0) return new PanelModel(PanelKind.Tray, "Apps en segundo plano", [new Widget(WidgetKind.Note, "tray-none", "WinMac aún no ha recibido iconos de apps."), winTray], 260, Pad: 8, Spacing: 2);
         var cells = icons.Select(t => new TrayCellData(t.Key, TrayIconPrefix + t.Icon, string.IsNullOrWhiteSpace(t.Tip) ? "App sin nombre" : t.Tip.Split('\n', 2)[0].Trim())).ToList();
         int cols = Math.Min(TrayColumns, cells.Count);
         // WM-004: title like the mock-up, a bit more room per icon; the panel keeps WinMac's glass and the apps' own actions (click = open, right click = their menu)
-        return new PanelModel(PanelKind.Tray, "Apps en segundo plano", [new Widget(WidgetKind.Caption, "tray-title", "Apps en segundo plano"), new Widget(WidgetKind.TrayGrid, "tray-grid", Data: new TrayGridData(cells, cols))], Math.Max(196, cols * PanelLayout.TrayCell + 2 * pad), Pad: pad, Spacing: 2);
+        return new PanelModel(PanelKind.Tray, "Apps en segundo plano", [new Widget(WidgetKind.Caption, "tray-title", "Apps en segundo plano"), new Widget(WidgetKind.TrayGrid, "tray-grid", Data: new TrayGridData(cells, cols)), winTray], Math.Max(260, cols * PanelLayout.TrayCell + 2 * pad), Pad: pad, Spacing: 2);
     }
 
     public static PanelModel ControlCenter(PanelContext c)

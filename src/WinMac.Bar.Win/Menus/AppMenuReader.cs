@@ -101,6 +101,44 @@ internal static class AppMenuReader
         });
     }
 
+    /// <summary>
+    /// WM-023: opens Windows' OWN overflow of tray icons by invoking Explorer's «Mostrar iconos ocultos» button through UI Automation (the public accessibility
+    /// API: nothing is injected and Explorer's memory is not read). Windows 11 exposes it as AutomationId «SystemTrayIcon»; older builds by its name.
+    /// Returns false when the button is not exposed (then the caller opens Settings › Taskbar).
+    /// </summary>
+    public static bool OpenWindowsTrayOverflow(Action<string>? log = null)
+    {
+        IUIAutomation? uia = null;
+        try
+        {
+            var tray = FindWindowW("Shell_TrayWnd", null);
+            // our own Shell_TrayWnd (TrayHost) may be the one FindWindow returns: look for the one that belongs to Explorer
+            if (tray != IntPtr.Zero) { GetWindowThreadProcessId(tray, out uint pid); if (pid == (uint)Environment.ProcessId) tray = FindWindowExW(IntPtr.Zero, tray, "Shell_TrayWnd", null); }
+            if (tray == IntPtr.Zero) { log?.Invoke("[bandeja] no se encontró la barra de tareas de Windows"); return false; }
+            uia = (IUIAutomation)new CUIAutomation();
+            if (uia.ElementFromHandle(tray, out var root) != 0 || root is null) return false;
+            IUIAutomationElement? chevron = null;
+            if (uia.CreatePropertyCondition(30011 /* AutomationId */, "SystemTrayIcon", out var byId) == 0) root.FindFirst(TreeScopeDescendants, byId, out chevron);
+            if (chevron is null && uia.CreatePropertyCondition(UIA_ControlTypePropertyId, 50000 /* Button */, out var btn) == 0 && root.FindAll(TreeScopeDescendants, btn, out var all) == 0 && all is not null)
+            {
+                all.get_Length(out int n);
+                for (int i = 0; i < n && chevron is null; i++)
+                    if (all.GetElement(i, out var e) == 0 && e is not null && e.get_CurrentName(out var nm) == 0 && nm is not null
+                        && (nm.Contains("ocult", StringComparison.OrdinalIgnoreCase) || nm.Contains("hidden", StringComparison.OrdinalIgnoreCase))) chevron = e;
+            }
+            if (chevron is null) { log?.Invoke("[bandeja] Windows no expone el botón de iconos ocultos por accesibilidad"); return false; }
+            if (chevron.GetCurrentPattern(UIA_InvokePatternId, out var p) == 0 && p is IUIAutomationInvokePattern inv && inv.Invoke() == 0) { log?.Invoke("[bandeja] abierta la bandeja de Windows"); return true; }
+            if (chevron.GetCurrentPattern(UIA_ExpandCollapsePatternId, out var q) == 0 && q is IUIAutomationExpandCollapsePattern ex && ex.Expand() == 0) { log?.Invoke("[bandeja] abierta la bandeja de Windows"); return true; }
+            return false;
+        }
+        catch (Exception e) { log?.Invoke("[bandeja] bandeja de Windows: " + e.GetType().Name); return false; }
+        finally { if (uia is not null && Marshal.IsComObject(uia)) Marshal.ReleaseComObject(uia); }
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowW(string? cls, string? title);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string? cls, string? title);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+
     private static T? WithMenuItems<T>(IntPtr hwnd, Func<List<(string Name, IUIAutomationElement Element)>, T> use)
     {
         IUIAutomation? uia = null;
