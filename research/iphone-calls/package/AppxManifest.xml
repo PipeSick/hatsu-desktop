@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Paquete de INVESTIGACIÓN: solo da identidad de paquete a CallProbe.exe para poder comparar «sin paquete» contra «con paquete».
+     Se registra en modo desarrollador (Add-AppxPackage -Register), sin certificado ni cambios en el almacén de confianza. Se quita con Unregister-DevPackage.ps1. -->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap rescap">
+  <Identity Name="WinMac.Research.CallProbe" Publisher="CN=WinMacResearch" Version="0.1.0.0" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>WinMac · CallProbe (investigación)</DisplayName>
+    <PublisherDisplayName>WinMac research</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources><Resource Language="en-us" /></Resources>
+  <Applications>
+    <Application Id="App" Executable="CallProbe.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="CallProbe" Description="Prueba de concepto de llamadas (investigación)" BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+  <Capabilities>
+    <uap:Capability Name="phoneCall" />
+    <rescap:Capability Name="phoneLineTransportManagement" />
+    <rescap:Capability Name="runFullTrust" />
+    <DeviceCapability Name="bluetooth" />
+  </Capabilities>
+</Package>

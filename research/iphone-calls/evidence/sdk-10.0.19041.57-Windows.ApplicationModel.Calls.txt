@@ -1,0 +1,91 @@
+class CallAnswerEventArgs
+class CallRejectEventArgs
+enum CallsPhoneContract
+class CallStateChangeEventArgs
+enum CallsVoipContract
+enum CellularDtmfMode
+enum LockScreenCallContract
+class LockScreenCallEndCallDeferral
+class LockScreenCallEndRequestedEventArgs
+class LockScreenCallUI
+class MuteChangeEventArgs
+enum PhoneAudioRoutingEndpoint
+    = Default
+    = Bluetooth
+    = Speakerphone
+class PhoneCallBlocking
+class PhoneCallHistoryEntry
+class PhoneCallHistoryEntryAddress
+enum PhoneCallHistoryEntryMedia
+enum PhoneCallHistoryEntryOtherAppReadAccess
+enum PhoneCallHistoryEntryQueryDesiredMedia
+class PhoneCallHistoryEntryQueryOptions
+enum PhoneCallHistoryEntryRawAddressKind
+class PhoneCallHistoryEntryReader
+class PhoneCallHistoryManager
+class PhoneCallHistoryManagerForUser
+enum PhoneCallHistorySourceIdKind
+class PhoneCallHistoryStore
+enum PhoneCallHistoryStoreAccessType
+class PhoneCallManager
+    static Void ShowPhoneCallUI(String phoneNumber, String displayName)
+    static Void ShowPhoneCallSettingsUI()
+    static IAsyncOperation`1 RequestStoreAsync()
+    prop Boolean IsCallActive
+    prop Boolean IsCallIncoming
+    event CallStateChanged
+enum PhoneCallMedia
+class PhoneCallStore
+class PhoneCallVideoCapabilities
+class PhoneCallVideoCapabilitiesManager
+class PhoneDialOptions
+class PhoneLine
+    static IAsyncOperation`1 FromIdAsync(Guid lineId)
+    IAsyncOperation`1 IsImmediateDialNumberAsync(String number)
+    Void Dial(String number, String displayName)
+    Void DialWithOptions(PhoneDialOptions options)
+    Void EnableTextReply(Boolean value)
+    prop Boolean CanDial
+    prop PhoneLineCellularDetails CellularDetails
+    prop Color DisplayColor
+    prop String DisplayName
+    prop Guid Id
+    prop PhoneLineConfiguration LineConfiguration
+    prop String NetworkName
+    prop PhoneNetworkState NetworkState
+    prop Boolean SupportsTile
+    prop PhoneLineTransport Transport
+    prop String TransportDeviceId
+    prop PhoneCallVideoCapabilities VideoCallingCapabilities
+    prop PhoneVoicemail Voicemail
+    event LineChanged
+class PhoneLineCellularDetails
+class PhoneLineConfiguration
+enum PhoneLineNetworkOperatorDisplayTextLocation
+enum PhoneLineTransport
+class PhoneLineTransportDevice
+    static PhoneLineTransportDevice FromId(String id)
+    static String GetDeviceSelector()
+    static String GetDeviceSelector(PhoneLineTransport transport)
+    IAsyncOperation`1 RequestAccessAsync()
+    Void RegisterApp()
+    Void RegisterAppForUser(User user)
+    Void UnregisterApp()
+    Void UnregisterAppForUser(User user)
+    Boolean IsRegistered()
+    Boolean Connect()
+    IAsyncOperation`1 ConnectAsync()
+    prop String DeviceId
+class PhoneLineWatcher
+class PhoneLineWatcherEventArgs
+enum PhoneLineWatcherStatus
+enum PhoneNetworkState
+enum PhoneSimState
+class PhoneVoicemail
+enum PhoneVoicemailType
+class VoipCallCoordinator
+class VoipPhoneCall
+enum VoipPhoneCallMedia
+enum VoipPhoneCallRejectReason
+enum VoipPhoneCallResourceReservationStatus
+enum VoipPhoneCallState

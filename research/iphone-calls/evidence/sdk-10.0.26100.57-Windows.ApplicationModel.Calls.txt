@@ -1,0 +1,160 @@
+class CallAnswerEventArgs
+class CallRejectEventArgs
+enum CallsPhoneContract
+class CallStateChangeEventArgs
+enum CallsVoipContract
+enum CellularDtmfMode
+enum DtmfKey
+enum DtmfToneAudioPlayback
+enum LockScreenCallContract
+class LockScreenCallEndCallDeferral
+class LockScreenCallEndRequestedEventArgs
+class LockScreenCallUI
+class MuteChangeEventArgs
+enum PhoneAudioRoutingEndpoint
+    = Default
+    = Bluetooth
+    = Speakerphone
+class PhoneCall
+    static PhoneCall GetFromId(String callId)
+    PhoneCallInfo GetPhoneCallInfo()
+    IAsyncOperation`1 GetPhoneCallInfoAsync()
+    PhoneCallOperationStatus End()
+    IAsyncOperation`1 EndAsync()
+    PhoneCallOperationStatus SendDtmfKey(DtmfKey key, DtmfToneAudioPlayback dtmfToneAudioPlayback)
+    IAsyncOperation`1 SendDtmfKeyAsync(DtmfKey key, DtmfToneAudioPlayback dtmfToneAudioPlayback)
+    PhoneCallOperationStatus AcceptIncoming()
+    IAsyncOperation`1 AcceptIncomingAsync()
+    PhoneCallOperationStatus Hold()
+    IAsyncOperation`1 HoldAsync()
+    PhoneCallOperationStatus ResumeFromHold()
+    IAsyncOperation`1 ResumeFromHoldAsync()
+    PhoneCallOperationStatus Mute()
+    IAsyncOperation`1 MuteAsync()
+    PhoneCallOperationStatus Unmute()
+    IAsyncOperation`1 UnmuteAsync()
+    PhoneCallOperationStatus RejectIncoming()
+    IAsyncOperation`1 RejectIncomingAsync()
+    PhoneCallOperationStatus ChangeAudioDevice(PhoneCallAudioDevice endpoint)
+    IAsyncOperation`1 ChangeAudioDeviceAsync(PhoneCallAudioDevice endpoint)
+    prop PhoneCallAudioDevice AudioDevice
+    prop String CallId
+    prop Boolean IsMuted
+    prop PhoneCallStatus Status
+    event AudioDeviceChanged
+    event IsMutedChanged
+    event StatusChanged
+enum PhoneCallAudioDevice
+    = Unknown
+    = LocalDevice
+    = RemoteDevice
+class PhoneCallBlocking
+enum PhoneCallDirection
+class PhoneCallHistoryEntry
+class PhoneCallHistoryEntryAddress
+enum PhoneCallHistoryEntryMedia
+enum PhoneCallHistoryEntryOtherAppReadAccess
+enum PhoneCallHistoryEntryQueryDesiredMedia
+class PhoneCallHistoryEntryQueryOptions
+enum PhoneCallHistoryEntryRawAddressKind
+class PhoneCallHistoryEntryReader
+class PhoneCallHistoryManager
+class PhoneCallHistoryManagerForUser
+enum PhoneCallHistorySourceIdKind
+class PhoneCallHistoryStore
+enum PhoneCallHistoryStoreAccessType
+class PhoneCallInfo
+    prop PhoneCallDirection CallDirection
+    prop String DisplayName
+    prop Boolean IsHoldSupported
+    prop Guid LineId
+    prop String PhoneNumber
+    prop DateTimeOffset StartTime
+class PhoneCallManager
+    static Void ShowPhoneCallUI(String phoneNumber, String displayName)
+    static Void ShowPhoneCallSettingsUI()
+    static IAsyncOperation`1 RequestStoreAsync()
+    prop Boolean IsCallActive
+    prop Boolean IsCallIncoming
+    event CallStateChanged
+enum PhoneCallMedia
+enum PhoneCallOperationStatus
+    = Succeeded
+    = OtherFailure
+    = TimedOut
+    = ConnectionLost
+    = InvalidCallState
+class PhoneCallsResult
+enum PhoneCallStatus
+    = Lost
+    = Incoming
+    = Dialing
+    = Talking
+    = Held
+    = Ended
+class PhoneCallStore
+class PhoneCallVideoCapabilities
+class PhoneCallVideoCapabilitiesManager
+class PhoneDialOptions
+class PhoneLine
+    static IAsyncOperation`1 FromIdAsync(Guid lineId)
+    IAsyncOperation`1 IsImmediateDialNumberAsync(String number)
+    Void Dial(String number, String displayName)
+    Void DialWithOptions(PhoneDialOptions options)
+    Void EnableTextReply(Boolean value)
+    PhoneLineDialResult DialWithResult(String number, String displayName)
+    IAsyncOperation`1 DialWithResultAsync(String number, String displayName)
+    PhoneCallsResult GetAllActivePhoneCalls()
+    IAsyncOperation`1 GetAllActivePhoneCallsAsync()
+    prop Boolean CanDial
+    prop PhoneLineCellularDetails CellularDetails
+    prop Color DisplayColor
+    prop Guid Id
+    prop PhoneLineConfiguration LineConfiguration
+    prop String NetworkName
+    prop PhoneNetworkState NetworkState
+    prop Boolean SupportsTile
+    prop PhoneLineTransport Transport
+    prop String TransportDeviceId
+    prop PhoneCallVideoCapabilities VideoCallingCapabilities
+    prop PhoneVoicemail Voicemail
+    event LineChanged
+class PhoneLineCellularDetails
+class PhoneLineConfiguration
+class PhoneLineDialResult
+enum PhoneLineNetworkOperatorDisplayTextLocation
+enum PhoneLineOperationStatus
+enum PhoneLineTransport
+class PhoneLineTransportDevice
+    static PhoneLineTransportDevice FromId(String id)
+    static String GetDeviceSelector()
+    static String GetDeviceSelector(PhoneLineTransport transport)
+    IAsyncOperation`1 RequestAccessAsync()
+    Void RegisterApp()
+    Void RegisterAppForUser(User user)
+    Void UnregisterApp()
+    Void UnregisterAppForUser(User user)
+    Boolean IsRegistered()
+    Boolean Connect()
+    IAsyncOperation`1 ConnectAsync()
+    prop TransportDeviceAudioRoutingStatus AudioRoutingStatus
+    prop String DeviceId
+    prop Boolean InBandRingingEnabled
+    event AudioRoutingStatusChanged
+    event InBandRingingEnabledChanged
+class PhoneLineWatcher
+class PhoneLineWatcherEventArgs
+enum PhoneLineWatcherStatus
+enum PhoneNetworkState
+enum PhoneSimState
+class PhoneVoicemail
+enum PhoneVoicemailType
+enum TransportDeviceAudioRoutingStatus
+    = CanRouteToLocalDevice
+    = CannotRouteToLocalDevice
+class VoipCallCoordinator
+class VoipPhoneCall
+enum VoipPhoneCallMedia
+enum VoipPhoneCallRejectReason
+enum VoipPhoneCallResourceReservationStatus
+enum VoipPhoneCallState

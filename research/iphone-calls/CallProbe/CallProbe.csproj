@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Prueba de concepto AISLADA (no forma parte de WinMac ni de NotchWin). SDK 26100: trae PhoneCall (AcceptIncoming, RejectIncoming, End, ChangeAudioDevice). Corre en Windows 10 1903+ / 11. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>CallProbe</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\CallProbe.Logic\CallProbe.Logic.csproj" /></ItemGroup>
+</Project>
