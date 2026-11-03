@@ -59,24 +59,35 @@ public class AppleMenuTests
 
 public class BatteryPanelWm010Tests
 {
-    private static PanelContext Ctx(BatteryInfo b, BatteryDetails? d) => PanelContext.Initial(new BarConfig(), new DateTime(2026, 11, 3)) with { Battery = b, BatteryDetail = d };
+    private static PanelContext Ctx(BatteryInfo b, BatteryDetails? d, bool open = false) => PanelContext.Initial(new BarConfig(), new DateTime(2026, 11, 3)) with { Battery = b, BatteryDetail = d, BatteryDetailsOpen = open };
 
     [Fact]
-    public void Shows_only_what_the_battery_reports_and_says_what_it_does_not()
+    public void Wm027_hero_health_cards_and_folded_details_with_only_what_the_battery_reports()
     {
-        var full = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 64, false, false, 12_000), new BatteryDetails(57_000, 52_440, 33_560, -9_800, 212)));
-        var kv = full.Widgets.Where(w => w.Kind == WidgetKind.KeyValue).ToDictionary(w => w.Id, w => w.Sub);
-        Assert.Equal("3 h 20 min", kv["bat-left"]); Assert.Equal("92 %", kv["bat-health"]); Assert.Equal("212", kv["bat-cycles"]); Assert.Equal("57,0 Wh", kv["bat-design"]);
-        Assert.DoesNotContain(full.Widgets, w => w.Id == "bat-missing");
+        // the beta's notebook: 81 %, charging at 56 W, 80.7 of 90.0 Wh (sample values for the test, not fixed anywhere in the code)
+        var m = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 81, true, true), new BatteryDetails(90_000, 80_700, 65_400, 56_000, null)));
+        var hero = m.Widgets.Single(w => w.Id == "battery"); Assert.Equal(WidgetKind.BatteryHero, hero.Kind); Assert.Equal("81 %", hero.Text); Assert.Equal("Cargando", hero.Sub); Assert.Equal(81, hero.Value);
+        Assert.Equal("Cargando a 56,0 W", ((BatteryHeroData)hero.Data!).Detail);
+        var cards = ((StatCardsData)m.Widgets.Single(w => w.Kind == WidgetKind.StatCards).Data!).Cards;
+        Assert.Equal(["Salud", "Plena carga", "Diseño"], cards.Select(c => c.Label)); Assert.Equal("90 %", cards[0].Value); Assert.Equal("good", cards[0].Tone);
+        Assert.DoesNotContain(m.Widgets, w => w.Id == "bat-cycles");                       // folded
+        var open = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 81, true, true), new BatteryDetails(90_000, 80_700, 65_400, 56_000, null), open: true));
+        Assert.Contains(open.Widgets, w => w.Id == "bat-missing");                         // «la batería no informa de sus ciclos»
+        Assert.DoesNotContain(open.Widgets, w => w.Id == "bat-cycles");                    // never invented
+        Assert.Equal("Potencia de carga", open.Widgets.Single(w => w.Id == "bat-rate").Text);
+        Assert.Equal(4, m.Widgets.Count(w => w.Kind == WidgetKind.ModeCard));               // modes are cards with a description
+        Assert.All(m.Widgets.Where(w => w.Kind == WidgetKind.ModeCard), w => Assert.False(string.IsNullOrEmpty(w.Sub)));
+    }
 
-        var partial = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 64, false, false), new BatteryDetails(null, 52_440, null, null, null)));
-        Assert.DoesNotContain(partial.Widgets, w => w.Id is "bat-health" or "bat-cycles" or "bat-design");   // never invented
-        Assert.Contains(partial.Widgets, w => w.Id == "bat-missing");
-        Assert.Equal("Windows lo está calculando", partial.Widgets.Single(w => w.Id == "bat-left").Sub);
-
-        var charging = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 80, true, true, null), null));
-        Assert.DoesNotContain(charging.Widgets, w => w.Id == "bat-left");   // plugged in: no «time left»
-        Assert.Equal("Cargando", charging.Widgets.Single(w => w.Id == "battery").Sub);
+    [Fact]
+    public void Without_capacities_there_are_no_cards_and_time_left_shows_only_on_battery()
+    {
+        var partial = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 64, false, false, 12_000), new BatteryDetails(null, null, null, null, null), open: true));
+        Assert.DoesNotContain(partial.Widgets, w => w.Kind == WidgetKind.StatCards);
+        Assert.Equal("3 h 20 min", partial.Widgets.Single(w => w.Id == "bat-left").Sub);
+        Assert.Equal("Quedan 3 h 20 min", ((BatteryHeroData)partial.Widgets.Single(w => w.Id == "battery").Data!).Detail);
+        var plugged = PanelBuilder.BatteryPanel(Ctx(new BatteryInfo(true, 80, true, true, null), null));
+        Assert.DoesNotContain(plugged.Widgets, w => w.Id == "bat-left"); Assert.Contains(plugged.Widgets, w => w.Id == "bat-reading");
         Assert.Null(new BatteryDetails(0, 52_000, null, null, null).HealthPercent);   // a driver reporting 0 as design capacity: no health
     }
 }

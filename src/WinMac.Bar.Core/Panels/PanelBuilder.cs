@@ -16,7 +16,7 @@ public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothS
 /// <summary>Estado de interfaz de los paneles: mes visible, día elegido, operaciones en curso («Conectando…») y el último error.</summary>
 public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo Battery, DateTime Now, IReadOnlyList<CalendarEvent> Events, int ViewYear, int ViewMonth,
     DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null, string? ForegroundApp = null, IReadOnlyList<Tray.TrayIcon>? Tray = null,
-    BatteryDetails? BatteryDetail = null, SessionUser? User = null)
+    BatteryDetails? BatteryDetail = null, SessionUser? User = null, bool BatteryDetailsOpen = false)
 {
     public static PanelContext Initial(BarConfig cfg, DateTime now) => new(SystemSnapshot.Empty, cfg, BatteryInfo.None, now, [], now.Year, now.Month, null, new Dictionary<string, string>(), null);
 }
@@ -222,37 +222,60 @@ public static partial class PanelBuilder
     }
 
     /// <summary>
-    /// WM-010: only what Windows and the battery report. Percent, state and Windows' time estimate always; capacities, health and cycles only when the
-    /// battery driver gives them (many do not report cycles). Nothing estimated, nothing from the mock-ups.
+    /// WM-027 (on WM-010's real data): a hero with the percentage, state, level bar and charge power; health cards (health, full-charge and design capacity);
+    /// «Detalles de batería» folds the secondary figures (time left, cycles, chemistry, rate); the power modes are cards with a short description.
+    /// Only what Windows and the battery report: a value that is not reported is not shown (and the details say what is missing).
     /// </summary>
     public static PanelModel BatteryPanel(PanelContext c)
     {
         var b = c.Battery; var p = c.Sys.Power; var d = c.BatteryDetail; var w = new List<Widget> { Back("Energía") };
         if (b.Present)
         {
-            w.Add(new Widget(WidgetKind.Info, "battery", $"Batería {b.Percent}%", BatteryText.State(b), On: b.Charging));
-            if (!b.Plugged && BatteryText.TimeLeft(b.SecondsLeft) is { } left) w.Add(new Widget(WidgetKind.KeyValue, "bat-left", "Tiempo restante", left.Replace("Quedan ", "")));
-            else if (!b.Plugged) w.Add(new Widget(WidgetKind.KeyValue, "bat-left", "Tiempo restante", "Windows lo está calculando"));
-            if (d is not null)
+            string? power = d?.RateMW is { } rate && rate != 0 ? (rate > 0 ? "Cargando a " : "Consumo ") + BatteryText.MWh(Math.Abs(rate)).Replace(" Wh", " W") : null;
+            string? left = !b.Plugged ? BatteryText.TimeLeft(b.SecondsLeft) : null;
+            w.Add(new Widget(WidgetKind.BatteryHero, "battery", $"{b.Percent} %", BatteryText.State(b), On: b.Charging, Value: b.Percent, Data: new BatteryHeroData(power ?? left)));
+            var cards = new List<StatCard>();
+            if (d?.HealthPercent is { } health) cards.Add(new("Salud", health + " %", health >= 80 ? "good" : health >= 60 ? "warn" : "bad"));
+            if (d?.FullMWh is { } full) cards.Add(new("Plena carga", BatteryText.MWh(full), null));
+            if (d?.DesignMWh is { } design) cards.Add(new("Diseño", BatteryText.MWh(design), null));
+            if (cards.Count > 0) w.Add(new Widget(WidgetKind.StatCards, "bat-cards", "", Data: new StatCardsData(cards)));
+            if (d is null) w.Add(new Widget(WidgetKind.Note, "bat-reading", "Leyendo los datos de la batería…"));
+            else
             {
-                if (d.FullMWh is { } full) w.Add(new Widget(WidgetKind.KeyValue, "bat-full", "Capacidad a plena carga", BatteryText.MWh(full)));
-                if (d.DesignMWh is { } design) w.Add(new Widget(WidgetKind.KeyValue, "bat-design", "Capacidad de diseño", BatteryText.MWh(design)));
-                if (d.HealthPercent is { } health) w.Add(new Widget(WidgetKind.KeyValue, "bat-health", "Salud (plena carga / diseño)", health + " %"));
-                if (d.Cycles is { } cycles) w.Add(new Widget(WidgetKind.KeyValue, "bat-cycles", "Ciclos de carga", cycles.ToString()));
-                if (d.RateMW is { } rate) w.Add(new Widget(WidgetKind.KeyValue, "bat-rate", rate > 0 ? "Carga a" : "Consumo", BatteryText.MWh(Math.Abs(rate)).Replace(" Wh", " W")));
-                if (d.Cycles is null || d.HealthPercent is null) w.Add(new Widget(WidgetKind.Note, "bat-missing", "La batería no informa de " + (d.Cycles is null && d.HealthPercent is null ? "sus ciclos ni de su capacidad" : d.Cycles is null ? "sus ciclos" : "su capacidad de diseño") + "."));
+                w.Add(new Widget(WidgetKind.Row, "bat:details", "Detalles de batería", null, On: c.BatteryDetailsOpen, Glyph: c.BatteryDetailsOpen ? "down" : "chevron"));
+                if (c.BatteryDetailsOpen)
+                {
+                    if (!b.Plugged) w.Add(new Widget(WidgetKind.KeyValue, "bat-left", "Tiempo restante", left?.Replace("Quedan ", "") ?? "Windows lo está calculando"));
+                    if (d.RateMW is { } r2 && r2 != 0) w.Add(new Widget(WidgetKind.KeyValue, "bat-rate", r2 > 0 ? "Potencia de carga" : "Consumo", BatteryText.MWh(Math.Abs(r2)).Replace(" Wh", " W")));
+                    if (d.RemainingMWh is { } rem) w.Add(new Widget(WidgetKind.KeyValue, "bat-rem", "Energía restante", BatteryText.MWh(rem)));
+                    if (d.FullMWh is { } f2) w.Add(new Widget(WidgetKind.KeyValue, "bat-full", "Capacidad a plena carga", BatteryText.MWh(f2)));
+                    if (d.DesignMWh is { } d2) w.Add(new Widget(WidgetKind.KeyValue, "bat-design", "Capacidad de diseño", BatteryText.MWh(d2)));
+                    if (d.HealthPercent is { } h2) w.Add(new Widget(WidgetKind.KeyValue, "bat-health", "Salud (plena carga / diseño)", h2 + " %"));
+                    if (d.Cycles is { } cycles) w.Add(new Widget(WidgetKind.KeyValue, "bat-cycles", "Ciclos de carga", cycles.ToString()));
+                    if (d.Chemistry is { } chem) w.Add(new Widget(WidgetKind.KeyValue, "bat-chem", "Química", chem));
+                    if (d.Cycles is null || d.HealthPercent is null) w.Add(new Widget(WidgetKind.Note, "bat-missing", "La batería no informa de " + (d.Cycles is null && d.HealthPercent is null ? "sus ciclos ni de su capacidad" : d.Cycles is null ? "sus ciclos" : "su capacidad de diseño") + "."));
+                }
             }
-            else w.Add(new Widget(WidgetKind.Note, "bat-reading", "Leyendo los datos de la batería…"));
         }
         else w.Add(new Widget(WidgetKind.Info, "battery", "Sin batería", "Equipo de sobremesa o batería no detectada"));
         w.Add(new Widget(WidgetKind.Header, "modes", "Modo de energía", Glyph: "section"));
         foreach (var m in Enum.GetValues<PowerMode>())
-            w.Add(new Widget(WidgetKind.Row, "power:" + m, PowerModeState.Label(m), BusyOr(c, "power:" + m, null), On: p.Available && p.Mode == m, Enabled: p.Available, Reason: p.Reason, Glyph: p.Available && p.Mode == m ? "check" : null));
+            w.Add(new Widget(WidgetKind.ModeCard, "power:" + m, PowerModeState.Label(m), BusyOr(c, "power:" + m, ModeDescription(m)), On: p.Available && p.Mode == m, Enabled: p.Available, Reason: p.Reason));
         if (!p.Available) w.Add(new Widget(WidgetKind.Note, "reason", p.Reason ?? "El modo de energía no está disponible"));
         Msg(w, c);
         w.Add(new Widget(WidgetKind.Button, "open:ms-settings:batterysaver", "Abrir configuración de batería…"));
-        return new PanelModel(PanelKind.Battery, "Energía", w);
+        return new PanelModel(PanelKind.Battery, "Energía", w, BatteryWidth);
     }
+
+    public const double BatteryWidth = 340;
+
+    public static string ModeDescription(PowerMode m) => m switch
+    {
+        PowerMode.BestEfficiency => "Más autonomía; el equipo rinde menos",
+        PowerMode.Balanced => "Windows equilibra consumo y rendimiento",
+        PowerMode.Performance => "Más rendimiento con algo más de consumo",
+        _ => "Todo el rendimiento; la batería dura menos",
+    };
 
     public static PanelModel DisplayPanel(PanelContext c)
     {

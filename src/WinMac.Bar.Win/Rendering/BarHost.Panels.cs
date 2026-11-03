@@ -304,6 +304,7 @@ public sealed partial class BarHost : IPanelUi
     {
         if (_pkind == PanelKind.AppleMenu && e.Id.StartsWith("apple:", StringComparison.Ordinal)) { AppleAction(e); return; }   // WM-009: tiles and sliders of the panel go to the same operations as the Control Center
         if (_pkind == PanelKind.Tray) { TrayPanelAction(e); return; }
+        if (e.Kind == PanelEventKind.Click && e.Id == "bat:details") { _pctx = _pctx with { BatteryDetailsOpen = !_pctx.BatteryDetailsOpen }; RebuildPanel(); return; }   // WM-027
         if (_pkind == PanelKind.AppMenu) { AppMenuAction(e); return; }
         _ops.Handle(e);
     }

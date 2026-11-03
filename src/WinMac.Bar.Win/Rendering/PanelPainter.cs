@@ -252,6 +252,49 @@ public sealed partial class PanelPainter : IDisposable
 
                 break;
             }
+            case WidgetKind.BatteryHero:
+            {
+                // WM-027: the level at a glance — big percentage, state, a level bar (green / amber / red, accent while charging) and the charge power or time left
+                double pct = Math.Clamp(w.Value, 0, 100);
+                var levelC = w.On ? new Color4(0.20f, 0.78f, 0.35f, 1) : pct <= 20 ? new Color4(1f, 0.27f, 0.23f, 1) : pct <= 40 ? new Color4(1f, 0.7f, 0.1f, 1) : new Color4(0.20f, 0.78f, 0.35f, 1);
+                EnsureFonts(); FillRR(x, y, x + wd, y + h, 14, Fill(0.07f));
+                Text(w.Text, _huge, x + 14, y + 2, 170, 52, Fg(0.97f));
+                Text(w.Sub ?? "", _bodyBold, x + 16, y + 52, wd - 32, 20, w.On ? levelC : Fg(0.7f));
+                if (w.Data is BatteryHeroData hd && hd.Detail is { } det) TextAlign(det, _small, x + wd - 200, y + 52, 184, 20, Fg(0.6f), TextAlignment.Trailing);
+                double by = y + h - 18, bw = wd - 32;
+                FillRR(x + 16, by, x + 16 + bw, by + 8, 4, Fill(0.12f));
+                if (pct > 0) FillRR(x + 16, by, x + 16 + Math.Max(8, bw * pct / 100), by + 8, 4, levelC);
+                break;
+            }
+            case WidgetKind.StatCards when w.Data is StatCardsData sc:
+            {
+                EnsureFonts();
+                double gap = 8, cw = (wd - gap * (sc.Cards.Count - 1)) / sc.Cards.Count;
+                for (int i = 0; i < sc.Cards.Count; i++)
+                {
+                    var card = sc.Cards[i]; double cx = x + i * (cw + gap);
+                    var tone = card.Tone switch { "good" => new Color4(0.20f, 0.78f, 0.35f, 1), "warn" => new Color4(1f, 0.7f, 0.1f, 1), "bad" => new Color4(1f, 0.27f, 0.23f, 1), _ => Fg(0.95f) };
+                    FillRR(cx, y, cx + cw, y + h, 12, Fill(0.07f));
+                    Text(card.Label, _small, cx + 12, y + 8, cw - 20, 18, Fg(0.55f));
+                    Text(card.Value, _bodyBold, cx + 12, y + 28, cw - 20, 24, tone);
+                }
+
+                break;
+            }
+            case WidgetKind.ModeCard:
+            {
+                // WM-027: a power mode is a card with its name, a short description, a radio mark and the whole card as the click area
+                bool sel = w.On, hot = hover && w.Enabled;
+                FillRR(x, y, x + wd, y + h, 12, sel ? new Color4(Accent.R, Accent.G, Accent.B, 0.20f) : Fill(hot ? 0.11f : 0.06f));
+                if (sel) { Brush(Accent); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(x + 0.75, y + 0.75, x + wd - 0.75, y + h - 0.75), RadiusX = 12, RadiusY = 12 }, _solid, 1.5f); }
+                double rx = x + 22, ry = y + h / 2;
+                Brush(sel ? Accent : Fg(w.Enabled ? 0.45f : 0.2f)); _ctx.DrawEllipse(new Ellipse(new Vector2((float)rx, (float)ry), 8, 8), _solid, 1.6f);
+                if (sel) FillCircle(rx, ry, 4.5f, Accent);
+                var tc = Fg(w.Enabled ? 0.95f : 0.4f);
+                Text(w.Text, _bodyBold, x + 42, y + 8, wd - 54, 20, tc);
+                Text(!w.Enabled && !string.IsNullOrEmpty(w.Reason) ? w.Reason! : w.Sub ?? "", _small, x + 42, y + 28, wd - 54, 18, Fg(w.Enabled ? 0.58f : 0.35f));
+                break;
+            }
             case WidgetKind.LinkRow when w.Data is LinkRowData lr:
             {
                 double cw = wd / lr.Links.Count;
@@ -360,6 +403,7 @@ public sealed partial class PanelPainter : IDisposable
             case "restart": { using var a = Arc(cx, cy, s * .8, -Math.PI * .05, Math.PI * 1.55); Stroke(a, c, 1.7f); double ax = cx + s * .8, ay = cy - s * .04; Line(ax, ay, ax - s * .42, ay - s * .12, c, 1.7f); Line(ax, ay, ax + s * .1, ay - s * .44, c, 1.7f); break; }
             case "logout": Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cx - s * .9, cy - s * .85, cx + s * .15, cy + s * .85), RadiusX = 2, RadiusY = 2 }, _solid, 1.5f); Line(cx - s * .25, cy, cx + s * .95, cy, c, 1.7f); Line(cx + s * .95, cy, cx + s * .6, cy - s * .35, c, 1.7f); Line(cx + s * .95, cy, cx + s * .6, cy + s * .35, c, 1.7f); break;
             case "chevron": Line(cx - s * .35, cy - s * .7, cx + s * .35, cy, c, 1.7f); Line(cx + s * .35, cy, cx - s * .35, cy + s * .7, c, 1.7f); break;
+            case "down": Line(cx - s * .7, cy - s * .35, cx, cy + s * .35, c, 1.7f); Line(cx, cy + s * .35, cx + s * .7, cy - s * .35, c, 1.7f); break;
             case "back": Line(cx + s * .35, cy - s * .7, cx - s * .35, cy, c, 1.7f); Line(cx - s * .35, cy, cx + s * .35, cy + s * .7, c, 1.7f); break;
             default: HubGlyph(id, cx, cy, s, c); break;
         }

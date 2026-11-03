@@ -38,6 +38,9 @@ public enum WidgetKind
     // ── menú de WinMac (el de la manzana)
     MenuItem,    // opción de menú: texto, ✓ si On, atenuada si no está disponible; resalte azul al pasar el ratón
     UserHeader,  // WM-009: avatar (iniciales), nombre, sesión y botón de apagado a la derecha (Data = UserHeaderData)
+    BatteryHero, // WM-027: porcentaje grande, estado, barra de nivel y potencia (Value = %, On = cargando; Data = BatteryHeroData)
+    StatCards,   // WM-027: tarjetas compactas en fila (Data = StatCardsData)
+    ModeCard,    // WM-027: opción de modo de energía: nombre, descripción, selección (On), área de clic de toda la tarjeta
     LinkRow,     // WM-022: pie con enlaces de texto en una fila (Ajustes de WinMac · Acerca de · Forzar salida; Data = LinkRowData)
     ActionStrip, // WM-009: fila de botones redondos con icono y texto (Suspender, Reiniciar…; Data = ActionStripData)
     TrayGrid,    // cuadrícula de iconos de las apps en segundo plano, como el desplegable de la bandeja de Windows (Data = TrayGridData); clic = abrir, clic derecho = su menú
@@ -45,6 +48,10 @@ public enum WidgetKind
 
 /// <param name="AccountId">Event of the «Cuenta» button on the right (Windows account settings).</param>
 public sealed record UserHeaderData(string Initials, string AccountId);
+public sealed record BatteryHeroData(string? Detail);
+/// <param name="Tone">«good», «warn», «bad» or null (neutral).</param>
+public sealed record StatCard(string Label, string Value, string? Tone);
+public sealed record StatCardsData(IReadOnlyList<StatCard> Cards);
 public sealed record LinkItem(string Id, string Label, bool Enabled);
 public sealed record LinkRowData(IReadOnlyList<LinkItem> Links);
 public sealed record StripAction(string Id, string Glyph, string Label);
@@ -137,6 +144,9 @@ public static class PanelLayout
         WidgetKind.UserHeader => 62,
         WidgetKind.ActionStrip => 80,
         WidgetKind.LinkRow => 30,
+        WidgetKind.BatteryHero => 96,
+        WidgetKind.StatCards => 62,
+        WidgetKind.ModeCard => 54,
         WidgetKind.TrayGrid => w.Data is TrayGridData g ? Math.Ceiling(g.Cells.Count / (double)Math.Max(1, g.Columns)) * TrayCell : TrayCell,
         WidgetKind.NcEmpty => Math.Max(118, 76 + 14 * Math.Ceiling((w.Sub?.Length ?? 0) / 44.0)),
         _ => 30,

@@ -265,7 +265,7 @@ public class PanelBuilderTests
         var desktop = PanelBuilder.BatteryPanel(Ctx(Nothing with { Power = new PowerModeState(true, PowerMode.Performance) }));
         Assert.Equal("Sin batería", desktop.Widgets.Single(w => w.Id == "battery").Text); Assert.True(desktop.Widgets.Single(w => w.Id == "power:Performance").On); Assert.True(desktop.Widgets.All(w => w.Kind != WidgetKind.Row || w.Enabled));
         var laptop = PanelBuilder.BatteryPanel(Ctx(Nothing with { Power = PowerModeState.None("no") }) with { Battery = new BatteryInfo(true, 15, false, false) });
-        Assert.Contains("15%", laptop.Widgets.Single(w => w.Id == "battery").Text); Assert.Equal("Batería baja", laptop.Widgets.Single(w => w.Id == "battery").Sub); Assert.All(laptop.Widgets.Where(w => w.Id.StartsWith("power:")), w => Assert.False(w.Enabled));
+        Assert.Contains("15 %", laptop.Widgets.Single(w => w.Id == "battery").Text); Assert.Equal("Batería baja", laptop.Widgets.Single(w => w.Id == "battery").Sub); Assert.All(laptop.Widgets.Where(w => w.Id.StartsWith("power:")), w => Assert.False(w.Enabled));
     }
 
     [Fact]

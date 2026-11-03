@@ -73,7 +73,7 @@ public sealed class PanelController
                 case WidgetKind.ActionStrip when w.Data is ActionStripData sd: for (int k = 0; k < sd.Actions.Count; k++) r.Add(new(i, k, sd.Actions[k].Id)); break;
                 case WidgetKind.LinkRow when w.Data is LinkRowData ld: for (int k = 0; k < ld.Links.Count; k++) if (ld.Links[k].Enabled) r.Add(new(i, k, ld.Links[k].Id)); break;
                 case WidgetKind.UserHeader when w.Data is UserHeaderData uh: r.Add(new(i, 0, uh.AccountId)); break;
-                case WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.MenuItem or WidgetKind.CityRow: r.Add(new(i, -1, w.Id)); break;
+                case WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.MenuItem or WidgetKind.CityRow or WidgetKind.ModeCard: r.Add(new(i, -1, w.Id)); break;
                 case WidgetKind.Header when w.Id == "back": r.Add(new(i, -1, w.Id)); break;
             }
         }
@@ -116,7 +116,7 @@ public sealed class PanelController
     }
 
     private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav or WidgetKind.Tabs or WidgetKind.TabHeader or WidgetKind.Select or WidgetKind.AppRow or WidgetKind.Stats or WidgetKind.CityRow
-        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem or WidgetKind.TrayGrid or WidgetKind.UserHeader or WidgetKind.ActionStrip or WidgetKind.LinkRow
+        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem or WidgetKind.TrayGrid or WidgetKind.UserHeader or WidgetKind.ActionStrip or WidgetKind.LinkRow or WidgetKind.ModeCard
         || (w.Kind == WidgetKind.Header && w.Id == "back");
 
     private static string ScrollKey(PanelModel m) => m.PinTop > 0 && m.PinTop <= m.Widgets.Count ? m.Kind + "/" + m.Widgets[m.PinTop - 1].Id : m.Kind.ToString();
