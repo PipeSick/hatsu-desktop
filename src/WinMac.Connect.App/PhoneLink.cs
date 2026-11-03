@@ -244,7 +244,7 @@ internal sealed class PhoneLink : IAsyncDisposable
             _cpInflight = 0;
         }
         FlushAlerts(); MarkListDirty();
-        _ = PumpControlPointAsync();
+        Post(PumpControlPointAsync);   // el siguiente comando, también dentro de la cola única (nunca en paralelo con otro trabajo)
     }
 
     /// <summary>Un comando a la vez: el iPhone responde en orden y así el reensamblado no se equivoca. Si no responde en 3 s, se sigue con el siguiente.</summary>
