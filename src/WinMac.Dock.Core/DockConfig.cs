@@ -26,10 +26,12 @@ public enum DockAlignment { Left, Center, Right }
 
 public sealed record DockConfig
 {
-    public int Version { get; init; } = 3;
+    public int Version { get; init; } = 4;
     public List<PinnedApp> Pinned { get; init; } = [];
     public bool MagnificationEnabled { get; init; } = true;
     public bool AutoHide { get; init; } = false;
+    /// <summary>WM-001: reservar el espacio del Dock en el área de trabajo (AppBar de Windows) para que no tape las ventanas maximizadas. Sin efecto con autoocultación.</summary>
+    public bool ReserveSpace { get; init; } = true;
     public double HideDelaySeconds { get; init; } = 0.6;
     public double ShowDelaySeconds { get; init; } = 0.12;
     public bool ShowRecents { get; init; } = true;
@@ -53,10 +55,26 @@ public sealed record DockConfig
 
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() }, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     public string ToJson() => JsonSerializer.Serialize(this, Json);
-    public static DockConfig FromJson(string json) => Migrate(JsonSerializer.Deserialize<DockConfig>(json, Json) ?? new DockConfig());
+    public static DockConfig FromJson(string json)
+    {
+        var c = JsonSerializer.Deserialize<DockConfig>(json, Json) ?? new DockConfig();
+        if (c.Version < 4)
+        {
+            // WM-019: an IconSize saved by an older version is mapped to the equivalent new preset; when it was not saved, the old default (60) becomes the new one
+            bool saved; using (var d = JsonDocument.Parse(json)) saved = d.RootElement.ValueKind == JsonValueKind.Object && d.RootElement.EnumerateObject().Any(p => p.Name.Equals("IconSize", StringComparison.OrdinalIgnoreCase));
+            c = c with { IconSize = saved ? DockSettings.MigrateIconSize(c.IconSize) : DockSettings.DefaultIconSize };
+        }
+
+        return Migrate(c);
+    }
 
     /// <summary>v&lt;3: el 3 guardado era el valor por defecto antiguo (no una elección del usuario) y ocultaba apps abiertas; pasa a «sin límite». Otros valores se respetan.</summary>
-    private static DockConfig Migrate(DockConfig c) => c.Version >= 3 ? c : c with { Version = 3, MaxRecents = c.MaxRecents == 3 ? 0 : c.MaxRecents };
+    private static DockConfig Migrate(DockConfig c)
+    {
+        if (c.Version < 3) c = c with { Version = 3, MaxRecents = c.MaxRecents == 3 ? 0 : c.MaxRecents };
+        if (c.Version < 4) c = c with { Version = 4, ReserveSpace = true };   // WM-001 (the icon size was already mapped in FromJson)
+        return c;
+    }
 
     /// <summary>Carga tolerante: un archivo corrupto o ausente devuelve la configuración por defecto, nunca lanza.</summary>
     public static DockConfig LoadOrDefault(string path, Func<DockConfig> fallback)

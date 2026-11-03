@@ -12,10 +12,27 @@ public readonly record struct PxRect(int Left, int Top, int Right, int Bottom)
 /// </summary>
 public static class DockSettings
 {
-    public const double DefaultIconSize = 60, MinIconSize = 32, MaxIconSize = 128, DefaultEdgeMargin = 16, MaxBottomOffset = 400, NudgeStep = 8;
+    public const double DefaultIconSize = 48, MinIconSize = 28, MaxIconSize = 128, DefaultEdgeMargin = 16, MaxBottomOffset = 400, NudgeStep = 8;
 
-    /// <summary>Tamaños del menú (nombre, DIP).</summary>
-    public static readonly (string Name, double Size)[] Presets = [("Pequeño", 48), ("Mediano", 60), ("Grande", 80), ("Muy grande", 96)];
+    /// <summary>
+    /// Tamaños del menú (nombre, DIP). WM-019: en la beta, «Pequeño» (48 DIP) medía ~119 px de alto a 150 %; ahora Pequeño 36 (~89 px a 150 %), Mediano 48,
+    /// Grande 64, Muy grande 80. El escalado se aplica una sola vez (DIP × escala del monitor).
+    /// </summary>
+    public static readonly (string Name, double Size)[] Presets = [("Pequeño", 36), ("Mediano", 48), ("Grande", 64), ("Muy grande", 80)];
+
+    /// <summary>
+    /// WM-001: la franja que el Dock reserva en la parte inferior del área de trabajo (px) para que las ventanas maximizadas queden por ENCIMA de él: la altura de
+    /// la barra visible más su separación del borde. <paramref name="bandBottom"/> es el borde inferior disponible sin contar el propio Dock (encima de la barra
+    /// de tareas de Windows si está visible).
+    /// </summary>
+    public static PxRect ReservedBand(PxRect monitor, int bandBottom, double scale, DockMetrics m, DockConfig c)
+    {
+        int h = (int)Math.Ceiling((m.BarHeight + 6 + ClampBottom(c.BottomOffset)) * scale);
+        return new PxRect(monitor.Left, Math.Max(monitor.Top, bandBottom - h), monitor.Right, bandBottom);
+    }
+
+    /// <summary>Tamaño de la versión anterior → tamaño equivalente de esta (solo los predefinidos exactos; un valor elegido a mano se respeta).</summary>
+    public static double MigrateIconSize(double old) => old switch { 48 => 36, 60 => 48, 80 => 64, 96 => 80, _ => old };
 
     public static double ClampIconSize(double s) => double.IsNaN(s) ? DefaultIconSize : Math.Clamp(Math.Round(s), MinIconSize, MaxIconSize);
     public static double ClampBottom(double v) => double.IsNaN(v) ? 0 : Math.Clamp(Math.Round(v), 0, MaxBottomOffset);

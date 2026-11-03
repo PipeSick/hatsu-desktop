@@ -139,7 +139,12 @@ public sealed class DockHost : IDisposable
     /// <summary>Aplica en vivo un cambio de tamaño, alineación o altura: el tamaño reconstruye controlador y painter con las métricas nuevas; lo demás solo recoloca la ventana.</summary>
     private void ApplyLayoutChange()
     {
-        var key = DockSettings.LayoutKey(_cfg); if (key == _appliedLayout) return;
+        var key = DockSettings.LayoutKey(_cfg);
+        if (key == _appliedLayout)
+        {
+            if ((_cfg.ReserveSpace && !_cfg.AutoHide) != _reserving && _hwnd != IntPtr.Zero) PlaceWindow(show: false);   // only the reservation changed
+            return;
+        }
         bool sizeChanged = key.Item1 != _appliedLayout.Item1; _appliedLayout = key;
         if (_hwnd == IntPtr.Zero) { _ctl.Config = _cfg; return; }
         _pressed = -1; _pressDrag = false;
@@ -199,6 +204,16 @@ public sealed class DockHost : IDisposable
         }
         _monitor = mi.rcMonitor;
         _winWpx = (int)Math.Ceiling(_ctl.WindowWidth * _scale); _winHpx = (int)Math.Ceiling(_ctl.WindowHeight * _scale);
+        // WM-001: reserve the Dock's strip (AppBar) so maximized windows end above it; with auto-hide or the option off, nothing is reserved
+        _appBar ??= new DockAppBar(_hwnd, WM_APPBAR, _log);
+        if (_cfg.ReserveSpace && !_cfg.AutoHide && !_demo)
+        {
+            int band = (int)Math.Ceiling((_m.BarHeight + 6 + DockSettings.ClampBottom(_cfg.BottomOffset)) * _scale);
+            int bottom = _appBar.Reserve(mi.rcMonitor, band);
+            mi.rcWork.Bottom = bottom;   // place the Dock on its own strip, not above it
+        }
+        else _appBar.Remove();
+        _reserving = _appBar.Registered;
         // Posición según la alineación y la altura elegidas (centro + altura normal = la de siempre: centrada justo sobre la barra de tareas).
         (_winLeftPx, _winTopPx) = DockSettings.Place(new PxRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom), new PxRect(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom), _winWpx, _winHpx, _scale, _m, _cfg);
         Native2.SetWindowPos(_hwnd, new IntPtr(-1), _winLeftPx, _winTopPx, _winWpx, _winHpx, show ? 0x0010u | 0x0040u /* NOACTIVATE | SHOWWINDOW */ : 0x0010u);
@@ -280,8 +295,15 @@ public sealed class DockHost : IDisposable
     }
 
     // ------------------------------------------------------------------ mensajes
+    private DockAppBar? _appBar; private bool _reserving;
+    private const int WM_APPBAR = 0x8000 + 0x51;   // WM_APP + 0x51: AppBar notifications
+    private uint _taskbarCreated;
+
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
     {
+        if (_taskbarCreated == 0) _taskbarCreated = Native2.RegisterWindowMessageW("TaskbarCreated");
+        if (msg == _taskbarCreated && _taskbarCreated != 0) { _appBar?.Forget(); PlaceWindow(show: false); return IntPtr.Zero; }   // Explorer restarted
+        if (msg == WM_APPBAR) { if ((long)w == 1 /* ABN_POSCHANGED */) PlaceWindow(show: false); return IntPtr.Zero; }
         switch ((int)msg)
         {
             case WM_MOUSEACTIVATE: return (IntPtr)3; // MA_NOACTIVATE: un clic en el dock no roba el foco a la app activa
@@ -475,6 +497,7 @@ public sealed class DockHost : IDisposable
     public void Dispose()
     {
         if (_saveDue is not null && _cfgPath is not null) _cfg.TrySave(_cfgPath);   // guarda lo pendiente al cerrar
+        try { _appBar?.Remove(); } catch (Exception) { }   // WM-001: give the work area back
         _tracker?.Dispose(); _thumbs?.Dispose(); _appIcons?.Dispose(); _quit?.Dispose(); _blurred?.Dispose(); _wall.Dispose(); _painter?.Dispose(); _bmp?.Dispose(); _swap?.Dispose(); _dev?.Dispose();
         if (_hwnd != IntPtr.Zero) Native2.DestroyWindow(_hwnd);
     }
@@ -493,6 +516,7 @@ public sealed class DockHost : IDisposable
         [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr h, IntPtr rgn, bool redraw);
         [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr inst, IntPtr p);
         [DllImport("user32.dll", EntryPoint = "DefWindowProcW")] public static extern IntPtr DefWindowProc(IntPtr h, uint m, IntPtr w, IntPtr l);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern uint RegisterWindowMessageW(string name);
         [DllImport("user32.dll")] public static extern bool DestroyWindow(IntPtr h);
         [DllImport("user32.dll")] public static extern void PostQuitMessage(int c);
         [DllImport("user32.dll")] public static extern bool PeekMessage(out MSG m, IntPtr h, uint a, uint b, uint remove);

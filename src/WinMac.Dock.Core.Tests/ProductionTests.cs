@@ -17,7 +17,7 @@ public class PinnedConfigTests
         var p = AppIdentity.FromAumid("Vendor.App_1!App", "Mi app", @"C:\pkg\app.exe");
         var c = DockPinning.SetIconOverride(DockPinning.Pin(new DockConfig(), p), p.Id, @"C:\iconos\mi.png");
         var d = DockConfig.FromJson(c.ToJson()); var q = d.Pinned.Single();
-        Assert.Equal("Vendor.App_1!App", q.Aumid); Assert.Equal(@"C:\iconos\mi.png", q.IconOverride); Assert.Equal(AppKind.Packaged, q.ToIdentity()!.Kind); Assert.Equal(3, d.Version);
+        Assert.Equal("Vendor.App_1!App", q.Aumid); Assert.Equal(@"C:\iconos\mi.png", q.IconOverride); Assert.Equal(AppKind.Packaged, q.ToIdentity()!.Kind); Assert.Equal(4, d.Version);
     }
 
     [Fact]

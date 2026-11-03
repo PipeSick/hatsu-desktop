@@ -6,7 +6,7 @@ public class IconSizeTests
     [Fact]
     public void The_default_size_is_exactly_the_approved_metrics()
     {
-        Assert.Equal(new DockMetrics(), DockMetrics.ForIconSize(60)); Assert.Equal(60, new DockConfig().IconSize); Assert.Equal(DockAlignment.Center, new DockConfig().Alignment); Assert.Equal(0, new DockConfig().BottomOffset);
+        Assert.Equal(new DockMetrics(), DockMetrics.ForIconSize(60)); Assert.Equal(48, new DockConfig().IconSize); Assert.Equal(DockAlignment.Center, new DockConfig().Alignment); Assert.Equal(0, new DockConfig().BottomOffset);
     }
 
     [Theory]
@@ -24,9 +24,9 @@ public class IconSizeTests
     [Fact]
     public void Sizes_are_clamped_and_rounded_and_garbage_falls_back_to_the_default()
     {
-        Assert.Equal(32, DockSettings.ClampIconSize(5)); Assert.Equal(128, DockSettings.ClampIconSize(900)); Assert.Equal(73, DockSettings.ClampIconSize(72.6)); Assert.Equal(60, DockSettings.ClampIconSize(double.NaN));
-        Assert.Equal(32, DockMetrics.ForIconSize(1).BaseSize);
-        var c = new DockConfig(); Assert.Same(c, DockSettings.WithIconSize(c, 60)); Assert.Equal(96, DockSettings.WithIconSize(c, 96).IconSize); Assert.Equal(128, DockSettings.WithIconSize(c, 1000).IconSize);
+        Assert.Equal(28, DockSettings.ClampIconSize(5)); Assert.Equal(128, DockSettings.ClampIconSize(900)); Assert.Equal(73, DockSettings.ClampIconSize(72.6)); Assert.Equal(48, DockSettings.ClampIconSize(double.NaN));
+        Assert.Equal(28, DockMetrics.ForIconSize(1).BaseSize);
+        var c = new DockConfig(); Assert.Same(c, DockSettings.WithIconSize(c, 48)); Assert.Equal(96, DockSettings.WithIconSize(c, 96).IconSize); Assert.Equal(128, DockSettings.WithIconSize(c, 1000).IconSize);
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class SettingsOperationsTests
     [Fact]
     public void Hand_edited_nonsense_is_sanitized()
     {
-        var c = DockSettings.Sanitize(new DockConfig { IconSize = -5, BottomOffset = 99999, EdgeMargin = double.NaN }); Assert.Equal(32, c.IconSize); Assert.Equal(400, c.BottomOffset); Assert.Equal(16, c.EdgeMargin);
+        var c = DockSettings.Sanitize(new DockConfig { IconSize = -5, BottomOffset = 99999, EdgeMargin = double.NaN }); Assert.Equal(28, c.IconSize); Assert.Equal(400, c.BottomOffset); Assert.Equal(16, c.EdgeMargin);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class SettingsOperationsTests
     {
         var c = new DockConfig { IconSize = 84, Alignment = DockAlignment.Right, EdgeMargin = 24, BottomOffset = 40 }; var back = DockConfig.FromJson(c.ToJson());
         Assert.Equal(84, back.IconSize); Assert.Equal(DockAlignment.Right, back.Alignment); Assert.Equal(24, back.EdgeMargin); Assert.Equal(40, back.BottomOffset); Assert.Contains("\"Right\"", c.ToJson());
-        var old = DockConfig.FromJson("{\"Version\":3,\"AutoHide\":true}"); Assert.Equal(60, old.IconSize); Assert.Equal(DockAlignment.Center, old.Alignment); Assert.Equal(0, old.BottomOffset);
+        var old = DockConfig.FromJson("{\"Version\":3,\"AutoHide\":true}"); Assert.Equal(48, old.IconSize); Assert.Equal(DockAlignment.Center, old.Alignment); Assert.Equal(0, old.BottomOffset);
     }
 }
 
@@ -176,11 +176,11 @@ public class SettingsMenuTests
     [Fact]
     public void The_background_menu_offers_settings_and_quit_and_marks_the_current_values()
     {
-        var m = DockMenu.ForBackground(new DockConfig { IconSize = 80, Alignment = DockAlignment.Left, BottomOffset = 16 }); var all = Flat(m).ToList();
+        var m = DockMenu.ForBackground(new DockConfig { IconSize = 64, Alignment = DockAlignment.Left, BottomOffset = 16 }); var all = Flat(m).ToList();
         Assert.Contains(all, e => e.Text == "Ajustes del Dock"); Assert.Equal(DockActionKind.Quit, m[^1].Action!.Kind);
         Assert.True(all.Single(e => e.Text.StartsWith("Grande")).Checked); Assert.False(all.Single(e => e.Text.StartsWith("Mediano")).Checked);
         Assert.True(all.Single(e => e.Text == "Izquierda").Checked); Assert.False(all.Single(e => e.Text == "Centro").Checked);
-        Assert.Equal(DockActionKind.SetIconSize, all.Single(e => e.Text.StartsWith("Muy grande")).Action!.Kind); Assert.Equal(96, all.Single(e => e.Text.StartsWith("Muy grande")).Action!.Number);
+        Assert.Equal(DockActionKind.SetIconSize, all.Single(e => e.Text.StartsWith("Muy grande")).Action!.Kind); Assert.Equal(80, all.Single(e => e.Text.StartsWith("Muy grande")).Action!.Number);
         Assert.Equal((double)DockAlignment.Right, all.Single(e => e.Text == "Derecha").Action!.Number);
     }
 
@@ -199,5 +199,27 @@ public class SettingsMenuTests
         var c = new DockController(new DockMetrics(), new DockConfig { Alignment = DockAlignment.Right }); c.SetItems(DemoData.Items());
         var menu = c.MenuFor(0); Assert.Contains(Flat(menu), e => e.Text == "Derecha" && e.Checked); Assert.Contains(menu, e => e.Text == "Abrir");
         Assert.All(Flat(menu).Where(e => e.Children is not null), e => Assert.Null(e.Action));   // los submenús no ejecutan nada por sí mismos
+    }
+
+    [Fact]
+    public void Wm019_PresetsAreCompactAndOldSavedSizesMapToTheirNewEquivalent()
+    {
+        Assert.Equal(36, DockConfig.FromJson("{\"Version\":3,\"IconSize\":48}").IconSize);   // the old «Pequeño» → the new «Pequeño»
+        Assert.Equal(48, DockConfig.FromJson("{\"Version\":3,\"IconSize\":60}").IconSize);
+        Assert.Equal(72, DockConfig.FromJson("{\"Version\":3,\"IconSize\":72}").IconSize);   // a hand-picked size is kept
+        Assert.Equal(36, DockConfig.FromJson("{\"Version\":4,\"IconSize\":36}").IconSize);   // already migrated: untouched
+        var small = DockMetrics.ForIconSize(36);
+        Assert.True(small.BarHeight * 1.5 < 92, "Pequeño a 150 % debe ocupar menos de 92 px de alto");
+    }
+
+    [Fact]
+    public void Wm001_ReservedBandSitsOnTheBottomAboveTheTaskbarAndScalesWithDpi()
+    {
+        var m = DockMetrics.ForIconSize(48); var mon = new PxRect(0, 0, 1920, 1080);
+        var band = DockSettings.ReservedBand(mon, 1032, 1.5, m, new DockConfig());   // taskbar visible: available bottom 1032
+        Assert.Equal(1032, band.Bottom); Assert.Equal((int)Math.Ceiling((m.BarHeight + 6) * 1.5), band.Height);
+        Assert.Equal(new PxRect(0, 1080 - band.Height, 1920, 1080), DockSettings.ReservedBand(mon, 1080, 1.5, m, new DockConfig()));
+        var raised = DockSettings.ReservedBand(mon, 1080, 1, m, new DockConfig { BottomOffset = 20 });
+        Assert.True(raised.Height > DockSettings.ReservedBand(mon, 1080, 1, m, new DockConfig()).Height);
     }
 }
