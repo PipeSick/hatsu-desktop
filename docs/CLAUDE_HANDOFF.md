@@ -1,8 +1,18 @@
 # Traspaso para Claude (léelo primero tras un /clear)
 
-Actualizado: 2026-11-02. Complementa `docs/ESTADO-SESION.md` (contexto anterior: repos, PC del usuario, reglas de trabajo).
+Actualizado: 2026-11-03. Complementa `docs/ESTADO-SESION.md` (contexto anterior: repos, PC del usuario, reglas de trabajo).
 
-## Plan en curso (orden obligatorio, pedido por el usuario)
+## Fase actual: corrección integral de la beta (WM-001…WM-021 + Quick Look) — informe: docs/36-informe-beta-correccion.md
+Estado de cada hallazgo, rendimiento antes/después y pendientes del PC real están en docs/36. Piezas nuevas:
+- Dock: `Dock.Win/Rendering/DockAppBar.cs` (AppBar), `DarkMenuWindow.cs` + `Dock.Core/DarkMenuModel.cs` (menú oscuro), tamaños en `DockSettings` (config v4).
+- Barra: `Bar.Core/WorkAreaGuard.cs` (WM-003), `Capture/CaptureCountdown.cs` y `QuickLook.cs` (puros), `Bar.Win/Capture/QuickLookWindow.cs`, `QuickLookActions.cs`,
+  `BarHost.QuickLook.cs`; panel W en `PanelBuilder.AppleMenu` (UserHeader, ActionStrip); batería `Shell/BatteryDetailsProvider.cs`; brillo WMI con System.Management.
+- Host: Ajustes en diez secciones (`SettingsModel.cs`, Dock edita dock.json), panel de la bandeja `TrayPanel.cs` + `Host.Core/Tray/TrayPanelModel.cs` (`--render-tray-panel`).
+- NotchWin: letras `NeteaseLyricsClient` (rechazos = Unavailable, título sin sufijos, `LrclibLyricsClient` de respaldo, `lyrics.log` sin títulos). Fijado en 33de751.
+- CI: `Visual-Audit.ps1` añade WM-001 (ventana maximizada), WM-002 (menú abierto + cuenta atrás), Quick Look, WM-017 (clic derecho en el Dock), renders 49a–49i;
+  `WINMAC_QUICKLOOK_IN_CAPTURES=1` solo en CI para poder fotografiar Quick Look. Decodificar PNG del registro: script `dec.py` (líneas `AUDIT_PNG|nombre|base64`).
+
+## Plan anterior (histórico)
 1. **NotchWin: volumen, brillo, notificaciones y prioridades** — implementado (docs/21). Ver «Estado por etapa».
 2. Launchpad y tecla Windows (índice de apps reutilizable).
 3. Spotlight (reutiliza el índice y el lanzador del Launchpad).
