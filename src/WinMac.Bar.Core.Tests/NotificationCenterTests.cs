@@ -166,11 +166,11 @@ public class NotificationStoreTests
         var r = new NcRig(new BarConfig { NotifRemoveFromWindows = false }); r.Src.Items.AddRange([NcRig.N(1, "Mail", 1), NcRig.N(2, "Teams", 2)]); r.Open();
         r.Click("ndismiss:1"); Assert.Empty(r.Src.Removed); Assert.Equal(1, r.Store.State.Count);
         r.Store.Refresh(); r.Pump(); Assert.Equal(1, r.Store.State.Count);   // sigue oculta tras releer (Windows aún la tiene)
-        Assert.Contains("solo la ocultan en WinMac", r.Panel().Widgets.Single(w => w.Id == "nc-mode").Text);
+        Assert.DoesNotContain(r.Panel().Widgets, w => w.Id == "nc-mode");   // WM-030: the instructions line is gone
 
         var w = new NcRig(); w.Src.Items.AddRange([NcRig.N(1, "Mail", 1), NcRig.N(2, "Teams", 2)]); w.Open();
         w.Click("ndismiss:1"); Assert.Equal([1u], w.Src.Removed); Assert.Equal(1, w.Store.State.Count); Assert.Equal(2u, w.Store.State.Groups[0].Items[0].Id);
-        Assert.Contains("también del centro de notificaciones de Windows", w.Panel().Widgets.Single(x => x.Id == "nc-mode").Text);
+        Assert.DoesNotContain(w.Panel().Widgets, x => x.Id == "nc-mode");
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public class NotificationStoreTests
         r.Store.Deactivate(); Assert.Equal(1, r.Src.Stops); Assert.Null(r.Src.Fire);
 
         var p = new NcRig(); p.Src.EventSupported = false; p.Open();
-        Assert.False(p.Store.State.Live); Assert.True(p.Store.NeedsPolling); Assert.Contains("cada pocos segundos", p.Panel().Widgets.FirstOrDefault(w => w.Id == "nc-mode")?.Text ?? "cada pocos segundos");
+        Assert.False(p.Store.State.Live); Assert.True(p.Store.NeedsPolling); Assert.DoesNotContain(p.Panel().Widgets, w => w.Id == "nc-mode");
         p.Store.Deactivate(); Assert.False(p.Store.NeedsPolling);
     }
 
@@ -412,5 +412,22 @@ public class NotchSnapshotWm025Tests
         Assert.Equal(WinMac.Bar.Notch.NotchFeed.SnapshotKey([a, b]), WinMac.Bar.Notch.NotchFeed.SnapshotKey([b, a]));
         Assert.NotEqual(WinMac.Bar.Notch.NotchFeed.SnapshotKey([a, b]), WinMac.Bar.Notch.NotchFeed.SnapshotKey([a]));
         Assert.Equal(7u, System.Text.Json.JsonSerializer.SerializeToElement(WinMac.Bar.Notch.NotchFeed.Notification(a, null)).GetProperty("id").GetUInt32());   // the pill knows which one it is
+    }
+}
+
+public class NotificationConcurrencyWm026Tests
+{
+    [Fact]
+    public void A_notification_that_arrives_while_clearing_is_neither_deleted_nor_reported_as_failed()
+    {
+        var r = new NcRig(); r.Src.Items.AddRange([NcRig.N(1, "Mail", 1), NcRig.N(2, "Teams", 2)]); r.Open();
+        r.Src.ClearResult = ServiceResult.Failed("COMException, 0x80070490");
+        r.Base.Ui.ConfirmAnswer = true; r.Base.Click("nc:clearall");   // confirmed; the work runs in the background (not pumped yet)
+        // the collection changes during the operation: 2 had already gone, a new one (3) arrives before Windows is touched
+        r.Src.Items.RemoveAll(i => i.Id == 2); r.Src.Items.Add(NcRig.N(3, "Chat", 0));
+        r.Pump();
+        Assert.DoesNotContain(3u, r.Src.Removed);                                  // only what was there when the user confirmed is deleted
+        Assert.Null(r.Store.State.Message);                                         // 1 and 2 are gone: no false error
+        Assert.Equal([3u], r.Store.State.Groups.SelectMany(g => g.Items).Select(n => n.Id));   // the new one is shown after the refresh
     }
 }

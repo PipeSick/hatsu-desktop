@@ -90,10 +90,6 @@ public static partial class PanelBuilder
         int shown = reachable, total = st.Count;
         if (shown < total) w.Add(new Widget(WidgetKind.Note, "nc-more", $"Se muestran {shown} de {total}. Las demás siguen en el centro de notificaciones de Windows."));
         if (st.Message is not null) w.Add(new Widget(WidgetKind.Note, "nc-msg", st.Message));
-        w.Add(new Widget(WidgetKind.Note, "nc-mode", (win
-            ? "«×» y «Borrar» eliminan la notificación también del centro de notificaciones de Windows."
-            : "«×» y «Ocultar» solo la ocultan en WinMac durante esta sesión: sigue en el centro de Windows.")
-            + (st.Live ? "" : " Se actualiza cada pocos segundos mientras el panel está abierto.")));
     }
 
     private static void WidgetsSection(List<Widget> w, PanelContext c)
