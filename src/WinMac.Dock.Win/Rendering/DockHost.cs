@@ -297,7 +297,7 @@ public sealed class DockHost : IDisposable
     // ------------------------------------------------------------------ mensajes
     private DockAppBar? _appBar; private bool _reserving;
     private const int WM_APPBAR = 0x8000 + 0x51;   // WM_APP + 0x51: AppBar notifications
-    private uint _taskbarCreated;
+    private uint _taskbarCreated; private bool? _diagInteractive;
 
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
     {
@@ -310,7 +310,12 @@ public sealed class DockHost : IDisposable
             case WM_NCHITTEST:
             {
                 int x = (short)((long)l & 0xFFFF), y = (short)(((long)l >> 16) & 0xFFFF);
-                if (MenuDiag && (Native2.GetKeyState(0x02) & 0x8000) != 0) _log($"[dock] diag ratón derecho en {x},{y}: {(InteractiveAt((x - _winLeftPx) / _scale, (y - _winTopPx) / _scale) ? "interactivo" : "transparente")} (ventana en {_winLeftPx},{_winTopPx})");
+                if (MenuDiag)
+                {
+                    bool ia = InteractiveAt((x - _winLeftPx) / _scale, (y - _winTopPx) / _scale);
+                    if (ia != _diagInteractive) { _diagInteractive = ia; _log($"[dock] diag ratón en {x},{y}: {(ia ? "interactivo" : "transparente")} (ventana en {_winLeftPx},{_winTopPx}, escala {_scale:0.##}, oculto {_view?.HideT ?? -1:0.##}, barra {_view?.BarLeft ?? 0:0}+{_view?.BarWidth ?? 0:0} alto {_view?.WindowHeight ?? 0:0})"); }
+                }
+
                 return InteractiveAt((x - _winLeftPx) / _scale, (y - _winTopPx) / _scale) ? (IntPtr)1 : (IntPtr)(-1); // HTCLIENT / HTTRANSPARENT: el resto deja pasar el ratón
             }
             case WM_LBUTTONDOWN:

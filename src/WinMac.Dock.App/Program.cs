@@ -42,6 +42,7 @@ internal static class Program
         try { Console.OutputEncoding = new System.Text.UTF8Encoding(false); } catch { }
         try { Directory.CreateDirectory(Path.GetDirectoryName(DockDefaults.LogPath)!); _log = new StreamWriter(DockDefaults.LogPath, true); } catch { }
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Log("EXCEPCIÓN NO CONTROLADA: " + e.ExceptionObject);
+        if (Environment.GetEnvironmentVariable("WINMAC_MENU_DIAG") == "1") Log("[dock] diagnóstico de CI activo");
         var tier = (Arg(args, "--tier")?.ToLowerInvariant()) switch { "tint" => GlassTier.Tint, "wallpaper" => GlassTier.WallpaperBlur, _ => (GlassTier?)null };
         ThemeMode? themeArg = Arg(args, "--theme")?.ToLowerInvariant() switch { "dark" => ThemeMode.Dark, "light" => ThemeMode.Light, _ => null };
         try
