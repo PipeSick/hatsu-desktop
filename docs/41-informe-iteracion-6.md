@@ -123,4 +123,37 @@ El iPhone publica AMS (`89D3502B-…`, prueba real) en la misma conexión que AN
 
 ## Etapa D — Validación y beta
 
-Ver al final: ejecución del CI, nombre del artefacto, instrucciones y lista de prueba.
+| Etapa | Commit | CI |
+|---|---|---|
+| A — escritorio | `85fa011` | [Actions 41723080420](https://github.com/PipeSick/win11-macos/actions/runs/41723080420): 4/4 en verde |
+| B — mezclador | `2d14292` | incluido en la siguiente |
+| C — Connect | `6c6c252` (NotchWin `8ae47d4`) | [Actions 41725534506](https://github.com/PipeSick/win11-macos/actions/runs/41725534506): 4/4 en verde (compilación y pruebas Windows, host, integración con NotchWin con paquete y verificación, Linux) |
+
+**Beta: `winmac-paquete-6c6c252b72a64bd7d69b4cbd9e0be0c6d024e504`**
+
+**Actualizar:** cierra WinMac (bandeja › Salir), descomprime el ZIP sobre la misma carpeta y abre `WinMac.exe`. Tus ajustes se conservan. Los nuevos vienen apagados: «Salida por aplicación (experimental)».
+
+**Pruebas automáticas:** Bar.Core 434 · Host.Core 131 · Dock.Core 150 · Connect.Core 16 · NotchWin.Core 172 · Ipc 31.
+
+**Qué está probado y qué no.**
+- **Con tu hardware** solo se probó, en iteraciones anteriores, lo de Connect: batería, ANCS, avisos de llamada y sesión MAP (docs/39).
+- **Nada de esta iteración está probado en tu PC.** Las pruebas son simulaciones de la lógica: estados, geometría, máquinas de estados y protocolo.
+- **El CI** compila y ejecuta, pero no tiene ni monitor físico, ni audio, ni Bluetooth.
+
+**Limitaciones:**
+- Contestar, rechazar y el audio de llamadas no se ofrecen (WM-039).
+- WhatsApp: no se puede responder.
+- Fotos de contactos: PBAP pendiente; por ahora iniciales.
+- Salida por aplicación: experimental, sin validar.
+- La beta no está firmada (WM-036).
+
+### Lista de validación manual
+
+1. **Dock (matriz de 4 casos):** con «Ocultar barra de tareas de Windows» y «Ocultar automáticamente» del Dock activados, lleva el cursor al borde inferior: el Dock aparece y la barra de Windows **no**. Maximiza una ventana: llega hasta abajo.
+2. **WM-045:** pasa el cursor por el borde inferior muchas veces durante unos minutos: la barra de Windows no vuelve a quedarse visible. Reinicia el Explorador: se vuelve a ocultar sola.
+3. **Isla en tema claro (WM-037):** cambia Windows a claro con la Isla abierta, reinicia la Isla y WinMac en claro: siempre oscura y legible; la música y las letras funcionan.
+4. **Mezclador (WM-035):** menú del icono de volumen ancho y compacto, selectores de salida y entrada, apps con su volumen, sesiones agrupadas, desplazamiento con muchas apps, 150 %.
+5. **Salida por aplicación (opcional, experimental):** actívala en Ajustes › Barra › Sonido. Cambia la salida de Spotify y de Discord, reinícialas y comprueba que se mantiene. Vuelve a «Predeterminada».
+6. **Llamada (WM-038):** llámate desde otro teléfono: «Llamada de …» se queda en la Isla mientras suena. Cuelga sin contestar: «Llamada perdida». Contesta en el iPhone: «Llamada terminada».
+7. **Seguridad (WM-036):** si algo no abre, ejecuta `WinMac.exe --diagnose-security` y comparte `%LOCALAPPDATA%\WinMac\logs\security-report.txt`.
+8. **Regresiones:** notificaciones del iPhone y de Windows, batería del iPhone, Spotlight, Launchpad, capturas y Ajustes.
