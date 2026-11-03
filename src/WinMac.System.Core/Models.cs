@@ -78,7 +78,9 @@ public sealed record PowerModeState(bool Available, PowerMode Mode, string? Reas
     };
 }
 
-public sealed record AppearanceState(bool Available, bool Dark, string? Reason = null)
+/// <param name="Dark">Tema de las APLICACIONES (AppsUseLightTheme = 0).</param>
+/// <param name="SystemDark">Tema de Windows: barra de tareas, Inicio, centro de notificaciones (SystemUsesLightTheme = 0). Null si Windows no lo tiene. El tema de WinMac es aparte (Ajustes › Barra › Tema).</param>
+public sealed record AppearanceState(bool Available, bool Dark, string? Reason = null, bool? SystemDark = null)
 {
     public static AppearanceState None(string reason) => new(false, false, reason);
 }

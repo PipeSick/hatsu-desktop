@@ -402,6 +402,18 @@ public sealed partial class PanelPainter : IDisposable
         Brush(c); _ctx.FillGeometry(moon, _solid);
     }
 
+    /// <summary>Light/dark: a ring with its right half filled (the usual «appearance» symbol).</summary>
+    private void ContrastGlyph(double cx, double cy, float s, Color4 c)
+    {
+        float r = s * .9f;
+        Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), r, r), _solid, 1.5f);
+        using var disc = _dev.Factory.CreateEllipseGeometry(new Ellipse(new Vector2((float)cx, (float)cy), r, r));
+        using var half = _dev.Factory.CreateRectangleGeometry(R(cx, cy - r - 1, cx + r + 1, cy + r + 1));
+        using var path = _dev.Factory.CreatePathGeometry();
+        using (var sink = path.Open()) { disc.CombineWithGeometry(half, CombineMode.Intersect, null, 0.1f, sink); sink.Close(); }
+        _ctx.FillGeometry(path, _solid);
+    }
+
     /// <summary>The standard power symbol: a ring open at the top (about 290°) crossed by a vertical bar, round caps.</summary>
     private void PowerGlyph(double cx, double cy, float s, Color4 c)
     {
@@ -454,6 +466,7 @@ public sealed partial class PanelPainter : IDisposable
                 for (int i = 0; i < 8; i++) { double a = i * Math.PI / 4; Line(cx + Math.Cos(a) * s * .75, cy + Math.Sin(a) * s * .75, cx + Math.Cos(a) * s * 1.05, cy + Math.Sin(a) * s * 1.05, c, 1.4f); }
                 break;
             case "moon": if (!SystemIcon(id, cx, cy, s, c)) MoonGlyph(cx, cy, s, c); break;   // WM-022: system glyph or a filled crescent
+            case "appearance": ContrastGlyph(cx, cy, s, c); break;   // 3.2: claro/oscuro, un círculo mitad lleno
             case "power":
                 Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cx - s, cy - s * .55, cx + s * .85, cy + s * .55), RadiusX = 2, RadiusY = 2 }, _solid, 1.5f);
                 Line(cx + s * 1.05, cy - s * .2, cx + s * 1.05, cy + s * .2, c, 1.8f); break;

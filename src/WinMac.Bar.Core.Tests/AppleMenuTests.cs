@@ -18,7 +18,7 @@ public class AppleMenuTests
         Assert.Null(((UserHeaderData)head.Data!).PictureKey);                                 // WM-029: no picture read → initials
         var withPic = PanelBuilder.AppleMenu(Ctx() with { User = new SessionUser("Ana", "PC", "user-picture:42") });
         Assert.Equal("user-picture:42", ((UserHeaderData)withPic.Widgets[0].Data!).PictureKey);
-        Assert.Equal(["open:wifi", "open:bluetooth", "open:ms-settings:notifications", "open:display", "open:battery", "open:ms-settings:"], m.Widgets.Where(w => w.Kind == WidgetKind.Tile).Select(w => w.Id));
+        Assert.Equal(["open:wifi", "open:bluetooth", "open:ms-settings:notifications", "appearance", "open:display", "open:battery", "open:ms-settings:"], m.Widgets.Where(w => w.Kind == WidgetKind.Tile).Select(w => w.Id));
         Assert.Equal(["volume", "brightness"], m.Widgets.Where(w => w.Kind == WidgetKind.Slider).Select(w => w.Id));
         Assert.NotNull(m.Card);   // the sliders share a card
         var strip = (ActionStripData)m.Widgets.Single(w => w.Kind == WidgetKind.ActionStrip).Data!;
@@ -56,7 +56,7 @@ public class AppleMenuTests
         Assert.Equal("apple:Restart", ctl.FocusKey(0x0D, false)!.Id);
         while (ctl.Focus!.Id != "volume") ctl.FocusKey(0x28, false);
         var ev = ctl.FocusKey(0x27, false)!; Assert.Equal(PanelEventKind.SliderCommit, ev.Kind); Assert.Equal("volume", ev.Id);
-        var hgt = PanelLayout.Compute(PanelBuilder.AppleMenu(Ctx())).Height; Assert.True(hgt < 600, "alto " + hgt);   // shorter than the beta's panel with the old menu
+        var hgt = PanelLayout.Compute(PanelBuilder.AppleMenu(Ctx())).Height; Assert.True(hgt < 680, "alto " + hgt);   // fits a 1080p screen at 150 % (720 DIP) with the dark-mode tile row (3.2)
     }
 }
 

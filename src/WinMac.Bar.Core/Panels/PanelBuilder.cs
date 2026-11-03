@@ -73,6 +73,8 @@ public static partial class PanelBuilder
         Tile(new Widget(WidgetKind.Tile, "open:bluetooth", "Bluetooth", !s.Bluetooth.Available ? "No disponible" : s.Bluetooth.RadioOn ? (s.Bluetooth.ConnectedCount > 0 ? $"{s.Bluetooth.ConnectedCount} conectado(s)" : "Activado") : "Desactivado", On: s.Bluetooth.Available && s.Bluetooth.RadioOn, Enabled: s.Bluetooth.Available, Reason: s.Bluetooth.Reason, Glyph: "bluetooth"));
         // «No molestar»: Windows no ofrece una API pública para activarlo; el mosaico abre su ajuste (no finge un interruptor)
         Tile(new Widget(WidgetKind.Tile, "open:ms-settings:notifications", "No molestar", "Abrir en Windows", Glyph: "moon"));
+        // 3.2: acción real (cambia el tema de las apps y de Windows, como «Elige tu modo»); muestra el estado leído, también si se cambió fuera de WinMac
+        Tile(new Widget(WidgetKind.Tile, "appearance", "Modo oscuro", AppearanceText(s.Appearance), On: s.Appearance.Available && s.Appearance.Dark, Enabled: s.Appearance.Available, Reason: s.Appearance.Reason, Glyph: "appearance"));
         Tile(new Widget(WidgetKind.Tile, "open:display", "Pantallas", "Duplicar o extender", Glyph: "display"));
         Tile(new Widget(WidgetKind.Tile, "open:battery", "Energía", s.Power.Available ? PowerModeState.Label(s.Power.Mode) : c.Battery.Present ? $"Batería {c.Battery.Percent}%" : "No disponible", Glyph: "power", On: c.Battery.Present && c.Battery.Charging));
         Tile(new Widget(WidgetKind.Tile, "open:ms-settings:", "Configuración", "De Windows", Glyph: "gear"));
@@ -122,7 +124,7 @@ public static partial class PanelBuilder
         void Tile(Widget t) { w.Add(t with { Col = col }); col = 1 - col; }
         if (cfg.CcWifi) Tile(new Widget(WidgetKind.Tile, "open:wifi", "Wi-Fi", BusyOr(c, "wifi", !s.Wifi.Available ? "No disponible" : s.Wifi.Connected ? s.Wifi.Ssid : s.Wifi.Reason is not null ? "Requiere ubicación" : "Sin conexión"), On: s.Wifi.Available && s.Wifi.Connected, Enabled: s.Wifi.Available, Reason: s.Wifi.Reason, Glyph: "wifi", Bars: s.Wifi.Bars));
         if (cfg.CcBluetooth) Tile(new Widget(WidgetKind.Tile, "open:bluetooth", "Bluetooth", !s.Bluetooth.Available ? "No disponible" : s.Bluetooth.RadioOn ? (s.Bluetooth.ConnectedCount > 0 ? $"{s.Bluetooth.ConnectedCount} conectado(s)" : "Activado") : "Desactivado", On: s.Bluetooth.Available && s.Bluetooth.RadioOn, Enabled: s.Bluetooth.Available, Reason: s.Bluetooth.Reason, Glyph: "bluetooth"));
-        if (cfg.CcAppearance) Tile(new Widget(WidgetKind.Tile, "appearance", "Modo oscuro", s.Appearance.Available ? (s.Appearance.Dark ? "Activado" : "Desactivado") : "No disponible", On: s.Appearance.Available && s.Appearance.Dark, Enabled: s.Appearance.Available, Reason: s.Appearance.Reason, Glyph: "moon"));
+        if (cfg.CcAppearance) Tile(new Widget(WidgetKind.Tile, "appearance", "Modo oscuro", AppearanceText(s.Appearance), On: s.Appearance.Available && s.Appearance.Dark, Enabled: s.Appearance.Available, Reason: s.Appearance.Reason, Glyph: "moon"));
         if (cfg.CcDisplay) Tile(new Widget(WidgetKind.Tile, "open:display", "Pantallas", "Duplicar / extender", Glyph: "display"));
         if (cfg.CcPower) Tile(new Widget(WidgetKind.Tile, "open:battery", c.Battery.Present ? "Batería" : "Energía", c.Battery.Present ? $"{c.Battery.Percent}%" : (s.Power.Available ? PowerModeState.Label(s.Power.Mode) : "No disponible"), Enabled: true, Glyph: "power", On: c.Battery.Present && c.Battery.Charging));
         if (cfg.CcNotifications) Tile(cfg.NotificationCenter
@@ -252,6 +254,14 @@ public static partial class PanelBuilder
         w.Add(new Widget(WidgetKind.Button, "open:ms-settings:sound", "Configuración de sonido de Windows…"));
         return new PanelModel(PanelKind.Sound, "Sonido", w, PinTop: 1, PinBottom: pinBottom);
     }
+
+    /// <summary>
+    /// Estado real del modo oscuro (3.2): el mosaico cambia a la vez el tema de las apps y el de Windows (lo mismo que «Elige tu modo» en Configuración).
+    /// Si el usuario los tiene distintos (modo «Personalizado» de Windows) se dice cuál es cuál en vez de fingir un sí o un no. El tema de WinMac es otro ajuste.
+    /// </summary>
+    public static string AppearanceText(AppearanceState a) => !a.Available ? "No disponible"
+        : a.SystemDark is { } sys && sys != a.Dark ? (a.Dark ? "Mixto: apps oscuras" : "Mixto: apps claras")
+        : a.Dark ? "Activado" : "Desactivado";
 
     /// <summary>Aplicaciones como máximo en el mezclador del menú Sonido (el resto, en el mezclador de Windows).</summary>
     public const int MixerMaxApps = 12;

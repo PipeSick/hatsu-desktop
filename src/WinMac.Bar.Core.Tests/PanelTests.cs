@@ -260,6 +260,17 @@ public class PanelBuilderTests
     }
 
     [Fact]
+    public void Dark_mode_tells_apps_and_windows_theme_apart_and_never_pretends()
+    {
+        Assert.Equal("Activado", PanelBuilder.AppearanceText(new AppearanceState(true, true, SystemDark: true)));
+        Assert.Equal("Desactivado", PanelBuilder.AppearanceText(new AppearanceState(true, false, SystemDark: false)));
+        Assert.Equal("Mixto: apps claras", PanelBuilder.AppearanceText(new AppearanceState(true, false, SystemDark: true)));   // modo «Personalizado» de Windows
+        Assert.Equal("Mixto: apps oscuras", PanelBuilder.AppearanceText(new AppearanceState(true, true, SystemDark: false)));
+        Assert.Equal("Activado", PanelBuilder.AppearanceText(new AppearanceState(true, true)));   // Windows sin valor de sistema: el de apps manda
+        Assert.Equal("No disponible", PanelBuilder.AppearanceText(AppearanceState.None("sin registro")));
+    }
+
+    [Fact]
     public void The_sound_menu_is_a_mixer_in_the_requested_order_with_real_sessions_only()
     {
         var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos", false) };

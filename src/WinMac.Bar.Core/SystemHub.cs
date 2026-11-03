@@ -36,7 +36,7 @@ public sealed class SystemHub
     private static string Key(SystemSnapshot s) =>
         $"{s.Audio.Available}|{s.Audio.Volume}|{s.Audio.Muted}|{string.Join(",", s.Audio.Outputs.Select(o => o.Id + o.IsDefault))}|{s.Wifi.Available}|{s.Wifi.Connected}|{s.Wifi.Ssid}|{s.Wifi.Bars}|{s.Wifi.RadioOn}|{string.Join(",", s.Wifi.Networks.Select(n => n.Ssid + n.Bars + n.Connected))}"
         + $"|{s.Mic.Available}|{s.Mic.Volume}|{s.Mic.Muted}|{string.Join(",", s.Mic.Devices.Select(d => d.Id + d.IsDefault))}|{string.Join(",", s.AppSessions.Sessions.Select(a => a.Id + a.Volume + a.Muted + a.Active))}"
-        + $"|{s.Bluetooth.Available}|{s.Bluetooth.RadioOn}|{string.Join(",", s.Bluetooth.Devices.Select(d => d.Id + d.Connected))}|{s.Brightness.Available}|{s.Brightness.Percent}|{s.Power.Available}|{s.Power.Mode}|{s.Appearance.Available}|{s.Appearance.Dark}|{s.OutputSwitchOk}|{s.CanRestoreOutput}";
+        + $"|{s.Bluetooth.Available}|{s.Bluetooth.RadioOn}|{string.Join(",", s.Bluetooth.Devices.Select(d => d.Id + d.Connected))}|{s.Brightness.Available}|{s.Brightness.Percent}|{s.Power.Available}|{s.Power.Mode}|{s.Appearance.Available}|{s.Appearance.Dark}|{s.Appearance.SystemDark}|{s.OutputSwitchOk}|{s.CanRestoreOutput}";
 
     // Cada Refresh* es de un solo vuelo con su propia bandera (ref no se puede capturar en la lambda: se resuelve aquí con métodos explícitos).
     public void RefreshAudio()
