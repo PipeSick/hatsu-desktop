@@ -55,6 +55,53 @@ public sealed class PanelController
 
     public PanelModel Model => _model;
     public PanelFrame Frame => _frame;
+
+    // ── WM-022: keyboard. Tab / ↓ / ↑ go through every control (each button of an action strip or a link row counts on its own), Intro or Espacio activates,
+    //    ← → move a focused slider by 10. The focus survives refreshes of the same panel (it is kept by id).
+    public sealed record FocusTarget(int Item, int Sub, string Id);
+    private string? _focusId; private int _focusSub = -1;
+    public FocusTarget? Focus => Targets().FirstOrDefault(t => t.Id == _focusId && (t.Sub == _focusSub || _focusSub < 0));
+
+    public IReadOnlyList<FocusTarget> Targets()
+    {
+        var r = new List<FocusTarget>();
+        for (int i = 0; i < _frame.Items.Count; i++)
+        {
+            var w = _frame.Items[i].W; if (!w.Enabled) continue;
+            switch (w.Kind)
+            {
+                case WidgetKind.ActionStrip when w.Data is ActionStripData sd: for (int k = 0; k < sd.Actions.Count; k++) r.Add(new(i, k, sd.Actions[k].Id)); break;
+                case WidgetKind.LinkRow when w.Data is LinkRowData ld: for (int k = 0; k < ld.Links.Count; k++) if (ld.Links[k].Enabled) r.Add(new(i, k, ld.Links[k].Id)); break;
+                case WidgetKind.UserHeader when w.Data is UserHeaderData uh: r.Add(new(i, 0, uh.AccountId)); break;
+                case WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.MenuItem or WidgetKind.CityRow: r.Add(new(i, -1, w.Id)); break;
+                case WidgetKind.Header when w.Id == "back": r.Add(new(i, -1, w.Id)); break;
+            }
+        }
+
+        return r;
+    }
+
+    public PanelEvent? FocusKey(int vk, bool shift)
+    {
+        var t = Targets(); if (t.Count == 0) return null;
+        int at = t.ToList().FindIndex(x => x.Id == _focusId && (x.Sub == _focusSub || _focusSub < 0));
+        void Go(int i) { var x = t[(i % t.Count + t.Count) % t.Count]; _focusId = x.Id; _focusSub = x.Sub; }
+        switch (vk)
+        {
+            case 0x09: Go(at < 0 ? (shift ? t.Count - 1 : 0) : at + (shift ? -1 : 1)); return null;   // Tab
+            case 0x28: Go(at < 0 ? 0 : at + 1); return null;                                           // ↓
+            case 0x26: Go(at < 0 ? t.Count - 1 : at - 1); return null;                                 // ↑
+            case 0x25 or 0x27 when at >= 0:                                                             // ← →
+            {
+                var f = _frame.Items[t[at].Item];
+                if (f.W.Kind == WidgetKind.Slider) return new PanelEvent(PanelEventKind.SliderCommit, f.W.Id, Math.Clamp(f.W.Value + (vk == 0x27 ? 10 : -10), 0, 100));
+                Go(at + (vk == 0x27 ? 1 : -1)); return null;
+            }
+            case 0x0D or 0x20 when at >= 0: return _frame.Items[t[at].Item].W.Kind == WidgetKind.Slider ? null : new PanelEvent(PanelEventKind.Click, t[at].Id);
+        }
+
+        return null;
+    }
     public int Hover => _hover;
     public bool Dragging => _dragging;
 
@@ -69,7 +116,7 @@ public sealed class PanelController
     }
 
     private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav or WidgetKind.Tabs or WidgetKind.TabHeader or WidgetKind.Select or WidgetKind.AppRow or WidgetKind.Stats or WidgetKind.CityRow
-        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem or WidgetKind.TrayGrid or WidgetKind.UserHeader or WidgetKind.ActionStrip
+        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem or WidgetKind.TrayGrid or WidgetKind.UserHeader or WidgetKind.ActionStrip or WidgetKind.LinkRow
         || (w.Kind == WidgetKind.Header && w.Id == "back");
 
     private static string ScrollKey(PanelModel m) => m.PinTop > 0 && m.PinTop <= m.Widgets.Count ? m.Kind + "/" + m.Widgets[m.PinTop - 1].Id : m.Kind.ToString();
@@ -159,7 +206,8 @@ public sealed class PanelController
                 return cell >= 0 && w.Data is TrayGridData g ? new PanelEvent(PanelEventKind.Click, "trayitem:" + g.Cells[cell].Key) : null;
             }
             case WidgetKind.NcHeader: return PanelLayout.NcCloseHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "nc:close") : null;
-            case WidgetKind.UserHeader: return w.Data is UserHeaderData uh && PanelLayout.UserPowerHit(f, x) ? new PanelEvent(PanelEventKind.Click, uh.PowerId) : null;
+            case WidgetKind.UserHeader: return w.Data is UserHeaderData uh && PanelLayout.UserPowerHit(f, x) ? new PanelEvent(PanelEventKind.Click, uh.AccountId) : null;
+            case WidgetKind.LinkRow: { int k = PanelLayout.LinkAt(f, x); return w.Data is LinkRowData ld && k >= 0 ? new PanelEvent(PanelEventKind.Click, ld.Links[k].Id) : null; }
             case WidgetKind.ActionStrip: { int k = PanelLayout.StripActionAt(f, x); return w.Data is ActionStripData sd2 && k >= 0 && k < sd2.Actions.Count ? new PanelEvent(PanelEventKind.Click, sd2.Actions[k].Id) : null; }
             case WidgetKind.NcSection: return PanelLayout.NcSectionActionHit(f, x) && w.Data is NcSectionData sd ? new PanelEvent(PanelEventKind.Click, sd.ActionId!) : null;
             case WidgetKind.NotifGroup:

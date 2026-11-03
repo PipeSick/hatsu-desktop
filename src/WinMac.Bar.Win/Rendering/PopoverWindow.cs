@@ -187,7 +187,7 @@ internal sealed class PopoverWindow : IDisposable
     private void Render()
     {
         if (_painter is null || _swap is null || _dcomp is null) return;
-        _painter.HoverPoint = _ctl.Pointer; _painter.TrayFocus = _ctl.TrayFocus; _painter.Paint(_ctl.Frame, _ctl.Model, _ctl.Hover); _dcomp.Commit(); _swap.Present(1, PresentFlags.None); _dirty = false;
+        _painter.HoverPoint = _ctl.Pointer; _painter.TrayFocus = _ctl.TrayFocus; _painter.Focus = _ctl.Focus; _painter.Paint(_ctl.Frame, _ctl.Model, _ctl.Hover); _dcomp.Commit(); _swap.Present(1, PresentFlags.None); _dirty = false;
     }
 
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
@@ -215,7 +215,12 @@ internal sealed class PopoverWindow : IDisposable
                     if (FocusDiag is not null) { var fg = BarNative.GetForegroundWindow(); var sb = new System.Text.StringBuilder(64); BarNative.GetClassNameW(fg, sb, 64); BarNative.GetWindowThreadProcessId(fg, out uint lp); FocusDiag($"[panel] se cierra al perder el foco: primer plano ahora {sb} (pid {lp}, la barra es {Environment.ProcessId}) tras {(Environment.TickCount64 - _shownAt)} ms; {Environment.StackTrace.Split('\n').Skip(1).Take(14).Aggregate("", (a, s) => a + " ← " + s.Trim().Replace("at WinMac.", ""))}"); }
                     Hide(); return IntPtr.Zero;
                 case WM_KEYDOWN when (int)w == 0x1B: Hide(); return IntPtr.Zero;
-                case WM_KEYDOWN: { var ev = _ctl.TrayKey((int)w, (BarNative.GetKeyState(0x10) & 0x8000) != 0); _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero; }   // WM-004: keyboard in the background-apps grid
+                case WM_KEYDOWN:   // WM-004: grid of background apps; WM-022: Tab/arrows/Intro over the controls of the other panels
+                {
+                    bool shift = (BarNative.GetKeyState(0x10) & 0x8000) != 0;
+                    var ev = _ctl.Model.Kind == PanelKind.Tray ? _ctl.TrayKey((int)w, shift) : _ctl.FocusKey((int)w, shift);
+                    _dirty = true; if (ev is not null) _onEvent(ev); return IntPtr.Zero;
+                }
                 case 0x2E0 /* WM_DPICHANGED */: return IntPtr.Zero;   // el tamaño y el escalado del panel los fija Show() según el monitor de destino: Windows no debe redimensionarlo por su cuenta al moverlo entre monitores
             }
         }

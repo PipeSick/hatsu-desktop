@@ -23,6 +23,18 @@ public sealed partial class PanelPainter : IDisposable
     public (double X, double Y)? HoverPoint { get; set; }
     /// <summary>WM-004: focused cell of the background-apps grid (keyboard).</summary>
     public int TrayFocus { get; set; } = -1;
+    /// <summary>WM-022: keyboard focus (drawn as an accent ring around the control or sub-button).</summary>
+    public PanelController.FocusTarget? Focus { get; set; }
+
+    private void DrawFocus(PanelFrame f)
+    {
+        if (Focus is not { } fc || fc.Item < 0 || fc.Item >= f.Items.Count) return;
+        var it = f.Items[fc.Item]; double x = it.X, y = it.Y, w = it.Width, h = it.Height;
+        if (it.W.Data is ActionStripData sd && fc.Sub >= 0) { double cw = w / sd.Actions.Count; Brush(Accent); _ctx.DrawEllipse(new Ellipse(new Vector2((float)(x + cw * fc.Sub + cw / 2), (float)(y + 24)), 25, 25), _solid, 2f); return; }
+        if (it.W.Data is LinkRowData ld && fc.Sub >= 0) { double cw = w / ld.Links.Count; x += cw * fc.Sub; w = cw; }
+        if (it.W.Data is UserHeaderData) { var ar = PanelLayout.UserAccountRect(it); x = ar.X; y = ar.Y; w = ar.W; h = ar.H; }
+        Brush(Accent); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(x - 1, y - 1, x + w + 1, y + h + 1), RadiusX = 12, RadiusY = 12 }, _solid, 2f);
+    }
     private static readonly Color4 Accent = new(0.04f, 0.52f, 1f, 1f);
 
     public PanelPainter(D2DDevice dev)
@@ -48,14 +60,19 @@ public sealed partial class PanelPainter : IDisposable
         _kind = m.Kind; _ctx.BeginDraw();
         if (clear) _ctx.Clear(new Color4(0, 0, 0, 0));
         // tarjeta (el panel lateral, con el vidrio del fondo de pantalla si lo hay y esquinas algo más amplias)
-        float rad = m.Kind == PanelKind.Notifications ? 18 : m.Kind is PanelKind.AppleMenu or PanelKind.AppMenu ? 10 : 16;
+        float rad = m.Kind == PanelKind.Notifications ? 18 : m.Kind == PanelKind.AppMenu ? 10 : 16;
         if (m.Kind == PanelKind.Notifications && Backdrop is { } bd)
         {
             using var br = _ctx.CreateBitmapBrush(bd, new BitmapBrushProperties { ExtendModeX = ExtendMode.Clamp, ExtendModeY = ExtendMode.Clamp, InterpolationMode = BitmapInterpolationMode.Linear });
             _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = R(0.5, 0.5, f.Width - 0.5, f.Height - 0.5), RadiusX = rad, RadiusY = rad }, br);
             FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, rad, Dark ? new Color4(0.10f, 0.10f, 0.12f, 0.58f) : new Color4(0.97f, 0.97f, 0.98f, 0.62f));
         }
-        else FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, rad, Dark ? new Color4(0.13f, 0.13f, 0.15f, 0.94f) : new Color4(0.96f, 0.96f, 0.97f, 0.95f));
+        else
+        {
+            // WM-022/027: the Control Center and the Energy panel carry dense text: almost opaque so what is behind never competes with it
+            float a = m.Kind is PanelKind.AppleMenu or PanelKind.Battery ? 0.985f : 0.94f;
+            FillRR(0.5, 0.5, f.Width - 0.5, f.Height - 0.5, rad, Dark ? new Color4(0.12f, 0.12f, 0.14f, a) : new Color4(0.96f, 0.96f, 0.97f, a));
+        }
         Brush(Fill(0.14f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(0.5, 0.5, f.Width - 0.5, f.Height - 0.5), RadiusX = rad, RadiusY = rad }, _solid, 1f);
         var v = f.View; int i = 0;
         if (v is not null) for (; i < v.From; i++) DrawWidget(f.Items[i], i == hover);   // logotipo, pestañas y título: fijos, sin recorte
@@ -68,6 +85,7 @@ public sealed partial class PanelPainter : IDisposable
         }
 
         if (v is not null) _ctx.PopAxisAlignedClip();
+        DrawFocus(f);
         if (f.View is { MaxOffset: > 0.5 } sv)   // indicador de desplazamiento
         {
             double tr0 = sv.Top + 8, tr1 = sv.Bottom - 8, th = Math.Max(24, (tr1 - tr0) * (sv.Bottom - sv.Top) / sv.ContentHeight), ty = tr0 + (tr1 - tr0 - th) * (sv.Offset / sv.MaxOffset);
@@ -196,28 +214,42 @@ public sealed partial class PanelPainter : IDisposable
             }
             case WidgetKind.UserHeader when w.Data is UserHeaderData uh:
             {
-                // WM-009: avatar with the initials, name and session; the round power button on the right (Apagar, with confirmation)
-                double r = 19, ax = x + 4 + r, ay = y + h / 2;
+                // WM-022: avatar with the initials, the full name (two lines when long, no absurd truncation), the session and the «Cuenta» button
+                double r = 21, ax = x + 2 + r, ay = y + h / 2;
                 FillCircle(ax, ay, (float)r, Accent); TextAlign(uh.Initials, _title, ax - r, ay - r, 2 * r, 2 * r, new Color4(1, 1, 1, 1), TextAlignment.Center);
-                Text(w.Text, _title, ax + r + 10, y + 7, wd - 2 * r - 70, 22, Fg(0.95f));
-                if (w.Sub is { } sub) Text(sub, _small, ax + r + 10, y + 29, wd - 2 * r - 70, 18, Fg(0.55f));
-                var pr = PanelLayout.UserPowerRect(f);
-                bool hot = hover && HoverPoint is { } hp1 && hp1.X >= pr.X - 4;
-                FillCircle(pr.X + pr.W / 2, pr.Y + pr.H / 2, (float)(pr.W / 2), Fill(hot ? 0.24f : 0.12f));
-                Glyph("onoff", pr.X + pr.W / 2, pr.Y + pr.H / 2, 8, Fg(0.9f));
+                var ar = PanelLayout.UserAccountRect(f); double tx = ax + r + 12, tw = ar.X - tx - 8;
+                bool two = MeasureText(w.Text, _bodyBold) > tw;
+                if (two) { TextAlign(w.Text, _bodyBold, tx, y + 4, tw, 36, Fg(0.95f), vcenter: false, wrap: true); if (w.Sub is { } s2) Text(s2, _small, tx, y + 40, tw, 16, Fg(0.55f)); }
+                else { Text(w.Text, _title, tx, y + 10, tw, 22, Fg(0.95f)); if (w.Sub is { } sub) Text(sub, _small, tx, y + 33, tw, 18, Fg(0.55f)); }
+                bool hot = hover && HoverPoint is { } hp1 && hp1.X >= ar.X;
+                FillRR(ar.X, ar.Y, ar.X + ar.W, ar.Y + ar.H, 14, Fill(hot ? 0.22f : 0.12f));
+                TextAlign("Cuenta", _small, ar.X, ar.Y, ar.W, ar.H, Fg(0.9f), TextAlignment.Center);
                 break;
             }
             case WidgetKind.ActionStrip when w.Data is ActionStripData sd:
             {
-                // WM-009: Suspender · Reiniciar · Apagar · Cerrar sesión · Bloquear — round buttons with a label, all with the same confirmations as before
+                // WM-022: five large round buttons (44 DIP) with their label under them (two lines if needed); same confirmations as always
                 double cw = wd / sd.Actions.Count;
                 for (int i = 0; i < sd.Actions.Count; i++)
                 {
-                    var a = sd.Actions[i]; double cx = x + cw * i + cw / 2, cy = y + 20;
+                    var a = sd.Actions[i]; double cx = x + cw * i + cw / 2, cy = y + 24;
                     bool hot = hover && HoverPoint is { } hp2 && hp2.X >= x + cw * i && hp2.X < x + cw * (i + 1);
-                    FillCircle(cx, cy, 17, Fill(hot ? 0.26f : 0.13f));
-                    Glyph(a.Glyph == "power" ? "onoff" : a.Glyph, cx, cy, 8, Fg(0.92f));
-                    TextAlign(a.Label, _small, x + cw * i, y + 41, cw, 18, Fg(0.7f), TextAlignment.Center);
+                    FillCircle(cx, cy, 22, Fill(hot ? 0.26f : 0.13f));
+                    Glyph(a.Glyph, cx, cy, 9.5f, Fg(0.95f));
+                    using var l = _dw.CreateTextLayout(a.Label, _small, (float)(cw - 4), 30); l.TextAlignment = TextAlignment.Center; l.WordWrapping = WordWrapping.Wrap;
+                    Brush(Fg(hot ? 0.95f : 0.72f)); _ctx.DrawTextLayout(new Vector2((float)(x + cw * i + 2), (float)(y + 50)), l, _solid);
+                }
+
+                break;
+            }
+            case WidgetKind.LinkRow when w.Data is LinkRowData lr:
+            {
+                double cw = wd / lr.Links.Count;
+                for (int i = 0; i < lr.Links.Count; i++)
+                {
+                    var li = lr.Links[i]; bool hot = li.Enabled && hover && HoverPoint is { } hp3 && hp3.X >= x + cw * i && hp3.X < x + cw * (i + 1);
+                    if (hot) FillRR(x + cw * i + 2, y + 2, x + cw * (i + 1) - 2, y + h - 2, 8, Fill(0.12f));
+                    TextAlign(li.Label, _small, x + cw * i, y, cw, h, li.Enabled ? (hot ? Fg(0.95f) : Accent) : Fg(0.35f), TextAlignment.Center);
                 }
 
                 break;
@@ -271,8 +303,10 @@ public sealed partial class PanelPainter : IDisposable
 
     private ID2D1PathGeometry Arc(double ox, double oy, double r, double a0, double a1)
     {
+        // WM-022: an arc of more than half a turn needs ArcSize.Large (it was always Small, so the power, restart and moon icons came out inverted)
+        double sweep = ((a1 - a0) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
         var g = _dev.Factory.CreatePathGeometry(); using var s = g.Open(); Vector2 P(double a) => new((float)(ox + r * Math.Cos(a)), (float)(oy + r * Math.Sin(a)));
-        s.BeginFigure(P(a0), FigureBegin.Hollow); s.AddArc(new ArcSegment { Point = P(a1), Size = new Vortice.Mathematics.Size((float)r, (float)r), SweepDirection = SweepDirection.Clockwise, ArcSize = ArcSize.Small }); s.EndFigure(FigureEnd.Open); s.Close(); return g;
+        s.BeginFigure(P(a0), FigureBegin.Hollow); s.AddArc(new ArcSegment { Point = P(a1), Size = new Vortice.Mathematics.Size((float)r, (float)r), SweepDirection = SweepDirection.Clockwise, ArcSize = sweep > Math.PI ? ArcSize.Large : ArcSize.Small }); s.EndFigure(FigureEnd.Open); s.Close(); return g;
     }
 
     private void Line(double x1, double y1, double x2, double y2, Color4 c, float w = 1.5f) { Brush(c); _ctx.DrawLine(new Vector2((float)x1, (float)y1), new Vector2((float)x2, (float)y2), _solid, w, _round); }

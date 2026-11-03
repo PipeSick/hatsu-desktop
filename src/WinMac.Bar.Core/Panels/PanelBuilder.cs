@@ -61,37 +61,36 @@ public static partial class PanelBuilder
     /// </summary>
     public static PanelModel AppleMenu(PanelContext c)
     {
-        // WM-009: Control Center de WinMac: quién ha iniciado sesión, controles reales, acciones de sesión y energía con confirmación y las opciones del menú de antes.
-        var s = c.Sys; var cfg = c.Cfg; var w = new List<Widget>(); int sep = 0;
-        void Line() => w.Add(new Widget(WidgetKind.Separator, "apple-sep" + sep++));
+        // WM-022: UN solo Centro de Control. Cabecera con la cuenta, seis controles reales, volumen y brillo en una tarjeta, las cinco acciones de energía
+        // grandes y un pie compacto. Las opciones del menú antiguo que eran ajustes (reservar espacio, salir de la barra) viven en Ajustes.
+        var s = c.Sys; var w = new List<Widget>();
         var user = c.User ?? new SessionUser(Environment.UserName, Environment.MachineName);
-        w.Add(new Widget(WidgetKind.UserHeader, "apple:user", user.Name, "Sesión en " + user.Machine, Data: new UserHeaderData(user.Initials, "apple:Shutdown")));
+        w.Add(new Widget(WidgetKind.UserHeader, "apple:user", user.Name, "Sesión iniciada en " + user.Machine, Data: new UserHeaderData(user.Initials, "open:ms-settings:yourinfo")));
         int col = 0;
         void Tile(Widget t) { w.Add(t with { Col = col }); col = 1 - col; }
         Tile(new Widget(WidgetKind.Tile, "open:wifi", "Wi-Fi", !s.Wifi.Available ? "No disponible" : s.Wifi.Connected ? s.Wifi.Ssid : s.Wifi.Reason is not null ? "Requiere ubicación" : "Sin conexión", On: s.Wifi.Available && s.Wifi.Connected, Enabled: s.Wifi.Available, Reason: s.Wifi.Reason, Glyph: "wifi", Bars: s.Wifi.Bars));
         Tile(new Widget(WidgetKind.Tile, "open:bluetooth", "Bluetooth", !s.Bluetooth.Available ? "No disponible" : s.Bluetooth.RadioOn ? (s.Bluetooth.ConnectedCount > 0 ? $"{s.Bluetooth.ConnectedCount} conectado(s)" : "Activado") : "Desactivado", On: s.Bluetooth.Available && s.Bluetooth.RadioOn, Enabled: s.Bluetooth.Available, Reason: s.Bluetooth.Reason, Glyph: "bluetooth"));
         // «No molestar»: Windows no ofrece una API pública para activarlo; el mosaico abre su ajuste (no finge un interruptor)
-        Tile(new Widget(WidgetKind.Tile, "open:ms-settings:notifications", "No molestar", "Ajuste de Windows", Glyph: "moon"));
-        Tile(new Widget(WidgetKind.Tile, "open:display", "Pantallas", "Duplicar / extender", Glyph: "display"));
-        Tile(new Widget(WidgetKind.Tile, "open:battery", "Modo de energía", s.Power.Available ? PowerModeState.Label(s.Power.Mode) : c.Battery.Present ? $"Batería {c.Battery.Percent}%" : "No disponible", Glyph: "power", On: c.Battery.Present && c.Battery.Charging));
+        Tile(new Widget(WidgetKind.Tile, "open:ms-settings:notifications", "No molestar", "Abrir en Windows", Glyph: "moon"));
+        Tile(new Widget(WidgetKind.Tile, "open:display", "Pantallas", "Duplicar o extender", Glyph: "display"));
+        Tile(new Widget(WidgetKind.Tile, "open:battery", "Energía", s.Power.Available ? PowerModeState.Label(s.Power.Mode) : c.Battery.Present ? $"Batería {c.Battery.Percent}%" : "No disponible", Glyph: "power", On: c.Battery.Present && c.Battery.Charging));
         Tile(new Widget(WidgetKind.Tile, "open:ms-settings:", "Configuración", "De Windows", Glyph: "gear"));
-        w.Add(new Widget(WidgetKind.Slider, "volume", "", Value: s.Audio.Volume, Enabled: s.Audio.Available, Reason: s.Audio.Reason, Glyph: s.Audio.Muted ? "sound-muted" : "sound"));   // compact: the icon says what it is
-        w.Add(new Widget(WidgetKind.Slider, "brightness", "", Value: s.Brightness.Percent, Enabled: s.Brightness.Available, Reason: s.Brightness.Reason, Glyph: "sun"));
+        int cardFrom = w.Count;
+        w.Add(new Widget(WidgetKind.Slider, "volume", "Sonido", Value: s.Audio.Volume, Enabled: s.Audio.Available, Reason: s.Audio.Reason, Glyph: s.Audio.Muted ? "sound-muted" : "sound"));
+        w.Add(new Widget(WidgetKind.Slider, "brightness", "Brillo", Value: s.Brightness.Percent, Enabled: s.Brightness.Available, Reason: s.Brightness.Reason, Glyph: "sun"));
+        int cardTo = w.Count - 1;
         w.Add(new Widget(WidgetKind.ActionStrip, "apple:session", "", Data: new ActionStripData([
-            new("apple:Sleep", "moon", "Suspender"), new("apple:Restart", "restart", "Reiniciar"), new("apple:Shutdown", "power", "Apagar"),
+            new("apple:Sleep", "moon", "Suspender"), new("apple:Restart", "restart", "Reiniciar"), new("apple:Shutdown", "onoff", "Apagar"),
             new("apple:LogOff", "logout", "Cerrar sesión"), new("apple:Lock", "lock", "Bloquear")])));
-        Line();
-        w.Add(new Widget(WidgetKind.MenuItem, "apple:winmac-settings", "Ajustes de WinMac…"));
-        w.Add(new Widget(WidgetKind.MenuItem, "apple:" + SystemActionKind.About, SystemActions.Get(SystemActionKind.About).Label));
-        w.Add(new Widget(WidgetKind.MenuItem, "apple:" + SystemActionKind.ForceQuit, c.ForegroundApp is { } app ? $"Forzar salida de «{app}»…" : "Forzar salida…", Enabled: c.ForegroundApp is not null));
-        Line();
-        w.Add(new Widget(WidgetKind.MenuItem, "apple:reserve", "Reservar espacio arriba", On: c.Cfg.ReserveSpace));
-        w.Add(new Widget(WidgetKind.MenuItem, "apple:quitbar", "Salir de la barra superior"));
+        w.Add(new Widget(WidgetKind.LinkRow, "apple:links", "", Data: new LinkRowData([
+            new("apple:winmac-settings", "Ajustes de WinMac", true),
+            new("apple:" + SystemActionKind.About, "Acerca de este PC", true),
+            new("apple:" + SystemActionKind.ForceQuit, "Forzar salida…", c.ForegroundApp is not null)])));
         Msg(w, c);
-        return new PanelModel(PanelKind.AppleMenu, "WinMac", w, AppleWidth, Pad: 10, Spacing: 4);
+        return new PanelModel(PanelKind.AppleMenu, "WinMac", w, AppleWidth, Card: (cardFrom, cardTo), Pad: 12, Spacing: 8);
     }
 
-    public const double AppleWidth = 320;
+    public const double AppleWidth = 372;
 
     public const int TrayColumns = 5;
     /// <summary>Prefijo de la clave de icono de una app en segundo plano (el resto es su HICON); el anfitrión la resuelve con los píxeles del icono.</summary>

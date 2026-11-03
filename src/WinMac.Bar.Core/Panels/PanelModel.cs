@@ -38,11 +38,15 @@ public enum WidgetKind
     // ── menú de WinMac (el de la manzana)
     MenuItem,    // opción de menú: texto, ✓ si On, atenuada si no está disponible; resalte azul al pasar el ratón
     UserHeader,  // WM-009: avatar (iniciales), nombre, sesión y botón de apagado a la derecha (Data = UserHeaderData)
+    LinkRow,     // WM-022: pie con enlaces de texto en una fila (Ajustes de WinMac · Acerca de · Forzar salida; Data = LinkRowData)
     ActionStrip, // WM-009: fila de botones redondos con icono y texto (Suspender, Reiniciar…; Data = ActionStripData)
     TrayGrid,    // cuadrícula de iconos de las apps en segundo plano, como el desplegable de la bandeja de Windows (Data = TrayGridData); clic = abrir, clic derecho = su menú
 }
 
-public sealed record UserHeaderData(string Initials, string PowerId);
+/// <param name="AccountId">Event of the «Cuenta» button on the right (Windows account settings).</param>
+public sealed record UserHeaderData(string Initials, string AccountId);
+public sealed record LinkItem(string Id, string Label, bool Enabled);
+public sealed record LinkRowData(IReadOnlyList<LinkItem> Links);
 public sealed record StripAction(string Id, string Glyph, string Label);
 public sealed record ActionStripData(IReadOnlyList<StripAction> Actions);
 public sealed record TabsData(IReadOnlyList<WinMac.Bar.Hub.TabItem> Tabs, int Selected);
@@ -130,8 +134,9 @@ public static class PanelLayout
         WidgetKind.NotifGroup => 30,
         WidgetKind.NotifCard => NotifCardHeight(w.Data as NotifCardData),
         WidgetKind.MenuItem => 24,
-        WidgetKind.UserHeader => 58,
-        WidgetKind.ActionStrip => 66,
+        WidgetKind.UserHeader => 62,
+        WidgetKind.ActionStrip => 80,
+        WidgetKind.LinkRow => 30,
         WidgetKind.TrayGrid => w.Data is TrayGridData g ? Math.Ceiling(g.Cells.Count / (double)Math.Max(1, g.Columns)) * TrayCell : TrayCell,
         WidgetKind.NcEmpty => Math.Max(118, 76 + 14 * Math.Ceiling((w.Sub?.Length ?? 0) / 44.0)),
         _ => 30,
@@ -240,9 +245,16 @@ public static class PanelLayout
 
     // ── Centro de Notificaciones
     /// <summary>«×» de cerrar del encabezado (arriba a la derecha).</summary>
-    /// <summary>WM-009: the round power button at the right of the user header (36 DIP).</summary>
-    public static bool UserPowerHit(WidgetFrame f, double x) => x >= f.X + f.Width - 44;
-    public static (double X, double Y, double W, double H) UserPowerRect(WidgetFrame f) => (f.X + f.Width - 40, f.Y + (f.Height - 34) / 2, 34, 34);
+    /// <summary>WM-022: the «Cuenta» button at the right of the user header.</summary>
+    public static (double X, double Y, double W, double H) UserAccountRect(WidgetFrame f) => (f.X + f.Width - 76, f.Y + (f.Height - 28) / 2, 76, 28);
+    public static bool UserPowerHit(WidgetFrame f, double x) => x >= UserAccountRect(f).X;
+
+    /// <summary>WM-022: which link of a LinkRow is under x (equal widths; -1 = none).</summary>
+    public static int LinkAt(WidgetFrame f, double x)
+    {
+        if (f.W.Data is not LinkRowData d || d.Links.Count == 0) return -1;
+        int k = (int)Math.Floor((x - f.X) / (f.Width / d.Links.Count)); return k >= 0 && k < d.Links.Count && d.Links[k].Enabled ? k : -1;
+    }
 
     /// <summary>WM-009: which of the evenly spaced round buttons of an action strip is under x (-1 = none).</summary>
     public static int StripActionAt(WidgetFrame f, double x)
