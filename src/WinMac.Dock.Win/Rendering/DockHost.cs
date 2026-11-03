@@ -432,8 +432,25 @@ public sealed class DockHost : IDisposable
         }
     }
 
-    /// <summary>Menú contextual NATIVO de Windows (accesible, con el estilo del sistema), con submenús y marcas de selección. Devuelve la acción elegida o null.</summary>
+    /// <summary>WM-017: el menú oscuro de WinMac (mismas entradas y acciones); el nativo de Windows queda solo como respaldo si el oscuro no se puede crear.</summary>
     private DockAction? ShowMenu(IReadOnlyList<MenuEntry> entries)
+    {
+        try
+        {
+            Native.GetCursorPos(out var cp); _modal = true;
+            var r = DarkMenuWindow.Show(entries, cp.X, cp.Y, _scale, _log);
+            if (MenuDiag) _log("[dock] menú oscuro: " + (r is null ? "cerrado sin elegir" : "eligió " + r.Kind));
+            return r;
+        }
+        catch (Exception e) { _log("Menú oscuro no disponible, se usa el de Windows: " + e.GetType().Name + ": " + e.Message); }
+        finally { _modal = false; }
+        return ShowNativeMenu(entries);
+    }
+
+    private static readonly bool MenuDiag = Environment.GetEnvironmentVariable("WINMAC_MENU_DIAG") == "1";
+
+    /// <summary>Menú contextual NATIVO de Windows (respaldo), con submenús y marcas de selección. Devuelve la acción elegida o null.</summary>
+    private DockAction? ShowNativeMenu(IReadOnlyList<MenuEntry> entries)
     {
         var actions = new List<DockAction?>();   // el id de cada comando del menú es su posición + 1
         IntPtr Build(IReadOnlyList<MenuEntry> list)

@@ -20,7 +20,13 @@ internal static class Program
             if (args.Contains("--install-autostart")) { Autostart.Install(exe, name); Console.WriteLine($"Inicio automático activado ({name} → {Autostart.Current(name)})."); return 0; }
             if (args.Contains("--remove-autostart")) { Console.WriteLine(Autostart.Remove(name) ? "Inicio automático desactivado." : "El inicio automático no estaba activado."); return 0; }
             if (args.Contains("--quit")) return HostApp.SignalQuit();
-            if (args.Contains("--render-settings")) return SettingsOffscreen.Run(args);   // solo CI: dibuja Ajustes fuera de pantalla
+            if (args.Contains("--render-settings")) return SettingsOffscreen.Run(args);
+            if (args.Contains("--render-tray-panel"))   // solo CI: el panel de la bandeja con estados de MUESTRA
+            {
+                string png = HostOptions.Arg(args, "--out", "bandeja.png");
+                var st = new Dictionary<string, WinMac.Host.ModuleState> { ["bar"] = WinMac.Host.ModuleState.Running, ["dock"] = WinMac.Host.ModuleState.Running, ["notch"] = WinMac.Host.ModuleState.Failed };
+                File.WriteAllText(png + ".txt", TrayPanel.RenderOffscreen(png, WinMac.Host.TrayPanelModel.Build(st, "2.0"), 2)); return 0;
+            }   // solo CI: dibuja Ajustes fuera de pantalla
             return HostApp.Run(HostOptions.Parse(args));
         }
         catch (Exception e) { try { Console.Error.WriteLine("ERROR: " + e); } catch (Exception) { } return 1; }

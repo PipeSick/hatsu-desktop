@@ -21,7 +21,9 @@ public static class QuickLook
         double maxW = 220 * s, maxH = 150 * s, k = Math.Min(maxW / Math.Max(1, imgW), maxH / Math.Max(1, imgH));
         int w = Math.Max((int)(60 * s), (int)Math.Round(imgW * k)), h = Math.Max((int)(40 * s), (int)Math.Round(imgH * k));
         int right = work.Right - margin, bottom = work.Bottom - margin;
-        if (dock is { } d && d.W > 0 && d.X < right && d.Right > right - w && d.Y < bottom && d.Bottom > work.Y + work.H / 2) bottom = Math.Min(bottom, d.Y - margin);   // never under the Dock
+        // Never under the Dock. Its WINDOW is taller than the visible Dock (room for the magnified icons), so its top is not used: when the Dock reserves its
+        // band the work area already ends above it; otherwise (auto-hide) the visible Dock is about 110 DIP above the bottom of its window.
+        if (dock is { } d && d.W > 0 && d.X < right && d.Right > right - w && d.Bottom > bottom) bottom = Math.Min(bottom, d.Bottom - (int)Math.Round(110 * s) - margin);
         return new CaptureRect(right - w, bottom - h, w, h);
     }
 

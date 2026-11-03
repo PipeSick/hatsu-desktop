@@ -234,7 +234,7 @@ if (WaitFor { LogHas $barLog '[quicklook] miniatura' } 6) {
     [Au]::Click([int]$m.Groups[1].Value, [int]$m.Groups[2].Value)
     if (WaitFor { LogHas $barLog '[quicklook] vista previa abierta' } 6) {
       Start-Sleep -Milliseconds 600; Shot '32d-quicklook-vista-previa' 'Quick Look: vista previa centrada con Copiar, Editar, Anotar, Recortar, Compartir, Guardar como, Abrir y Eliminar'
-      $c = [regex]::Match((BarLine '[quicklook] diag copy@'), 'copy@(\d+),(\d+)')
+      $c = [regex]::Match((BarLine '[quicklook] diag close@'), 'copy@(\d+),(\d+)')
       if ($c.Success) { [Au]::Click([int]$c.Groups[1].Value, [int]$c.Groups[2].Value); Start-Sleep -Milliseconds 700; $img = Get-Clipboard -Format Image -ErrorAction SilentlyContinue; Note "  - Copiar: $(if ($img) { "imagen en el portapapeles ($($img.Width)x$($img.Height))" } else { 'NO hay imagen en el portapapeles' })"; Shot '32e-quicklook-copiada' 'Quick Look tras «Copiar» (aviso en la vista previa)' }
       [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 600
       Note "  - Esc cierra la vista previa: $(-not [Au]::Visible('WinMacQuickLook'))"
@@ -272,6 +272,19 @@ if ($res -match '\(-?\d+,(-?\d+)\)-\(-?\d+,-?\d+\)' -and $mr -match '^(-?\d+),(-
   Note "  - WM-001: borde inferior de la ventana $mBottom px; franja del Dock desde $bandTop px → $(if ($mBottom -le $bandTop + 16) { 'NO la tapa (correcto)' } else { 'la ventana sigue bajo el Dock' })"
 } else { Note '  - WM-001: no se pudo medir (falta la línea de reserva o la ventana)' }
 Shot '32b-dock-ventana-maximizada' 'WM-001: ventana maximizada con el Dock reservando su franja (los controles inferiores quedan visibles)'
+# ── WM-017: menú contextual oscuro del Dock (clic derecho real sobre el primer icono)
+$dkr = [Au]::RectOf('WinMacDock')
+if ($dkr -match '^(-?\d+),(-?\d+) (\d+)x(\d+)') {
+  $dx = [int]$Matches[1] + [int]([int]$Matches[3] * 0.28); $dy = [int]$Matches[2] + [int]$Matches[4] - 48
+  [Au]::SetCursorPos($dx, $dy) | Out-Null; Start-Sleep -Milliseconds 300
+  [Au]::mouse_event(8, 0, 0, 0, [IntPtr]::Zero); [Au]::mouse_event(16, 0, 0, 0, [IntPtr]::Zero)   # RIGHTDOWN / RIGHTUP
+  if (WaitFor { [Au]::Visible('WinMacDockMenu') } 4) {
+    Start-Sleep -Milliseconds 400; Note "  - WM-017: menú oscuro del Dock abierto ($([Au]::RectOf('WinMacDockMenu')))"
+    Shot '32f-dock-menu-oscuro' 'WM-017: menú contextual del Dock con el estilo oscuro de WinMac (mismas acciones que antes)'
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 400
+    Note "  - WM-017: Esc lo cierra: $(-not [Au]::Visible('WinMacDockMenu'))"
+  } else { Note '  - WM-017: el menú del Dock NO apareció con el clic derecho' }
+}
 Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 1500
 $capAfter = @(Get-ChildItem $shotsDir -Filter 'Captura *' -ErrorAction SilentlyContinue)
@@ -582,6 +595,9 @@ foreach ($r in @(@('bar', 1300, '49a-ajustes-atajos'), @('spot', 0, '49b-ajustes
   Start-Process -FilePath $hostExe -ArgumentList @('--render-settings', $r[0], '--scroll', $r[1], '--out', "`"$png`"", '--scale', '1') -Wait -WindowStyle Hidden | Out-Null
   Note "- **$($r[2]).png**: Ajustes › $($r[0]) desplazado $($r[1]) DIP (los atajos solo muestran su estado real en la ventana viva: aquí no hay Barra que informe)"
 }
+$trayPng = Join-Path $OutDir '49i-panel-bandeja-winmac.png'
+Start-Process -FilePath $hostExe -ArgumentList @('--render-tray-panel', '--out', "`"$trayPng`"") -Wait -WindowStyle Hidden | Out-Null
+Note "- **49i-panel-bandeja-winmac.png**: WM-011, panel del icono de WinMac en la bandeja (estados de MUESTRA: la Isla «falló»), fuera de pantalla con el código de dibujo real"
 Measure-Idle 'al final, tras usar todo' 10
 Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; [void]$hp.WaitForExit(30000)
 Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue

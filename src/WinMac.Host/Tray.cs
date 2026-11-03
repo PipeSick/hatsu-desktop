@@ -55,7 +55,33 @@ internal sealed class Tray : IDisposable
         ModuleState.Failed => "falló (no se reintenta)", ModuleState.NotInstalled => "no instalada", _ => "desactivado",
     };
 
+    private TrayPanel? _panel;
+    private static readonly string Version = typeof(Tray).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false) is [System.Reflection.AssemblyInformationalVersionAttribute v, ..] ? v.InformationalVersion.Split('+')[0] : "2.0";
+
+    /// <summary>WM-011: the dark WinMac panel; the classic menu stays only as a fallback if the panel cannot be created (no GPU device, for example).</summary>
     private void ShowMenu()
+    {
+        try
+        {
+            var states = _states();
+            _panel ??= new TrayPanel(a => RunPanelAction(a, states), _log);
+            Native.GetCursorPos(out var p);
+            _panel.Show(TrayPanelModel.Build(states, Version), p.X, p.Y);
+            return;
+        }
+        catch (Exception e) { _log("[host] panel de la bandeja no disponible, menú clásico: " + e.GetType().Name + ": " + e.Message); _panel?.Close(); }
+        ShowClassicMenu();
+    }
+
+    private void RunPanelAction(string a, IReadOnlyDictionary<string, ModuleState> states)
+    {
+        if (a == "quit") _quit();
+        else if (a == "settings") _settings();
+        else if (a == "restart-all") { foreach (var (id, st) in states) if (st is not (ModuleState.Disabled or ModuleState.NotInstalled)) _open(id); }
+        else if (a.IndexOf(':') is var i and > 0) _open(a[(i + 1)..]);   // restart:/open:/enable: — the host's handler restarts, opens or enables as fits
+    }
+
+    private void ShowClassicMenu()
     {
         IntPtr menu = Native.CreatePopupMenu();
         try
@@ -85,5 +111,5 @@ internal sealed class Tray : IDisposable
         var d = Data(0); Native.Shell_NotifyIconW(Native.NIM_DELETE, ref d); _added = false;
     }
 
-    public void Dispose() { RemoveIcon(); if (_hwnd != IntPtr.Zero) { Native.DestroyWindow(_hwnd); _hwnd = IntPtr.Zero; } }
+    public void Dispose() { _panel?.Dispose(); RemoveIcon(); if (_hwnd != IntPtr.Zero) { Native.DestroyWindow(_hwnd); _hwnd = IntPtr.Zero; } }
 }

@@ -58,10 +58,12 @@ public class QuickLookTests
     {
         var t = WinMac.Bar.Capture.QuickLook.ThumbRect(Mon, null, 1920, 1080);
         Assert.Equal(1920 - 24, t.X + t.W); Assert.Equal(54 + 930 - 24, t.Y + t.H); Assert.True(t.W <= 330 && t.H <= 225);
-        var dock = new WinMac.Bar.Capture.CaptureRect(300, 900, 1500, 170);   // Dock with auto-hide: the work area reaches the bottom, the window is there
+        var dock = new WinMac.Bar.Capture.CaptureRect(210, 412, 1500, 668);   // Dock with auto-hide: its WINDOW is tall (magnification room), the visible Dock is the bottom ~110 DIP
         var full = Mon with { Work = new(0, 54, 1920, 1026) };
         var u = WinMac.Bar.Capture.QuickLook.ThumbRect(full, dock, 1920, 1080);
-        Assert.True(u.Y + u.H <= dock.Y - 24);
+        Assert.Equal(1080 - 165 - 24, u.Y + u.H);   // above the visible Dock, still at the bottom (CI: it went to y=109 using the window's top)
+        var side = WinMac.Bar.Capture.QuickLook.ThumbRect(full, new(18, 412, 1200, 668), 1920, 1080);
+        Assert.Equal(1080 - 24, side.Y + side.H);   // a centred Dock that does not reach the right corner: the thumbnail stays in the corner
     }
 
     [Fact]
