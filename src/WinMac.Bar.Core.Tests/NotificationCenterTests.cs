@@ -347,3 +347,18 @@ public class NcGeometryTests
         double mid = NcGeometry.SlideOffset(110, 220, 356, true); Assert.InRange(mid, 1, 178);   // ease-out: a mitad de tiempo ya recorrió más de la mitad
     }
 }
+
+public class NotificationLimitWm012Tests
+{
+    [Fact]
+    public void A_folded_group_does_not_produce_a_false_shown_n_of_m_and_many_notifications_all_stay_reachable()
+    {
+        var r = new NcRig(); r.Src.Items.AddRange([NcRig.N(1, "Mail", 1), NcRig.N(2, "Mail", 2), NcRig.N(3, "Teams", 3), NcRig.N(4, "Chat", 4)]); r.Open();
+        var m = r.Panel();
+        Assert.DoesNotContain(m.Widgets, w => w.Id == "nc-more");   // beta: «Se muestran 3 de 4» with Mail folded
+        Assert.Contains(m.Widgets, w => w.Kind == WidgetKind.NotifGroup);
+
+        var big = new NcRig(); big.Src.Items.AddRange(Enumerable.Range(1, 60).Select(i => NcRig.N((uint)i, "App" + i, i))); big.Open();
+        Assert.Equal(60, big.Panel().Widgets.Count(w => w.Kind == WidgetKind.NotifCard));   // no arbitrary cap at a handful
+    }
+}

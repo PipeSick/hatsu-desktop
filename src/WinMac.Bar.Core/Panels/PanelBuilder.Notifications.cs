@@ -9,7 +9,7 @@ public sealed record NcView(NcState State, IReadOnlySet<string> Expanded, double
 
 public static partial class PanelBuilder
 {
-    public const int NcMaxGroups = 16, NcMaxCards = 40, NcMaxCities = 3;
+    public const int NcMaxGroups = 60, NcMaxCards = 150, NcMaxCities = 3;   // WM-012: the panel scrolls; these only protect against hundreds of toasts
 
     /// <summary>Prefijo de las claves de icono de app (el anfitrión las resuelve con el icono que entregó Windows).</summary>
     public const string NcIconPrefix = "notif-app:";
@@ -68,7 +68,7 @@ public static partial class PanelBuilder
         }
 
         w.Add(new Widget(WidgetKind.NcSection, "nc-sec", "Notificaciones", st.Count.ToString(), Data: new NcSectionData("nc:clearall", win ? "Borrar todo" : "Ocultar todo")));
-        int cards = 0; var now = new DateTimeOffset(c.Now);
+        int cards = 0, reachable = 0; var now = new DateTimeOffset(c.Now);
         foreach (var g in st.Groups.Take(NcMaxGroups))
         {
             if (cards >= NcMaxCards) break;
@@ -79,14 +79,15 @@ public static partial class PanelBuilder
                 return new Widget(WidgetKind.NotifCard, "n:" + n.Id, p, s, Data: new NotifCardData(n.Id, g.Key, icon, g.AppName, p, s, NotificationText.When(n.Time, now, c.Cfg.Use24Hour), true, stacked, showApp));
             }
 
-            if (g.Items.Count == 1) { w.Add(Card(g.Items[0], true, 0)); continue; }
+            if (g.Items.Count == 1) { w.Add(Card(g.Items[0], true, 0)); reachable++; continue; }
             bool open = nc.Expanded.Contains(g.Key);
             w.Add(new Widget(WidgetKind.NotifGroup, "ng:" + g.Key, g.AppName, g.Items.Count.ToString(), On: open, Data: new NotifGroupData(g.Key, icon, g.AppName, g.Items.Count, open, win ? "Borrar" : "Ocultar")));
-            if (!open) { w.Add(Card(g.Items[0], false, g.Items.Count - 1)); continue; }
-            foreach (var n in g.Items) { if (cards >= NcMaxCards) break; w.Add(Card(n, false, 0)); }
+            if (!open) { w.Add(Card(g.Items[0], false, g.Items.Count - 1)); reachable += g.Items.Count; continue; }   // a stacked group: all of them are one click away
+            foreach (var n in g.Items) { if (cards >= NcMaxCards) break; w.Add(Card(n, false, 0)); reachable++; }
         }
 
-        int shown = cards, total = st.Count;
+        // WM-012: «Se muestran 3 de 4» appeared with a folded group of 2 although all were reachable. Now only a REAL limit is reported.
+        int shown = reachable, total = st.Count;
         if (shown < total) w.Add(new Widget(WidgetKind.Note, "nc-more", $"Se muestran {shown} de {total}. Las demás siguen en el centro de notificaciones de Windows."));
         if (st.Message is not null) w.Add(new Widget(WidgetKind.Note, "nc-msg", st.Message));
         w.Add(new Widget(WidgetKind.Note, "nc-mode", (win
