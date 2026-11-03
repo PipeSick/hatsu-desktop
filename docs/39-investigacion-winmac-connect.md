@@ -88,6 +88,19 @@ Abre «Terminal» o «Símbolo del sistema» en la carpeta donde la descomprimas
 
 Para deshacerlo todo: Configuración › Bluetooth › tu iPhone › Quitar dispositivo, y en el iPhone, Ajustes › Bluetooth › (i) › Omitir dispositivo. No queda nada más instalado.
 
+## 6b. Resultados reales — primera ronda (2026-11-03, PC del usuario, Windows 11 compilación 26300, iPhone 17 Pro)
+
+| Prueba | Resultado | Conclusión |
+|---|---|---|
+| 1 Adaptador | Classic, LE, rol central y periférico, LE y Classic Secure Connections, publicidad extendida: **todo True** | El Bluetooth integrado sirve para todo lo investigado |
+| 2–3 Emparejamiento | El iPhone aparece en **Classic** (conectado) y en **LE** (dirección aleatoria, protección `EncryptionAndAuthentication`) | El emparejamiento normal de Windows crea también el vínculo LE cifrado y autenticado |
+| 4–5 GATT y batería | Servicios publicados: Battery Service, ANCS, AMS, Current Time, Device Information (más Continuity y Nearby, privados, que no se usan, y servicios de apps de terceros, `0xFE15` y otros). **Batería: 75 % (lectura real)**; suscripción a cambios: Success | **Batería: verificada** (lectura y suscripción; falta ver un cambio de valor) |
+| 6–7 ANCS | Servicio presente, Notification Source, Control Point y Data Source presentes; **suscripciones aceptadas (Success)**, sin error de autorización. En 30 s llegaron **0** eventos, ni siquiera de las notificaciones ya existentes | Acceso autorizado. Falta ver eventos: segunda ronda de 2 min con la conexión LE mantenida (`GattSession.MaintainConnection`) y comprobación del permiso en el iPhone |
+| 8 Classic | El iPhone publica **MAP** (0x1132), **PBAP** (0x112F) y **HFP AG** (0x111F), con cifrado y autenticación (más dos servicios de Apple, iAP, que no se usan). Telefonía de Windows: **`DeniedBySystem`**, no registrado | **Llamadas con audio y control HFP desde WinMac: bloqueado** (confirmado en tu PC). Contestar y rechazar sigue siendo posible por ANCS |
+| 8b MAP | **El canal RFCOMM de MAP se abre** desde una aplicación de escritorio normal. Respuesta OBEX a CONNECT: `0xC3` (prohibido) | Windows no bloquea MAP. El iPhone lo rechaza porque falta su permiso para el PC («Mostrar notificaciones» en Ajustes › Bluetooth › (i)). Se repite en la segunda ronda |
+
+Estados actualizados: **Batería → Verificado** · **Notificaciones → Viable técnicamente** (autorizado, eventos pendientes) · **Llamadas (aviso y contestar por ANCS) → Viable técnicamente** · **Llamadas (HFP, audio en el PC) → Bloqueado** · **SMS/iMessage → Viable técnicamente** (el canal se abre; falta el permiso del iPhone).
+
 ## 7. Arquitecturas candidatas
 
 | Estrategia | Descripción | Valoración |
