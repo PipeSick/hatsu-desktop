@@ -83,13 +83,14 @@ No cierra, sustituye, inyecta ni parchea Explorer. No usa ganchos ni escribe en 
 ## 5. Beta privada (entregable E)
 
 - Commits de esta iteración: `a196fb0` … `20ca1c9` (WinMac) y `698969f`, `bd588fb` (NotchWin; fijado en `tools/notch-pin.txt`).
-- CI y artefacto: ver §6 (se completa con el número de ejecución y el nombre exacto del artefacto `winmac-paquete-<sha>`).
+- CI y artefacto: §6.
 - Actualizar: cierra WinMac (icono de la bandeja › Salir, o `WinMac.exe --quit`), descomprime el ZIP nuevo **sobre la misma carpeta** (o en otra y apunta el inicio automático con `WinMac.exe --install-autostart`) y abre `WinMac.exe`. Tus ajustes (`%APPDATA%\WinMac\winmac.json`, `dock.json`) se conservan. Los campos nuevos (`hideTaskbar`, `bar.soundMixer`) toman su valor por defecto sin migración destructiva.
 - Avisos conocidos: el cambio de salida/entrada usa `IPolicyConfig` (no documentada); la ocultación de la barra de tareas está sin validar en hardware real; la bandeja no tiene paridad (WM-023); «No molestar» solo abre su ajuste.
 
 ## 6. Ejecución del CI
 
-_Se rellena al terminar la ejecución del último commit._
+Commit `20ca1c9` (último con código; después solo documentación) · [Actions 41702458325](https://github.com/PipeSick/win11-macos/actions/runs/41702458325): los cuatro trabajos en verde (compilación y pruebas Windows, pruebas del host, integración con NotchWin + paquete reproducible + desinstalación + `Verify-Package`, compilación cruzada Linux).
+**Artefacto de la beta: `winmac-paquete-20ca1c9eb0c735412539a9f844c99c4917f45ab3`** (ZIP autocontenido, con `Restore-Taskbar.ps1`). Pruebas locales: Bar.Core 426, Host.Core 126, Dock.Core 148 en verde.
 
 ## 7. Lista de prueba manual
 
