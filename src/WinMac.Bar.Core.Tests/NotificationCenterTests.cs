@@ -397,3 +397,20 @@ public class NotificationDeleteWm026Tests
         Assert.Equal(0, r.Store.State.Count); Assert.Null(r.Store.State.Message);
     }
 }
+
+public class NotchSnapshotWm025Tests
+{
+    [Fact]
+    public void The_island_gets_what_windows_holds_with_ids_and_only_when_it_changes()
+    {
+        var a = new AppNotification(7, "MSTeams!App", "Teams", "Ana", "¿Vienes?", DateTimeOffset.FromUnixTimeSeconds(3000));
+        var b = new AppNotification(8, "", "Mail", "Factura", null, DateTimeOffset.FromUnixTimeSeconds(1000));
+        var json = System.Text.Json.JsonSerializer.SerializeToElement(WinMac.Bar.Notch.NotchFeed.Snapshot([b, a]));
+        Assert.Equal("notifications", json.GetProperty("kind").GetString());
+        var items = json.GetProperty("items"); Assert.Equal(7u, items[0].GetProperty("id").GetUInt32()); Assert.Equal("MSTeams!App", items[0].GetProperty("appId").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, items[1].GetProperty("appId").ValueKind);
+        Assert.Equal(WinMac.Bar.Notch.NotchFeed.SnapshotKey([a, b]), WinMac.Bar.Notch.NotchFeed.SnapshotKey([b, a]));
+        Assert.NotEqual(WinMac.Bar.Notch.NotchFeed.SnapshotKey([a, b]), WinMac.Bar.Notch.NotchFeed.SnapshotKey([a]));
+        Assert.Equal(7u, System.Text.Json.JsonSerializer.SerializeToElement(WinMac.Bar.Notch.NotchFeed.Notification(a, null)).GetProperty("id").GetUInt32());   // the pill knows which one it is
+    }
+}

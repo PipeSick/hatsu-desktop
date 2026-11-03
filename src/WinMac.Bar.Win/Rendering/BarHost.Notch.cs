@@ -23,7 +23,7 @@ public sealed partial class BarHost
     private IDisposable? _volWatch, _brightWatch;
     private bool _notchStarted, _notchReading;
     private DateTime _nextNotchRead = DateTime.MinValue;
-    private readonly NewNotificationTracker _notchTracker = new();
+    private readonly NewNotificationTracker _notchTracker = new(); private string? _notchSnapshotKey;
 
     /// <summary>Envía un evento a la Isla (lo pone Program en modo integrado). Se llama desde cualquier hilo.</summary>
     public Action<object>? NotchEvent { get; set; }
@@ -32,7 +32,7 @@ public sealed partial class BarHost
     public Action<object>? NotchActivity { get; set; }
 
     /// <summary>Ajustes centrales de la Isla (tópico retenido): qué quiere recibir.</summary>
-    public void ApplyNotchOptions(NotchFeedOptions o) { _notchOpts = o; if (!o.Notifications) Post(_notchTracker.Reset); }
+    public void ApplyNotchOptions(NotchFeedOptions o) { _notchOpts = o; _notchSnapshotKey = null; if (!o.Notifications) Post(_notchTracker.Reset); }   // the Island (re)connected: it gets the snapshot again
 
     private void Send(object payload)
     {
@@ -46,7 +46,8 @@ public sealed partial class BarHost
         var now = DateTime.UtcNow;
         if (now < _nextNotchRead || _notchReading) return;
         _nextNotchRead = now + NotchNotifyEvery;
-        if (!_notchOpts.Notifications || !_cfg.NotificationsFromWindows || _ncSrc is not { } src) { _notchTracker.Reset(); return; }
+        // WM-025: Windows is read whenever WinMac shows Windows' notifications (also with the pill off): the Island's tab mirrors the centre; pills stay optional
+        if (!_cfg.NotificationsFromWindows || _ncSrc is not { } src) { _notchTracker.Reset(); return; }
         _notchReading = true;
         Task.Run(() =>
         {
@@ -57,6 +58,8 @@ public sealed partial class BarHost
             {
                 _notchReading = false;
                 if (list is null) { _notchTracker.Reset(); return; }
+                var key = NotchFeed.SnapshotKey(list);
+                if (key != _notchSnapshotKey) { _notchSnapshotKey = key; Send(NotchFeed.Snapshot(list)); }
                 var fresh = _notchTracker.Observe(list, DateTimeOffset.Now);
                 if (fresh.Count == 0 || !_notchOpts.Notifications) return;
                 if (NotchFeed.Quiet(UserNotificationState())) { _log($"[isla] {fresh.Count} notificación(es) sin mostrar: No molestar / presentación / pantalla completa"); return; }

@@ -36,10 +36,23 @@ public static class NotchFeed
         bool ok = icon is not null && iconSide > 0 && icon.Length == iconSide * iconSide * 4;
         return new
         {
-            kind = "notification", app = n.DisplayApp, title = n.Title, body = n.Body,
+            kind = "notification", id = n.Id, app = n.DisplayApp, title = n.Title, body = n.Body,
             icon = ok ? Convert.ToBase64String(icon!) : null, iconW = ok ? iconSide : 0, iconH = ok ? iconSide : 0,
         };
     }
+
+    /// <summary>
+    /// WM-025: snapshot of what Windows' notification centre holds now, newest first (at most 60), for the Island's Notifications tab. No icons (the tab draws
+    /// the app's initial; icons travel only with the pill). Sent only when the set changes (<see cref="SnapshotKey"/>).
+    /// </summary>
+    public static object Snapshot(IReadOnlyList<AppNotification> list) => new
+    {
+        kind = "notifications",
+        items = list.OrderByDescending(n => n.Time).Take(60).Select(n => new { id = n.Id, app = n.DisplayApp, appId = string.IsNullOrWhiteSpace(n.AppId) ? null : n.AppId, title = n.Title, body = n.Body, at = n.Time.ToUnixTimeMilliseconds() }).ToArray(),
+    };
+
+    /// <summary>Identity of a snapshot (ids and times): equal keys mean nothing to send.</summary>
+    public static string SnapshotKey(IReadOnlyList<AppNotification> list) => string.Join(",", list.OrderBy(n => n.Id).Select(n => n.Id + ":" + n.Time.ToUnixTimeMilliseconds()));
 
     /// <summary>Modo «No molestar» / presentación / pantalla completa: <c>SHQueryUserNotificationState</c> distinto de <c>QUNS_ACCEPTS_NOTIFICATIONS</c> (5).
     /// Desconocido (la llamada falla) cuenta como «acepta», igual que hace Windows con sus propias notificaciones.</summary>
