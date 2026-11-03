@@ -22,7 +22,8 @@ public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo
 }
 
 /// <summary>WM-009: who is signed in, for the header of the WinMac panel. Name from Windows (display name or user name); the avatar is the initials.</summary>
-public sealed record SessionUser(string Name, string Machine)
+/// <param name="PictureKey">Icon key of the Windows account picture (64×64) when it could be read; null → initials.</param>
+public sealed record SessionUser(string Name, string Machine, string? PictureKey = null)
 {
     public string Initials => string.Concat(Name.Split([' ', '.', '_', '-'], StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0]))) is { Length: > 0 } i ? i : "?";
 }
@@ -65,7 +66,7 @@ public static partial class PanelBuilder
         // grandes y un pie compacto. Las opciones del menú antiguo que eran ajustes (reservar espacio, salir de la barra) viven en Ajustes.
         var s = c.Sys; var w = new List<Widget>();
         var user = c.User ?? new SessionUser(Environment.UserName, Environment.MachineName);
-        w.Add(new Widget(WidgetKind.UserHeader, "apple:user", user.Name, "Sesión iniciada en " + user.Machine, Data: new UserHeaderData(user.Initials, "open:ms-settings:yourinfo")));
+        w.Add(new Widget(WidgetKind.UserHeader, "apple:user", user.Name, "Sesión iniciada en " + user.Machine, Data: new UserHeaderData(user.Initials, "open:ms-settings:yourinfo", user.PictureKey)));
         int col = 0;
         void Tile(Widget t) { w.Add(t with { Col = col }); col = 1 - col; }
         Tile(new Widget(WidgetKind.Tile, "open:wifi", "Wi-Fi", !s.Wifi.Available ? "No disponible" : s.Wifi.Connected ? s.Wifi.Ssid : s.Wifi.Reason is not null ? "Requiere ubicación" : "Sin conexión", On: s.Wifi.Available && s.Wifi.Connected, Enabled: s.Wifi.Available, Reason: s.Wifi.Reason, Glyph: "wifi", Bars: s.Wifi.Bars));

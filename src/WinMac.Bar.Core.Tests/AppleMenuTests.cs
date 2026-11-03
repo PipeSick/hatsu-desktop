@@ -15,6 +15,9 @@ public class AppleMenuTests
         var m = PanelBuilder.AppleMenu(Ctx() with { User = new SessionUser("Ana María Pérez", "PORTATIL") });
         var head = m.Widgets[0]; Assert.Equal(WidgetKind.UserHeader, head.Kind); Assert.Equal("Ana María Pérez", head.Text); Assert.Equal("AM", ((UserHeaderData)head.Data!).Initials);
         Assert.Equal("open:ms-settings:yourinfo", ((UserHeaderData)head.Data!).AccountId);   // account options
+        Assert.Null(((UserHeaderData)head.Data!).PictureKey);                                 // WM-029: no picture read → initials
+        var withPic = PanelBuilder.AppleMenu(Ctx() with { User = new SessionUser("Ana", "PC", "user-picture:42") });
+        Assert.Equal("user-picture:42", ((UserHeaderData)withPic.Widgets[0].Data!).PictureKey);
         Assert.Equal(["open:wifi", "open:bluetooth", "open:ms-settings:notifications", "open:display", "open:battery", "open:ms-settings:"], m.Widgets.Where(w => w.Kind == WidgetKind.Tile).Select(w => w.Id));
         Assert.Equal(["volume", "brightness"], m.Widgets.Where(w => w.Kind == WidgetKind.Slider).Select(w => w.Id));
         Assert.NotNull(m.Card);   // the sliders share a card

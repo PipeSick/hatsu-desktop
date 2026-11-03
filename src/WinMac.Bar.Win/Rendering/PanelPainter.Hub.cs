@@ -59,8 +59,9 @@ public sealed partial class PanelPainter
         try
         {
             var px = IconProvider(exePath);
-            if (px is { Length: 32 * 32 * 4 })
-                unsafe { fixed (byte* p = px) bmp = _ctx.CreateBitmap(new SizeI(32, 32), (IntPtr)p, 32 * 4, new BitmapProperties1(new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96, 96)); }
+            int side = px is { Length: 64 * 64 * 4 } ? 64 : 32;   // WM-029: the account picture comes at 64×64
+            if (px is { Length: 32 * 32 * 4 } or { Length: 64 * 64 * 4 })
+                unsafe { fixed (byte* p = px) bmp = _ctx.CreateBitmap(new SizeI(side, side), (IntPtr)p, (uint)(side * 4), new BitmapProperties1(new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96, 96)); }
         }
         catch (Exception) { bmp = null; }
         if (_icons.Count > 64) { foreach (var b in _icons.Values) b?.Dispose(); _icons.Clear(); }

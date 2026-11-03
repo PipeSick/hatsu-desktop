@@ -47,7 +47,7 @@ public enum WidgetKind
 }
 
 /// <param name="AccountId">Event of the «Cuenta» button on the right (Windows account settings).</param>
-public sealed record UserHeaderData(string Initials, string AccountId);
+public sealed record UserHeaderData(string Initials, string AccountId, string? PictureKey = null);
 public sealed record BatteryHeroData(string? Detail);
 /// <param name="Tone">«good», «warn», «bad» or null (neutral).</param>
 public sealed record StatCard(string Label, string Value, string? Tone);

@@ -58,7 +58,8 @@ public sealed partial class BarHost : IPanelUi
 
     /// <summary>Iconos del panel: los de las apps de las notificaciones (en memoria, los entregó Windows al leer) y los de ejecutables (multifunción).</summary>
     private byte[]? PanelIcon(string key) =>
-        key.StartsWith(PanelBuilder.NcIconPrefix, StringComparison.Ordinal) ? _ncSrc?.CachedIcon(key[PanelBuilder.NcIconPrefix.Length..])
+        key.StartsWith("user-picture:", StringComparison.Ordinal) ? _userPicture
+        : key.StartsWith(PanelBuilder.NcIconPrefix, StringComparison.Ordinal) ? _ncSrc?.CachedIcon(key[PanelBuilder.NcIconPrefix.Length..])
         : key.StartsWith(PanelBuilder.TrayIconPrefix, StringComparison.Ordinal) ? TrayIconBgra(key)
         : _hubSvc.Icons.GetBgra(key, 32);
 
@@ -220,12 +221,37 @@ public sealed partial class BarHost : IPanelUi
         });
     }
 
-    /// <summary>WM-009: the signed-in user's display name (GetUserNameEx NameDisplay), or the account name; the machine name.</summary>
-    private static SessionUser SessionUserInfo()
+    /// <summary>WM-009: the signed-in user's display name (GetUserNameEx NameDisplay), or the account name; the machine name; WM-029: the account picture.</summary>
+    private SessionUser SessionUserInfo()
     {
         string name = Environment.UserName;
         try { var sb = new System.Text.StringBuilder(256); uint n = 256; if (GetUserNameExW(3 /* NameDisplay */, sb, ref n) && sb.Length > 0) name = sb.ToString(); } catch (Exception) { }
-        return new SessionUser(name, Environment.MachineName);
+        RefreshUserPicture();
+        return new SessionUser(name, Environment.MachineName, _userPicture is null ? null : "user-picture:" + _userPictureStamp);
+    }
+
+    private byte[]? _userPicture; private int _userPictureStamp; private bool _userPictureLoading;
+
+    /// <summary>
+    /// WM-029: reads the account picture off the bar thread each time the W panel opens (so a new picture shows next time); when it arrives or changes, the
+    /// panel is rebuilt with a new key (the painter's cache is per key). Initials stay when Windows gives nothing.
+    /// </summary>
+    private void RefreshUserPicture()
+    {
+        if (_userPictureLoading) return; _userPictureLoading = true;
+        Task.Run(async () =>
+        {
+            byte[]? px = null;
+            try { px = await Shell.AccountPicture.LoadAsync(64).ConfigureAwait(false); } catch (Exception e) { _log("[cuenta] sin foto: " + e.GetType().Name); }
+            Post(() =>
+            {
+                _userPictureLoading = false;
+                int stamp = px is null ? 0 : px.Aggregate(17, (h, b) => unchecked(h * 31 + b));
+                if (stamp == _userPictureStamp && (px is null) == (_userPicture is null)) return;
+                _userPicture = px; _userPictureStamp = stamp;
+                if (_popover is { IsOpen: true } && _pkind == PanelKind.AppleMenu) { _pctx = _pctx with { User = _pctx.User is { } u ? u with { PictureKey = px is null ? null : "user-picture:" + stamp } : null }; RebuildPanel(); }
+            });
+        });
     }
 
     [System.Runtime.InteropServices.DllImport("secur32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] private static extern bool GetUserNameExW(int format, System.Text.StringBuilder name, ref uint size);

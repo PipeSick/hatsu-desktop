@@ -226,7 +226,13 @@ public sealed partial class PanelPainter : IDisposable
             {
                 // WM-022: avatar with the initials, the full name (two lines when long, no absurd truncation), the session and the «Cuenta» button
                 double r = 21, ax = x + 2 + r, ay = y + h / 2;
-                FillCircle(ax, ay, (float)r, Accent); TextAlign(uh.Initials, _title, ax - r, ay - r, 2 * r, 2 * r, new Color4(1, 1, 1, 1), TextAlignment.Center);
+                if (uh.PictureKey is { } pk && IconFor(pk) is { } pic)   // WM-029: the Windows account picture, cropped to a circle
+                {
+                    using var bb = _ctx.CreateBitmapBrush(pic, new BitmapBrushProperties { ExtendModeX = ExtendMode.Clamp, ExtendModeY = ExtendMode.Clamp, InterpolationMode = BitmapInterpolationMode.Linear });
+                    var sz = pic.Size; bb.Transform = System.Numerics.Matrix3x2.CreateScale((float)(2 * r / sz.Width), (float)(2 * r / sz.Height)) * System.Numerics.Matrix3x2.CreateTranslation((float)(ax - r), (float)(ay - r));
+                    _ctx.FillEllipse(new Ellipse(new Vector2((float)ax, (float)ay), (float)r, (float)r), bb);
+                }
+                else { FillCircle(ax, ay, (float)r, Accent); TextAlign(uh.Initials, _title, ax - r, ay - r, 2 * r, 2 * r, new Color4(1, 1, 1, 1), TextAlignment.Center); }
                 var ar = PanelLayout.UserAccountRect(f); double tx = ax + r + 12, tw = ar.X - tx - 8;
                 bool two = MeasureText(w.Text, _bodyBold) > tw;
                 if (two) { TextAlign(w.Text, _bodyBold, tx, y + 4, tw, 36, Fg(0.95f), vcenter: false, wrap: true); if (w.Sub is { } s2) Text(s2, _small, tx, y + 40, tw, 16, Fg(0.55f)); }
