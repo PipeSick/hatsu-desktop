@@ -2,7 +2,15 @@
 
 Actualizado: 2026-11-03. Complementa `docs/ESTADO-SESION.md` (contexto anterior: repos, PC del usuario, reglas de trabajo).
 
-## Fase actual: tercera iteración (WM-022…WM-027) — informe: docs/37-informe-iteracion-3.md
+## Fase actual: cuarta iteración (WM-022…WM-034, sonido, WinMac Connect) — informe: docs/38-informe-iteracion-4.md
+Piezas nuevas: mezclador en `PanelBuilder.SoundPanel` (ajuste `bar.soundMixer`; micrófono y sesiones solo con el menú abierto), ocultación de la barra de
+tareas en el HOST (`Host/TaskbarHider.cs` + `Host.Core/TaskbarLease.cs`: registro `%LOCALAPPDATA%\WinMac\taskbar-restore.json`, guardián
+`--taskbar-guard <pid>`, `--restore-taskbar`, `tools/Restore-Taskbar.ps1`; `hideTaskbar` en winmac.json, APAGADO por defecto), página de Ajustes
+«WinMac Connect» (`ConnectPage`: solo Info y botones reales), modo oscuro con estado «Mixto» (`PanelBuilder.AppearanceText`), foto de cuenta
+`Bar.Win/Shell/AccountPicture.cs`, glifos de energía del sistema. NotchWin: WM-031 (tres estados de «En curso»), WM-028 (galería); fijado en bd588fb.
+Pendiente: validación del usuario (docs/38 §4 y §7); siguientes ideas de Connect: QR de enlaces y ANCS opcional.
+
+## Fase anterior: tercera iteración (WM-022…WM-027) — informe: docs/37-informe-iteracion-3.md
 **Metodología definitiva (decisión del usuario): CI verde = compilación y pruebas técnicas.** Nada de capturas, clics simulados ni disparadores
 solo-CI en el pipeline; la validación visual y de interacción la hace el usuario en su Windows. Herramientas visuales opcionales: `tools/manual/`.
 CI: windows-build (compila, pruebas, sintaxis .ps1) · windows-host (Test-Host) · windows-integracion (Build-Local, Test-Notch sin capturas, paquete
