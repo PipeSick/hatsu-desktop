@@ -8,7 +8,7 @@ Las pruebas de concepto van en una herramienta aparte (`ConnectProbe`, fuera de 
 | Función | Qué se puede construir sin app en el iPhone | Estado |
 |---|---|---|
 | **Batería** | Porcentaje real (1 %), con aviso de cambios, por el servicio estándar Battery Service (0x180F) que iOS publica en la conexión LE vinculada. Estado de carga: **no** (BAS solo da el nivel). | Viable técnicamente |
-| **Notificaciones** | Todas las notificaciones del iPhone (app, título, subtítulo, texto, fecha, categoría) con **ANCS**, la especificación pública de Apple. Nuevas, modificadas y eliminadas. Acciones positiva y negativa (p. ej. contestar o rechazar una llamada, borrar). **No** se pueden responder. | Viable técnicamente |
+| **Notificaciones** (verificado en §6c) | Todas las notificaciones del iPhone (app, título, subtítulo, texto, fecha, categoría) con **ANCS**, la especificación pública de Apple. Nuevas, modificadas y eliminadas. Acciones positiva y negativa (p. ej. contestar o rechazar una llamada, borrar). **No** se pueden responder. | Viable técnicamente |
 | **Llamadas** | *Aviso* de llamada entrante con nombre o número y **contestar / rechazar** desde el PC: sí, por ANCS (la llamada sigue en el iPhone). *Marcar y hablar con el micrófono y altavoces del PC* (HFP): la API pública de Windows existe, pero exige una capacidad **restringida** y paquete MSIX, y el único proyecto que lo intentó no logró el audio. | Aviso y contestar: viable · Audio en el PC: experimental, probablemente bloqueado |
 | **SMS / iMessage** | Recibir y **responder** conversaciones 1:1 (SMS e iMessage) con **MAP** sobre RFCOMM, que Windows permite usar con API pública. Dos proyectos Linux lo hacen con iOS 26/27. En Windows nadie lo ha publicado funcionando. Sin grupos, sin historial completo, sin adjuntos. | Experimental (en Windows) |
 
@@ -100,6 +100,21 @@ Para deshacerlo todo: Configuración › Bluetooth › tu iPhone › Quitar disp
 | 8b MAP | **El canal RFCOMM de MAP se abre** desde una aplicación de escritorio normal. Respuesta OBEX a CONNECT: `0xC3` (prohibido) | Windows no bloquea MAP. El iPhone lo rechaza porque falta su permiso para el PC («Mostrar notificaciones» en Ajustes › Bluetooth › (i)). Se repite en la segunda ronda |
 
 Estados actualizados: **Batería → Verificado** · **Notificaciones → Viable técnicamente** (autorizado, eventos pendientes) · **Llamadas (aviso y contestar por ANCS) → Viable técnicamente** · **Llamadas (HFP, audio en el PC) → Bloqueado** · **SMS/iMessage → Viable técnicamente** (el canal se abre; falta el permiso del iPhone).
+
+## 6c. Resultados reales — segunda ronda (mismo día, conexión LE mantenida, permisos del iPhone activados)
+
+| Prueba | Resultado | Conclusión |
+|---|---|---|
+| ANCS | Sesión GATT mantenida y conexión LE estable durante 2 min. Al suscribirse llegaron las **322 notificaciones ya existentes** (Otra 112, Social 182, Noticias 15, Finanzas 8, Entretenimiento 7, Ubicación 2…). Después, en directo: WhatsApp (3), Telegram, Cartera (`com.apple.Passbook`), y **eliminadas** cuando se borraban en el iPhone. Cada nueva traía su app (Get Notification Attributes por Control Point y Data Source) | **Notificaciones: verificado** (nuevas, eliminadas, ya existentes, identificación de la app). El contenido (título y texto) no se pidió por privacidad: los atributos llegan por el mismo canal ya probado |
+| Llamada | **Llamada entrante** detectada al instante (`com.apple.mobilephone`) con **acción positiva y negativa** disponibles; al colgar desde el otro teléfono: eliminada → **llamada perdida**. Un `0xA2` (parámetro inválido) al pedir los datos de una notificación que el iPhone ya había borrado: carrera esperable, hay que tolerarla | **Aviso de llamada: verificado.** Contestar o rechazar (Perform Notification Action) queda viable técnicamente: las acciones están anunciadas, pero no se ejecutaron |
+| MAP | OBEX CONNECT `0xA0` (éxito) y DISCONNECT `0xA0` tras activar el permiso en el iPhone. No se leyó ni listó ningún mensaje | **Sesión MAP: verificada** desde una aplicación de escritorio con API pública. Leer el listado y enviar siguen sin probar |
+
+**Matriz final:** Batería → **Verificado** · Notificaciones → **Verificado** · Llamadas (aviso) → **Verificado**; contestar/rechazar → Viable técnicamente; audio y marcar en el PC (HFP) → **Bloqueado** (`DeniedBySystem`) · SMS/iMessage → **Viable técnicamente** (sesión MAP verificada; listado y envío pendientes).
+
+Avisos para la implementación, aprendidos de las pruebas:
+- `GattSession.MaintainConnection = true` es necesario: sin él no llegaron eventos en la primera ronda.
+- Al suscribirse llegan todas las notificaciones guardadas en el iPhone (aquí 322). La primera carga debe ir en silencio: las marcadas PreExisting se meten en el centro sin avisos ni píldoras.
+- Hay que tolerar `0xA2` cuando una notificación desaparece antes de pedir sus datos.
 
 ## 7. Arquitecturas candidatas
 
