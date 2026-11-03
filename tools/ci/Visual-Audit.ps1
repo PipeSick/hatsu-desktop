@@ -224,6 +224,22 @@ Start-Sleep -Milliseconds 800
 & $bar --capture screen | Out-Null
 if (WaitFor { [Au]::Visible('WinMacCapture') } 8) { Start-Sleep -Milliseconds 400; Shot '32-captura-pantalla' 'Captura de pantalla completa (modo monitor): todo el monitor seleccionado'; [Au]::Click(500, 300); Note "  - pantalla guardada: $(Saved 3)" }
 Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# ── WM-001: una ventana MAXIMIZADA no queda bajo el Dock (el Dock reserva su franja con SHAppBarMessage; no se toca la opacidad ni el orden Z)
+Note ''; Note '### WM-001 — Dock y ventanas maximizadas'
+$dockLog = Join-Path $env:LOCALAPPDATA 'WinMac\logs\dock.log'
+$res = if (Test-Path $dockLog) { (Select-String -Path $dockLog -SimpleMatch 'espacio reservado (AppBar)' | Select-Object -Last 1).Line } else { '' }
+Note "  - registro del Dock: $(if ($res) { $res } else { 'sin línea de reserva' })"
+$wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea; Note "  - área de trabajo del monitor principal: $($wa.X),$($wa.Y) $($wa.Width)x$($wa.Height) (pantalla $($sc.Width)x$($sc.Height))"
+$npm = Start-Process notepad.exe -PassThru -WindowStyle Maximized; Start-Sleep -Milliseconds 2000
+$mr = [Au]::RectOf('Notepad'); $dr = [Au]::RectOf('WinMacDock')
+Note "  - Bloc de notas maximizado: $mr · ventana del Dock: $dr"
+if ($res -match '\(-?\d+,(-?\d+)\)-\(-?\d+,-?\d+\)' -and $mr -match '^(-?\d+),(-?\d+) (\d+)x(\d+)') {
+  $bandTop = [int]([regex]::Match($res, '\(-?\d+,(-?\d+)\)-').Groups[1].Value); $mBottom = [int]$Matches[2] + [int]$Matches[4]
+  # una ventana maximizada sobresale unos píxeles de borde invisible (DWM): se tolera hasta 16 px
+  Note "  - WM-001: borde inferior de la ventana $mBottom px; franja del Dock desde $bandTop px → $(if ($mBottom -le $bandTop + 16) { 'NO la tapa (correcto)' } else { 'la ventana sigue bajo el Dock' })"
+} else { Note '  - WM-001: no se pudo medir (falta la línea de reserva o la ventana)' }
+Shot '33-dock-ventana-maximizada' 'WM-001: ventana maximizada con el Dock reservando su franja (los controles inferiores quedan visibles)'
+Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 1500
 $capAfter = @(Get-ChildItem $shotsDir -Filter 'Captura *' -ErrorAction SilentlyContinue)
 Note "  - archivos nuevos en la carpeta de capturas: $($capAfter.Count - $capBefore) ($((($capAfter | ForEach-Object { $_.Name + ' ' + $_.Length + ' B' }) -join '; ')))"

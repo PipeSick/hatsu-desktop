@@ -107,7 +107,31 @@ internal sealed class BarWindow : IWndTarget, IDisposable
         abd.rc.Bottom = abd.rc.Top + _winHpx;   // QUERYPOS ajusta el borde; la altura la fijamos nosotros
         BarNative.SHAppBarMessage(BarNative.ABM_SETPOS, ref abd);
         _winLeftPx = abd.rc.Left; _winTopPx = abd.rc.Top; _winWpx = abd.rc.Width;
+        _workGuard.Placed(_guardClock.Elapsed.TotalSeconds);
         _log($"[bar] AppBar reservado en {Info.Id}: ({abd.rc.Left},{abd.rc.Top})-({abd.rc.Right},{abd.rc.Bottom}) px");
+    }
+
+    private readonly WorkAreaGuard _workGuard = new(); private static readonly System.Diagnostics.Stopwatch _guardClock = System.Diagnostics.Stopwatch.StartNew(); private bool _reportedUnreserved;
+
+    /// <summary>
+    /// WM-003: la reserva pedida a Windows se comprueba contra el área de trabajo real del monitor. Si no está (Explorer no estaba listo al primer arranque,
+    /// otra AppBar la desplazó…), se vuelve a pedir con espera creciente. Las ventanas maximizadas las recoloca Windows al cambiar el área de trabajo.
+    /// </summary>
+    private void CheckReservation()
+    {
+        if (!_host.Config.ReserveSpace || _hiddenForFullscreen || Hwnd == IntPtr.Zero) return;
+        var h = BarNative.MonitorFromWindow(Hwnd, BarNative.MONITOR_DEFAULTTONEAREST); if (h == IntPtr.Zero) return;
+        var mi = new BarNative.MONITORINFO { cbSize = (uint)Marshal.SizeOf<BarNative.MONITORINFO>() };
+        if (!BarNative.GetMonitorInfo(h, ref mi)) return;
+        bool ok = _registered && WorkAreaGuard.Reserved(mi.rcWork.Top, mi.rcWork.Bottom, _winTopPx, _winTopPx + _winHpx);
+        if (ok && _reportedUnreserved) { _reportedUnreserved = false; _log($"[bar] reserva confirmada en {Info.Id}: área de trabajo desde {mi.rcWork.Top} px"); }
+        if (_workGuard.Due(_guardClock.Elapsed.TotalSeconds, ok))
+        {
+            if (!_reportedUnreserved || _workGuard.Failures % 10 == 0) _log($"[bar] el área de trabajo de {Info.Id} no excluye la barra (empieza en {mi.rcWork.Top} px, barra hasta {_winTopPx + _winHpx} px; registrada: {(_registered ? "sí" : "no")}): se vuelve a pedir la reserva (intento {_workGuard.Failures})");
+            _reportedUnreserved = true;
+            if (_registered) AppBarRemove();
+            PlaceWindow(); _force = true;
+        }
     }
 
     private void AppBarRemove()
@@ -222,6 +246,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
             // Una app a pantalla completa en OTRO monitor no debe esconder esta barra: solo se oculta si la app en primer plano está en este monitor.
             bool fs = FullscreenWatcher.ShouldSuppress() && ForegroundIsOnThisMonitor();
             if (fs != _hiddenForFullscreen) { _hiddenForFullscreen = fs; BarNative.ShowWindow(Hwnd, fs ? 0 : 4 /* SW_SHOWNOACTIVATE */); _force = true; }
+            CheckReservation();
         }
     }
 
