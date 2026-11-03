@@ -350,6 +350,7 @@ public sealed class DockHost : IDisposable
             }
             case WM_RBUTTONUP:
             {
+                if (MenuDiag) _log($"[dock] clic derecho en {(short)((long)l & 0xFFFF)},{(short)(((long)l >> 16) & 0xFFFF)} (cliente)");
                 if (_view is null || _ctl.PreviewContains((short)((long)l & 0xFFFF) / _scale, (short)(((long)l >> 16) & 0xFFFF) / _scale)) return IntPtr.Zero;
                 _ctl.DismissPreview();
                 int hit = HitIndex((short)((long)l & 0xFFFF) / _scale);

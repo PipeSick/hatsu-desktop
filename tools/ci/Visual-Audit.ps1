@@ -56,6 +56,8 @@ public static class Au {
   public static void Down() { mouse_event(2, 0, 0, 0, IntPtr.Zero); }
   public static void Up() { mouse_event(4, 0, 0, 0, IntPtr.Zero); }
   public static void Click(int x, int y) { SetCursorPos(x, y); System.Threading.Thread.Sleep(120); mouse_event(2, 0, 0, 0, IntPtr.Zero); mouse_event(4, 0, 0, 0, IntPtr.Zero); }
+  [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(PT p);
+  public static string ClassAt(int x, int y) { var p = new PT(); p.X = x; p.Y = y; var h = WindowFromPoint(p); var c = new StringBuilder(64); GetClassName(h, c, 64); return c.ToString(); }
   public static bool Visible(string cls) { var h = FindWindow(cls, null); return h != IntPtr.Zero && IsWindowVisible(h); }
   public static string RectOf(string cls) { var h = FindWindow(cls, null); if (h == IntPtr.Zero) return "(no existe)"; RC r; GetWindowRect(h, out r); return r.L + "," + r.T + " " + (r.R - r.L) + "x" + (r.B - r.T); }
   /// Ventanas visibles de un proceso: clase y rectángulo (para medir la Isla).
@@ -282,7 +284,7 @@ Shot '32b-dock-ventana-maximizada' 'WM-001: ventana maximizada con el Dock reser
 $dkr = [Au]::RectOf('WinMacDock')
 if ($dkr -match '^(-?\d+),(-?\d+) (\d+)x(\d+)') {
   $dx = [int]$Matches[1] + [int]([int]$Matches[3] * 0.28); $dy = [int]$Matches[2] + [int]$Matches[4] - 48
-  [Au]::SetCursorPos($dx, $dy) | Out-Null; Start-Sleep -Milliseconds 300
+  [Au]::Glide($dx, $dy, 12); Start-Sleep -Milliseconds 500   # por la ruta de entrada de Windows (como un ratón físico)
   [Au]::mouse_event(8, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 90; [Au]::mouse_event(16, 0, 0, 0, [IntPtr]::Zero)   # RIGHTDOWN / RIGHTUP
   if (WaitFor { [Au]::Visible('WinMacDockMenu') } 4) {
     Start-Sleep -Milliseconds 400; Note "  - WM-017: menú oscuro del Dock abierto ($([Au]::RectOf('WinMacDockMenu')))"
@@ -293,6 +295,7 @@ if ($dkr -match '^(-?\d+),(-?\d+) (\d+)x(\d+)') {
     Note "  - WM-017: el menú del Dock NO apareció con el clic derecho en $dx,$dy (menú nativo visible: $([Au]::Visible('#32768')))"
     [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
     if (Test-Path $dockLog) { Get-Content $dockLog -Tail 8 | ForEach-Object { Note ('    dock.log> ' + $_) } }
+    Note "  - WM-017: ventana bajo el punto: $([Au]::ClassAt($dx, $dy))"
   }
 }
 Get-Process -Name 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
