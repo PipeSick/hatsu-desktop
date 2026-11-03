@@ -225,6 +225,12 @@ Start-Sleep -Milliseconds 800
 if (WaitFor { [Au]::Visible('WinMacCapture') } 8) { Start-Sleep -Milliseconds 400; Shot '32-captura-pantalla' 'Captura de pantalla completa (modo monitor): todo el monitor seleccionado'; [Au]::Click(500, 300); Note "  - pantalla guardada: $(Saved 3)" }
 # ── Quick Look (sección 11): miniatura tras guardar, vista previa al pulsarla, Copiar y Esc
 Note ''; Note '### Quick Look'
+# pwsh 7 no lee imágenes del portapapeles: se pregunta a Windows PowerShell en STA con un script temporal (sin comillas anidadas)
+function ClipImage {
+  $f = Join-Path $env:TEMP 'winmac-clip-image.ps1'
+  Set-Content -Path $f -Encoding UTF8 -Value @('Add-Type -AssemblyName System.Windows.Forms', '$i = [Windows.Forms.Clipboard]::GetImage()', 'if ($i) { [string]$i.Width + "x" + [string]$i.Height }')
+  ((& powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File $f) | Out-String).Trim()
+}
 function BarLine([string]$t) { (Select-String -Path $barLog -SimpleMatch $t -ErrorAction SilentlyContinue | Select-Object -Last 1).Line }
 if (WaitFor { LogHas $barLog '[quicklook] miniatura' } 6) {
   Start-Sleep -Milliseconds 400; Note "  - $((BarLine '[quicklook] miniatura') -replace '^\S+ ', '') · $((BarLine '[quicklook] excluida') -replace '^\S+ ', '')"
@@ -235,7 +241,7 @@ if (WaitFor { LogHas $barLog '[quicklook] miniatura' } 6) {
     if (WaitFor { LogHas $barLog '[quicklook] vista previa abierta' } 6) {
       Start-Sleep -Milliseconds 600; Shot '32d-quicklook-vista-previa' 'Quick Look: vista previa centrada con Copiar, Editar, Anotar, Recortar, Compartir, Guardar como, Abrir y Eliminar'
       $c = [regex]::Match((BarLine '[quicklook] diag close@'), 'copy@(\d+),(\d+)')
-      if ($c.Success) { [Au]::Click([int]$c.Groups[1].Value, [int]$c.Groups[2].Value); Start-Sleep -Milliseconds 700; $img = (& powershell.exe -NoProfile -STA -Command "Add-Type -AssemblyName System.Windows.Forms; `$i = [Windows.Forms.Clipboard]::GetImage(); if (`$i) { '{0}x{1}' -f `$i.Width, `$i.Height }" | Out-String).Trim(); Note "  - Copiar: $(if ($img) { "imagen en el portapapeles ($img)" } else { 'NO hay imagen en el portapapeles' })";   # pwsh 7 no lee imágenes del portapapeles: se pregunta a Windows PowerShell (STA) Shot '32e-quicklook-copiada' 'Quick Look tras «Copiar» (aviso en la vista previa)' }
+      if ($c.Success) { [Au]::Click([int]$c.Groups[1].Value, [int]$c.Groups[2].Value); Start-Sleep -Milliseconds 700; $img = ClipImage; Note "  - Copiar: $(if ($img) { 'imagen en el portapapeles (' + $img + ')' } else { 'NO hay imagen en el portapapeles' })"; Shot '32e-quicklook-copiada' 'Quick Look tras «Copiar» (aviso en la vista previa)' }
       [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 600
       Note "  - Esc cierra la vista previa: $(-not [Au]::Visible('WinMacQuickLook'))"
     } else { Note '  - la vista previa NO se abrió con el clic' }

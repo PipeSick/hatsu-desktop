@@ -210,6 +210,7 @@ jobs:
           Write-Host "Reproducible (dos empaquetados del mismo commit, mismo SHA-256): $($first -eq $second)"
           Write-Host "Primero:  $first"; Write-Host "Segundo:  $second"
           # Desinstalación limpia en este runner: sin -RemoveFolder; comprueba que el inicio automático y los datos se quitan
+          if (-not (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run')) { New-Item -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Force | Out-Null }   # algunos runners no traen la clave
           New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WinMac' -Value 'x' -Force | Out-Null
           ./dist/WinMac/Uninstall-WinMac.ps1 -RemoveData
           $runLeft = [bool](Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WinMac' -ErrorAction SilentlyContinue)
