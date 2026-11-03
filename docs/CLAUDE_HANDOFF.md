@@ -2,7 +2,16 @@
 
 Actualizado: 2026-11-03. Complementa `docs/ESTADO-SESION.md` (contexto anterior: repos, PC del usuario, reglas de trabajo).
 
-## Fase actual: corrección integral de la beta (WM-001…WM-021 + Quick Look) — informe: docs/36-informe-beta-correccion.md
+## Fase actual: tercera iteración (WM-022…WM-027) — informe: docs/37-informe-iteracion-3.md
+**Metodología definitiva (decisión del usuario): CI verde = compilación y pruebas técnicas.** Nada de capturas, clics simulados ni disparadores
+solo-CI en el pipeline; la validación visual y de interacción la hace el usuario en su Windows. Herramientas visuales opcionales: `tools/manual/`.
+CI: windows-build (compila, pruebas, sintaxis .ps1) · windows-host (Test-Host) · windows-integracion (Build-Local, Test-Notch sin capturas, paquete
+reproducible + Verify-Package) · linux-cross. Piezas nuevas: `Dock.Win/Rendering/DarkDialog.cs` (diálogo propio), panel W en `PanelBuilder.AppleMenu`
+(UserHeader, ActionStrip, LinkRow), teclado de paneles `PanelController.FocusKey`, batería (BatteryHero, StatCards, ModeCard), borrado fiable en
+`NotificationStore`, instantánea de notificaciones `NotchFeed.Snapshot` → NotchWin `NotificationLog.SetWindows`, bandeja de Windows por UIA
+`AppMenuReader.OpenWindowsTrayOverflow`. NotchWin fijado en be9c3f8.
+
+## Fase anterior: corrección integral de la beta (WM-001…WM-021 + Quick Look) — informe: docs/36-informe-beta-correccion.md
 Estado de cada hallazgo, rendimiento antes/después y pendientes del PC real están en docs/36. Piezas nuevas:
 - Dock: `Dock.Win/Rendering/DockAppBar.cs` (AppBar), `DarkMenuWindow.cs` + `Dock.Core/DarkMenuModel.cs` (menú oscuro), tamaños en `DockSettings` (config v4).
 - Barra: `Bar.Core/WorkAreaGuard.cs` (WM-003), `Capture/CaptureCountdown.cs` y `QuickLook.cs` (puros), `Bar.Win/Capture/QuickLookWindow.cs`, `QuickLookActions.cs`,
