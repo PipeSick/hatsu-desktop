@@ -30,7 +30,7 @@ internal static class Program
             {
                 string png = HostOptions.Arg(args, "--out", "bandeja.png");
                 var st = new Dictionary<string, WinMac.Host.ModuleState> { ["bar"] = WinMac.Host.ModuleState.Running, ["dock"] = WinMac.Host.ModuleState.Running, ["notch"] = WinMac.Host.ModuleState.Failed };
-                File.WriteAllText(png + ".txt", TrayPanel.RenderOffscreen(png, WinMac.Host.TrayPanelModel.Build(st, "2.0"), 2)); return 0;
+                File.WriteAllText(png + ".txt", TrayPanel.RenderOffscreen(png, WinMac.Host.TrayPanelModel.Build(st, "2.0"), double.TryParse(HostOptions.Arg(args, "--scale", "2"), System.Globalization.CultureInfo.InvariantCulture, out var tsc) ? tsc : 2, dark: HostOptions.Arg(args, "--theme", "dark") != "light")); return 0;
             }   // solo CI: dibuja Ajustes fuera de pantalla
             return HostApp.Run(HostOptions.Parse(args));
         }

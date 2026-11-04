@@ -5,7 +5,9 @@ using Vortice.Direct2D1;
 using Vortice.DirectWrite;
 using Vortice.DXGI;
 using Vortice.Mathematics;
+using WinMac.Dock;
 using WinMac.Dock.Win.Rendering;
+using WinMac.Dock.Win.Shell;
 
 namespace WinMac.Host.App;
 
@@ -22,6 +24,8 @@ internal sealed class TrayPanel : IDisposable
     private IntPtr _hwnd; private D2DDevice? _dev; private IDXGISwapChain1? _swap; private ID2D1Bitmap1? _bmp; private ID2D1SolidColorBrush? _b;
     private IDWriteFactory? _dw; private IDWriteTextFormat? _title, _body, _small; private double _scale = 1;
     private IReadOnlyList<TrayPanelModel.Item> _items = []; private int _focus = -1; private string? _hover;
+    private UiPalette _p = UiPalette.Dark;   // It7: sigue el tema de APLICACIONES de Windows (claro/oscuro), también si cambia con el panel abierto
+    private static Color4 C(Rgba c) => new(c.R, c.G, c.B, c.A);
     private static bool _registered;
 
     public TrayPanel(Action<string> act, Action<string> log) { _act = act; _log = log; }
@@ -31,7 +35,7 @@ internal sealed class TrayPanel : IDisposable
     public void Show(IReadOnlyList<TrayPanelModel.Item> items, int cursorX, int cursorY)
     {
         Close();
-        _items = items; _focus = -1; _hover = null;
+        _items = items; _focus = -1; _hover = null; _p = UiPalette.For(SystemTheme.Current());
         uint dpi = Native.GetDpiForSystem(); if (dpi < 96) dpi = 96; _scale = dpi / 96.0;
         int w = (int)Math.Round(TrayPanelModel.Width * _scale), h = (int)Math.Round(TrayPanelModel.Height(items) * _scale);
         // Above the cursor (the taskbar is at the bottom); kept inside the screen
@@ -43,7 +47,7 @@ internal sealed class TrayPanel : IDisposable
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("no se pudo crear el panel de la bandeja");
         _current = this;
         int round = 2; Native.DwmSetWindowAttribute(_hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE: ROUND */, ref round, 4);
-        int dark = 1; Native.DwmSetWindowAttribute(_hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, ref dark, 4);
+        int dark = _p.IsDark ? 1 : 0; Native.DwmSetWindowAttribute(_hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, ref dark, 4);
         _dev = new D2DDevice(); _dev.SetDpi(_scale); Fonts();
         using (var factory = DXGI.CreateDXGIFactory2<IDXGIFactory2>(false))
             _swap = factory.CreateSwapChainForHwnd(_dev.D3D, _hwnd, new SwapChainDescription1 { Width = (uint)w, Height = (uint)h, Format = Format.B8G8R8A8_UNorm, BufferCount = 2, BufferUsage = Usage.RenderTargetOutput, SampleDescription = new SampleDescription(1, 0), SwapEffect = SwapEffect.FlipSequential });
@@ -64,9 +68,9 @@ internal sealed class TrayPanel : IDisposable
     }
 
     /// <summary>SOLO CI: dibuja el panel con estados de muestra fuera de pantalla (mismo código de dibujo) y lo guarda como PNG.</summary>
-    public static string RenderOffscreen(string png, IReadOnlyList<TrayPanelModel.Item> items, double scale)
+    public static string RenderOffscreen(string png, IReadOnlyList<TrayPanelModel.Item> items, double scale, bool dark = true)
     {
-        var p = new TrayPanel(_ => { }, _ => { }) { _items = items, _scale = scale, _focus = 4 };
+        var p = new TrayPanel(_ => { }, _ => { }) { _items = items, _scale = scale, _focus = 4, _p = dark ? UiPalette.Dark : UiPalette.Light };
         int w = (int)Math.Ceiling(TrayPanelModel.Width * scale), h = (int)Math.Ceiling(TrayPanelModel.Height(items) * scale);
         p._dev = new D2DDevice(true); p._dev.SetDpi(scale); p.Fonts();
         using var target = GlassBackdrop.CreateTarget(p._dev.Context, w, h, scale); p._dev.Context.Target = target;
@@ -91,7 +95,7 @@ internal sealed class TrayPanel : IDisposable
     private void Draw()
     {
         {
-            var c = _dev!.Context; c.BeginDraw(); c.Clear(new Color4(0.13f, 0.13f, 0.15f, 1));
+            var c = _dev!.Context; c.BeginDraw(); c.Clear(C(_p.Window));
             float W = (float)TrayPanelModel.Width; var focusId = _focus >= 0 ? TrayPanelModel.Focusable(_items).ElementAtOrDefault(_focus) : null;
             foreach (var (i, y0, hh) in TrayPanelModel.Layout(_items))
             {
@@ -99,32 +103,32 @@ internal sealed class TrayPanel : IDisposable
                 switch (i.Kind)
                 {
                     case TrayPanelModel.Kind.Header:
-                        _b!.Color = new Color4(1, 1, 1, 0.95f); Txt(i.Text, _title!, x + 4, y + 6, W - 40, 22);
-                        _b.Color = new Color4(1, 1, 1, 0.55f); Txt(i.Sub!, _small!, x + 4, y + 28, W - 40, 18);
+                        _b!.Color = C(_p.Ink(0.95f)); Txt(i.Text, _title!, x + 4, y + 6, W - 40, 22);
+                        _b.Color = C(_p.Ink(0.55f)); Txt(i.Sub!, _small!, x + 4, y + 28, W - 40, 18);
                         break;
                     case TrayPanelModel.Kind.Module:
                     {
                         var dot = TrayPanelModel.StateColor(i.State ?? ModuleState.Disabled) switch { "green" => new Color4(0.2f, 0.78f, 0.35f, 1), "amber" => new Color4(1f, 0.7f, 0.1f, 1), "red" => new Color4(1f, 0.27f, 0.23f, 1), _ => new Color4(0.55f, 0.55f, 0.58f, 1) };
                         _b!.Color = dot; c.FillEllipse(new Ellipse(new Vector2(x + 8, y + h / 2), 4.5f, 4.5f), _b);
-                        _b.Color = new Color4(1, 1, 1, 0.92f); Txt(i.Text, _body!, x + 22, y + 5, W - 140, 20);
-                        _b.Color = new Color4(1, 1, 1, 0.5f); Txt(i.Sub!, _small!, x + 22, y + 24, W - 140, 16);
+                        _b.Color = C(_p.Ink(0.92f)); Txt(i.Text, _body!, x + 22, y + 5, W - 140, 20);
+                        _b.Color = C(_p.Ink(0.5f)); Txt(i.Sub!, _small!, x + 22, y + 24, W - 140, 16);
                         if (i.ActionLabel is { } al)
                         {
                             var (bx, bw) = TrayPanelModel.ButtonX(i); bool hot = _hover == i.Action || focusId == i.Action;
-                            _b.Color = new Color4(1, 1, 1, hot ? 0.24f : 0.11f); c.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF((float)bx, y + 10, (float)(bx + bw), y + h - 10), RadiusX = 7, RadiusY = 7 }, _b);
-                            _b.Color = new Color4(1, 1, 1, 0.95f); using var l = _dw!.CreateTextLayout(al, _small!, (float)bw, h - 20); l.TextAlignment = TextAlignment.Center; c.DrawTextLayout(new Vector2((float)bx, y + 10), l, _b);
+                            _b.Color = C(_p.Fill(hot ? 0.24f : 0.11f)); c.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF((float)bx, y + 10, (float)(bx + bw), y + h - 10), RadiusX = 7, RadiusY = 7 }, _b);
+                            _b.Color = C(_p.Ink(0.95f)); using var l = _dw!.CreateTextLayout(al, _small!, (float)bw, h - 20); l.TextAlignment = TextAlignment.Center; c.DrawTextLayout(new Vector2((float)bx, y + 10), l, _b);
                         }
                         break;
                     }
                     case TrayPanelModel.Kind.Separator:
-                        _b!.Color = new Color4(1, 1, 1, 0.1f); c.FillRectangle(new RawRectF(x + 4, y + h / 2, W - x - 4, y + h / 2 + 1), _b); break;
+                        _b!.Color = C(_p.Fill(0.10f)); c.FillRectangle(new RawRectF(x + 4, y + h / 2, W - x - 4, y + h / 2 + 1), _b); break;
                     default:
                     {
                         bool hot = _hover == i.Action || focusId == i.Action;
                         if (hot) { _b!.Color = i.Danger ? new Color4(1f, 0.27f, 0.23f, 0.85f) : new Color4(0.04f, 0.52f, 1f, 0.9f); c.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(x - 2, y + 2, W - x + 2, y + h - 2), RadiusX = 6, RadiusY = 6 }, _b); }
-                        _b!.Color = new Color4(1, 1, 1, hot ? 1f : i.Danger ? 0.95f : 0.9f);
+                        _b!.Color = hot ? C(_p.OnColor()) : C(_p.Ink(i.Danger ? 0.95f : 0.9f));
                         if (i.Sub is null) Txt(i.Text, _body!, x + 6, y, W - 30, h);
-                        else { Txt(i.Text, _body!, x + 6, y + 4, W - 30, 20); _b.Color = new Color4(1, 1, 1, hot ? 0.8f : 0.5f); Txt(i.Sub, _small!, x + 6, y + 23, W - 30, 16); }
+                        else { Txt(i.Text, _body!, x + 6, y + 4, W - 30, 20); _b.Color = hot ? C(_p.OnColor(0.85f)) : C(_p.Ink(0.5f)); Txt(i.Sub, _small!, x + 6, y + 23, W - 30, 16); }
                         break;
                     }
                 }
@@ -150,6 +154,7 @@ internal sealed class TrayPanel : IDisposable
             switch (msg)
             {
                 case WM_ACTIVATE when ((long)w & 0xFFFF) == 0: me.Close(); return IntPtr.Zero;   // lost the focus: closes, like a menu
+                case 0x1A /* WM_SETTINGCHANGE */: me._p = UiPalette.For(SystemTheme.Current()); { int dk = me._p.IsDark ? 1 : 0; Native.DwmSetWindowAttribute(h, 20, ref dk, 4); } me.Render(); return IntPtr.Zero;   // el tema de Windows cambió con el panel abierto
                 case WM_MOUSEMOVE: { var (x, y) = me.Dip(l); var hit = TrayPanelModel.Hit(me._items, x, y); if (hit != me._hover) { me._hover = hit; me.Render(); } return IntPtr.Zero; }
                 case WM_LBUTTONUP: { var (x, y) = me.Dip(l); if (TrayPanelModel.Hit(me._items, x, y) is { } a) me.Run(a); return IntPtr.Zero; }
                 case WM_KEYDOWN:
