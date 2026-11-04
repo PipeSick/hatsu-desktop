@@ -80,6 +80,10 @@ public static class OnboardingRules
         _ => "",
     };
 
+    /// <summary>Peripherals y Cleanup viven en la Barra superior: la tarjeta lo dice con «Requiere Barra superior».</summary>
+    public static bool RequiresBar(string id) => id is ComponentPeripherals or ComponentCleanup;
+    public const string RequiresBarText = "Requiere Barra superior";
+
     /// <summary>Qué necesita cada componente (el texto que se muestra), o null.</summary>
     public static string? Requirement(string id) => id switch
     {
@@ -151,10 +155,10 @@ public static class OnboardingRules
             ("Dock", Onoff(c.Dock)), ("Barra superior", Onoff(c.Bar)), ("Dynamic Island", Onoff(c.Notch)), ("Hatsu Connect", Onoff(c.Connect)), ("Hatsu Peripherals", Onoff(c.Peripherals)), ("Hatsu Cleanup", Onoff(c.Cleanup)),
             ("Tema del Dock", ThemeNames[(int)c.Theme]),
         };
-        if (c.Dock) l.Add(("Dock", $"{(c.DockSize >= 0 ? DockSettings.Presets[c.DockSize].Name : "tamaño actual")} · {AlignmentNames[(int)c.DockAlignment]}"));
+        if (c.Dock) l.Add(("Tamaño y posición del Dock", $"{(c.DockSize >= 0 ? DockSettings.Presets[c.DockSize].Name : "tamaño actual")} · {AlignmentNames[(int)c.DockAlignment]}"));
         if (c.Bar) l.Add(("Fondo de la Barra", BackgroundNames[c.BarBackground == BarBackground.Glass ? 0 : 1]));
-        l.Add(("Iniciar con Windows", c.Autostart ? "Sí: se añade una entrada de inicio de tu usuario" : "No"));
-        l.Add(("Barra de tareas de Windows", c.HideTaskbar ? "Se oculta mientras Hatsu Desktop funcione (se restaura al salir)" : "Se queda como está"));
+        l.Add(("Iniciar con Windows", c.Autostart ? "Sí: entrada de inicio solo para tu usuario" : "No"));
+        l.Add(("Barra de tareas de Windows", c.HideTaskbar ? "Se oculta mientras funcione; se restaura al salir" : "Se queda como está"));
         return l;
     }
 }
@@ -208,7 +212,10 @@ public static class OnboardingPlan
 }
 
 public enum ApplyOutcome { Ok, Warning, Failed }
-public sealed record ApplyItem(string Id, string Label, ApplyOutcome Outcome, string? Detail = null);
+/// <param name="Detail">Texto para el usuario («No se pudo iniciar»).</param>
+/// <param name="Technical">Detalle técnico aparte (estado del supervisor…), disponible en «Detalles técnicos» y en el registro; null si no hay.</param>
+/// <param name="Inactive">Desactivado a propósito: no es un acierto ni un fallo (indicador neutro).</param>
+public sealed record ApplyItem(string Id, string Label, ApplyOutcome Outcome, string? Detail = null, string? Technical = null, bool Inactive = false);
 
 public sealed record ApplyResult(IReadOnlyList<ApplyItem> Items, OnboardingStatus Status, bool RolledBack)
 {
@@ -281,13 +288,13 @@ public sealed class OnboardingApplier(IOnboardingPorts ports, Action<string>? lo
         foreach (var (id, on) in new[] { ("bar", c.Bar), ("dock", c.Dock), ("notch", c.Notch), ("connect", c.Connect) })
         {
             string label = OnboardingRules.Name(id);
-            if (!on) { items.Add(new("mod:" + id, label, ApplyOutcome.Ok, "Desactivado: no se inicia")); continue; }
+            if (!on) { items.Add(new("mod:" + id, label, ApplyOutcome.Ok, "Desactivado: no se inicia", Inactive: true)); continue; }
             var st = await WaitAsync(id).ConfigureAwait(false);
             items.Add(st switch
             {
                 ModuleState.Running => new("mod:" + id, label, ApplyOutcome.Ok, "En ejecución"),
-                ModuleState.NotInstalled => new("mod:" + id, label, ApplyOutcome.Warning, "No está incluido en esta instalación"),
-                _ => new("mod:" + id, label, ApplyOutcome.Warning, st == ModuleState.Starting ? "Sigue iniciándose" : "No arrancó (estado: " + st + ")"),
+                ModuleState.NotInstalled => new("mod:" + id, label, ApplyOutcome.Warning, "No está incluido en esta instalación", "estado del supervisor: NotInstalled"),
+                _ => new("mod:" + id, label, ApplyOutcome.Warning, st == ModuleState.Starting ? "Sigue iniciándose" : "No se pudo iniciar", "estado del supervisor: " + st),
             });
         }
 
@@ -304,7 +311,7 @@ public sealed class OnboardingApplier(IOnboardingPorts ports, Action<string>? lo
     /// <summary>El usuario acepta los avisos (p. ej. un módulo que no arranca): el asistente se da por completado y los avisos quedan anotados.</summary>
     public string? AcceptWarnings(ApplyResult r, bool skipped = false)
     {
-        var w = r.Items.Where(i => i.Outcome == ApplyOutcome.Warning).Select(i => $"{i.Label}: {i.Detail}").ToList();
+        var w = r.Items.Where(i => i.Outcome == ApplyOutcome.Warning).Select(i => $"{i.Label}: {i.Detail}" + (i.Technical is null ? "" : $" ({i.Technical})")).ToList();
         return ports.Update(cfg => cfg with { Onboarding = new OnboardingRecord { Status = skipped ? OnboardingStatus.Skipped : OnboardingStatus.Completed, Origin = cfg.Onboarding?.Origin, AtUtc = DateTime.UtcNow, Warnings = w } });
     }
 

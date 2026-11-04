@@ -96,6 +96,7 @@ Check 'ONB2 el asistente anotó su resultado en el registro' (WaitFor { LogHas $
 Quit $ro $hO
 $jo = Get-Content $ro.Cfg -Raw | ConvertFrom-Json
 Check 'ONB2 la configuración guardada tiene Dock, Barra e Isla activados y nada más; sin inicio automático ni barra de tareas oculta' ($jo.modules.bar.enabled -and $jo.modules.dock.enabled -and -not $jo.modules.connect.enabled -and -not $jo.hideTaskbar -and -not $jo.autostart)
+Check 'ONB2 omitir NO crea el inicio automático de Windows (valor Run\WinMac ausente)' (-not (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WinMac' -ErrorAction SilentlyContinue))
 Check 'ONB2 el estado del asistente no queda «NotStarted»' ($jo.onboarding.status -ne 'NotStarted') ($jo.onboarding.status)
 # (3) un winmac.json que ya existía (WinMac o Hatsu anterior): no se fuerza el asistente; los módulos arrancan como siempre y solo se anota «Existing»
 $re = NewRoom 'onb-existing'; $hE = StartHost $re -Onboarding

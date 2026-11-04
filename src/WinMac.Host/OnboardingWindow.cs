@@ -123,23 +123,26 @@ internal sealed class OnboardingWindow : IDisposable
 
     // ───────────────────────────── CI: dibujo fuera de pantalla con el pintor real
     /// <summary>Renderiza una pantalla del asistente a PNG con elecciones de MUESTRA. No abre ventanas ni lee el sistema: valida dibujo y composición, NO el ratón ni el foco.</summary>
-    public static string RenderOffscreen(string png, OnboardingStep step, bool dark, double scale)
+    public static string RenderOffscreen(string png, OnboardingStep step, bool dark, double scale, string? variant = null)
     {
-        var choices = OnboardingChoices.Safe with { Connect = false, Peripherals = true, Theme = WinMac.Dock.ThemeMode.System, DockSize = 2, DockAlignment = WinMac.Dock.DockAlignment.Center, Autostart = false, HideTaskbar = false };
+        // elecciones de MUESTRA = los valores seguros + Peripherals (para mostrar la dependencia de la Barra). El inicio automático y la barra de tareas se quedan APAGADOS, como en una instalación nueva.
+        var choices = OnboardingChoices.Safe with { Peripherals = true, DockSize = 2 };
         var ctl = new OnboardingController(OnboardingMode.Fresh, choices);
         switch (step)
         {
             case OnboardingStep.Components: ctl.Click("next"); break;
             case OnboardingStep.Appearance: ctl.Click("next"); ctl.Click("next"); break;
-            case OnboardingStep.Windows: ctl.Click("next"); ctl.Click("next"); ctl.Click("next"); ctl.Click("t:autostart"); break;
-            case OnboardingStep.Review: for (int i = 0; i < 4; i++) ctl.Click("next"); ctl.Click("t:autostart"); break;
+            case OnboardingStep.Windows: ctl.Click("next"); ctl.Click("next"); ctl.Click("next"); break;
+            case OnboardingStep.Review: for (int i = 0; i < 4; i++) ctl.Click("next"); break;
             case OnboardingStep.Result:
                 for (int i = 0; i < 4; i++) ctl.Click("next");
+                // ESCENARIO DE PRUEBA: un fallo inventado de la Isla para ver la pantalla de incidencias. No es un fallo del paquete real (la Isla arranca bajo el host en Test-Notch).
                 ctl.ShowResult(new ApplyResult([new("config", "Guardar la configuración", ApplyOutcome.Ok), new("mod:bar", "Barra superior", ApplyOutcome.Ok, "En ejecución"), new("mod:dock", "Dock", ApplyOutcome.Ok, "En ejecución"),
-                    new("mod:notch", "Dynamic Island", ApplyOutcome.Warning, "No arrancó (estado: Failed)"), new("mod:connect", "Hatsu Connect", ApplyOutcome.Ok, "Desactivado: no se inicia")], OnboardingStatus.InProgress, false)); break;
+                    new("mod:notch", "Dynamic Island", ApplyOutcome.Warning, "No se pudo iniciar", "estado del supervisor: Failed"), new("mod:connect", "Hatsu Connect", ApplyOutcome.Ok, "Desactivado: no se inicia", Inactive: true)], OnboardingStatus.InProgress, false)); break;
         }
+        if (variant == "details" && step == OnboardingStep.Result) ctl.Click("details");
         int pw = (int)Math.Ceiling(OnboardingController.WinW * scale), ph = (int)Math.Ceiling(OnboardingController.WinH * scale);
-        using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new OnboardingPainter(dev, dark);
+        using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new OnboardingPainter(dev, dark) { Watermark = "Captura de muestra · datos de prueba" };
         using var target = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale); dev.Context.Target = target;
         painter.Paint(ctl);
         using var cpu = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale, readable: true); cpu.CopyFromBitmap(target);

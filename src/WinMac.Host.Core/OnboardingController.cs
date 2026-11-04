@@ -41,44 +41,11 @@ public sealed class OnboardingController
 
     public static readonly OnboardingStep[] Flow = [OnboardingStep.Welcome, OnboardingStep.Components, OnboardingStep.Appearance, OnboardingStep.Windows, OnboardingStep.Review];
 
-    // ───────────────────────────── diseño
-    public IReadOnlyList<OnboardingHit> Hits
-    {
-        get
-        {
-            var h = new List<OnboardingHit>();
-            switch (Step)
-            {
-                case OnboardingStep.Welcome:
-                    h.Add(new("next", 290, 392, 220, 46));
-                    h.Add(new(Mode == OnboardingMode.Rerun ? "cancel" : "skip", 270, 450, 260, 32));
-                    break;
-                case OnboardingStep.Components:
-                    for (int i = 0; i < OnboardingRules.Components.Length; i++) h.Add(new("c:" + OnboardingRules.Components[i], 40 + (i % 2) * 370, 96 + (i / 2) * 104, 350, 94));
-                    Nav(h, "Siguiente"); break;
-                case OnboardingStep.Appearance:
-                    Segs(h, "theme", 3, 132, true); Segs(h, "size", DockSettings.Presets.Length, 206, Choices.Dock); Segs(h, "align", 3, 280, Choices.Dock); Segs(h, "bg", 2, 354, Choices.Bar);
-                    Nav(h, "Siguiente"); break;
-                case OnboardingStep.Windows:
-                    h.Add(new("t:autostart", 40, 104, 720, 104)); h.Add(new("t:hidetask", 40, 224, 720, 104, Choices.Dock));
-                    Nav(h, "Siguiente"); break;
-                case OnboardingStep.Review:
-                    h.Add(new("back", 40, 492, 120, 44)); h.Add(new("apply", 540, 492, 220, 44)); break;
-                case OnboardingStep.Result:
-                    if (Busy) break;
-                    if (Result is { EssentialFailed: true }) { h.Add(new("back", 40, 492, 150, 44)); h.Add(new("retry", 600, 492, 160, 44)); h.Add(new("cancel", 420, 492, 160, 44)); }
-                    else if (Result is { HasWarnings: true }) { h.Add(new("retry", 420, 492, 150, 44)); h.Add(new("accept", 580, 492, 180, 44)); }
-                    else h.Add(new("finish", 570, 492, 190, 44));
-                    break;
-            }
-            return h;
-        }
-    }
-
-    private static void Nav(List<OnboardingHit> h, string next) { h.Add(new("back", 40, 492, 120, 44)); h.Add(new("next", 640, 492, 120, 44)); }
-    /// <summary>Segmentos de un control de opciones: ancho total 420 a partir de x = 40.</summary>
-    public const double SegX = 40, SegW = 420, SegH = 38;
-    private static void Segs(List<OnboardingHit> h, string id, int n, double y, bool enabled) { for (int i = 0; i < n; i++) h.Add(new($"{id}:{i}", SegX + i * SegW / n, y, SegW / n, SegH, enabled)); }
+    // ───────────────────────────── diseño (una sola fuente: OnboardingLayout)
+    public IReadOnlyList<OnboardingHit> Hits => OnboardingLayout.Compute(this).Where(x => x.Kind == BoxKind.Control).Select(x => new OnboardingHit(x.Id, x.X, x.Y, x.W, x.H, x.Enabled)).ToList();
+    /// <summary>Segmentos de un control de opciones (los usa el pintor para el contenedor).</summary>
+    public const double SegH = 38;
+    public bool ShowDetails { get; private set; }
 
     public string? HitTest(double x, double y) => Hits.FirstOrDefault(h => h.Contains(x, y)) is { Enabled: true } hit ? hit.Id : null;
 
@@ -107,6 +74,7 @@ public sealed class OnboardingController
             case "cancel": return OnboardingCommand.Cancel;
             case "apply": return OnboardingCommand.Apply;
             case "retry": return OnboardingCommand.Retry;
+            case "details": ShowDetails = !ShowDetails; return OnboardingCommand.None;
             case "accept": return OnboardingCommand.Accept;
             case "finish": return OnboardingCommand.Finish;
         }
@@ -126,13 +94,20 @@ public sealed class OnboardingController
     /// <summary>Escape: volver, o cancelar en la primera pantalla.</summary>
     public OnboardingCommand Escape() => Step == OnboardingStep.Welcome ? OnboardingCommand.Cancel : Busy ? OnboardingCommand.None : Click("back");
 
-    public void BeginApply() { Busy = true; Step = OnboardingStep.Result; Result = null; Note = null; }
+    public void BeginApply() { Busy = true; Step = OnboardingStep.Result; Result = null; Note = null; ShowDetails = false; }
     public void ShowResult(ApplyResult r) { Busy = false; Result = r; Step = OnboardingStep.Result; HasUnappliedChanges = r.AllOk ? false : HasUnappliedChanges; }
     public void Reset() { Busy = false; Result = null; Step = OnboardingStep.Review; }
 
     public string StepTitle => Step switch
     {
         OnboardingStep.Welcome => "Bienvenido a Hatsu Desktop", OnboardingStep.Components => "Elige tus componentes", OnboardingStep.Appearance => "Apariencia",
-        OnboardingStep.Windows => "Integración con Windows", OnboardingStep.Review => "Revisa tus elecciones", _ => Busy ? "Aplicando…" : Result is { AllOk: true } ? "Todo listo" : Result is { EssentialFailed: true } ? "No se pudo aplicar" : "Casi listo",
+        OnboardingStep.Windows => "Integración con Windows", OnboardingStep.Review => "Revisa tus elecciones", _ => Busy ? "Aplicando…" : Result is { AllOk: true } ? "Todo listo" : Result is { EssentialFailed: true } ? "No se pudo aplicar" : "Configuración aplicada con incidencias",
     };
+
+    /// <summary>Mensaje de la pantalla final (dentro de la tarjeta, junto a la lista).</summary>
+    public string ResultMessage => Result is not { } r ? "" :
+        r.RolledBack ? "No se aplicó nada: se restauró el estado anterior. Puedes reintentar o cerrar el asistente sin cambios." :
+        r.EssentialFailed ? "Algo esencial falló y no se aplicó. Puedes volver a revisar, reintentar o cerrar sin aplicar." :
+        r.HasWarnings ? "Lo que sí funciona ya está aplicado. «Reintentar» vuelve a probar lo que falló. «Continuar de todos modos» cierra el asistente con lo que funciona; lo que no se pudo iniciar queda anotado y puedes reintentarlo o desactivarlo en Ajustes." :
+        "Todo se aplicó y los módulos están en marcha. Puedes cambiar lo que quieras en Ajustes.";
 }

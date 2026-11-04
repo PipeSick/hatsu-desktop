@@ -15,29 +15,28 @@ namespace WinMac.Host.App;
 /// </summary>
 internal sealed class OnboardingPainter : IDisposable
 {
-    private readonly D2DDevice _dev; private readonly ID2D1DeviceContext _ctx; private readonly IDWriteFactory _dw; private readonly bool _dark;
-    private readonly IDWriteTextFormat _h1, _h2, _body, _bodyB, _small, _tag;
+    private readonly D2DDevice _dev; private readonly ID2D1DeviceContext _ctx; private readonly IDWriteFactory _dw; private readonly bool _dark; public string? Watermark { get; set; }
+    private readonly IDWriteTextFormat _h1, _h2, _body, _bodyB, _small, _tag, _chip, _tiny;
     private readonly ID2D1SolidColorBrush _b; private ID2D1Bitmap? _logo;
 
-    // paleta Flux de referencia: #7C3AED, #A78BFA, #C4B5FD, #EDE9FE, #0B0618 (no sustituye los temas de la interfaz; es el fondo del asistente)
+    // paleta Flux de referencia: #7C3AED, #A78BFA, #C4B5FD, #EDE9FE, #0B0618 (no sustituye los temas de la interfaz). El texto sobre superficies claras usa variantes más oscuras (OnboardingPalette).
     private static Color4 C(int rgb, float a = 1f) => new(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, a);
-    private static readonly Color4 Violet = C(0x7C3AED), Lilac = C(0xA78BFA), Lavender = C(0xC4B5FD), Mist = C(0xEDE9FE), Night = C(0x0B0618);
-    private Color4 BgTop => _dark ? Night : Mist;
-    private Color4 BgBottom => _dark ? C(0x1E1042) : C(0xFAF8FF);
-    private Color4 Ink => _dark ? C(0xF5F2FF) : C(0x1E1236);
-    private Color4 Muted => _dark ? C(0xB9AEDC) : C(0x5B4B86);
+    private static readonly Color4 Violet = C(0x7C3AED), Lilac = C(0xA78BFA), Night = C(0x0B0618), VioletDeep = C(0x6D28D9), VioletDeeper = C(0x5B21B6);
+    private readonly OnboardingPalette _p;
+    private Color4 BgTop => C(_p.BgTop); private Color4 BgBottom => C(_p.BgBottom);
+    private Color4 Ink => C(_p.Ink); private Color4 Muted => C(_p.Muted); private Color4 AccentText => C(_p.AccentText);
+    private Color4 Warn => C(_p.Warn); private Color4 Bad => C(_p.Bad); private Color4 Good => C(_p.Good); private Color4 Neutral => C(_p.Neutral);
     private Color4 Glass => _dark ? new Color4(1, 1, 1, .075f) : new Color4(1, 1, 1, .66f);
     private Color4 GlassStrong => _dark ? new Color4(1, 1, 1, .14f) : new Color4(1, 1, 1, .92f);
     private Color4 Edge => _dark ? new Color4(1, 1, 1, .16f) : new Color4(.486f, .227f, .929f, .20f);
     private Color4 TrackOff => _dark ? new Color4(1, 1, 1, .20f) : new Color4(.35f, .29f, .53f, .28f);
-    private Color4 Warn => C(0xF59E0B); private Color4 Bad => C(0xEF4444); private Color4 Good => C(0x22C55E);
     private static RawRectF R(double l, double t, double r, double b) => new((float)l, (float)t, (float)r, (float)b);
 
     public OnboardingPainter(D2DDevice dev, bool dark)
     {
-        _dev = dev; _ctx = dev.Context; _dark = dark; _b = _ctx.CreateSolidColorBrush(new Color4(1, 1, 1, 1)); _dw = Vortice.DirectWrite.DWrite.DWriteCreateFactory<IDWriteFactory>();
+        _dev = dev; _ctx = dev.Context; _dark = dark; _p = OnboardingPalette.For(dark); _b = _ctx.CreateSolidColorBrush(new Color4(1, 1, 1, 1)); _dw = Vortice.DirectWrite.DWrite.DWriteCreateFactory<IDWriteFactory>();
         _h1 = _dw.CreateTextFormat("Segoe UI Semibold", 30); _h2 = _dw.CreateTextFormat("Segoe UI Semibold", 22); _body = _dw.CreateTextFormat("Segoe UI", 14.5f);
-        _bodyB = _dw.CreateTextFormat("Segoe UI Semibold", 14.5f); _small = _dw.CreateTextFormat("Segoe UI", 12.5f); _tag = _dw.CreateTextFormat("Segoe UI", 18);
+        _bodyB = _dw.CreateTextFormat("Segoe UI Semibold", 14.5f); _small = _dw.CreateTextFormat("Segoe UI", 12.5f); _tag = _dw.CreateTextFormat("Segoe UI", 18); _chip = _dw.CreateTextFormat("Segoe UI Semibold", 11.5f); _tiny = _dw.CreateTextFormat("Segoe UI", 11.5f);
     }
 
     private void Brush(Color4 c) => _b.Color = c;
@@ -76,27 +75,19 @@ internal sealed class OnboardingPainter : IDisposable
     }
     private void Button(OnboardingHit h, string label, bool primary, bool hover)
     {
-        if (primary) { Gradient(h.X, h.Y, h.W, h.H, h.H / 2, hover ? Lilac : Violet, hover ? Violet : C(0x6D28D9)); }
+        if (primary) { Gradient(h.X, h.Y, h.W, h.H, h.H / 2, hover ? VioletDeep : Violet, hover ? VioletDeeper : VioletDeep); }
         else { RR(h.X, h.Y, h.W, h.H, h.H / 2, hover ? GlassStrong : Glass); RRStroke(h.X, h.Y, h.W, h.H, h.H / 2, Edge); }
         Text(label, _bodyB, h.X, h.Y, h.W, h.H, primary ? new Color4(1, 1, 1, 1) : Ink, center: true);
     }
-    private void Segments(OnboardingController c, string id, string[] names, int selected, double y, bool enabled)
-    {
-        double w = OnboardingController.SegW, x = OnboardingController.SegX, h = OnboardingController.SegH, sw = w / names.Length;
-        RR(x, y, w, h, 12, Glass); RRStroke(x, y, w, h, 12, Edge);
-        for (int i = 0; i < names.Length; i++)
-        {
-            bool sel = i == selected, hov = c.Hover == $"{id}:{i}" && enabled;
-            if (sel) Gradient(x + i * sw + 3, y + 3, sw - 6, h - 6, 9, enabled ? Violet : TrackOff, enabled ? C(0x6D28D9) : TrackOff);
-            else if (hov) RR(x + i * sw + 3, y + 3, sw - 6, h - 6, 9, Glass);
-            Text(names[i], _body, x + i * sw, y, sw, h, sel ? new Color4(1, 1, 1, enabled ? 1f : .8f) : enabled ? Ink : Muted, center: true);
-        }
-    }
+    // ───────────────────────────── pantallas (todas las medidas salen de OnboardingLayout)
+    private Dictionary<string, LayoutBox> _l = new();
+    private LayoutBox L(string id) => _l[id];
+    private bool Has(string id) => _l.ContainsKey(id);
+    private void TextIn(string id, string? s, IDWriteTextFormat f, Color4 c, bool center = false, bool right = false, bool wrap = false, bool top = false) { var b = L(id); Text(s, f, b.X, b.Y, b.W, b.H, c, center, right, wrap, top); }
 
-    // ───────────────────────────── pantallas
     public void Paint(OnboardingController c)
     {
-        var ctx = _ctx; ctx.BeginDraw();
+        _l = OnboardingLayout.Compute(c).ToDictionary(x => x.Id, x => x); var ctx = _ctx; ctx.BeginDraw();
         try
         {
             ctx.Clear(BgTop);
@@ -112,38 +103,36 @@ internal sealed class OnboardingPainter : IDisposable
                 case OnboardingStep.Review: Header(c, "Revisa tus elecciones", "Aún no se ha cambiado nada. Puedes volver atrás."); Review(c); break;
                 case OnboardingStep.Result: Header(c, c.StepTitle, null); Result(c); break;
             }
-            if (c.Step != OnboardingStep.Welcome) Dots(c);
-            if (c.Note is { } n && c.Step != OnboardingStep.Result) Text(n, _small, 40, 452, 720, 34, C(0xF59E0B), wrap: true);
+            if (Has("dots")) Dots(c);
+            if (Has("note")) TextIn("note", c.Note, _small, Warn, wrap: true, top: true);
+            if (Watermark is { } wm) Text(wm, _small, 0, 4, OnboardingController.WinW, 14, Muted, center: true);
         }
         finally { ctx.EndDraw(); }
     }
 
     private void Dots(OnboardingController c)
     {
-        int cur = Math.Max(0, Array.IndexOf(OnboardingController.Flow, c.Step)); if (c.Step == OnboardingStep.Result) cur = OnboardingController.Flow.Length - 1;
-        for (int i = 0; i < OnboardingController.Flow.Length; i++) Dot(OnboardingController.WinW / 2 - 40 + i * 20, 520 + 0, i == cur ? 4.5 : 3.2, i <= cur ? Violet : TrackOff);
+        var d = L("dots"); int cur = Math.Max(0, Array.IndexOf(OnboardingController.Flow, c.Step));
+        for (int i = 0; i < OnboardingController.Flow.Length; i++) Dot(d.X + 10 + i * 20, d.Y + d.H / 2, i == cur ? 4.5 : 3.2, i <= cur ? Violet : TrackOff);
     }
 
     private void Header(OnboardingController c, string title, string? sub)
     {
-        if (_logo is not null) _ctx.DrawBitmap(_logo, new RawRectF(40, 28, 40 + 40, 28 + 40), 1f, BitmapInterpolationMode.Linear, null);
-        Text(title, _h2, 92, 24, 640, 32, Ink); if (sub is not null) Text(sub, _small, 92, 54, 660, 22, Muted);
-        Text("Hatsu Desktop", _small, 600, 28, 160, 20, Muted, right: true);
+        var lg = L("h.logo"); if (_logo is not null) _ctx.DrawBitmap(_logo, new RawRectF((float)lg.X, (float)lg.Y, (float)lg.Right, (float)lg.Bottom), 1f, BitmapInterpolationMode.Linear, null);
+        TextIn("h.title", title, _h2, Ink); if (sub is not null) TextIn("h.sub", sub, _small, Muted); TextIn("h.brand", "Hatsu Desktop", _small, Muted, right: true);
     }
 
     private void Welcome(OnboardingController c)
     {
         double cx = OnboardingController.WinW / 2;
-        Orb(cx, 150, 150, new Color4(Violet.R, Violet.G, Violet.B, _dark ? .45f : .28f));
-        if (_logo is not null) _ctx.DrawBitmap(_logo, new RawRectF((float)cx - 56, 92, (float)cx + 56, 204), 1f, BitmapInterpolationMode.Linear, null);
-        Text("Bienvenido a Hatsu Desktop", _h1, 0, 220, OnboardingController.WinW, 44, Ink, center: true);
-        Text("Tu escritorio, a tu estilo.", _tag, 0, 266, OnboardingController.WinW, 30, Lilac, center: true);
-        Text("Hatsu Desktop personaliza Windows con herramientas opcionales: tú eliges cuáles usar y puedes cambiarlo después en Ajustes. Hasta que confirmes, no se modifica nada en tu equipo.",
-            _body, 170, 312, 460, 70, Muted, center: true, wrap: true, top: true);
+        Orb(cx, 140, 150, new Color4(Violet.R, Violet.G, Violet.B, _dark ? .45f : .28f));
+        var lg = L("w.logo"); if (_logo is not null) _ctx.DrawBitmap(_logo, new RawRectF((float)lg.X, (float)lg.Y, (float)lg.Right, (float)lg.Bottom), 1f, BitmapInterpolationMode.Linear, null);
+        TextIn("w.title", "Bienvenido a Hatsu Desktop", _h1, Ink, center: true); TextIn("w.tag", "Tu escritorio, a tu estilo.", _tag, AccentText, center: true);
+        TextIn("w.body", OnboardingLayout.WelcomeBody, _body, Muted, center: true, wrap: true, top: true);
         foreach (var h in c.Hits)
             if (h.Id == "next") Button(h, c.Mode == OnboardingMode.Resume ? "Continuar" : "Comenzar", true, c.Hover == h.Id);
             else Text(h.Id == "skip" ? "Omitir configuración" : "Cancelar", c.Hover == h.Id ? _bodyB : _body, h.X, h.Y, h.W, h.H, c.Hover == h.Id ? Ink : Muted, center: true);
-        if (c.Mode != OnboardingMode.Rerun) Text("Omitir usa valores seguros: Dock, Barra e Isla activados; nada se cambia en Windows.", _small, 100, 486, 600, 24, Muted, center: true);
+        if (Has("w.note")) TextIn("w.note", OnboardingLayout.WelcomeSkipNote, _small, Muted, center: true, wrap: true, top: true);
     }
 
     private void Components(OnboardingController c)
@@ -152,9 +141,9 @@ internal sealed class OnboardingPainter : IDisposable
         {
             string id = h.Id[2..]; bool on = OnboardingRules.Get(c.Choices, id); bool hov = c.Hover == h.Id;
             Card(h.X, h.Y, h.W, h.H, hov);
-            Text(OnboardingRules.Name(id), _bodyB, h.X + 18, h.Y + 12, h.W - 90, 24, Ink);
-            Text(OnboardingRules.Description(id), _small, h.X + 18, h.Y + 38, h.W - 92, 40, Muted, wrap: true, top: true);
-            Switch(h.X + h.W - 64, h.Y + 14, on);
+            TextIn("cn:" + id, OnboardingRules.Name(id), _bodyB, Ink); TextIn("cd:" + id, OnboardingRules.Description(id), _small, Muted, wrap: true, top: true);
+            var sw = L("cs:" + id); Switch(sw.X, sw.Y, on);
+            if (Has("cr:" + id)) { var r = L("cr:" + id); RR(r.X, r.Y, r.W, r.H, 10, new Color4(Violet.R, Violet.G, Violet.B, _dark ? .28f : .14f)); Text(OnboardingRules.RequiresBarText, _chip, r.X, r.Y, r.W, r.H, AccentText, center: true); }
         }
         Nav(c);
     }
@@ -167,36 +156,46 @@ internal sealed class OnboardingPainter : IDisposable
     private void Appearance(OnboardingController c)
     {
         var ch = c.Choices;
-        Text("Tema del Dock", _bodyB, 40, 100, 420, 24, Ink); Segments(c, "theme", OnboardingRules.ThemeNames, (int)ch.Theme, 132, true);
-        Text("La Barra superior y la Isla siguen siempre el tema de Windows.", _small, 40, 172, 420, 20, Muted);
-        Text("Tamaño del Dock", _bodyB, 40, 178, 420, 24, Ink);
-        Segments(c, "size", DockSettings.Presets.Select(p => p.Name).ToArray(), ch.DockSize, 206, ch.Dock);
-        Text("Posición del Dock", _bodyB, 40, 252, 420, 24, Ink); Segments(c, "align", OnboardingRules.AlignmentNames, (int)ch.DockAlignment, 280, ch.Dock);
-        Text("Fondo de la Barra superior", _bodyB, 40, 326, 420, 24, Ink); Segments(c, "bg", OnboardingRules.BackgroundNames, ch.BarBackground == BarBackground.Glass ? 0 : 1, 354, ch.Bar);
-        if (!ch.Dock) Text("El Dock está desactivado: sus opciones no se aplican.", _small, 40, 400, 420, 20, Muted);
-        else if (!ch.Bar) Text("La Barra superior está desactivada: su fondo no se aplica.", _small, 40, 400, 420, 20, Muted);
-        Preview(c, 490, 100, 270, 330);
+        TextIn("a.l1", "Tema del Dock", _bodyB, Ink); SegGroup(c, "theme", OnboardingRules.ThemeNames, (int)ch.Theme, true);
+        TextIn("a.n1", OnboardingLayout.ThemeNote, _small, Muted, wrap: true, top: true);
+        TextIn("a.l2", "Tamaño del Dock", _bodyB, Ink); SegGroup(c, "size", DockSettings.Presets.Select(p => p.Name).ToArray(), ch.DockSize, ch.Dock);
+        TextIn("a.l3", "Posición del Dock", _bodyB, Ink); SegGroup(c, "align", OnboardingRules.AlignmentNames, (int)ch.DockAlignment, ch.Dock);
+        TextIn("a.l4", "Fondo de la Barra superior", _bodyB, Ink); SegGroup(c, "bg", OnboardingRules.BackgroundNames, ch.BarBackground == BarBackground.Glass ? 0 : 1, ch.Bar);
+        if (Has("a.off")) TextIn("a.off", !ch.Dock ? OnboardingLayout.AppearanceDockOff : OnboardingLayout.AppearanceBarOff, _small, Muted, wrap: true, top: true);
+        Preview(c);
         Nav(c);
     }
 
-    /// <summary>Vista previa esquemática (no es una captura): refleja las elecciones reales.</summary>
-    private void Preview(OnboardingController c, double x, double y, double w, double h)
+    private void SegGroup(OnboardingController c, string id, string[] names, int selected, bool enabled)
     {
-        var ch = c.Choices; bool dockDark = ch.Theme == ThemeMode.Dark || (ch.Theme == ThemeMode.System && _dark);
-        Card(x - 10, y - 10, w + 20, h + 20);
-        Gradient(x, y, w, h, 12, C(0x5B21B6), C(0xC084FC));
-        if (ch.Bar) RR(x, y, w, 20, 0, ch.BarBackground == BarBackground.Glass ? new Color4(1, 1, 1, .28f) : new Color4(1, 1, 1, .04f));
-        if (ch.Bar) { Text("Hatsu", _small, x + 8, y, 60, 20, new Color4(1, 1, 1, .95f)); Text("12:34", _small, x + w - 68, y, 60, 20, new Color4(1, 1, 1, .95f), right: true); }
-        if (ch.Notch) RR(x + w / 2 - 30, y + 2, 60, 16, 8, new Color4(0, 0, 0, .85f));
+        var box = L(id + ".seg"); RR(box.X, box.Y, box.W, box.H, 12, Glass); RRStroke(box.X, box.Y, box.W, box.H, 12, Edge);
+        for (int i = 0; i < names.Length; i++)
+        {
+            var s = L($"{id}:{i}"); bool sel = i == selected, hov = c.Hover == s.Id && enabled;
+            if (sel) Gradient(s.X + 3, s.Y + 3, s.W - 6, s.H - 6, 9, enabled ? Violet : TrackOff, enabled ? VioletDeep : TrackOff);
+            else if (hov) RR(s.X + 3, s.Y + 3, s.W - 6, s.H - 6, 9, Glass);
+            Text(names[i], _body, s.X, s.Y, s.W, s.H, sel ? new Color4(1, 1, 1, enabled ? 1f : .8f) : enabled ? Ink : Muted, center: true);
+        }
+    }
+
+    /// <summary>Vista previa esquemática HORIZONTAL de escritorio (16:10; no es una captura): refleja las elecciones reales.</summary>
+    private void Preview(OnboardingController c)
+    {
+        var ch = c.Choices; var card = L("p.card"); var d = L("p.desk"); bool dockDark = ch.Theme == ThemeMode.Dark || (ch.Theme == ThemeMode.System && _dark);
+        Card(card.X, card.Y, card.W, card.H);
+        Gradient(d.X, d.Y, d.W, d.H, 8, C(0x5B21B6), C(0xC084FC));
+        if (ch.Bar) { RR(d.X, d.Y, d.W, 14, 0, ch.BarBackground == BarBackground.Glass ? new Color4(1, 1, 1, .30f) : new Color4(1, 1, 1, .05f)); Text("Hatsu", _tiny, d.X + 6, d.Y, 50, 14, new Color4(1, 1, 1, .95f)); Text("12:34", _tiny, d.Right - 56, d.Y, 50, 14, new Color4(1, 1, 1, .95f), right: true); }
+        if (ch.Notch) RR(d.X + d.W / 2 - 22, d.Y + 2, 44, 10, 5, new Color4(0, 0, 0, .85f));
+        RR(d.X + 40, d.Y + 34, d.W - 120, d.H - 80, 6, new Color4(1, 1, 1, .16f)); RR(d.X + 40, d.Y + 34, d.W - 120, 10, 6, new Color4(1, 1, 1, .22f));   // una ventana de muestra
         if (ch.Dock)
         {
-            int sz = ch.DockSize >= 0 ? ch.DockSize : 1; double icon = 12 + sz * 4.5, pad = 6, n = 5, dw = n * (icon + 6) + pad * 2, dh = icon + pad * 2;
-            double dx = ch.DockAlignment switch { DockAlignment.Left => x + 12, DockAlignment.Right => x + w - dw - 12, _ => x + (w - dw) / 2 };
-            RR(dx, y + h - dh - 14, dw, dh, 12, dockDark ? new Color4(.1f, .1f, .14f, .78f) : new Color4(.96f, .96f, 1f, .82f));
-            for (int i = 0; i < n; i++) RR(dx + pad + i * (icon + 6) + 3, y + h - dh - 14 + pad, icon, icon, icon * .24, i == 0 ? Lilac : dockDark ? new Color4(1, 1, 1, .35f) : new Color4(.3f, .2f, .5f, .4f));
+            int sz = ch.DockSize >= 0 ? ch.DockSize : 1; double icon = 8 + sz * 3.2, pad = 4, n = 5, gap = 4, dw = n * (icon + gap) + pad * 2 - gap, dh = icon + pad * 2;
+            double dx = ch.DockAlignment switch { DockAlignment.Left => d.X + 10, DockAlignment.Right => d.Right - dw - 10, _ => d.X + (d.W - dw) / 2 }, dy = d.Bottom - dh - 8;
+            RR(dx, dy, dw, dh, 8, dockDark ? new Color4(.1f, .1f, .14f, .80f) : new Color4(.96f, .96f, 1f, .85f));
+            for (int i = 0; i < n; i++) RR(dx + pad + i * (icon + gap), dy + pad, icon, icon, icon * .24, i == 0 ? Lilac : dockDark ? new Color4(1, 1, 1, .38f) : new Color4(.3f, .2f, .5f, .45f));
         }
-        else Text("Sin Dock", _small, x, y + h - 40, w, 24, new Color4(1, 1, 1, .85f), center: true);
-        Text("Vista previa esquemática", _small, x - 10, y + h + 12, w + 20, 18, Muted, center: true);
+        else Text("Sin Dock", _tiny, d.X, d.Bottom - 26, d.W, 20, new Color4(1, 1, 1, .9f), center: true);
+        TextIn("p.cap", "Vista previa esquemática", _small, Muted, center: true);
     }
 
     private void WindowsStep(OnboardingController c)
@@ -204,46 +203,47 @@ internal sealed class OnboardingPainter : IDisposable
         var ch = c.Choices;
         foreach (var h in c.Hits.Where(h => h.Id.StartsWith("t:")))
         {
-            bool auto = h.Id == "t:autostart", on = auto ? ch.Autostart : ch.HideTaskbar, hov = c.Hover == h.Id && h.Enabled;
+            string key = h.Id[2..]; bool auto = key == "autostart", on = auto ? ch.Autostart : ch.HideTaskbar, hov = c.Hover == h.Id && h.Enabled;
             Card(h.X, h.Y, h.W, h.H, hov);
-            Text(auto ? "Iniciar Hatsu Desktop al iniciar sesión en Windows" : "Ocultar la barra de tareas original mientras Hatsu Desktop esté funcionando", _bodyB, h.X + 20, h.Y + 12, h.W - 110, 26, h.Enabled ? Ink : Muted);
-            Text(auto ? "Añade una entrada de inicio solo para tu usuario. Puedes quitarla cuando quieras en Ajustes. Desactivado por defecto."
-                      : h.Enabled ? "Hatsu Desktop la restaura al salir y, si se cierra de golpe, un guardián la devuelve. No se modifica Explorer de forma permanente. Desactivado por defecto."
-                                  : "Necesita el Dock: sin él no quedaría ninguna forma de cambiar de ventana.", _small, h.X + 20, h.Y + 42, h.W - 110, 56, Muted, wrap: true, top: true);
-            Switch(h.X + h.W - 70, h.Y + 20, on && h.Enabled, h.Enabled);
+            TextIn("tt:" + key, auto ? OnboardingLayout.AutostartTitle : OnboardingLayout.HideTitle, _bodyB, h.Enabled ? Ink : Muted);
+            TextIn("td:" + key, auto ? OnboardingLayout.AutostartDesc : h.Enabled ? OnboardingLayout.HideDesc : OnboardingLayout.HideNeedsDock, _small, Muted, wrap: true, top: true);
+            var sw = L("ts:" + key); Switch(sw.X, sw.Y, on && h.Enabled, h.Enabled);
         }
-        Card(40, 344, 720, 80);
-        Text("Cerrar ventanas no cierra Hatsu Desktop: sigue en segundo plano, con su icono en la bandeja. Para salir del todo, usa «Salir» en el menú de la bandeja.", _small, 60, 354, 680, 60, Muted, wrap: true, top: true);
+        var ic = L("i.card"); Card(ic.X, ic.Y, ic.W, ic.H); TextIn("i.text", OnboardingLayout.CloseInfo, _small, Muted, wrap: true, top: true);
         Nav(c);
     }
 
     private void Review(OnboardingController c)
     {
-        Card(40, 96, 720, 380);
-        var rows = OnboardingRules.Review(c.Choices); double y = 108, lh = Math.Min(28, 356.0 / Math.Max(1, rows.Count));
-        foreach (var (l, v) in rows)
+        var card = L("r.card"); Card(card.X, card.Y, card.W, card.H);
+        var rows = OnboardingRules.Review(c.Choices);
+        for (int i = 0; i < rows.Count; i++)
         {
-            bool windows = l is "Iniciar con Windows" or "Barra de tareas de Windows";
-            Text(l, _bodyB, 64, y, 250, lh, windows ? Lilac : Ink); Text(v, _body, 320, y, 420, lh, v == "Desactivado" ? Muted : Ink); y += lh;
+            var (l, v) = rows[i]; bool windows = l is "Iniciar con Windows" or "Barra de tareas de Windows";
+            TextIn("rl:" + i, l, _bodyB, windows ? AccentText : Ink); TextIn("rv:" + i, v, _body, v == "Desactivado" ? Muted : Ink);
         }
         foreach (var h in c.Hits) Button(h, h.Id == "back" ? "Atrás" : "Aplicar y comenzar", h.Id == "apply", c.Hover == h.Id);
     }
 
     private void Result(OnboardingController c)
     {
-        Card(40, 96, 720, 380);
-        if (c.Busy || c.Result is null) { Text("Aplicando tus elecciones y comprobando que cada módulo arranca…", _body, 64, 120, 670, 40, Muted); return; }
-        double y = 108;
-        foreach (var it in c.Result.Items)
+        var card = L("x.card"); Card(card.X, card.Y, card.W, card.H);
+        if (c.Busy || c.Result is null) { TextIn("x.busy", "Aplicando tus elecciones y comprobando que cada módulo arranca…", _body, Muted, wrap: true, top: true); return; }
+        var r = c.Result;
+        for (int i = 0; i < Math.Min(r.Items.Count, OnboardingLayout.MaxResultRows); i++)
         {
-            var col = it.Outcome == ApplyOutcome.Ok ? Good : it.Outcome == ApplyOutcome.Warning ? Warn : Bad;
-            Dot(66, y + 13, 6, col); Text(it.Label, _bodyB, 84, y, 250, 26, Ink); Text(it.Detail ?? (it.Outcome == ApplyOutcome.Ok ? "Listo" : ""), _small, 340, y, 400, 26, it.Outcome == ApplyOutcome.Ok ? Muted : col); y += 28;
-            if (y > 450) break;
+            var it = r.Items[i]; var d = L("xd:" + i);
+            var col = it.Inactive ? Neutral : it.Outcome == ApplyOutcome.Ok ? Good : it.Outcome == ApplyOutcome.Warning ? Warn : Bad;
+            Dot(d.X + 6, d.Y + 6, 6, col); TextIn("xl:" + i, it.Label, _bodyB, Ink);
+            TextIn("xt:" + i, it.Detail ?? (it.Outcome == ApplyOutcome.Ok ? "Listo" : ""), _small, it.Outcome == ApplyOutcome.Ok ? Muted : col);
         }
-        string msg = c.Result.RolledBack ? "No se aplicó nada: se restauró el estado anterior. Puedes reintentar o cerrar el asistente." : c.Result.EssentialFailed ? "Algo esencial falló." : c.Result.HasWarnings ? "Algunas cosas no se aplicaron. Puedes reintentar o continuar y revisarlo después en Ajustes." : "Todo se aplicó y los módulos están en marcha. Puedes cambiar lo que quieras en Ajustes.";
-        Text(msg, _small, 40, 446 + 4, 720, 40, c.Result.AllOk ? Good : Warn, wrap: true, top: true);
-        foreach (var h in c.Hits) Button(h, h.Id switch { "back" => "Volver a revisar", "retry" => "Reintentar", "cancel" => "Cerrar sin aplicar", "accept" => "Continuar de todos modos", _ => "Empezar" }, h.Id is "finish" or "accept" || (h.Id == "retry" && c.Result.EssentialFailed), c.Hover == h.Id);
+        if (Has("x.more")) TextIn("x.more", $"…y {r.Items.Count - OnboardingLayout.MaxResultRows} más (ver el registro)", _small, Muted);
+        var ln = L("x.line"); RR(ln.X, ln.Y, ln.W, 1, 0, Edge);
+        TextIn("x.msg", c.ResultMessage, _small, r.AllOk ? Muted : Warn, wrap: true, top: true);
+        if (Has("details")) { var dt = L("details"); Text(c.ShowDetails ? "Detalles técnicos ▴" : "Detalles técnicos ▾", _small, dt.X, dt.Y, dt.W, dt.H, AccentText); }
+        if (Has("x.tech")) TextIn("x.tech", string.Join("\n", r.Items.Where(i => i.Technical is not null).Select(i => $"{i.Label}: {i.Technical}")), _tiny, Muted, wrap: true, top: true);
+        foreach (var h in c.Hits.Where(h => h.Id != "details")) Button(h, h.Id switch { "back" => "Volver a revisar", "retry" => "Reintentar", "cancel" => "Cerrar sin aplicar", "accept" => "Continuar de todos modos", _ => "Empezar" }, h.Id is "finish" or "accept" || (h.Id == "retry" && r.EssentialFailed), c.Hover == h.Id);
     }
 
-    public void Dispose() { _logo?.Dispose(); _b.Dispose(); _h1.Dispose(); _h2.Dispose(); _body.Dispose(); _bodyB.Dispose(); _small.Dispose(); _tag.Dispose(); _dw.Dispose(); }
+    public void Dispose() { _logo?.Dispose(); _b.Dispose(); _h1.Dispose(); _h2.Dispose(); _body.Dispose(); _bodyB.Dispose(); _small.Dispose(); _tag.Dispose(); _chip.Dispose(); _tiny.Dispose(); _dw.Dispose(); }
 }

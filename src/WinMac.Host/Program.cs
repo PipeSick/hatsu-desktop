@@ -53,7 +53,7 @@ internal static class Program
                 try
                 {
                     var step = Enum.Parse<WinMac.Host.OnboardingStep>(stepName, ignoreCase: true);
-                    File.WriteAllText(png + ".txt", OnboardingWindow.RenderOffscreen(png, step, HostOptions.Arg(args, "--theme", "dark") != "light", double.TryParse(HostOptions.Arg(args, "--scale", "2"), System.Globalization.CultureInfo.InvariantCulture, out var osc) ? osc : 2)); return 0;
+                    File.WriteAllText(png + ".txt", OnboardingWindow.RenderOffscreen(png, step, HostOptions.Arg(args, "--theme", "dark") != "light", double.TryParse(HostOptions.Arg(args, "--scale", "2"), System.Globalization.CultureInfo.InvariantCulture, out var osc) ? osc : 2, args.Contains("--details") ? "details" : null)); return 0;
                 }
                 catch (Exception e) { try { File.WriteAllText(png + ".txt", "ERROR: " + e); } catch (IOException) { } return 1; }
             }
