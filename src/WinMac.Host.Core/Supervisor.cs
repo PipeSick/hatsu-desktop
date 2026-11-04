@@ -53,6 +53,7 @@ public sealed class Supervisor
         List<Runner> list; lock (_runners) list = [.. _runners];
         foreach (var r in list.Where(r => r.State is not (ModuleState.Disabled or ModuleState.NotInstalled)))
         {
+            if (_shuttingDown) break;   // si el host se cierra durante el arranque escalonado, no se lanza lo que falta
             r.Loop = Task.Run(() => RunAsync(r));
             await r.FirstLaunch.Task.ConfigureAwait(false);                                   // el orden de arranque es real: el siguiente no se lanza hasta que este ya existe
             await _clock.Delay(_p.StartStagger, CancellationToken.None).ConfigureAwait(false);   // el orden de aparición importa (la isla debe quedar encima)

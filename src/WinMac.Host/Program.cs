@@ -21,6 +21,7 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        try { Native.SetErrorMode(0x0001 | 0x8000); } catch (Exception) { }   // sin cuadros modales del sistema ante un ejecutable no válido o un archivo ausente (bloquearían el arranque de módulos y, con él, la bandeja y el asistente)
         try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch (Exception) { }
         string exe = Environment.ProcessPath ?? "HatsuDesktop.exe", name = HostOptions.Arg(args, "--autostart-name", Autostart.DefaultName);
         try

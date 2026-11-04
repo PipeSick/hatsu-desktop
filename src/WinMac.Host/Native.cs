@@ -5,6 +5,8 @@ namespace WinMac.Host.App;
 /// <summary>P/Invoke del host. Solo APIs documentadas (user32, shell32, kernel32).</summary>
 internal static class Native
 {
+    /// <summary>SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX: un fallo de carga o de apertura devuelve el error en vez de abrir un cuadro modal del sistema que bloquearía al host.</summary>
+    [DllImport("kernel32.dll")] public static extern uint SetErrorMode(uint mode);
     public delegate IntPtr WndProc(IntPtr h, uint msg, IntPtr w, IntPtr l);
     public delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
 

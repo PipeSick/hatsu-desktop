@@ -197,8 +197,13 @@ internal static class HostApp
             });
         }
 
-        sup.StartAsync().GetAwaiter().GetResult();
-        log("[host] módulos lanzados: " + string.Join(", ", sup.States.Select(kv => $"{kv.Key}={kv.Value}")));
+        // Fase 3.1: el arranque de módulos corre FUERA del hilo de interfaz. Si el lanzamiento de uno se bloquea o tarda (Windows analizando el archivo, un cuadro del sistema…), la bandeja, Ajustes y el asistente
+        // siguen respondiendo: nada de la configuración depende de que un módulo opcional arranque.
+        var startTask = Task.Run(async () =>
+        {
+            try { await sup.StartAsync().ConfigureAwait(false); log("[host] módulos lanzados: " + string.Join(", ", sup.States.Select(kv => $"{kv.Key}={kv.Value}"))); }
+            catch (Exception e) { log("[host] el arranque de módulos falló: " + e.Message); }
+        });
 
         // Bucle de mensajes (la bandeja y el cierre de sesión lo necesitan) + vigilancia de la señal de cierre (--quit).
         while (!quitting)
@@ -217,6 +222,7 @@ internal static class HostApp
         log("[host] cerrando…");
         try { taskbar.RestoreNow(); } catch (Exception e) { log("[barra de tareas] no se pudo restaurar al salir: " + e.Message + " (el guardián o «HatsuDesktop.exe --restore-taskbar» la devuelven)"); }   // lo primero: la barra vuelve al instante
         tray?.RemoveIcon();
+        try { startTask.Wait(TimeSpan.FromSeconds(20)); } catch (Exception) { }   // no se cierra a mitad de un arranque (y no se espera para siempre a un lanzamiento bloqueado)
         sup.StopAllAsync().GetAwaiter().GetResult();
         log("[host] módulos cerrados: " + string.Join(", ", sup.States.Select(kv => $"{kv.Key}={kv.Value}")));
         try { extHost.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); } catch (Exception) { }

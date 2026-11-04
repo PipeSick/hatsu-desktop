@@ -19,7 +19,16 @@ $exe = (Resolve-Path $BarExe).Path; $before = Top; Write-Host "Área de trabajo 
 Get-Process -Name 'HatsuDesktop.Bar' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 1
 # 1) arranque con reserva (valores de fábrica): el borde superior sale del área de trabajo
 $p = Start-Process $exe -ArgumentList @('--no-config') -PassThru -WindowStyle Hidden; $reserved = $false; for ($i = 0; $i -lt 40; $i++) { Start-Sleep -Milliseconds 500; if ((Top) -gt $before) { $reserved = $true; break } }
-$during = [WorkArea]::Get(); Check 'la Barra reserva el borde superior: el área de trabajo de Windows baja' $reserved "antes y=$before · durante: $during"
+$during = [WorkArea]::Get()
+if (-not $reserved) {   # sin reserva: se reúne la evidencia antes de concluir nada (¿murió la Barra? ¿ABM_NEW falló? ¿el runner no tiene un shell que acepte barras de aplicación?)
+  $barLog = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'; Write-Host ("Barra: terminó={0}{1}" -f $p.HasExited, $(if ($p.HasExited) { " código=$($p.ExitCode)" } else { '' }))
+  $tail = if (Test-Path $barLog) { @(Get-Content $barLog -Tail 40) } else { @() }; $tail | ForEach-Object { Write-Host "    bar.log: $_" }
+  Write-Host ("Procesos explorer: {0} · sesión interactiva: {1}" -f @(Get-Process explorer -ErrorAction SilentlyContinue).Count, [Environment]::UserInteractive)
+  if (@($tail | Where-Object { $_ -match 'ABM_NEW falló' }).Count -gt 0) {
+    Write-Host 'INFO  El shell de este runner NO acepta barras de aplicación (ABM_NEW falló): la prueba NO es concluyente aquí. Se valida en un Windows físico (docs/49 §10).'
+    ($head = "# Reserva del borde superior en el runner de CI`n`n**No concluyente:** este runner no acepta barras de aplicación (ABM_NEW falló). Hay que probarlo en un Windows físico.`n") | Out-Null
+    Set-Content (Join-Path $OutDir 'appbar-report.md') -Value ($head + "`n" + (($tail | ForEach-Object { '    ' + $_ }) -join "`n")) -Encoding UTF8; if (-not $p.HasExited) { $p | Stop-Process -Force }; exit 0 } }
+Check 'la Barra reserva el borde superior: el área de trabajo de Windows baja' $reserved "antes y=$before · durante: $during"
 # 2) cierre ordenado: se devuelve exactamente lo que había
 $null = $p.CloseMainWindow(); if (-not $p.WaitForExit(8000)) { $p | Stop-Process -Force }; Start-Sleep 2
 $restored = Top; if ($restored -ne $before) { Start-Sleep 3; $restored = Top }
