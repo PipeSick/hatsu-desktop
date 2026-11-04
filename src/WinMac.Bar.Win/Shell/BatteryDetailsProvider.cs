@@ -28,6 +28,37 @@ internal static class BatteryDetailsProvider
         return new BatteryDetails(design, full, remaining, rate, cycles, chem);
     }
 
+    /// <summary>
+    /// It7: rutas de interfaz de los dispositivos de la clase Batería presentes (batería del equipo y, si los hay, SAI/UPS conectados por USB/HID).
+    /// Null si Windows no deja enumerar (el llamante usa entonces solo GetSystemPowerStatus). Solo lectura; no necesita derechos de administrador.
+    /// </summary>
+    internal static List<string>? DevicePaths()
+    {
+        var cls = new Guid("72631e54-78a4-11d0-bcf7-00aa00b7b32a");
+        var set = SetupDiGetClassDevsW(ref cls, IntPtr.Zero, IntPtr.Zero, 0x2 | 0x10);
+        if (set == new IntPtr(-1)) return null;
+        try
+        {
+            var res = new List<string>();
+            for (uint i = 0; i < 16; i++)
+            {
+                var did = new SP_DEVICE_INTERFACE_DATA { cbSize = Marshal.SizeOf<SP_DEVICE_INTERFACE_DATA>() };
+                if (!SetupDiEnumDeviceInterfaces(set, IntPtr.Zero, ref cls, i, ref did)) break;
+                SetupDiGetDeviceInterfaceDetailW(set, ref did, IntPtr.Zero, 0, out int need, IntPtr.Zero);
+                if (need <= 0) continue;
+                var buf = Marshal.AllocHGlobal(need);
+                try
+                {
+                    Marshal.WriteInt32(buf, IntPtr.Size == 8 ? 8 : 6);
+                    if (SetupDiGetDeviceInterfaceDetailW(set, ref did, buf, need, out _, IntPtr.Zero) && Marshal.PtrToStringUni(buf + 4) is { } p) res.Add(p);
+                }
+                finally { Marshal.FreeHGlobal(buf); }
+            }
+            return res;
+        }
+        finally { SetupDiDestroyDeviceInfoList(set); }
+    }
+
     private static int? Positive(int? v) => v is > 0 ? v : null;
 
     private static (int? Cycles, string? Chemistry) CyclesFromDriver()
@@ -49,6 +80,7 @@ internal static class BatteryDetailsProvider
                     Marshal.WriteInt32(buf, IntPtr.Size == 8 ? 8 : 6);   // cbSize of SP_DEVICE_INTERFACE_DETAIL_DATA_W
                     if (!SetupDiGetDeviceInterfaceDetailW(set, ref did, buf, need, out _, IntPtr.Zero)) continue;
                     string path = Marshal.PtrToStringUni(buf + 4)!;
+                    if (BatteryDeviceClass.Classify(path) == BatteryDeviceKind.Ups) continue;   // un SAI/UPS no es la batería del equipo: sus ciclos y química no se mezclan
                     using var h = CreateFileW(path, 0xC0000000 /* GENERIC_READ|WRITE */, 3, IntPtr.Zero, 3 /* OPEN_EXISTING */, 0x80, IntPtr.Zero);
                     if (h.IsInvalid) continue;
                     uint wait = 0, tag;

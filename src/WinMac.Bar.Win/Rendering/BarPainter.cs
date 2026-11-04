@@ -62,6 +62,7 @@ public sealed class BarPainter : IDisposable
         for (int i = 0; i < v.Frame.Items.Count; i++)
         {
             var f = v.Frame.Items[i]; double a = i < v.HoverAlpha.Count ? v.HoverAlpha[i] : 0;
+            if (v.DragId is not null && f.Item.Id == v.DragId) a = 1;   // el módulo que se arrastra queda resaltado
             if (a > 0.005 && BarModel.IsClickable(f.Item.Kind))
             {
                 Brush(Theme == BarTheme.Dark ? new Color4(1, 1, 1, (float)(0.20 * a)) : new Color4(0, 0, 0, (float)(0.11 * a)));
@@ -69,6 +70,11 @@ public sealed class BarPainter : IDisposable
                 ctx.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF((float)f.X, iy, (float)(f.X + f.W), h - iy), RadiusX = r, RadiusY = r }, _solid);
             }
             DrawItem(f, v.State, h);
+        }
+        if (v.DropX is double dx)
+        {   // indicador de inserción: línea fina con el color de acento de Windows (neutro si no hay)
+            Brush(Theme == BarTheme.Dark ? new Color4(0.40f, 0.70f, 1f, 1f) : new Color4(0.0f, 0.40f, 0.85f, 1f));
+            ctx.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF((float)dx - 1f, 5f, (float)dx + 1f, h - 5f), RadiusX = 1f, RadiusY = 1f }, _solid);
         }
         ctx.EndDraw();
     }
@@ -109,7 +115,9 @@ public sealed class BarPainter : IDisposable
                 case BarItemKind.Volume: DrawVolume(x, cy, s.Volume); break;
                 case BarItemKind.Battery: DrawBattery(x, cy, s.Battery); break;
                 case BarItemKind.TrayMenu: DrawTrayMenu(x, cy, s.TrayOpen); break;
-                case BarItemKind.Phone: DrawPhone(x, cy, s.Phone?.Status == WinMac.Connect.PhoneLinkStatus.Connected); break;
+                case BarItemKind.Phone: DrawPhone(x, cy, f.Item.Look); break;
+                case BarItemKind.TaskManager: DrawActivity(x, cy); break;
+                case BarItemKind.PowerPlug: DrawPlug(x + 8, cy); break;
             }
             x += (float)(f.Item.GlyphWidth + (string.IsNullOrEmpty(f.Item.Text) ? 0 : _m.GlyphTextGap));
         }
@@ -202,6 +210,12 @@ public sealed class BarPainter : IDisposable
             }
             Brush(Theme == BarTheme.Dark ? new Color4(0, 0, 0, 0.75f) : new Color4(1, 1, 1, 0.9f)); _ctx.FillGeometry(g, _solid);
         }
+        else if (b.Plugged)
+        {   // con corriente pero sin cargar (Windows lo distingue): enchufe pequeño en lugar del rayo
+            float bx = x + bw / 2f; Brush(Theme == BarTheme.Dark ? new Color4(0, 0, 0, 0.75f) : new Color4(1, 1, 1, 0.9f));
+            _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(bx - 2.4f, cy - 0.9f, bx + 2.4f, cy + 2.6f), RadiusX = 1f, RadiusY = 1f }, _solid);
+            _ctx.DrawLine(new Vector2(bx - 1.1f, cy - 3.2f), new Vector2(bx - 1.1f, cy - 0.9f), _solid, 1f); _ctx.DrawLine(new Vector2(bx + 1.1f, cy - 3.2f), new Vector2(bx + 1.1f, cy - 0.9f), _solid, 1f);
+        }
     }
 
     private void DrawVolume(float x, float cy, VolumeInfo v)
@@ -241,12 +255,35 @@ public sealed class BarPainter : IDisposable
         if (off) { Brush(Fg()); _ctx.DrawLine(new Vector2(x + 2, cy - 6), new Vector2(x + 14, cy + 6.5f), _solid, 1.5f, _round); }
     }
 
-    /// <summary>WinMac Connect: un iPhone de perfil (contorno redondeado con la isla arriba). Atenuado sin conexión.</summary>
-    private void DrawPhone(float x, float cy, bool connected)
+    /// <summary>WinMac Connect: un iPhone de perfil (contorno redondeado con la isla arriba). Atenuado al conectar; tachado sin conexión.</summary>
+    private void DrawPhone(float x, float cy, BarItemLook look)
     {
-        float cx = x + 8, a = connected ? 1f : 0.4f; Brush(Fg(a));
+        float cx = x + 8, a = look == BarItemLook.Normal ? 1f : look == BarItemLook.Dim ? 0.45f : 0.6f; Brush(Fg(a));
         _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.2f, cy - 7.2f, cx + 4.2f, cy + 7.2f), RadiusX = 2.2f, RadiusY = 2.2f }, _solid, 1.3f);
         _ctx.DrawLine(new Vector2(cx - 1.4f, cy - 5.1f), new Vector2(cx + 1.4f, cy - 5.1f), _solid, 1.3f, _round);
+        if (look == BarItemLook.Slashed) { Brush(Fg()); _ctx.DrawLine(new Vector2(x + 2, cy - 6.5f), new Vector2(x + 14, cy + 6.5f), _solid, 1.5f, _round); }
+    }
+
+    /// <summary>Administrador de tareas: icono de actividad (pulso).</summary>
+    private void DrawActivity(float x, float cy)
+    {
+        Brush(Fg());
+        using var g = _dev.Factory.CreatePathGeometry(); using (var s = g.Open())
+        {
+            s.BeginFigure(new Vector2(x + 0.8f, cy), FigureBegin.Hollow);
+            foreach (var p in new[] { new Vector2(x + 4.2f, cy), new Vector2(x + 6.6f, cy - 6.2f), new Vector2(x + 9.6f, cy + 6.2f), new Vector2(x + 11.8f, cy), new Vector2(x + 15.2f, cy) }) s.AddLine(p);
+            s.EndFigure(FigureEnd.Open); s.Close();
+        }
+        _ctx.DrawGeometry(g, _solid, 1.4f, _round);
+    }
+
+    /// <summary>Enchufe (equipo sin batería conectado a la corriente).</summary>
+    private void DrawPlug(float cx, float cy)
+    {
+        Brush(Fg());
+        _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.2f, cy - 2.2f, cx + 4.2f, cy + 3.4f), RadiusX = 2f, RadiusY = 2f }, _solid, 1.3f);
+        _ctx.DrawLine(new Vector2(cx - 2f, cy - 2.2f), new Vector2(cx - 2f, cy - 6.4f), _solid, 1.3f, _round); _ctx.DrawLine(new Vector2(cx + 2f, cy - 2.2f), new Vector2(cx + 2f, cy - 6.4f), _solid, 1.3f, _round);
+        _ctx.DrawLine(new Vector2(cx, cy + 3.4f), new Vector2(cx, cy + 7f), _solid, 1.3f, _round);
     }
 
     private void DrawBluetooth(float x, float cy, bool on)

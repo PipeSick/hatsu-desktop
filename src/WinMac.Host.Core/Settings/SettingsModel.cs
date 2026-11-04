@@ -57,6 +57,9 @@ public static class SettingsBuilder
         ("soundMixer", "Mezclador en el menú Sonido", b => b.SoundMixer),
         ("showPhone", "Indicador del iPhone en la barra superior", b => b.ShowPhone),
         ("appOutputRouting", "Salida por aplicación (experimental)", b => b.AppOutputRouting),
+        ("showPhonePercent", "Porcentaje junto al iPhone", b => b.ShowPhonePercent),
+        ("showPowerWithoutBattery", "Icono de corriente en equipos sin batería", b => b.ShowPowerWithoutBattery),
+        ("showTaskManager", "Botón del Administrador de tareas", b => b.ShowTaskManager),
     ];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];
@@ -136,10 +139,13 @@ public static class SettingsBuilder
         var barPage = new SettingsPage("bar", "Barra superior", "bar",
         [
             new("Apariencia", [
-                new(RowKind.Segmented, "bar.theme", "Tema", Options: ThemeNames, Selected: Index(ThemeValues, bar.Theme.ToString())),
                 new(RowKind.Segmented, "bar.bg", "Fondo", Options: SettingsBuilder.BackgroundNames, Selected: Index(BackgroundValues, bar.Background.ToString())),
             ]),
-            new("Elementos", [Bar(0), Bar(1), Bar(2), Bar(3), Bar(4), Bar(5), Bar(6), Bar(7), Bar(8), Bar(28, "Los de la bandeja de Windows; siguen también en la barra de tareas")]),
+            new("Elementos", [Bar(0), Bar(1), Bar(2), Bar(3), Bar(4), Bar(5), Bar(6), Bar(7), Bar(8), Bar(28, "Los de la bandeja de Windows; siguen también en la barra de tareas"),
+                Bar(BarToggles.Length - 3, "Si el iPhone está conectado pero Windows no da una lectura reciente, se muestra «—» en vez de un número viejo"),
+                Bar(BarToggles.Length - 2, "Solo si el equipo no tiene batería y está conectado a la corriente; sin porcentaje. Apagado, el módulo de batería no aparece"),
+                Bar(BarToggles.Length - 1, "Abre el Administrador de tareas de Windows"),
+                new(RowKind.Button, "bar.orderreset", "Restaurar orden predeterminado", "Arrastra los iconos de la barra para cambiar su orden")]),
             new("Comportamiento", [
                 Bar(9, "Las ventanas maximizadas empiezan debajo de la barra y no quedan tapadas"),
                 Bar(11),

@@ -1,18 +1,21 @@
 namespace WinMac.Bar;
 
-public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather, TrayMenu, Phone }
+public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather, TrayMenu, Phone, TaskManager, PowerPlug }
 
 /// <summary>
 /// Un elemento de la barra. <see cref="Text"/> puede estar vacío (solo icono). <see cref="GlyphWidth"/> es el ancho fijo del icono (0 = sin icono).
 /// El render mide el texto y el núcleo reparte el espacio (<see cref="BarLayout"/>).
 /// </summary>
-public sealed record BarItem(BarItemKind Kind, string Text, double GlyphWidth, bool Bold = false, string? Key = null)
+/// <summary>Aspecto del icono: normal, atenuado (buscando) o tachado (sin conexión).</summary>
+public enum BarItemLook { Normal, Dim, Slashed }
+
+public sealed record BarItem(BarItemKind Kind, string Text, double GlyphWidth, bool Bold = false, string? Key = null, BarItemLook Look = BarItemLook.Normal, string? Tip = null)
 {
     /// <summary>Identidad estable del elemento (el resalte la usa al repartir de nuevo). Los menús de app llevan su posición.</summary>
     public string Id => Key ?? Kind.ToString();
 }
 
-public enum BarActionKind { None, OpenSettings, ShowMenu, Quit, OpenPanel, ShowAppMenu }
+public enum BarActionKind { None, OpenSettings, ShowMenu, Quit, OpenPanel, ShowAppMenu, OpenTaskManager }
 
 /// <summary>
 /// Lo que pasa al hacer clic. <see cref="Panel"/>: panel desplegable a abrir; <see cref="Uri"/>: página de Configuración (única acción en el modo antiguo y respaldo si el panel no puede abrirse).
@@ -38,13 +41,13 @@ public static class BarModel
         if (c.ShowBluetooth && s.Bt.Present) right.Add(new BarItem(BarItemKind.Bluetooth, "", IconW));
         if (c.ShowNetwork && s.Network.Kind != NetKind.Unknown) right.Add(new BarItem(BarItemKind.Network, "", IconW));
         if (c.ShowVolume && s.Volume.Available) right.Add(new BarItem(BarItemKind.Volume, "", IconW));
-        // WinMac Connect: solo con el módulo activo y un iPhone conocido. El porcentaje, solo si es real y reciente (desconectado: el icono sin número).
-        if (c.ShowPhone && s.Phone is { DeviceName: not null } ph && ph.Status is not (WinMac.Connect.PhoneLinkStatus.NoDevice or WinMac.Connect.PhoneLinkStatus.NoBluetooth) && ph.BatteryStatus != WinMac.Connect.PhoneFeatureStatus.Off)
-            right.Add(new BarItem(BarItemKind.Phone, WinMac.Connect.PhoneStatusText.CurrentBattery(ph, s.Now.ToUniversalTime()) is { } pb ? $"{pb}%" : "", IconW));
-        if (c.ShowBattery && s.Battery.Present) right.Add(new BarItem(BarItemKind.Battery, c.ShowBatteryPercent ? $"{s.Battery.Percent}%" : "", BatteryW));
+        // WinMac Connect: solo con el módulo activo y un iPhone conocido. El porcentaje, solo si es real y reciente (ver PhoneBar).
+        if (c.ShowPhone && PhoneBar.Evaluate(s.Phone, s.Now.ToUniversalTime(), c.ShowPhonePercent) is { } pi) right.Add(pi);
+        if (c.ShowBattery && PcPowerBar.Evaluate(s.Battery, c) is { } pw) right.Add(pw);
+        if (c.ShowTaskManager) right.Add(new BarItem(BarItemKind.TaskManager, "", IconW, Tip: "Administrador de tareas"));
         if (c.ShowControlCenter) right.Add(new BarItem(BarItemKind.ControlCenter, "", IconW));
         right.Add(new BarItem(BarItemKind.Clock, ClockFormat.Format(s.Now, c), 0));
-        return (left, right);
+        return (left, BarOrdering.Apply(right, c.BarOrder));
     }
 
     /// <summary>Qué hace cada elemento al hacer clic. Las páginas son URI documentadas de Configuración (ms-settings:).</summary>
@@ -62,6 +65,8 @@ public static class BarModel
         BarItemKind.Weather => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Weather),
         BarItemKind.TrayMenu => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Tray),
         BarItemKind.Phone => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Phone),
+        BarItemKind.TaskManager => new BarAction(BarActionKind.OpenTaskManager),
+        BarItemKind.PowerPlug => new BarAction(BarActionKind.OpenSettings, "ms-settings:batterysaver"),
         _ => new BarAction(BarActionKind.None),
     };
 

@@ -25,7 +25,7 @@ public class ConnectBarTests
         BarItem? Phone(PhoneState? p, BarConfig? c = null) => BarModel.Build(State(p), c ?? new BarConfig()).Right.FirstOrDefault(i => i.Kind == BarItemKind.Phone);
         Assert.Null(Phone(null));   // sin módulo: nada
         Assert.Equal("75%", Phone(Connected())!.Text);
-        Assert.Equal("", Phone(Connected(minutesAgo: 30))!.Text);   // lectura vieja: el icono sin número
+        Assert.Equal("—", Phone(Connected(minutesAgo: 30))!.Text);   // lectura vieja: estado desconocido, nunca el número viejo
         Assert.Equal("", Phone(Connected() with { Status = PhoneLinkStatus.Disconnected })!.Text);   // desconectado: nunca un % viejo como actual
         Assert.Null(Phone(new PhoneState { Status = PhoneLinkStatus.NoDevice }));
         Assert.Null(Phone(Connected(), new BarConfig { ShowPhone = false }));

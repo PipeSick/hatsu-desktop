@@ -7,6 +7,8 @@ public enum NetKind { Unknown, Offline, Wifi, Ethernet }
 public sealed record BatteryInfo(bool Present, int Percent, bool Charging, bool Plugged, int? SecondsLeft = null)
 {
     public static readonly BatteryInfo None = new(false, 0, false, false);
+    /// <summary>It7: equipo sin batería (sobremesa) conectado a la corriente: no hay porcentaje, solo la línea de corriente.</summary>
+    public static readonly BatteryInfo NoBatteryOnAc = new(false, 0, false, true);
     public double Fill => Math.Clamp(Percent, 0, 100) / 100.0;
     public bool Low => Present && !Charging && Percent <= 20;
 }

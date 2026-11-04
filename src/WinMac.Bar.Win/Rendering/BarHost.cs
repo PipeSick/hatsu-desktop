@@ -112,7 +112,8 @@ public sealed partial class BarHost : IDisposable
         }
     }
 
-    private BarTheme ResolveTheme() => _cfg.Theme switch { BarThemeMode.Dark => BarTheme.Dark, BarThemeMode.Light => BarTheme.Light, _ => SystemTheme.Current() == DockTheme.Dark ? BarTheme.Dark : BarTheme.Light };
+    /// <summary>It7: siempre el tema de aplicaciones de Windows (AppsUseLightTheme); ya no hay selector manual (el campo Theme de bar.json se conserva solo por compatibilidad y se ignora).</summary>
+    private BarTheme ResolveTheme() => SystemTheme.Current() == DockTheme.Dark ? BarTheme.Dark : BarTheme.Light;
 
     // ------------------------------------------------------------------ monitores
     /// <summary>Una barra por monitor activo; el modo espejo (mismos límites) cuenta como UN monitor. Crea, recoloca o libera las que hagan falta.</summary>
@@ -255,9 +256,25 @@ public sealed partial class BarHost : IDisposable
                 case BarActionKind.ShowMenu: ShowAppleMenu(src, item); break;
                 case BarActionKind.OpenPanel: OpenPanelFromBar(src, a, item); break;
                 case BarActionKind.ShowAppMenu: ShowAppMenu(src, a.Index, item); break;
+                case BarActionKind.OpenTaskManager: OpenTaskManager(); break;
             }
         }
         catch (Exception e) { _log($"Acción {a.Kind} falló: {e.GetType().Name}: {e.Message}"); }
+    }
+
+    /// <summary>It7: guarda el orden elegido arrastrando (compartido por todas las barras y persistido en la configuración central).</summary>
+    internal void OnBarOrderChangedInternal(string order) => ((IPanelUi)this).PatchConfig(new { barOrder = order });
+
+    /// <summary>It7: abre el Administrador de tareas de Windows con el shell (no necesita derechos de administrador propios; si Windows pide elevar, lo gestiona él). Cancelar el aviso de UAC no es un error.</summary>
+    private void OpenTaskManager()
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("taskmgr.exe") { UseShellExecute = true }); }
+        catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223) { /* el usuario canceló la elevación */ }
+        catch (Exception e)
+        {
+            _log($"[bar] no se pudo abrir el Administrador de tareas: {e.GetType().Name}: {e.Message}");
+            ShowInfo("Administrador de tareas", "Windows no pudo abrir el Administrador de tareas. Puedes abrirlo con Ctrl+Mayús+Esc.");
+        }
     }
 
     public string Report() => $"{Diagnostics}; {_wins.Count} barra(s): {string.Join(" | ", _wins.Select(w => w.Report()))}; tema={_theme}; batería={_battery.Present}; volumen={_hub.Snapshot.Audio.Available}; red={_network.Kind}";

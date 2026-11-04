@@ -239,7 +239,11 @@ public class SettingsActionsTests
         try
         {
             Assert.True(a.Apply(new SettingsEdit("bar:showSeconds", "toggle", On: true))); Assert.True(cfg.Bar.ShowSeconds);
-            Assert.True(a.Apply(new SettingsEdit("bar.theme", "segment", Index: 2))); Assert.Equal(BarThemeMode.Dark, cfg.Bar.Theme);
+            Assert.False(a.Apply(new SettingsEdit("bar.theme", "segment", Index: 2))); Assert.Equal(BarThemeMode.System, cfg.Bar.Theme);   // It7: ya no hay selector manual de tema
+            Assert.True(a.Apply(new SettingsEdit("bar:showTaskManager", "toggle", On: true))); Assert.True(cfg.Bar.ShowTaskManager);
+            Assert.True(a.Apply(new SettingsEdit("bar:showPhonePercent", "toggle", On: false))); Assert.False(cfg.Bar.ShowPhonePercent);
+            Assert.True(a.Apply(new SettingsEdit("bar:showPowerWithoutBattery", "toggle", On: true))); Assert.True(cfg.Bar.ShowPowerWithoutBattery);
+            cfg.ApplyBarPatch(System.Text.Json.JsonSerializer.SerializeToElement(new { barOrder = "Volume,Network" })); Assert.True(a.Apply(new SettingsEdit("bar.orderreset", "button"))); Assert.Equal("", cfg.Bar.BarOrder);
             Assert.True(a.Apply(new SettingsEdit("bar.bg", "segment", Index: 1))); Assert.Equal(BarBackground.Transparent, cfg.Bar.Background);
             Assert.True(a.Apply(new SettingsEdit("hub.rate", "segment", Index: 2))); Assert.Equal(WinMac.Bar.Hub.RateUnit.MBps, cfg.Bar.RateUnit);
             Assert.True(a.Apply(new SettingsEdit("hub.ms", "text", Text: " 2000 "))); Assert.Equal(2000, cfg.Bar.HubRefreshMs); Assert.True(a.Apply(new SettingsEdit("hub.ms", "text", Text: "abc"))); Assert.Equal(2000, cfg.Bar.HubRefreshMs);   // basura se ignora

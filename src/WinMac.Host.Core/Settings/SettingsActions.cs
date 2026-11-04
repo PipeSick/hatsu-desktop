@@ -101,7 +101,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("host.hidetaskbar", "toggle"): cfg.SetHideTaskbar(e.On); return true;
             case ("autostart", "toggle"): setAutostart(e.On); cfg.SetAutostartFlag(e.On); return true;
             case ("bar.bg", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.BackgroundValues.Length: cfg.ApplyBarPatch(Patch("background", SettingsBuilder.BackgroundValues[e.Index])); return true;
-            case ("bar.theme", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.ThemeValues.Length: cfg.ApplyBarPatch(Patch("theme", SettingsBuilder.ThemeValues[e.Index])); return true;
+            case ("bar.orderreset", _): cfg.ApplyBarPatch(Patch("barOrder", "")); return true;
             case ("bar.capmods", "segment") when e.Index >= 0 && e.Index < WinMac.Bar.Launcher.HotkeyAudit.CaptureModifierIds.Length: cfg.ApplyBarPatch(Patch("captureModifiers", WinMac.Bar.Launcher.HotkeyAudit.CaptureModifierIds[e.Index])); return true;
             case ("bar.keysreset", _): cfg.ApplyBarPatch(JsonSerializer.SerializeToElement(new Dictionary<string, object?> { ["captureModifiers"] = "CtrlShift", ["captureHotkeys"] = true, ["spotlightHotkey"] = "AltSpace" })); return true;
             case ("bar.capfmt", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.CaptureFormatValues.Length: cfg.ApplyBarPatch(Patch("captureFormat", SettingsBuilder.CaptureFormatValues[e.Index])); return true;

@@ -95,6 +95,14 @@ public sealed record BarConfig
     public bool SoundMixer { get; init; } = true;
     /// <summary>WinMac Connect: indicador del iPhone (batería real y estado). Solo aparece con el módulo activo y datos reales.</summary>
     public bool ShowPhone { get; init; } = true;
+    /// <summary>It7: porcentaje junto al icono del iPhone. false = solo el icono (el estado se ve en la sugerencia y en el panel).</summary>
+    public bool ShowPhonePercent { get; init; } = true;
+    /// <summary>It7: en un equipo SIN batería (sobremesa) mostrar un icono de enchufe sin porcentaje. Apagado por defecto: el módulo de batería se oculta.</summary>
+    public bool ShowPowerWithoutBattery { get; init; } = false;
+    /// <summary>It7: botón del Administrador de tareas en la barra (abre taskmgr.exe). Apagado por defecto.</summary>
+    public bool ShowTaskManager { get; init; } = false;
+    /// <summary>It7: orden elegido por el usuario de los módulos propios movibles («Network,Volume,…», ver <see cref="BarOrdering"/>). Vacío = orden predeterminado.</summary>
+    public string BarOrder { get; init; } = "";
     /// <summary>WM-035 (EXPERIMENTAL): elegir la salida de audio de cada app desde el menú Sonido. APAGADO por defecto: usa una interfaz interna de Windows (la de su propio mezclador).</summary>
     public bool AppOutputRouting { get; init; } = false;
 
@@ -122,6 +130,7 @@ public sealed record BarConfig
         CaptureDelaySeconds = CaptureDelaySeconds switch { <= 0 => 0, <= 3 => 3, <= 5 => 5, _ => 10 },
         WeatherCity = Hub.GeoPoint.Parse(WeatherCity)?.Serialize(),
         WeatherFavorites = Hub.GeoPoint.ParseList(WeatherFavorites) is { Count: > 0 } favs ? Hub.GeoPoint.SerializeList(favs) : null,
+        BarOrder = BarOrdering.Serialize(BarOrdering.Parse(BarOrder)),
         NcWidgets = Notifications.NcWidgets.Serialize(Notifications.NcWidgets.Parse(NcWidgets ?? Notifications.NcWidgets.Default)),
     };
 
