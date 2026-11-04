@@ -2,7 +2,7 @@ using WinMac.Calendar;
 
 namespace WinMac.Bar;
 
-public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications, AppleMenu, Tray, AppMenu, Phone }
+public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications, AppleMenu, Tray, AppMenu, Phone, Peripherals, Cleanup }
 
 public enum WidgetKind
 {
@@ -46,12 +46,18 @@ public enum WidgetKind
     PhoneHeader, // It7: cabecera del panel del iPhone: icono, nombre, estado con punto de color y ajustes discretos (Data = PhoneHeaderData; clic en el engranaje)
     PhoneBattery,// It7: tarjeta de batería del iPhone: % destacado, barra, última lectura y «carga» solo si se sabe (Data = PhoneBatteryData)
     PhoneNotifs, // It7: tarjeta de notificaciones del iPhone: estado de la integración y cuántas se han recibido (Data = PhoneNotifData)
+    DeviceCard,  // It8: tarjeta de un periférico: nombre, tipo, conexión, batería y estado (Data = DeviceCardData; «Ocultar» a la derecha)
+    CleanRow,    // It8: categoría de limpieza con casilla, tamaño y motivo (Data = CleanRowData)
     TrayGrid,    // cuadrícula de iconos de las apps en segundo plano, como el desplegable de la bandeja de Windows (Data = TrayGridData); clic = abrir, clic derecho = su menú
 }
 
 /// <param name="AccountId">Event of the «Cuenta» button on the right (Windows account settings).</param>
 public sealed record UserHeaderData(string Initials, string AccountId, string? PictureKey = null);
 public sealed record BatteryHeroData(string? Detail);
+/// <param name="Fraction">0–1 solo con lectura ACTUAL; null = sin barra.</param><param name="Tone">«good», «warn», «bad» o «off».</param>
+public sealed record DeviceCardData(string DeviceId, string Type, string Connection, string BatteryText, double? Fraction, string Status, string? Charge, string Tone, string? Note, string HideId, string HideLabel);
+/// <param name="Reason">Qué se elimina y por qué.</param><param name="Size">Tamaño analizado («1,2 GB») o «—».</param><param name="Checked">Marcada para limpiar.</param><param name="Locked">No se puede marcar (nada que limpiar, o solo revisión).</param>
+public sealed record CleanRowData(string CategoryId, string Reason, string Size, bool Checked, bool Locked, string? Badge);
 /// <param name="Tone">«good» (conectado), «warn» (conectando), «off» (sin conexión).</param>
 public sealed record PhoneHeaderData(string Tone, string SettingsId);
 /// <param name="Big">«82 %» o «—» (sin lectura válida).</param><param name="Caption">Estado de la lectura («Conectado», «Última lectura: 82 % · hace 20 min»).</param>
@@ -159,6 +165,8 @@ public static class PanelLayout
         WidgetKind.ActionStrip => 80,
         WidgetKind.LinkRow => 30,
         WidgetKind.BatteryHero => 96,
+        WidgetKind.DeviceCard => w.Data is DeviceCardData { Note: not null } ? 104 : 88,
+        WidgetKind.CleanRow => 64,
         WidgetKind.PhoneHeader => 66,
         WidgetKind.PhoneBattery => 124,
         WidgetKind.PhoneNotifs => 82,
@@ -328,6 +336,8 @@ public static class PanelLayout
     public static (double X, double Y, double W, double H) UserAccountRect(WidgetFrame f) => (f.X + f.Width - 76, f.Y + (f.Height - 28) / 2, 76, 28);
     public static (double X, double Y, double W, double H) PhoneGearRect(WidgetFrame f) => (f.X + f.Width - 36, f.Y + (f.Height - 30) / 2, 30, 30);
     public static bool PhoneGearHit(WidgetFrame f, double x) => x >= PhoneGearRect(f).X;
+    public static bool DeviceHideHit(WidgetFrame f, double x, double y) => x >= f.X + f.Width - 74 && y <= f.Y + 34;
+    public static bool CleanCheckHit(WidgetFrame f, double x) => x <= f.X + 46;
     public static bool UserPowerHit(WidgetFrame f, double x) => x >= UserAccountRect(f).X;
 
     /// <summary>WM-022: which link of a LinkRow is under x (equal widths; -1 = none).</summary>

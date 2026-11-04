@@ -99,6 +99,17 @@ public sealed record BarConfig
     public bool ShowPhonePercent { get; init; } = true;
     /// <summary>It7: en un equipo SIN batería (sobremesa) mostrar un icono de enchufe sin porcentaje. Apagado por defecto: el módulo de batería se oculta.</summary>
     public bool ShowPowerWithoutBattery { get; init; } = false;
+    /// <summary>It8: módulo Periféricos (batería de ratón, teclado, auriculares…). APAGADO por defecto: desactivado no se crea ningún proveedor ni temporizador.</summary>
+    public bool ShowPeripherals { get; init; } = false;
+    /// <summary>It8: avisar (por la Isla) cuando un periférico conectado baja del umbral. Apagado por defecto.</summary>
+    public bool PeripheralAlerts { get; init; } = false;
+    public int PeripheralAlertThreshold { get; init; } = Peripherals.PeripheralSettings.DefaultThreshold;
+    /// <summary>It8: dispositivos ocultos por el usuario (ids separados por salto de línea).</summary>
+    public string PeripheralHidden { get; init; } = "";
+    /// <summary>It8: módulo Cleanup (icono de destellos). APAGADO por defecto. Nunca limpia por sí solo.</summary>
+    public bool ShowCleanup { get; init; } = false;
+    /// <summary>It8: mostrar el progreso de Cleanup en la Isla.</summary>
+    public bool CleanupIsland { get; init; } = true;
     /// <summary>It7: botón del Administrador de tareas en la barra (abre taskmgr.exe). Apagado por defecto.</summary>
     public bool ShowTaskManager { get; init; } = false;
     /// <summary>It7: orden elegido por el usuario de los módulos propios movibles («Network,Volume,…», ver <see cref="BarOrdering"/>). Vacío = orden predeterminado.</summary>
@@ -131,6 +142,8 @@ public sealed record BarConfig
         WeatherCity = Hub.GeoPoint.Parse(WeatherCity)?.Serialize(),
         WeatherFavorites = Hub.GeoPoint.ParseList(WeatherFavorites) is { Count: > 0 } favs ? Hub.GeoPoint.SerializeList(favs) : null,
         BarOrder = BarOrdering.Serialize(BarOrdering.Parse(BarOrder)),
+        PeripheralAlertThreshold = Peripherals.PeripheralSettings.ClampThreshold(PeripheralAlertThreshold),
+        PeripheralHidden = Peripherals.PeripheralSettings.SerializeHidden(Peripherals.PeripheralSettings.ParseHidden(PeripheralHidden)),
         NcWidgets = Notifications.NcWidgets.Serialize(Notifications.NcWidgets.Parse(NcWidgets ?? Notifications.NcWidgets.Default)),
     };
 

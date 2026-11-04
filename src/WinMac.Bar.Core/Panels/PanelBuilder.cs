@@ -16,7 +16,7 @@ public sealed record SystemSnapshot(AudioState Audio, WifiState Wifi, BluetoothS
 /// <summary>Estado de interfaz de los paneles: mes visible, día elegido, operaciones en curso («Conectando…») y el último error.</summary>
 public sealed record PanelContext(SystemSnapshot Sys, BarConfig Cfg, BatteryInfo Battery, DateTime Now, IReadOnlyList<CalendarEvent> Events, int ViewYear, int ViewMonth,
     DateOnly? SelectedDay, IReadOnlyDictionary<string, string> Busy, string? Message, string? ExpandedNet = null, Hub.HubTab Tab = Hub.HubTab.Sound, Hub.HubData? Hub = null, NcView? Nc = null, string? ForegroundApp = null, IReadOnlyList<Tray.TrayIcon>? Tray = null,
-    BatteryDetails? BatteryDetail = null, SessionUser? User = null, bool BatteryDetailsOpen = false, WinMac.Connect.PhoneState? Phone = null, int? PhoneNotifCount = null)
+    BatteryDetails? BatteryDetail = null, SessionUser? User = null, bool BatteryDetailsOpen = false, WinMac.Connect.PhoneState? Phone = null, int? PhoneNotifCount = null, PeripheralsView? Periph = null, CleanupView? Clean = null)
 {
     public static PanelContext Initial(BarConfig cfg, DateTime now) => new(SystemSnapshot.Empty, cfg, BatteryInfo.None, now, [], now.Year, now.Month, null, new Dictionary<string, string>(), null);
 }
@@ -48,6 +48,8 @@ public static partial class PanelBuilder
         PanelKind.AppleMenu => AppleMenu(c),
         PanelKind.Tray => TrayMenu(c),
         PanelKind.Phone => PhonePanel(c),
+        PanelKind.Peripherals => PeripheralsPanel(c),
+        PanelKind.Cleanup => CleanupPanel(c),
         _ => ControlCenter(c),
     };
 
