@@ -17,7 +17,8 @@ $installDir = Join-Path $env:LOCALAPPDATA 'Programs\Hatsu Desktop'; $exe = Join-
 $menu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Hatsu Desktop\Hatsu Desktop.lnk'; $desktopLnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Hatsu Desktop.lnk'
 $dataDir = Join-Path $env:APPDATA 'WinMac'; $localData = Join-Path $env:LOCALAPPDATA 'WinMac'; $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 function Arp([string]$pc) { Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{$pc}" -ErrorAction SilentlyContinue }
-function Arps { Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -eq 'Hatsu Desktop' } }
+function Arps { $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Uninstall'); if (-not $k) { return }; foreach ($n in $k.GetSubKeyNames()) { $sk = $k.OpenSubKey($n); if ($sk -and $sk.GetValue('DisplayName') -eq 'Hatsu Desktop') { [pscustomobject]@{ Key = $n; DisplayName = $sk.GetValue('DisplayName'); DisplayVersion = $sk.GetValue('DisplayVersion') } } } }
+function ArpNames { $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Uninstall'); if ($k) { ($k.GetSubKeyNames() -join ',') } }
 function Msi([string]$verb, [string]$target, [string]$log) { $p = Start-Process msiexec.exe -ArgumentList @($verb, "`"$target`"", '/qn', '/norestart', '/l*v', "`"$log`"") -Wait -PassThru; $p.ExitCode }
 function HostRunning { @(Get-Process HatsuDesktop -ErrorAction SilentlyContinue) }
 function Stop-AllHosts { & $exe --quit 2>$null | Out-Null; Get-Process HatsuDesktop -ErrorAction SilentlyContinue | ForEach-Object { if (-not $_.WaitForExit(15000)) { $_ | Stop-Process -Force } } }
@@ -49,7 +50,8 @@ New-Item -ItemType Directory -Force -Path $dataDir, $localData | Out-Null
 $cfg = Join-Path $dataDir 'winmac.json'; '{"version":3,"autostart":false,"onboarding":{"status":"Completed","origin":"fresh"}}' | Set-Content $cfg -Encoding UTF8
 'datos del usuario' | Set-Content (Join-Path $localData 'nota.txt'); $cfgHash = (Get-FileHash $cfg).Hash; $noteHash = (Get-FileHash (Join-Path $localData 'nota.txt')).Hash
 if (-not (Test-Path $runKey)) { New-Item -Path $runKey -Force | Out-Null }
-$foreign = '"D:\CopiaPortable\HatsuDesktop.exe" --background'; New-ItemProperty -Path $runKey -Name 'WinMac' -Value $foreign -Force | Out-Null
+$otherDir = Join-Path $out 'otra copia'; New-Item -ItemType Directory -Force -Path $otherDir | Out-Null; Copy-Item "$env:SystemRoot\System32\more.com" (Join-Path $otherDir 'HatsuDesktop.exe')   # otra copia VIVA (existe en disco): el host no repara lo que no es huérfano
+$foreign = "`"$otherDir\HatsuDesktop.exe`" --background"; New-ItemProperty -Path $runKey -Name 'WinMac' -Value $foreign -Force | Out-Null
 
 # ── instalar 2.0.0
 $code = Msi '/i' $msis['2.0.0'] (Join-Path $out 'install-2.0.0.log'); Check 'instala 2.0.0 (msiexec /qn)' ($code -eq 0) "código $code"
@@ -86,7 +88,7 @@ Stop-AllHosts; Remove-Item $portable -Recurse -Force
 
 # ── actualizar 2.0.0 → 2.0.1
 $code = Msi '/i' $msis['2.0.1'] (Join-Path $out 'upgrade-2.0.1.log'); Check 'actualiza 2.0.0 → 2.0.1' ($code -eq 0) "código $code"
-$all = @(Arps); Check 'una sola entrada del producto (no duplica la instalación)' ($all.Count -eq 1 -and $all[0].DisplayVersion -eq '2.0.1') ("$($all.Count) entrada(s): " + (($all | ForEach-Object DisplayVersion) -join ', '))
+$all = @(Arps); Check 'una sola entrada del producto (no duplica la instalación)' ($all.Count -eq 1 -and $all[0].DisplayVersion -eq '2.0.1') ("$($all.Count) entrada(s): " + (($all | ForEach-Object DisplayVersion) -join ', ') + " · claves: " + (ArpNames))
 Check 'la versión anterior ya no está registrada' (-not (Arp $pc['2.0.0']))
 Check 'los archivos siguen instalados tras actualizar' (Test-Path $exe)
 Check 'datos y elecciones del usuario intactos tras actualizar' (((Get-FileHash $cfg).Hash -eq $cfgHash) -and ((Get-FileHash (Join-Path $localData 'nota.txt')).Hash -eq $noteHash))
