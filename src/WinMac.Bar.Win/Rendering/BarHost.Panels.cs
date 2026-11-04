@@ -401,8 +401,22 @@ public sealed partial class BarHost : IPanelUi
     private void RunSystemAction(SystemActionKind k, string? appName)
     {
         var info = SystemActions.Get(k);
+        if (k == SystemActionKind.About) { ShowAboutThisPc(info); return; }   // It7: ventana propia; «Información de Windows…» abre la original (ms-settings:about)
         if (SystemActions.NeedsConfirmation(k, _cfg.ConfirmDestructive) && !Confirm(info.ConfirmTitle ?? info.Label, string.Format(info.ConfirmText ?? "¿Continuar?", appName ?? "la app activa"), info.Label.TrimEnd('…', '.'), danger: true, ConfirmIcons.ForAction(k))) return;
         _hub.Run(() => _hub.Services.Session.Run(k), r => { if (!r.IsOk) ShowInfo(info.Label, r.Message); });
+    }
+
+    /// <summary>It7: «Acerca de este PC». Los datos se leen en un hilo de trabajo (WMI tarda); si algo falla, se abre la pantalla de Windows de siempre en vez de no mostrar nada.</summary>
+    private void ShowAboutThisPc(SystemActionInfo info)
+    {
+        AboutRaw? raw = null;
+        _hub.Run(() => { raw = AboutPcReader.Read(); return ServiceResult.Ok; }, r =>
+        {
+            if (!r.IsOk || raw is null) { _hub.Run(() => _hub.Services.Session.Run(SystemActionKind.About), _ => { }); return; }
+            if (_popover is not null) _popover.KeepOpen = true; _modal = true;
+            try { AboutWindow.Show(AboutFormatter.Build(raw), () => BarNative.ShellExecuteW(IntPtr.Zero, "open", info.SettingsUri ?? "ms-settings:about", null, null, 1), _log); }
+            finally { _modal = false; if (_popover is not null) _popover.KeepOpen = false; }
+        });
     }
 
     private void SetReserve(bool on)

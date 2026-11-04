@@ -51,6 +51,11 @@ internal static class Program
                 int hover = int.TryParse(Arg(args, "--hover"), out var h) ? h : -1;
                 Log("PNG: " + BarOffscreen.Render(png, theme, bg, scale, hoverItem: hover)); return 0;
             }
+            if (args.Contains("--render-about"))   // It7 (CI): «Acerca de este PC» con datos de MUESTRA
+            {
+                bool dk = Arg(args, "--theme")?.ToLowerInvariant() != "light"; double asc = double.TryParse(Arg(args, "--scale"), System.Globalization.CultureInfo.InvariantCulture, out var asv) ? asv : 2.0;
+                Log("PNG: " + AboutOffscreen.Render(Arg(args, "--out") ?? "about.png", dk, asc, args.Contains("--expanded"))); return 0;
+            }
             if (Arg(args, "--render-dialog") is string dkind)   // It7 (CI): diálogos de confirmación con datos reales de cada acción, en ambos temas
             {
                 bool dark = Arg(args, "--theme")?.ToLowerInvariant() != "light"; double ds = double.TryParse(Arg(args, "--scale"), System.Globalization.CultureInfo.InvariantCulture, out var dsc) ? dsc : 2.0;
