@@ -17,11 +17,27 @@ public sealed class TrayHost : IDisposable
 {
     private const uint WM_DESTROY = 0x2, WM_CLOSE = 0x10, WM_TIMER = 0x113, WM_COMMAND = 0x111, WM_COPYDATA = 0x4A, WM_USER = 0x400;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 0x8, WS_EX_TOOLWINDOW = 0x80, SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOACTIVATE = 0x10, SMTO_ABORTIFHUNG = 0x2;
-    private static readonly IntPtr HWND_TOPMOST = new(-1), HWND_BROADCAST = new(0xFFFF);
+    private static readonly IntPtr HWND_TOPMOST = new(-1), HWND_NOTOPMOST = new(-2), HWND_BROADCAST = new(0xFFFF);
 
     private readonly Action<string> _log; private readonly WndProc _proc; private Thread? _thread; private IntPtr _hwnd, _explorer; private uint _taskbarCreated;
     private readonly ManualResetEventSlim _ready = new(); private volatile bool _primary; private int _messages;
-    private bool _warnedNotPrimary;
+    private bool _warnedNotPrimary; private volatile bool _suspended; private readonly object _opLock = new();
+
+    /// <summary>
+    /// Ejecuta <paramref name="op"/> con la ventana-proxy FUERA de la cima del orden Z, de modo que <c>FindWindow("Shell_TrayWnd")</c> (que usa <c>SHAppBarMessage</c> para hablar con Explorer) devuelva la de EXPLORER.
+    /// Medido en CI: con el proxy encima, ABM_NEW/QUERYPOS/SETPOS de la propia Barra se «aceptaban» pero Windows nunca reservaba el área de trabajo (la Barra con la bandeja desactivada sí la reservaba).
+    /// Solo cubre las llamadas de AppBar de ESTE proceso; dura milisegundos y el proxy vuelve a la cima justo después.
+    /// </summary>
+    public void WithExplorerDirect(Action op)
+    {
+        var h = _hwnd; if (h == IntPtr.Zero || !_primary) { op(); return; }
+        lock (_opLock)
+        {
+            _suspended = true;
+            try { SetWindowPos(h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE); op(); }
+            finally { SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE); _suspended = false; }
+        }
+    }
 
     /// <summary>Un mensaje de Shell_NotifyIcon ya reenviado a Explorer. Se produce en el hilo de la bandeja.</summary>
     public event Action<TrayMessage>? Message;
@@ -67,6 +83,7 @@ public sealed class TrayHost : IDisposable
     /// <summary>Ventana encima de la de Explorer (para que Shell_NotifyIcon la encuentre primero) y comprobación real con FindWindow.</summary>
     private void Reassert()
     {
+        if (_suspended) return;   // una operación de AppBar de este proceso está en curso: el proxy se queda abajo hasta que termine
         if (_explorer == IntPtr.Zero || !IsWindow(_explorer)) _explorer = FindExplorerTray();
         SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         bool primary = FindWindowW("Shell_TrayWnd", null) == _hwnd;

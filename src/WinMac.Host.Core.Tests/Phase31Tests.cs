@@ -110,6 +110,16 @@ public class MigrationWelcomeTests
         var res2 = await new OnboardingApplier(p) { ModuleTimeout = TimeSpan.Zero }.ApplyAsync(OnboardingChoices.Safe); Assert.Null(res2.Items.Single(i => i.Id == "mod:dock").Cause); Assert.Equal("estado del supervisor: Failed", res2.Items.Single(i => i.Id == "mod:dock").Technical);
     }
 
+    [Fact] public void The_bar_sends_its_AppBar_messages_with_the_tray_proxy_out_of_the_way()
+    {
+        // medido en CI: con la ventana-proxy «Shell_TrayWnd» de la Barra encima, SHAppBarMessage hablaba con ella y Windows nunca reservaba el área de trabajo
+        string root = FindRoot(); var win = File.ReadAllText(Path.Combine(root, "src", "WinMac.Bar.Win", "Rendering", "BarWindow.cs")); var host = File.ReadAllText(Path.Combine(root, "src", "WinMac.Bar.Win", "Shell", "Tray", "TrayHost.cs"));
+        Assert.Contains("_host.RunAppBarOp(AppBarSetPosCore)", win); Assert.Contains("_host.RunAppBarOp(AppBarRemoveCore)", win);
+        foreach (var core in new[] { "AppBarSetPosCore", "AppBarRemoveCore" }) { int i = win.IndexOf("private void " + core + "()", StringComparison.Ordinal); Assert.True(i > 0); }
+        Assert.Equal(4, System.Text.RegularExpressions.Regex.Matches(win, @"SHAppBarMessage\(").Count);   // NEW, QUERYPOS, SETPOS y REMOVE: todas dentro de los dos métodos envueltos
+        Assert.Contains("HWND_NOTOPMOST", host); Assert.Contains("WithExplorerDirect", host); Assert.Contains("if (_suspended) return;", host);   // mientras dura la operación, el temporizador no vuelve a subir el proxy
+    }
+
     [Fact] public void The_wizard_lives_in_the_host_so_a_failed_dock_or_bar_cannot_prevent_it()
     {
         var src = File.ReadAllText(Path.Combine(FindRoot(), "src", "WinMac.Host", "HostApp.cs"));

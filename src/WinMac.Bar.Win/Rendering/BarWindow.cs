@@ -101,7 +101,9 @@ internal sealed class BarWindow : IWndTarget, IDisposable
         _zOrdered = true; ApplyYield();   // la ventana se movió o cambió de tamaño: volver a recortar
     }
 
-    private void AppBarSetPos()
+    private void AppBarSetPos() => _host.RunAppBarOp(AppBarSetPosCore);
+
+    private void AppBarSetPosCore()
     {
         var abd = new BarNative.APPBARDATA { cbSize = (uint)Marshal.SizeOf<BarNative.APPBARDATA>(), hWnd = Hwnd, uCallbackMessage = WM_APP_BAR };
         if (!_registered) { _registered = BarNative.SHAppBarMessage(BarNative.ABM_NEW, ref abd) != 0; if (!_registered) { _log($"[bar] ABM_NEW falló en {Info.Id}: la barra se muestra superpuesta, sin reservar espacio."); return; } }
@@ -137,9 +139,10 @@ internal sealed class BarWindow : IWndTarget, IDisposable
         }
     }
 
-    private void AppBarRemove()
+    private void AppBarRemove() { if (!_registered || Hwnd == IntPtr.Zero) return; _host.RunAppBarOp(AppBarRemoveCore); }
+
+    private void AppBarRemoveCore()
     {
-        if (!_registered || Hwnd == IntPtr.Zero) return;
         var abd = new BarNative.APPBARDATA { cbSize = (uint)Marshal.SizeOf<BarNative.APPBARDATA>(), hWnd = Hwnd };
         BarNative.SHAppBarMessage(BarNative.ABM_REMOVE, ref abd); _registered = false; _log($"[bar] AppBar liberado en {Info.Id}.");
     }

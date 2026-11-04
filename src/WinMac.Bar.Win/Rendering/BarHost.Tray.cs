@@ -10,6 +10,9 @@ public sealed partial class BarHost
 {
     private TrayHost? _trayHost; private readonly TrayIconStore _trayStore = new(); private DateTime _lastTrayClean = DateTime.MinValue;
 
+    /// <summary>Operaciones de AppBar de esta barra (ABM_NEW/QUERYPOS/SETPOS/REMOVE): con la bandeja activa, su ventana-proxy «Shell_TrayWnd» se aparta un instante para que Windows hable con Explorer y no con ella.</summary>
+    internal void RunAppBarOp(Action op) { var t = _trayHost; if (t is null) op(); else t.WithExplorerDirect(op); }
+
     /// <summary>Estado de la bandeja para el diagnóstico.</summary>
     public string TrayReport => _trayHost is null ? "bandeja: apagada" : $"bandeja: {(_trayHost.IsPrimary ? "activa" : "Windows aún usa la de Explorer")}, Explorer {(_trayHost.ExplorerFound ? "encontrado" : "NO encontrado")}, {_trayHost.MessagesSeen} mensajes, {_trayStore.Visible.Count} iconos visibles";
 

@@ -78,6 +78,11 @@ if (-not $reserved) {   # sin reserva: se reúne la evidencia antes de concluir 
     ($head = "# Reserva del borde superior en el runner de CI`n`n**No concluyente:** este runner no cambia el área de trabajo ni con una barra de aplicación mínima que sigue el protocolo documentado (control). Hay que probarlo en un Windows físico.`n") | Out-Null
     Set-Content (Join-Path $OutDir 'appbar-report.md') -Value ($head + "`n" + (($tail | ForEach-Object { '    ' + $_ }) -join "`n")) -Encoding UTF8; if (-not $p.HasExited) { $p | Stop-Process -Force }; exit 0 } }
 Check 'la Barra reserva el borde superior: el área de trabajo de Windows baja' $reserved "antes y=$before · durante: $during"
+# 1b) EXPERIMENTO-2: con la Barra (y su ventana-proxy de bandeja) en marcha, una barra de aplicación de OTRO proceso (este script), ¿reserva además? Si no, el proxy sigue rompiendo las AppBar ajenas (p. ej. el Dock).
+if ($reserved) {
+  $cx = [AppBarControl]::Run(28, [uint32]($TOOL -bor $TOP), $true, $false, $false); $okx = ($cx -match 'antes=(\d+);durante=(\d+)' -and [int]$Matches[2] -gt [int]$Matches[1])
+  Write-Host "EXPERIMENTO-2 AppBar de otro proceso con la Barra en marcha: $(if ($okx) { 'RESERVA' } else { 'NO reserva' })  [$cx]"; $script:rep += "| INFO | experimento 2: AppBar de OTRO proceso con la Barra y su proxy en marcha | $(if ($okx) { 'reserva' } else { 'NO reserva' }) — $cx |"
+}
 # 2) cierre ordenado: se devuelve exactamente lo que había
 $null = $p.CloseMainWindow(); if (-not $p.WaitForExit(8000)) { $p | Stop-Process -Force }; Start-Sleep 2
 $restored = Top; if ($restored -ne $before) { Start-Sleep 3; $restored = Top }
