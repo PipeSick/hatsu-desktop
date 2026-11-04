@@ -4,7 +4,7 @@ using WinMac.Ipc;
 namespace WinMac.Host.App;
 
 /// <summary>Opciones de línea de comandos del host (las de prueba están marcadas).</summary>
-internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTray, bool Fast, string? PipeName, string NotchWinSettingsPath, string BarJsonPath, bool Replace = false)
+internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTray, bool Fast, string? PipeName, string NotchWinSettingsPath, string BarJsonPath, bool Replace = false, bool Background = false, bool NoOnboarding = false, string? OnboardingAuto = null)
 {
     public static string Arg(string[] a, string n, string def) { int i = Array.IndexOf(a, n); return i >= 0 && i + 1 < a.Length ? a[i + 1] : def; }
     public static HostOptions Parse(string[] a) => new(
@@ -15,7 +15,9 @@ internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTra
         a.Contains("--pipe-name") ? Arg(a, "--pipe-name", "") : null,
         Arg(a, "--notchwin-settings", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NotchWin", "settings.json")),
         Arg(a, "--bar-json", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "bar.json")),
-        a.Contains("--replace-running"));   // Hatsu Desktop: cierra la instancia en ejecución (también una de WinMac anterior: mismos nombres de instancia única) y continúa con esta   // origen de la migración única (PRUEBAS: se puede redirigir)
+        a.Contains("--replace-running"), a.Contains("--background"),
+        a.Contains("--no-onboarding"),                                                          // PRUEBAS: sin asistente de primera ejecución
+        a.Contains("--onboarding-auto") ? Arg(a, "--onboarding-auto", "skip") : null);          // PRUEBAS: aplica el asistente SIN ventana (skip = valores seguros)   // Hatsu Desktop: cierra la instancia en ejecución (también una de WinMac anterior: mismos nombres de instancia única) y continúa con esta   // origen de la migración única (PRUEBAS: se puede redirigir)
 }
 
 internal sealed class FileLog(string path)
@@ -40,8 +42,23 @@ internal static class HostApp
     public static int Run(HostOptions o)
     {
         var log = new FileLog(o.LogPath).Write;
+        bool cfgExisted = File.Exists(o.ConfigPath);   // ANTES de cualquier migración que lo cree: distingue instalación nueva de usuario existente
+        bool legacyData = File.Exists(o.BarJsonPath) || File.Exists(o.NotchWinSettingsPath) || File.Exists(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath);
         using var mutex = new Mutex(true, MutexName, out bool first);
-        if (!first && o.Replace)
+        bool replace = o.Replace;
+        if (!first && !replace)
+        {   // Convivencia (MSI / portable / WinMac antiguo): si el host vivo es de OTRA carpeta, nunca se toca por cuenta propia. En uso interactivo se PREGUNTA; en segundo plano (inicio automático) esta copia se cierra.
+            string self = Environment.ProcessPath ?? "";
+            var others = OtherHostPaths(); var kind = HostCoexistence.Classify(self, others);
+            if (HostCoexistence.ShouldAsk(kind, o.Background, o.NoTray))
+            {
+                string other = HostCoexistence.OtherPath(self, others) ?? "otra carpeta";
+                replace = WinMac.Dock.Win.Rendering.DarkDialog.Ask("Ya hay otra copia en ejecución", $"Hatsu Desktop (o WinMac) ya está abierto desde:\n{other}\n\nSolo puede haber una copia a la vez. ¿Cerrarla y usar esta?\n\nNo se borra nada ni se cambia el inicio automático.", "Cerrar la otra y usar esta", false, log);
+                log(replace ? "[host] el usuario aceptó reemplazar la copia en ejecución (" + other + ")" : "[host] el usuario prefirió dejar la otra copia en ejecución: esta se cierra.");
+            }
+            else if (kind == CoexistenceKind.OtherInstall) log("[host] hay otra copia de Hatsu Desktop/WinMac en ejecución (" + HostCoexistence.OtherPath(self, others) + "): esta se cierra sin tocarla.");
+        }
+        if (!first && replace)
         {   // Adopción explícita de esta instalación (--replace-running): se pide el cierre ordenado a la instancia viva —los nombres de instancia única y de cierre son los mismos que usaba WinMac,
             // así que también sirve para una versión anterior— y se espera a que libere la exclusión mutua. Si no la libera, esta se cierra sin tocar nada (nunca se mata un proceso).
             log("[host] --replace-running: se pide el cierre de la instancia en ejecución…");
@@ -64,6 +81,13 @@ internal static class HostApp
         cfg = MigrateNotchOnce(cfg, o, log);
         cfg = WinMac.Host.BarMigration.ImportOnce(cfg, o.BarJsonPath, o.ConfigPath, log);
         { var (m, changed) = BetaMigration.Apply(cfg); if (changed) { try { HostConfig.Save(o.ConfigPath, m); } catch (Exception e) { log("[host] no se pudo guardar la migración: " + e.Message); } log("[host] configuración actualizada a la versión 3 (menús de app duplicados desactivados)"); } cfg = m; }
+        var (onbAction, onbRecord) = o.NoOnboarding ? (OnboardingAction.None, cfg.Onboarding ?? new OnboardingRecord { Status = OnboardingStatus.Existing }) : OnboardingDecision.Decide(cfg, cfgExisted, legacyData);
+        if (!o.NoOnboarding && cfg.Onboarding is null)
+        {   // primera vez que se decide: usuario existente → se anota y no se toca nada más; instalación nueva → ningún módulo arranca hasta que el usuario decida (el escritorio no cambia antes)
+            cfg = onbAction == OnboardingAction.None ? cfg with { Onboarding = onbRecord } : OnboardingDecision.GateFresh(cfg, onbRecord);
+            try { HostConfig.Save(o.ConfigPath, cfg); } catch (Exception e) { log("[host] no se pudo guardar el estado del asistente: " + e.Message); }
+            log(onbAction == OnboardingAction.None ? $"[host] configuración existente ({onbRecord.Origin}): se conserva; no se muestra el asistente." : "[host] instalación nueva: se muestra el asistente; los módulos esperan a que elijas.");
+        }
         string baseDir = AppContext.BaseDirectory, pipe = o.PipeName ?? PipeNames.ForCurrentUser(), token = PipeNames.NewToken();
         log($"[host] iniciado (pid {Environment.ProcessId}); configuración: {o.ConfigPath}; canal: {pipe}");
 
@@ -88,8 +112,43 @@ internal static class HostApp
         bool quitting = false; void RequestQuit() => quitting = true;
         var uiActions = new System.Collections.Concurrent.ConcurrentQueue<Action>();   // lo que llega por el canal (otro hilo) se ejecuta en el hilo de interfaz: las ventanas de Windows no admiten otro
         controller.QuitRequested = () => uiActions.Enqueue(RequestQuit);
-        Tray? tray = null; SettingsWindow? settings = null;
+        // ── Asistente de primera ejecución (Fase 3): ventana propia, aplicación transaccional por el dueño único de la configuración
+        OnboardingWindow? wizard = null;
         string exePath = Environment.ProcessPath ?? "HatsuDesktop.exe";
+        var ports = new HostOnboardingPorts(config, sup, exePath, log); var applier = new OnboardingApplier(ports, log);
+        void OpenWizard(OnboardingMode mode)
+        {
+            if (wizard is { IsOpen: true }) { wizard.Show(); return; }
+            var initial = mode == OnboardingMode.Rerun ? OnboardingRules.FromCurrent(config.Current, ports.LoadDock(), ports.AutostartOn) : config.Current.Onboarding?.Pending ?? OnboardingChoices.Safe;
+            var ctl = new OnboardingController(mode, initial); ApplyResult? last = null; bool skipped = false;
+            var w = new OnboardingWindow(ctl, log); wizard = w;
+            void RunApply(bool skip)
+            {
+                skipped = skip; if (skip) { ctl.Reset(); } ctl.BeginApply(); w.Invalidate();
+                var choices = skip ? OnboardingChoices.Safe : ctl.Choices;
+                _ = Task.Run(async () =>
+                {
+                    ApplyResult r; try { r = await applier.ApplyAsync(choices, skip).ConfigureAwait(false); }
+                    catch (Exception e) { log("[asistente] fallo inesperado: " + e); r = new ApplyResult([new("unexpected", "Aplicar", ApplyOutcome.Failed, e.Message)], OnboardingStatus.InProgress, false); }
+                    last = r; log($"[asistente] resultado: {(r.AllOk ? "todo aplicado" : r.EssentialFailed ? "fallo esencial" + (r.RolledBack ? " (estado anterior restaurado)" : "") : "con avisos")}; " + string.Join("; ", r.Items.Where(i => i.Outcome != ApplyOutcome.Ok).Select(i => i.Label + ": " + i.Detail)));
+                    w.Post(() => ctl.ShowResult(r));
+                });
+            }
+            w.OnCommand = cmd =>
+            {
+                switch (cmd)
+                {
+                    case OnboardingCommand.Apply: case OnboardingCommand.Retry: RunApply(false); break;
+                    case OnboardingCommand.Skip: RunApply(true); break;
+                    case OnboardingCommand.Accept: if (last is not null) { var err = applier.AcceptWarnings(last, skipped); if (err is not null) log("[asistente] no se pudo anotar la aceptación: " + err); } w.Close(); break;
+                    case OnboardingCommand.Finish: w.Close(); break;
+                    case OnboardingCommand.Cancel: w.Close(); break;   // cerrar sin aplicar: lo ya aplicado se queda; si no se aplicó nada, el asistente vuelve en el próximo arranque (instalación nueva)
+                }
+            };
+            w.Closed = () => { log("[asistente] ventana cerrada"); wizard = null; };
+            w.Show();
+        }
+        Tray? tray = null; SettingsWindow? settings = null;
         if (Autostart.Heal(exePath) is { } healed) log("[host] el inicio automático apuntaba a una carpeta que ya no existe: ahora apunta a esta instalación.");
         var taskbar = new TaskbarHider(exePath, log);   // WM-034
         try { taskbar.RecoverStale(); } catch (Exception e) { log("[barra de tareas] no se pudo revisar la sesión anterior: " + e.Message); }
@@ -97,6 +156,7 @@ internal static class HostApp
         try
         {
             settings = new SettingsWindow(config, () => sup.States, controller.OpenNotchLocalSettings, exePath, log);
+            settings.RunOnboarding = () => uiActions.Enqueue(() => OpenWizard(OnboardingMode.Rerun));
             var win = settings; controller.SettingsRequested = section => uiActions.Enqueue(() => win.Show(section));
             tray = new Tray(() => sup.States, RequestQuit, id => { if (sup.States.TryGetValue(id, out var st) && st == ModuleState.Disabled) config.SetModuleEnabled(id, true); else sup.Restart(id); }, settings.Show, log, showIcon: !o.NoTray);
             tray.TaskbarCreated = () => taskbar.OnTaskbarCreated(config.Current.HideTaskbar);
@@ -114,6 +174,16 @@ internal static class HostApp
             settings.ExtensionOps = new ExtensionOps(extCatalog, extHost, settings.Refresh);
             controller.HotkeysChanged = settings.Refresh;
             settings.ClearClipboard = () => { bus.Emit(NotchSettings.CommandTopic, new { cmd = "clear-clipboard" }); log("[host] historial del portapapeles borrado desde Ajustes"); };
+        }
+
+        if (onbAction != OnboardingAction.None && o.OnboardingAuto is null && !o.NoTray) uiActions.Enqueue(() => OpenWizard(onbAction == OnboardingAction.ResumeWizard ? OnboardingMode.Resume : OnboardingMode.Fresh));
+        if (onbAction != OnboardingAction.None && o.OnboardingAuto is { } auto)
+        {   // PRUEBAS: el mismo camino de aplicación, sin ventana (valores seguros). Verifica de verdad que el arranque queda gobernado por el asistente.
+            _ = Task.Run(async () =>
+            {
+                var r = await applier.ApplyAsync(OnboardingChoices.Safe, skipped: true).ConfigureAwait(false);
+                log($"[asistente] (automático: {auto}) " + (r.AllOk ? "completado con valores seguros" : "con avisos/fallos: " + string.Join("; ", r.Items.Where(i => i.Outcome != ApplyOutcome.Ok).Select(i => i.Label + ": " + i.Detail))));
+            });
         }
 
         sup.StartAsync().GetAwaiter().GetResult();
@@ -171,6 +241,16 @@ internal static class HostApp
         Native.EnumWindows((h, _) => { Native.GetWindowThreadProcessId(h, out uint p); if (p == (uint)pid) Native.PostMessage(h, Native.WM_CLOSE, IntPtr.Zero, IntPtr.Zero); return true; }, IntPtr.Zero);
     }
 
+    /// <summary>Rutas de los ejecutables de OTROS procesos HatsuDesktop/WinMac de este usuario (null si no se pudo leer). Solo lectura.</summary>
+    private static List<string?> OtherHostPaths()
+    {
+        var list = new List<string?>(); int me = Environment.ProcessId;
+        foreach (var name in new[] { "HatsuDesktop", "WinMac" })
+            foreach (var p in Process.GetProcessesByName(name))
+                using (p) { if (p.Id == me) continue; try { list.Add(p.MainModule?.FileName); } catch (Exception) { list.Add(null); } }
+        return list;
+    }
+
     /// <summary>Pide al host en ejecución que se cierre normalmente.</summary>
     public static int SignalQuit()
     {
@@ -187,3 +267,20 @@ internal sealed class ExtensionOps(WinMac.Host.Extensions.ExtensionCatalog catal
     public string? Install(string folder) { var (_, err) = catalog.Install(folder); refresh(); return err; }
 }
 
+
+/// <summary>El asistente habla con el host solo a través de estas piezas ya existentes: ConfigService (dueño único de winmac.json), Supervisor, Autostart y dock.json. No hay un segundo gestor de módulos.</summary>
+internal sealed class HostOnboardingPorts(ConfigService config, Supervisor sup, string exePath, Action<string> log) : IOnboardingPorts
+{
+    public HostConfig Config => config.Current;
+    public string? Update(Func<HostConfig, HostConfig> change) { config.Update(change); return config.LastSaveError; }
+    public WinMac.Dock.DockConfig? LoadDock()
+    {
+        try { return WinMac.Dock.DockSettings.Sanitize(WinMac.Dock.DockConfig.LoadOrDefault(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath, WinMac.Dock.Win.Shell.DockDefaults.Create)); }
+        catch (Exception e) { log("[asistente] dock.json no se pudo leer: " + e.Message); return null; }
+    }
+    public bool SaveDock(WinMac.Dock.DockConfig d) => d.TrySave(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath);
+    public bool AutostartOn => Autostart.Current() is not null;
+    public void SetAutostart(bool on) { if (on) Autostart.Install(exePath); else Autostart.Remove(); }
+    public IReadOnlyDictionary<string, ModuleState> ModuleStates => sup.States;
+    public Task DelayAsync(TimeSpan t) => Task.Delay(t);
+}

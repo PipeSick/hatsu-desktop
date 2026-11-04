@@ -137,6 +137,7 @@ public static class SettingsBuilder
             ], "Cada módulo es un proceso aparte: si uno falla, los demás siguen."),
             new("Sistema", [
                 new(RowKind.Toggle, "autostart", "Iniciar con Windows", "Abre Hatsu Desktop al iniciar sesión", input.Autostart),
+                new(RowKind.Button, "onboarding.rerun", "Abrir el asistente de configuración", "No cambia nada hasta que confirmes"),
                 Bar(10, "Pide confirmación antes de reiniciar, apagar o cerrar la sesión"),
                 .. (input.AutostartForeignPath is { } other ? [new SettingsRow(RowKind.Button, "autostart.adopt", "Iniciar esta instalación con Windows", "Hoy Windows inicia otra copia: " + other + ". Se cambia solo si lo confirmas; la carpeta anterior no se borra.")] : Array.Empty<SettingsRow>()),
             ]),

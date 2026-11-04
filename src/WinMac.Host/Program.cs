@@ -2,6 +2,9 @@
 //
 //   HatsuDesktop.exe                      inicia el host (y con él los módulos habilitados en %APPDATA%\WinMac\winmac.json)
 //   HatsuDesktop.exe --background         igual; es lo que registra el inicio automático
+//   HatsuDesktop.exe --uninstall-cleanup  (desinstalador MSI) restaura la barra de tareas y quita SOLO el inicio automático de esta instalación; no borra datos
+//   HatsuDesktop.exe --no-onboarding · --onboarding-auto skip   (pruebas) sin asistente / asistente aplicado sin ventana
+//   HatsuDesktop.exe --render-onboarding <Welcome|Components|Appearance|Windows|Review|Result> --out f.png [--theme light|dark] [--scale 2]   dibuja el asistente fuera de pantalla (CI)
 //   HatsuDesktop.exe --quit               pide al host en ejecución que se cierre normalmente (cierra sus módulos)
 //   HatsuDesktop.exe --diagnose-security  informe de solo lectura: Smart App Control, Integridad de código y antivirus sobre archivos de WinMac (WM-036)
 //   HatsuDesktop.exe --restore-taskbar    vuelve a mostrar la barra de tareas de Windows y su «Ocultar automáticamente» como estaba (WM-034), aunque WinMac no pueda arrancar
@@ -31,11 +34,29 @@ internal static class Program
                 Console.WriteLine(written is null ? (st == WinMac.Host.AutostartState.Current ? "El inicio automático ya apunta a esta instalación." : "No se cambió nada (el valor no se entiende).") : $"Inicio automático ({name}) → {written}");
                 return 0;
             }
+            if (args.Contains("--uninstall-cleanup"))   // lo ejecuta el desinstalador MSI antes de quitar archivos: devuelve la barra de tareas y quita SOLO el inicio automático que apunta a esta instalación; nunca borra datos
+            {
+                int rc = TaskbarHider.RestoreFromCommandLine(quiet: true);
+                var stored = Autostart.Current(name);
+                if (WinMac.Host.HostCoexistence.AutostartBelongsTo(stored, exe)) { Autostart.Remove(name); Console.WriteLine("Inicio automático de esta instalación quitado."); }
+                else Console.WriteLine(stored is null ? "No había inicio automático." : "El inicio automático pertenece a otra copia: no se toca.");
+                return rc;
+            }
             if (args.Contains("--quit")) return HostApp.SignalQuit();
             if (args.Contains("--diagnose-security")) return SecurityDiagnostics.Run(quiet: args.Contains("--quiet"));   // WM-036: solo lectura
             if (args.Contains("--restore-taskbar")) return TaskbarHider.RestoreFromCommandLine(quiet: args.Contains("--quiet"));   // WM-034: recuperación manual, sin arrancar WinMac
             if (args.Contains("--taskbar-guard")) return int.TryParse(HostOptions.Arg(args, "--taskbar-guard", ""), out int hostPid) ? TaskbarHider.RunGuard(hostPid) : 2;
             if (args.Contains("--render-settings")) return SettingsOffscreen.Run(args);
+            if (args.Contains("--render-onboarding"))   // solo CI: una pantalla del asistente con elecciones de MUESTRA, fuera de pantalla
+            {
+                string png = HostOptions.Arg(args, "--out", "asistente.png"); var stepName = HostOptions.Arg(args, "--render-onboarding", "Welcome");
+                try
+                {
+                    var step = Enum.Parse<WinMac.Host.OnboardingStep>(stepName, ignoreCase: true);
+                    File.WriteAllText(png + ".txt", OnboardingWindow.RenderOffscreen(png, step, HostOptions.Arg(args, "--theme", "dark") != "light", double.TryParse(HostOptions.Arg(args, "--scale", "2"), System.Globalization.CultureInfo.InvariantCulture, out var osc) ? osc : 2)); return 0;
+                }
+                catch (Exception e) { try { File.WriteAllText(png + ".txt", "ERROR: " + e); } catch (IOException) { } return 1; }
+            }
             if (args.Contains("--render-tray-panel"))   // solo CI: el panel de la bandeja con estados de MUESTRA
             {
                 string png = HostOptions.Arg(args, "--out", "bandeja.png");

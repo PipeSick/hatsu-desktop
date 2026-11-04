@@ -75,7 +75,7 @@ public class SettingsLayoutTests
         var page = Notch(); var top = SettingsLayout.Compute(page, 0); Assert.True(top.MaxScroll > 0);
         var end = SettingsLayout.Compute(page, 1e9); Assert.Equal(top.MaxScroll, end.Scroll, 3); Assert.True(end.Rows[0].Y < top.Rows[0].Y);
         Assert.Equal(0, SettingsLayout.Compute(page, -50).Scroll);
-        Assert.Equal(0, SettingsLayout.Compute(SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "general")).MaxScroll);
+        Assert.Equal(0, SettingsLayout.Compute(SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false)).OrderBy(p => p.Groups.Sum(g => g.Rows.Count)).First()).MaxScroll);   // la página más corta no se desplaza (General ya puede, con la fila del asistente)
     }
 
     [Fact]

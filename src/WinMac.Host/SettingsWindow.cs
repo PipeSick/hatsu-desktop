@@ -53,6 +53,8 @@ internal sealed class SettingsWindow : IDisposable
 
     /// <summary>Extensions (docs/30): operations and the list to show; set by the host.</summary>
     public WinMac.Host.IExtensionOps? ExtensionOps { get => _actions.Extensions; set => _actions.Extensions = value; }
+    /// <summary>Reabrir el asistente de primera ejecución (Ajustes › General). Lo pone el host.</summary>
+    public Action? RunOnboarding { get => _actions.RunOnboarding; set => _actions.RunOnboarding = value; }
     public Action? ClearClipboard { get => _actions.ClearClipboard; set => _actions.ClearClipboard = value; }
     /// <summary>WM-034: estado real de la ocultación de la barra de tareas para la página Escritorio y Dock.</summary>
     public Func<string>? TaskbarStatus { get; set; }
