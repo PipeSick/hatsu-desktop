@@ -501,11 +501,10 @@ public class CalibrationTests
         => Assert.True(ShadowMath.Cumulative(ShadowMath.LayerAlphas(12, new GlassStyle().ShadowAlpha), 1) < 0.07);
 
     [Fact]
-    public void Calibrated_material_has_no_saturation_boost_and_no_inner_rim()
+    public void Material_never_boosts_saturation_and_has_no_inner_rim()
     {
+        // It8: la calibración de la referencia 1 (tinte gris α 0,40) se sustituye por un material por tema (ver DockThemeTests); lo que se conserva: sin realce de saturación ni filete interior
         foreach (var t in new[] { DockTheme.Light, DockTheme.Dark })
-        { var g = GlassStyle.For(t); Assert.Equal(1.0, g.Saturation); Assert.Equal(0.0, g.InnerRimAlpha); Assert.InRange(g.RimTopAlpha, 0.2, 0.4); }
-        var d = GlassStyle.For(DockTheme.Dark);   // k = 1 − α ≈ 0,6 y término aditivo ≈ 31 (medido)
-        Assert.InRange(1 - d.TintAlpha, 0.55, 0.65); Assert.InRange(255 * d.TintAlpha * d.TintR, 25, 38);
+        { var g = GlassStyle.For(t); Assert.InRange(g.Saturation, 0.5, 1.0); Assert.Equal(0.0, g.InnerRimAlpha); Assert.InRange(g.RimTopAlpha, 0.2, 0.65); }
     }
 }

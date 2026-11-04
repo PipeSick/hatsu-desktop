@@ -21,7 +21,7 @@ public sealed class DockHost : IDisposable
     private const int WM_DESTROY = 2, WM_SETTINGCHANGE = 0x1A, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_NCHITTEST = 0x84, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_MOUSEMOVE = 0x200, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
 
-    private DockController _ctl; private DockConfig _cfg; private DockMetrics _m; private readonly GlassStyle _glass;
+    private DockController _ctl; private DockConfig _cfg; private DockMetrics _m; private GlassStyle _glass;
     private readonly WindowTracker? _tracker; private readonly WindowActions? _actions; private readonly DockModelBuilder _builder;
     private readonly IIconSource _icons; private readonly AppIconSource? _appIcons; private readonly WindowThumbnails? _thumbs;
     private bool _pressPreview;
@@ -114,6 +114,23 @@ public sealed class DockHost : IDisposable
 
     private double ScreenWidthDip() => (_screen is { } t ? t.Width : Native2.GetSystemMetrics(0 /* SM_CXSCREEN */)) / (Native2.GetDpiForSystem() / 96.0);
 
+    /// <summary>
+    /// It8: el material del Dock sigue el tema de aplicaciones de Windows EN CALIENTE (antes se resolvía una sola vez al arrancar y el tinte, además, apenas se notaba).
+    /// Solo cambia el material (pincel, tinte, desenfoque, marcas): ni la posición, ni las animaciones, ni la autoocultación, ni la configuración guardada.
+    /// </summary>
+    private void ApplySystemTheme()
+    {
+        try
+        {
+            if (!DockThemeTracker.NeedsRestyle(_cfg.Theme, SystemTheme.Current(), _glass.Theme, out var target)) return;
+            _glass = GlassStyle.For(target);
+            var old = _painter; _painter = new DockPainter(_dev, _m, _glass, _icons, _thumbs); old.Dispose();
+            BuildBackdrop(); _force = true;
+            _log($"[dock] tema del sistema: {target}; material actualizado en caliente.");
+        }
+        catch (Exception e) { _log("[dock] no se pudo actualizar el tema: " + e.GetType().Name + ": " + e.Message); }
+    }
+
     private void PollInputs()
     {
         if (!Native.GetCursorPos(out var p)) return;
@@ -124,7 +141,7 @@ public sealed class DockHost : IDisposable
         _ctl.SetEdgeHot(DockSettings.EdgeHot(p.X, p.Y, _monitor.Bottom, _winLeftPx, _winWpx, _winTopPx + _winHpx, screenEdgeFree: !_taskbarBelow));
         if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000) { _lastFs = DateTime.UtcNow; _ctl.SetSuppressed(FullscreenWatcher.ShouldSuppress()); }
         if ((DateTime.UtcNow - _lastWorkCheck).TotalSeconds >= 2) {
-            _lastWorkCheck = DateTime.UtcNow; var top = TaskbarTopOn(_monitor); bool changed = (top is null) != (_taskbarTop is null); _taskbarTop = top; _taskbarBelow = top is not null;
+            _lastWorkCheck = DateTime.UtcNow; ApplySystemTheme(); var top = TaskbarTopOn(_monitor); bool changed = (top is null) != (_taskbarTop is null); _taskbarTop = top; _taskbarBelow = top is not null;
             if (changed && _hwnd != IntPtr.Zero) { _log($"[dock] la barra de tareas de Windows {(top is null ? "ya no se ve" : "volvió")}: el Dock se recoloca"); PlaceWindow(show: false); _force = true; }
             else RecheckWorkArea(null);
         }   // por si Windows no avisó (barata: una consulta)
@@ -423,6 +440,7 @@ public sealed class DockHost : IDisposable
             case WM_DISPLAYCHANGE: ResizeWindow(); return IntPtr.Zero;
             case WM_SETTINGCHANGE:
                 if ((long)w == 0x14 /* SPI_SETDESKWALLPAPER */) { BuildBackdrop(); _force = true; }
+                else if (l != IntPtr.Zero && System.Runtime.InteropServices.Marshal.PtrToStringUni(l) == "ImmersiveColorSet") ApplySystemTheme();   // It8: Windows cambió el modo claro/oscuro
                 else if ((long)w == 0x2F /* SPI_SETWORKAREA */) RecheckWorkArea("aviso de Windows");   // WM-043: la barra de tareas se ocultó o volvió
                 return IntPtr.Zero;
             case WM_DESTROY: Native2.PostQuitMessage(0); return IntPtr.Zero;

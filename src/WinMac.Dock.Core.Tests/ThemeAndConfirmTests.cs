@@ -85,3 +85,54 @@ public class ConfirmDialogModelTests
     public void A_dangerous_flag_always_wins_over_the_icon()
         => Assert.Equal(UiPalette.Dark.Danger, ConfirmStyle.Colors(ConfirmKind.Info, danger: true, UiPalette.Dark).Action);
 }
+
+/// <summary>It8: el Dock tiene un material propio por tema y lo cambia en caliente.</summary>
+public class DockThemeTests
+{
+    private static double Lum(double c) => c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+    private static double L(double r, double g, double b) => 0.2126 * Lum(r) + 0.7152 * Lum(g) + 0.0722 * Lum(b);
+    private static double Ratio(double a, double b) { if (a < b) (a, b) = (b, a); return (a + 0.05) / (b + 0.05); }
+
+    [Fact]
+    public void Light_and_dark_glass_are_clearly_different_materials()
+    {
+        var l = GlassStyle.For(DockTheme.Light); var d = GlassStyle.For(DockTheme.Dark);
+        // sobre el MISMO fondo rosado, claro y oscuro deben diferir mucho (antes casi no se distinguían)
+        var (lr, lg, lb) = l.EffectiveOver(0.75); var (dr, dg, db) = d.EffectiveOver(0.75);
+        Assert.True(L(lr, lg, lb) > 0.55 && L(dr, dg, db) < 0.30, $"claro {L(lr, lg, lb):0.00} oscuro {L(dr, dg, db):0.00}");
+        Assert.True(L(lr, lg, lb) / Math.Max(0.001, L(dr, dg, db)) > 2.5);
+    }
+
+    [Fact]
+    public void Dark_glass_is_graphite_with_a_subtle_violet_tint()
+    {
+        var d = GlassStyle.For(DockTheme.Dark);
+        Assert.True(d.TintB > d.TintR && d.TintB > d.TintG);          // violeta
+        Assert.True(d.TintB - d.TintG < 0.12 && d.TintB < 0.35);        // muy sutil y oscuro
+    }
+
+    [Theory]
+    [InlineData(DockTheme.Light)]
+    [InlineData(DockTheme.Dark)]
+    public void Indicators_and_separators_stay_visible_over_any_wallpaper(DockTheme t)
+    {
+        var g = GlassStyle.For(t);
+        foreach (double wall in new[] { 0.0, 0.5, 1.0 })
+        {
+            var (r, gg, b) = g.EffectiveOver(wall); double glass = L(r, gg, b);
+            double a = g.MarkAlpha; double mark = L(a * g.MarkR + (1 - a) * r, a * g.MarkG + (1 - a) * gg, a * g.MarkB + (1 - a) * b);
+            Assert.True(Ratio(mark, glass) >= 3.0, $"{t} fondo {wall}: {Ratio(mark, glass):0.0}:1");   // indicador de app abierta: no texto, 3:1
+        }
+    }
+
+    [Theory]
+    [InlineData(ThemeMode.System, DockTheme.Dark, DockTheme.Light, true, DockTheme.Dark)]
+    [InlineData(ThemeMode.System, DockTheme.Light, DockTheme.Light, false, DockTheme.Light)]
+    [InlineData(ThemeMode.System, DockTheme.Light, DockTheme.Dark, true, DockTheme.Light)]
+    [InlineData(ThemeMode.Dark, DockTheme.Light, DockTheme.Dark, false, DockTheme.Dark)]   // elegido a mano: el sistema no manda
+    [InlineData(ThemeMode.Light, DockTheme.Dark, DockTheme.Dark, true, DockTheme.Light)]
+    public void Restyle_follows_windows_unless_the_user_chose_a_theme(ThemeMode mode, DockTheme system, DockTheme current, bool expected, DockTheme target)
+    {
+        Assert.Equal(expected, DockThemeTracker.NeedsRestyle(mode, system, current, out var t)); Assert.Equal(target, t);
+    }
+}

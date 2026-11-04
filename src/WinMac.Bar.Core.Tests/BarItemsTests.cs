@@ -160,17 +160,39 @@ public class BarItemsTests
     }
     [Fact] public void Empty_or_transparent_icon_is_untouched() { Assert.Null(Tray.IconAdapt.Adapt(new byte[32 * 32 * 4], false)); Assert.Null(Tray.IconAdapt.Adapt([], true)); }
 
-    // ── It7: menú contextual de la bandeja
+    // ── It8: menú contextual de la bandeja
+    private static Tray.TrayMenuSignals Sg(bool win = false, bool mode = false, bool pop = false, Tray.ForegroundOwner fg = Tray.ForegroundOwner.Target) => new(win, mode, pop, fg);
     [Fact] public void Tray_panel_stays_while_the_menu_is_open_and_closes_after()
     {
         var w = new Tray.TrayMenuWatch();
-        Assert.Equal(Tray.TrayMenuPhase.Waiting, w.Step(80, false)); Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(200, true));
-        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(5000, true)); Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(5100, false));   // salto entre submenús: margen
-        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(5200, true));
-        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(6000, false)); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(6300, false));
+        Assert.Equal(Tray.TrayMenuPhase.Waiting, w.Step(80, Sg())); Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(200, Sg(win: true)));
+        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(5000, Sg(win: true))); Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(5100, Sg()));   // salto entre submenús: margen
+        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(5200, Sg(win: true)));
+        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(6000, Sg())); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(6700, Sg()));
     }
-    [Fact] public void Tray_panel_closes_when_the_app_shows_no_menu()
-    { var w = new Tray.TrayMenuWatch(); Assert.Equal(Tray.TrayMenuPhase.Waiting, w.Step(1000, false)); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(1500, false)); }
-    [Fact] public void Tray_watch_has_an_upper_bound()
-    { var w = new Tray.TrayMenuWatch(); w.Step(100, true); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(Tray.TrayMenuWatch.MaxOpenMs, true)); }
+    [Theory]
+    [InlineData(true, false, false)] [InlineData(false, true, false)] [InlineData(false, false, true)]
+    public void Any_menu_signal_keeps_the_panel_open_win32_modemode_or_own_popup(bool win, bool mode, bool pop)
+    {
+        var w = new Tray.TrayMenuWatch(); w.Step(100, Sg(win, mode, pop));
+        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(20_000, Sg(win, mode, pop)));   // un menú abierto largo rato no se cierra por tiempo
+    }
+    [Fact] public void Slow_menu_that_appears_after_the_old_one_and_a_half_seconds_is_still_followed()
+    { var w = new Tray.TrayMenuWatch(); Assert.Equal(Tray.TrayMenuPhase.Waiting, w.Step(1600, Sg())); Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(2000, Sg(pop: true))); }
+    [Fact] public void Undetectable_menu_never_closes_the_panel_by_timer_while_the_app_has_focus()
+    {
+        var w = new Tray.TrayMenuWatch(); Assert.Equal(Tray.TrayMenuPhase.Undetected, w.Step(Tray.TrayMenuWatch.AppearTimeoutMs, Sg()));
+        Assert.Equal(Tray.TrayMenuPhase.Undetected, w.Step(60_000, Sg())); Assert.Equal(Tray.TrayMenuPhase.Undetected, w.Step(300_000, Sg(fg: Tray.ForegroundOwner.Panel)));
+    }
+    [Fact] public void Undetected_menu_ends_when_the_user_moves_to_something_else()
+    {
+        var w = new Tray.TrayMenuWatch(); w.Step(Tray.TrayMenuWatch.AppearTimeoutMs, Sg());
+        Assert.Equal(Tray.TrayMenuPhase.Undetected, w.Step(4000, Sg(fg: Tray.ForegroundOwner.Other))); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(4700, Sg(fg: Tray.ForegroundOwner.Other)));
+    }
+    [Fact] public void Undetected_menu_that_shows_up_late_is_followed()
+    { var w = new Tray.TrayMenuWatch(); w.Step(3000, Sg()); Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(3500, Sg(win: true))); }
+    [Fact] public void No_menu_and_focus_elsewhere_closes_after_the_wait()
+    { var w = new Tray.TrayMenuWatch(); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(Tray.TrayMenuWatch.AppearTimeoutMs, Sg(fg: Tray.ForegroundOwner.Other))); }
+    [Fact] public void Tray_watch_has_an_upper_bound_on_a_stuck_signal()
+    { var w = new Tray.TrayMenuWatch(); w.Step(100, Sg(win: true)); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(Tray.TrayMenuWatch.MaxOpenMs, Sg(win: true))); }
 }

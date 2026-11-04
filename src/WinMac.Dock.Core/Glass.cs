@@ -25,15 +25,28 @@ public sealed record GlassStyle
     public double SeparatorAlpha { get; init; } = 0.38;
 
     /// <summary>
-    /// Presets. CALIBRADO con la referencia 1 (docs/09), con estas salvedades: la captura NO indicaba si el Dock estaba en apariencia clara u oscura
-    /// (la ganancia de luminancia y el tinte gris medido se aplican al preset OSCURO, que es el que encaja con la captura y con el tema de Windows del usuario; PENDIENTE de confirmar);
-    /// el material del preset CLARO conserva sus valores anteriores salvo la saturación, el borde y la sombra.
+    /// Presets. It8: cada tema tiene un MATERIAL propio, no solo otro tinte. Antes el tinte (α 0,20–0,40) era tan tenue que el fondo de pantalla desenfocado mandaba y el Dock
+    /// se veía casi igual (p. ej. rosado/lila con un fondo rosa) en claro y en oscuro. Ahora el tinte tapa lo bastante el color del fondo y se atenúa su saturación:
+    /// oscuro = cristal grafito con un tinte violeta muy sutil; claro = cristal blanco translúcido con marcas oscuras. El contraste de las marcas se comprueba en las pruebas.
     /// </summary>
-    public static GlassStyle For(DockTheme t) => t == DockTheme.Light ? new GlassStyle() : new GlassStyle
+    public static GlassStyle For(DockTheme t) => t == DockTheme.Light ? new GlassStyle
     {
-        Theme = DockTheme.Dark, Brightness = 0.0, TintAlpha = 0.40, TintBottomFactor = 0.95, TintR = 0.31, TintG = 0.31, TintB = 0.31,
-        ShadowAlpha = 0.08, SeparatorAlpha = 0.40,
+        Theme = DockTheme.Light, TintR = 1, TintG = 1, TintB = 1, TintAlpha = 0.42, Brightness = 0.10, TintBottomFactor = 0.85, Saturation = 0.80,
+        MarkR = 0.10, MarkG = 0.10, MarkB = 0.13, MarkAlpha = 0.78, SeparatorAlpha = 0.30,
+        RimTopAlpha = 0.60, RimBottomAlpha = 0.40, SideContourAlpha = 0.14, ShadowAlpha = 0.10, TopSheenAlpha = 0.20,
+    } : new GlassStyle
+    {
+        Theme = DockTheme.Dark, TintR = 0.20, TintG = 0.18, TintB = 0.26, TintAlpha = 0.62, Brightness = 0.0, TintBottomFactor = 0.92, Saturation = 0.75,
+        MarkR = 1, MarkG = 1, MarkB = 1, MarkAlpha = 0.88, SeparatorAlpha = 0.40,
+        ShadowAlpha = 0.16, RimTopAlpha = 0.26, RimBottomAlpha = 0.18, SideContourAlpha = 0.22,
     };
+
+    /// <summary>Color efectivo (R,G,B de 0 a 1) del cristal arriba, compuesto sobre un fondo gris uniforme: lo que lee el usuario tras el desenfoque.</summary>
+    public (double R, double G, double B) EffectiveOver(double backdropGray)
+    {
+        double a = Math.Clamp(TintAlpha + Brightness, 0, 1);
+        return (a * TintR + (1 - a) * backdropGray, a * TintG + (1 - a) * backdropGray, a * TintB + (1 - a) * backdropGray);
+    }
 
     public double TintBottomFactor { get; init; } = 0.8;   // opacidad del tinte abajo ÷ arriba
     public double SideContourAlpha { get; init; } = 0.20;  // contorno oscuro fino (macOS: ≈ −13…−25 de luminancia en los costados)
@@ -50,4 +63,15 @@ public sealed record GlassStyle
     public double ShadowAlpha { get; init; } = 0.06;    // opacidad ACUMULADA junto al borde (medido lateral ≤ 2–6 %; antes ≈ 51 % por apilado)
     public double ShadowOffsetY { get; init; } = 4;     // sin medir abajo (recorte de 9 px); arriba no hay sombra
     public double TopSheenAlpha { get; init; } = 0.12;  // resplandor suave en el borde superior
+}
+
+/// <summary>It8: cuándo hay que cambiar el material del Dock. Puro: el anfitrión lo consulta en cada aviso de Windows y en su repaso periódico.</summary>
+public static class DockThemeTracker
+{
+    /// <returns>true si el material actual no corresponde al tema que manda (el de Windows con <see cref="ThemeMode.System"/>, o el elegido a mano).</returns>
+    public static bool NeedsRestyle(ThemeMode mode, DockTheme system, DockTheme current, out DockTheme target)
+    {
+        target = mode switch { ThemeMode.Light => DockTheme.Light, ThemeMode.Dark => DockTheme.Dark, _ => system };
+        return target != current;
+    }
 }

@@ -74,30 +74,34 @@ public sealed partial class BarHost
         if (!BarNative.IsWindow(hwnd)) { _popover?.Hide(); _trayStore.RemoveDead(h => h != icon.Hwnd); SetStateAll(); return; }
         BarNative.GetWindowThreadProcessId(hwnd, out uint pid); AllowSetForegroundWindow(pid);
         // Clic derecho: el panel sigue visible (y con el foco) mientras la app muestra su menú; se cierra cuando el menú se cierra (ver TrayMenuWatch). Clic izquierdo: se cierra como siempre.
-        if (right && _popover is { IsOpen: true }) BeginTrayMenuWatch(); else _popover?.Hide();
+        if (right && _popover is { IsOpen: true }) BeginTrayMenuWatch(hwnd); else _popover?.Hide();
         foreach (var (w, l) in TrayClick.Messages(icon, right ? TrayButton.Right : TrayButton.Left, x, y)) BarNative.PostMessage(hwnd, icon.CallbackMessage, w, l);
     }
 
     private TrayMenuWatch? _trayWatch; private System.Threading.Timer? _trayWatchTimer; private long _trayWatchStart;
 
-    private void BeginTrayMenuWatch()
+    private TrayMenuProbe? _trayProbe;
+
+    private void BeginTrayMenuWatch(IntPtr targetHwnd)
     {
         EndTrayMenuWatch(hide: false);
         if (_popover is null) return;
         _popover.KeepOpen = true; _trayWatch = new TrayMenuWatch(); _trayWatchStart = Environment.TickCount64;
-        _trayWatchTimer = new System.Threading.Timer(_ => { bool vis; try { vis = TrayMenuProbe.AnyMenuVisible(); } catch (Exception) { vis = false; } Post(() => StepTrayMenuWatch(vis)); }, null, 80, 80);
+        try { _trayProbe = new TrayMenuProbe(targetHwnd); } catch (Exception) { _trayProbe = null; }
+        var probe = _trayProbe;
+        _trayWatchTimer = new System.Threading.Timer(_ => { TrayMenuSignals sg; try { sg = probe?.Read() ?? new TrayMenuSignals(false, false, false, ForegroundOwner.Target); } catch (Exception) { sg = new TrayMenuSignals(false, false, false, ForegroundOwner.Target); } Post(() => StepTrayMenuWatch(sg)); }, null, 80, 80);
     }
 
-    private void StepTrayMenuWatch(bool menuVisible)
+    private void StepTrayMenuWatch(TrayMenuSignals signals)
     {
         if (_trayWatch is null) return;
         if (_popover is not { IsOpen: true }) { EndTrayMenuWatch(hide: false); return; }   // el panel se cerró por otro lado (otro icono de la barra, Esc…)
-        if (_trayWatch.Step((int)(Environment.TickCount64 - _trayWatchStart), menuVisible) == TrayMenuPhase.Finished) EndTrayMenuWatch(hide: true);
+        if (_trayWatch.Step((int)(Environment.TickCount64 - _trayWatchStart), signals) == TrayMenuPhase.Finished) EndTrayMenuWatch(hide: true);
     }
 
     private void EndTrayMenuWatch(bool hide)
     {
-        bool was = _trayWatch is not null; _trayWatchTimer?.Dispose(); _trayWatchTimer = null; _trayWatch = null;
+        bool was = _trayWatch is not null; _trayWatchTimer?.Dispose(); _trayWatchTimer = null; _trayWatch = null; _trayProbe = null;
         if (!was) return;
         if (_popover is not null) _popover.KeepOpen = false;
         if (hide) _popover?.Hide();
