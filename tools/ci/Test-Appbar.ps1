@@ -61,6 +61,11 @@ $variants = @(
 $lab = @(); foreach ($v in $variants) { $r = [AppBarControl]::Run(28, [uint32]$v[1], $v[2], $v[3], $v[4]); $ok = ($r -match 'durante=(\d+)' -and [int]$Matches[1] -gt $before); $lab += [pscustomobject]@{ Variante = $v[0]; Reserva = $ok; Detalle = $r }; Write-Host ("LAB  {0}: {1}  [{2}]" -f $v[0], $(if ($ok) { 'RESERVA' } else { 'NO reserva' }), $r) }
 $ctl = $lab[0].Detalle; $controlWorks = $lab[0].Reserva
 $script:rep += "| INFO | control V0 (AppBar mínimo según el protocolo documentado) | $ctl |"; foreach ($l in ($lab | Select-Object -Skip 1)) { $script:rep += "| INFO | laboratorio · $($l.Variante) | $(if ($l.Reserva) { 'reserva' } else { 'NO reserva' }) — $($l.Detalle) |" }
+# 0) EXPERIMENTO: la misma Barra con la bandeja desactivada (sin su ventana «Shell_TrayWnd» propia). Si ESTA reserva y la normal no, la ventana-proxy de bandeja estorba a los mensajes de AppBar.
+$noTrayCfg = Join-Path $OutDir 'bar-sin-bandeja.json'; '{"Version":1,"ShowTrayIcons":false}' | Set-Content $noTrayCfg -Encoding UTF8
+$pt = Start-Process $exe -ArgumentList @('--config', "`"$noTrayCfg`"") -PassThru -WindowStyle Hidden; $noTrayReserved = $false; for ($i = 0; $i -lt 30; $i++) { Start-Sleep -Milliseconds 500; if ((Top) -gt $before) { $noTrayReserved = $true; break } }
+Write-Host ("EXPERIMENTO bandeja desactivada: reserva={0} (y durante={1})" -f $noTrayReserved, [WorkArea]::Get()); $script:rep += "| INFO | experimento: Barra con ShowTrayIcons=false | reserva=$noTrayReserved |"
+$null = $pt.CloseMainWindow(); if (-not $pt.WaitForExit(8000)) { $pt | Stop-Process -Force }; Get-Process -Name 'HatsuDesktop.Bar' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 3
 # 1) arranque con reserva (valores de fábrica): el borde superior sale del área de trabajo
 $p = Start-Process $exe -ArgumentList @('--no-config') -PassThru -WindowStyle Hidden; $reserved = $false; for ($i = 0; $i -lt 40; $i++) { Start-Sleep -Milliseconds 500; if ((Top) -gt $before) { $reserved = $true; break } }
 $during = [WorkArea]::Get()
