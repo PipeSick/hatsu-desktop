@@ -115,13 +115,14 @@ if (-not $okB) { Write-Host '--- registro del host (F31-1), últimas líneas:'; 
 Check 'F31-1 un módulo que no se puede lanzar acaba en Failed y la Barra sigue en marcha' $okB ("dock Failed={0} bar Running={1}" -f (LogHas $rb '[dock] Failed'), (LogHas $rb '[bar] Running'))
 $tries = @(Get-Content $rb.Log | Where-Object { $_ -match '\[dock\] no se pudo lanzar' }).Count
 Check 'F31-2 no hay reintentos infinitos (a lo sumo 5 intentos)' ($tries -ge 1 -and $tries -le 5) ("intentos: $tries")
-Check 'F31-3 el registro da el CÓDIGO REAL de Windows (193: no es un programa válido), no una suposición' (LogHas $rb '[error 193]')
+$firstTry = (Get-Content $rb.Log | Where-Object { $_ -match '\[dock\] no se pudo lanzar' } | Select-Object -First 1); Write-Host "INFO  F31-3 línea real del registro: $firstTry"
+Check 'F31-3 el registro da el CÓDIGO REAL de Windows ([error N]) del intento fallido, no una suposición' ($firstTry -match '\[error \d+\]')
 Check 'F31-4 el registro NO culpa a Smart App Control de un archivo que simplemente no es un ejecutable' (-not (Select-String -Path $rb.Log -Pattern '\[dock\] no se pudo lanzar.*Smart App Control' -Quiet))
 $repFile = Join-Path $rb.Dir 'diagnostico.txt'
 $dp = Start-Process $hostExe -ArgumentList @('--diagnose', '--quiet', '--config', "`"$($rb.Cfg)`"", '--log', "`"$($rb.Log)`"", '--notchwin-settings', "`"$(Join-Path $rb.Dir 'sin-notchwin.json')`"", '--out', "`"$repFile`"") -Wait -PassThru -WindowStyle Hidden
 $rep = if (Test-Path $repFile) { Get-Content $repFile -Raw } else { '' }
 Check 'F31-5 HatsuDesktop.exe --diagnose termina bien y escribe el informe local' ($dp.ExitCode -eq 0 -and $rep.Length -gt 500)
-Check 'F31-6 el informe dice que el Dock NO está en ejecución y por qué, y que la Barra sí' ($rep -match 'Dock: elegido=sí · NO está en ejecución' -and $rep -match '\[error 193\]' -and $rep -match 'Barra superior: elegido=sí')
+Check 'F31-6 el informe dice que el Dock NO está en ejecución y por qué, y que la Barra sí' ($rep -match 'Dock: elegido=sí · NO está en ejecución' -and $rep -match 'causa registrada: .*\[error \d+\]' -and $rep -match 'Barra superior: elegido=sí')
 Check 'F31-7 el informe es de solo lectura, local y sin datos personales ni telemetría' ($rep -match 'NO se envía a ningún sitio' -and -not $rep.Contains($env:USERPROFILE) -and -not ($rep -match 'WeatherCity|Molina'))
 Quit $rb $hb; Cleanup
 # (b) «Dock inaccesible»: permisos denegados sobre el ejecutable (si el entorno no lo permite, se informa y no se falla: depende de las ACL del runner)

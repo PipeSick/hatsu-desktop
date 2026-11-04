@@ -17,6 +17,37 @@ function Top { [int](([WorkArea]::Get()).Split(',')[1]) }
 $fails = 0; $rep = @(); function Check([string]$n, $ok, [string]$d = '') { $ok = [bool](@($ok) | Select-Object -Last 1); $script:rep += "| $(if ($ok) { 'OK' } else { 'FALLO' }) | $n | $d |"; Write-Host ("{0}  {1} {2}" -f $(if ($ok) { 'PASS' } else { 'FAIL' }), $n, $d); if (-not $ok) { $script:fails++ } }
 $exe = (Resolve-Path $BarExe).Path; $before = Top; Write-Host "Área de trabajo antes: $([WorkArea]::Get())"
 Get-Process -Name 'HatsuDesktop.Bar' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 1
+
+# ── EXPERIMENTO DE CONTROL: una barra de aplicación mínima que sigue al pie de la letra el protocolo documentado (ABM_NEW → QUERYPOS → SETPOS → mover la ventana).
+#    Si ESTE control tampoco cambia el área de trabajo, el runner no admite barras de aplicación y la prueba de la Barra no es concluyente aquí. Si el control sí funciona y la Barra no, es un defecto del producto.
+Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices;
+public static class AppBarControl {
+  [StructLayout(LayoutKind.Sequential)] struct RECT { public int L, T, R, B; }
+  [StructLayout(LayoutKind.Sequential)] struct ABD { public uint cb; public IntPtr hWnd; public uint cbMsg; public uint edge; public RECT rc; public IntPtr lParam; }
+  [DllImport("shell32.dll")] static extern UIntPtr SHAppBarMessage(uint m, ref ABD d);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr inst, IntPtr p);
+  [DllImport("user32.dll")] static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hh, bool repaint);
+  [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr h);
+  [DllImport("user32.dll")] static extern int GetSystemMetrics(int i);
+  [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint a, uint b, ref RECT r, uint c);
+  [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+  static int WorkTop() { RECT r = new RECT(); SystemParametersInfo(0x30, 0, ref r, 0); return r.T; }
+  public static string Run(int height) {
+    SetProcessDPIAware(); int before = WorkTop(); int w = GetSystemMetrics(0);
+    IntPtr h = CreateWindowEx(0x80 | 0x8, "Static", "control-appbar", 0x80000000 | 0x10000000, 0, 0, w, height, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);   // TOOLWINDOW|TOPMOST, POPUP|VISIBLE
+    if (h == IntPtr.Zero) return "ventana=falló";
+    ABD d = new ABD(); d.cb = (uint)Marshal.SizeOf(typeof(ABD)); d.hWnd = h; d.cbMsg = 0x8000 + 77;
+    bool nw = SHAppBarMessage(0, ref d) != UIntPtr.Zero;
+    d.edge = 1; d.rc = new RECT { L = 0, T = 0, R = w, B = height }; SHAppBarMessage(2, ref d); d.rc.B = d.rc.T + height; SHAppBarMessage(3, ref d); MoveWindow(h, d.rc.L, d.rc.T, d.rc.R - d.rc.L, d.rc.B - d.rc.T, true);
+    int during = before; for (int i = 0; i < 20 && during == before; i++) { System.Threading.Thread.Sleep(250); during = WorkTop(); }
+    SHAppBarMessage(1, ref d); DestroyWindow(h); System.Threading.Thread.Sleep(1500); int after = WorkTop();
+    return "ABM_NEW=" + nw + ";antes=" + before + ";durante=" + during + ";despues=" + after;
+  }
+}
+'@
+$ctl = [AppBarControl]::Run(28); Write-Host "CONTROL: $ctl"; $controlWorks = ($ctl -match 'durante=(\d+)' -and [int]$Matches[1] -gt $before)
+$script:rep += "| INFO | control (AppBar mínimo según el protocolo documentado) | $ctl |"
 # 1) arranque con reserva (valores de fábrica): el borde superior sale del área de trabajo
 $p = Start-Process $exe -ArgumentList @('--no-config') -PassThru -WindowStyle Hidden; $reserved = $false; for ($i = 0; $i -lt 40; $i++) { Start-Sleep -Milliseconds 500; if ((Top) -gt $before) { $reserved = $true; break } }
 $during = [WorkArea]::Get()
@@ -24,9 +55,9 @@ if (-not $reserved) {   # sin reserva: se reúne la evidencia antes de concluir 
   $barLog = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'; Write-Host ("Barra: terminó={0}{1}" -f $p.HasExited, $(if ($p.HasExited) { " código=$($p.ExitCode)" } else { '' }))
   $tail = if (Test-Path $barLog) { @(Get-Content $barLog -Tail 40) } else { @() }; $tail | ForEach-Object { Write-Host "    bar.log: $_" }
   Write-Host ("Procesos explorer: {0} · sesión interactiva: {1}" -f @(Get-Process explorer -ErrorAction SilentlyContinue).Count, [Environment]::UserInteractive)
-  if (@($tail | Where-Object { $_ -match 'ABM_NEW falló' }).Count -gt 0) {
-    Write-Host 'INFO  El shell de este runner NO acepta barras de aplicación (ABM_NEW falló): la prueba NO es concluyente aquí. Se valida en un Windows físico (docs/49 §10).'
-    ($head = "# Reserva del borde superior en el runner de CI`n`n**No concluyente:** este runner no acepta barras de aplicación (ABM_NEW falló). Hay que probarlo en un Windows físico.`n") | Out-Null
+  if (-not $controlWorks) {
+    Write-Host 'INFO  El shell de este runner NO acepta barras de aplicación ni siquiera con el control mínimo: la prueba de la Barra NO es concluyente aquí. Se valida en un Windows físico (docs/49 §10).'
+    ($head = "# Reserva del borde superior en el runner de CI`n`n**No concluyente:** este runner no cambia el área de trabajo ni con una barra de aplicación mínima que sigue el protocolo documentado (control). Hay que probarlo en un Windows físico.`n") | Out-Null
     Set-Content (Join-Path $OutDir 'appbar-report.md') -Value ($head + "`n" + (($tail | ForEach-Object { '    ' + $_ }) -join "`n")) -Encoding UTF8; if (-not $p.HasExited) { $p | Stop-Process -Force }; exit 0 } }
 Check 'la Barra reserva el borde superior: el área de trabajo de Windows baja' $reserved "antes y=$before · durante: $during"
 # 2) cierre ordenado: se devuelve exactamente lo que había
