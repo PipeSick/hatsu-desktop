@@ -1,4 +1,4 @@
-<# Deshace Register-DevPackage.ps1: quita SOLO el paquete de investigación «suelto» (sin firma). (Antes, si lo registraste: .\Run-Probe.ps1 stage3 unregister)
+﻿<# Deshace Register-DevPackage.ps1: quita SOLO el paquete de investigación «suelto» (sin firma). (Antes, si lo registraste: .\Run-Probe.ps1 stage3 unregister)
    Si el paquete instalado está FIRMADO (es el de P3), no lo toca: usa Uninstall-SignedDevPackage.ps1. #>
 $pkgs = @(Get-AppxPackage WinMac.Research.CallProbe)
 if ($pkgs.Count -eq 0) { Write-Host 'No hay paquete de investigación instalado.' }

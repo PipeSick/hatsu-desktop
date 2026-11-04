@@ -1,4 +1,4 @@
-<#
+﻿<#
   Da identidad de paquete a CallProbe SIN certificados: registro «suelto» en modo desarrollador (Add-AppxPackage -Register).
   - Requiere el MODO DESARROLLADOR de Windows (Configuración › Sistema › Para programadores). Es un ajuste del usuario, reversible; este script NO lo cambia: si no está activo, se detiene y lo dice.
   - NO toca certificados, Smart App Control, Defender, directivas ni archivos del sistema.

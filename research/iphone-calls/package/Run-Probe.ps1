@@ -1,4 +1,4 @@
-<#
+﻿<#
   Ejecuta CallProbe CON identidad de paquete (Invoke-CommandInDesktopPackage) o SIN ella (-Unpackaged), para comparar.
   Los informes se guardan en Documentos\CallProbe\ (una app empaquetada no siempre muestra consola).
   Ejemplos:

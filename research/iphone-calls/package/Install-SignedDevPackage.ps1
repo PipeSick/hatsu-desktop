@@ -1,4 +1,4 @@
-<#
+﻿<#
   P3 — INSTALA el paquete de investigación FIRMADO (autofirmado de desarrollo; NO equivale a una firma de Microsoft Store).
   Hipótesis que prueba (H1/C): ¿el registro de PhoneLineTransportDevice tiene efecto con un MSIX firmado y de confianza, en vez del paquete suelto sin firma?
   Requisitos: Windows PowerShell 5.1 (NO pwsh) como ADMINISTRADOR; Windows SDK (makeappx/signtool, x64); modo de carga lateral activo; ningún paquete WinMac.Research.CallProbe instalado.

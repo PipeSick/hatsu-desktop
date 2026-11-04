@@ -1,4 +1,4 @@
-<#
+﻿<#
   P3 — DESHACE lo que instaló Install-SignedDevPackage.ps1, leyendo %LOCALAPPDATA%\CallProbeP3\<id>\state.json.
   Quita SOLO: el paquete de esa ejecución (si su identidad coincide exactamente), el certificado de esa ejecución (por HUELLA EXACTA, en TrustedPeople y en CurrentUser\My) y los archivos de su carpeta.
   Nunca borra certificados por Subject/nombre, ni paquetes ajenos (si hay una identidad inesperada, se detiene y lo explica), ni nada de otras ejecuciones. state.json se conserva como registro.

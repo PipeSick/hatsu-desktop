@@ -449,7 +449,7 @@ Requisitos: sin app en iOS, sin Phone Link, sin drivers propios, libre, control 
 
 ## 13. P3 — MSIX firmado: preparación segura (NO ejecutada por la investigación)
 
-Etiquetas como en §12. **Nada de esto se ha ejecutado en tu PC ni en mi entorno** (aquí solo se corrieron las pruebas simuladas de 13.8). Un certificado autofirmado **no equivale** a una firma de Microsoft Store: P3 solo responde si *un paquete firmado y de confianza local* cambia el resultado; un fallo de P3 no descarta la Store y un éxito no la implica.
+Etiquetas como en §12. **Nada de esto se ha ejecutado en tu PC ni en mi entorno** (aquí solo se corrieron las pruebas simuladas de 13.8). **Corrección posterior (§14):** esas pruebas fallaron en Windows real por un defecto de ámbito en la propia batería; el recuento «165» de 13.8 queda sustituido por el de §14.4. Un certificado autofirmado **no equivale** a una firma de Microsoft Store: P3 solo responde si *un paquete firmado y de confianza local* cambia el resultado; un fallo de P3 no descarta la Store y un éxito no la implica.
 
 ### 13.1 Estado de partida (informado por el usuario; los registros de P1/P2 no los he visto) [HW]
 Build 10.0.26300.9711 · iPhone por Classic · Phone Link cerrado · paquete suelto (`None`) · `RequestAccessAsync=Allowed` · `RegisterApp()` retorna, `IsRegistered()=False`. P1: detecta desconexión/reconexión sin cambios de registro. P2 (activación por `shell:AppsFolder`): `RegisterApp()` en 24 ms y `IsRegistered()` False 10 s → **H3 (activación) queda descartada [HW]**. Sin llamadas reales ni audio. SDK `10.0.28000.0` instalado (el script elige el SDK más nuevo con `makeappx` y `signtool` en `x64`).
@@ -577,6 +577,55 @@ Las tres no deben devolver nada. Último recurso manual, **solo por huella exact
 - Comprobación de que las pruebas detectan errores: quitando la verificación del sujeto o la guarda «no intentó instalar», fallan.
 - `dotnet test CallProbe.Logic.Tests` → ver commit; `dotnet build CallProbe` sin errores.
 - **No probado (requiere Windows real):** `New-SelfSignedCertificate`, `makeappx`, `signtool`, `Add-AppxPackage`, almacenes `Cert:\`, el valor real de `SignatureKind`, y el comportamiento de Smart App Control. Esas operaciones solo se ejercitan en tu ejecución; por eso cada una tiene su comprobación y reversión.
+
+## 14. Corrección de P3: el fallo `Hex40` al ejecutar `Test-P3.ps1` en Windows real
+
+**Resultado en el PC del usuario (commit `1722484`):** `P3: pruebas` → `P3-FALLO (revertido por completo): El término "Hex40" no se reconoce…` en `P3.Common.ps1:226`. P3 **no** había pasado sus propias pruebas; mi entrega anterior lo presentó como «165 correctas» porque solo lo ejecuté con `pwsh -File`, el único modo en que el defecto no aparece. Ese informe era incompleto en ese punto.
+
+### 14.1 Causa raíz [reproducida]
+- `Hex40` (y `New-Cert`, `New-Pkg`) son **funciones auxiliares definidas en `Test-P3.ps1`**, es decir, en el *ámbito del script*. Las operaciones simuladas (`NewCert`, `ImportTrust`, `Verify`, `AddPackage`) son scriptblocks creados con `.GetNewClosure()`, que se ejecutan en un **módulo dinámico**: allí los *comandos* se resuelven desde el ámbito **global**, no desde el del script, y de las *variables* solo se capturan las **locales** de la función que lo creó.
+- Con `pwsh -File Test-P3.ps1` el script corre en el ámbito global, así que las funciones sí se ven (por eso lo di por bueno). Con `.\package\Test-P3.ps1`, `& script` o `pwsh -Command ./Test-P3.ps1` el script tiene su propio ámbito y `Hex40` desaparece. **Reproducido en pwsh 7.6.9 (Linux)** con `-Command ./Test-P3.ps1`, sin necesitar Windows.
+- La misma causa afectaba a las variables `$TP` y `$MY` (rutas de almacenes) usadas dentro de los closures: habrían dado `Index operation failed; the array index evaluated to null` en cuanto se corrigiera `Hex40`. Se detectó al reproducir.
+- **Dónde estaba el fallo:** solo en la **prueba simulada** (`Test-P3.ps1`). **El instalador real no se ve afectado:** `New-P3RealOps` usa únicamente cmdlets de Windows, ninguna función auxiliar del script de pruebas (comprobado por inspección y por el análisis AST de 14.3).
+- Diferencia 5.1 / 7: el mecanismo es el mismo en ambas; lo que cambia es *cómo se invoca* el script, no la versión.
+
+### 14.2 Defectos adicionales encontrados al auditar
+1. **Mensaje engañoso:** `P3-FALLO (revertido por completo)` se emitía en cuanto el rollback devolvía «completo», sin volver a consultar el sistema; en este caso ni siquiera se había creado nada que revertir. **Corregido:** tras la limpieza se hace una **verificación independiente** (`Get-P3Residuals`: paquete, huella en ambos almacenes, contenido de la carpeta). Solo entonces el mensaje dice `limpieza verificada` y cita la huella y los almacenes comprobados; si no se creó nada, dice `no se había creado nada que revertir`; si queda cualquier residuo o la limpieza lanza una excepción, `P3-FALLO-INCOMPLETO` con los residuos, el estado `cleanup-incomplete` (que bloquea nuevas ejecuciones) y el comando para continuar. Matiz honesto: «verificada» significa *según lo que el script puede consultar*, no una auditoría del sistema entero.
+2. **Codificación:** los `.ps1` estaban en UTF-8 **sin BOM** con caracteres no ASCII (`→`, `—`, `«`). Windows PowerShell 5.1 los lee como ANSI y varios de esos bytes (p. ej. `0x92`, `0x94`) se convierten en comillas tipográficas que PowerShell trata como comillas reales: riesgo de errores de análisis. **Corregido:** todos los `.ps1` del paquete se guardan con BOM UTF-8.
+3. La batería terminaba en la primera excepción inesperada y ocultaba el resto. **Corregido:** cada bloque corre dentro de `Section`, que registra la excepción como fallo y continúa.
+
+### 14.3 Pruebas de regresión añadidas (`Test-P3.ps1`)
+| Prueba | Qué detecta |
+|---|---|
+| Análisis AST de los closures simulados | cualquier llamada a una función definida en el propio script de pruebas, o uso de una variable del ámbito del script que el closure no captura |
+| `NewCert` simulado invocado directamente | el camino exacto que falló |
+| La batería completa se relanza como `& script` en un proceso nuevo | el modo de invocación que usa un usuario (y que `-File` ocultaba) |
+| BOM UTF-8 y lectura simulada como Windows-1252 | caracteres no ASCII sin BOM / comillas tipográficas |
+| Mensajes de recuperación | `RemoveCert` ineficaz → `INCOMPLETO` con residuos y sin decir «verificada»; limpieza que lanza → `INCOMPLETO` y pendiente; fallo previo a crear nada → lo dice; fallo normal → cita huella y almacenes |
+Comprobación de que detectan el error: reintroduciendo la llamada a `Hex40` en un closure, quitando la copia local de `$TP/$MY`, o quitando el BOM de `P3.Common.ps1`, la batería falla.
+
+### 14.4 Resultados (mi entorno, sin Windows)
+| Ejecución | Resultado |
+|---|---|
+| `pwsh 7.6.9 -File Test-P3.ps1` | 182 correctas, 0 fallidas |
+| `pwsh -Command ./Test-P3.ps1` (modo que reproducía el fallo) | 182 correctas, 0 fallidas |
+| `pwsh -Command "& ./Test-P3.ps1"` | 182 correctas, 0 fallidas |
+| `dotnet test CallProbe.Logic.Tests` | 60/60 |
+**Windows PowerShell 5.1: NO verificado aquí** (no hay 5.1 disponible en este entorno). Lo cubren las pruebas de ámbito y de codificación, pero la confirmación real es la ejecución del usuario (14.5). No se hizo ninguna instalación ni se tocó ningún certificado.
+
+### 14.5 Cómo repetir la validación en tu PC (no instala nada, no toca certificados)
+```powershell
+cd <repo>\research\iphone-calls
+git pull origin research/iphone-calls
+$PSVersionTable.PSVersion
+.\package\Test-P3.ps1
+```
+Esperado, última línea: `P3: 182 comprobaciones correctas, 0 fallidas` (sin líneas `FALLA`). Repite también en la otra versión de PowerShell que tengas:
+```powershell
+pwsh -NoProfile -File .\package\Test-P3.ps1
+powershell.exe -NoProfile -File .\package\Test-P3.ps1
+```
+Si alguna línea dice `FALLA`, envíame esa línea completa y `$PSVersionTable.PSVersion`; **no instales P3**. Solo cuando la batería pase en tu Windows PowerShell 5.1 sigue valiendo el procedimiento de §13.6.
 
 ## Apéndice A — Correcciones a `docs/39` y `docs/41`
 

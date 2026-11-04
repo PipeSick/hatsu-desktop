@@ -1,4 +1,4 @@
-<#
+﻿<#
   Lógica común de P3 (paquete MSIX FIRMADO de investigación). Se carga con «. .\P3.Common.ps1».
   Toda acción con efecto sobre Windows pasa por el objeto $Ops (inyectable): en producción son las operaciones reales (New-P3RealOps);
   en Test-P3.ps1 son simulaciones en memoria. Así se prueban la detección de conflictos, la recuperación y la limpieza sin tocar ningún sistema.
@@ -145,9 +145,31 @@ function Invoke-P3Rollback([hashtable]$State, $Ops) {
     else { foreach ($item in Get-ChildItem -LiteralPath $runDir -Force) { if ($item.Name -notin @('state.json')) { Remove-Item -LiteralPath $item.FullName -Recurse -Force } } }
   }
 
+  # 4) Verificación INDEPENDIENTE: se vuelve a preguntar al sistema; «limpio» solo si no queda ningún residuo de esta ejecución
+  $residuals = @(Get-P3Residuals $State $Ops)
+  foreach ($r in $residuals) { Say "RESIDUO: $r" }
+  if ($residuals.Count -gt 0) { $complete = $false }
+
   $State.status = if ($complete) { 'cleaned' } else { 'cleanup-incomplete' }
   $State.cleanedUtc = [DateTime]::UtcNow.ToString('o'); Save-P3State $State
-  return @{ Complete = $complete; Messages = $msgs }
+  return @{ Complete = $complete; Messages = $msgs; Residuals = $residuals }
+}
+
+# Lo que, según una consulta NUEVA al sistema, sigue existiendo de esta ejecución. Lista vacía = limpio (respecto de lo que el script puede consultar).
+function Get-P3Residuals([hashtable]$State, $Ops) {
+  $res = @()
+  if ($State.packageInstallAttempted) {
+    foreach ($pkg in @(& $Ops.GetPackages $script:P3.PackageName)) { if ((Get-P3PackageDecision $State $pkg) -ne 'foreign') { $res += "paquete $($pkg.PackageFullName) sigue instalado" } }
+  }
+  if (Test-P3Thumbprint $State.thumbprint) {
+    if ($State.trustImportAttempted -and $null -ne (& $Ops.GetCert $script:P3.TrustStore $State.thumbprint)) { $res += "el certificado $($State.thumbprint) sigue en $($script:P3.TrustStore)" }
+    if ($State.certCreated -and $null -ne (& $Ops.GetCert $script:P3.KeyStore $State.thumbprint)) { $res += "el certificado $($State.thumbprint) sigue en $($script:P3.KeyStore)" }
+  }
+  if ($State.runDir -and (Test-Path -LiteralPath $State.runDir)) {
+    $extra = @(Get-ChildItem -LiteralPath $State.runDir -Force | Where-Object { $_.Name -ne 'state.json' })
+    if ($extra.Count -gt 0) { $res += "quedan $($extra.Count) elemento(s) en $($State.runDir)" }
+  }
+  return $res
 }
 
 # ───────────── instalación
@@ -220,11 +242,17 @@ function Invoke-P3Install([string]$Base, [string]$BuildDir, [string]$ManifestPat
   catch {
     $err = $_.Exception.Message
     & $log "FALLO: $err"
-    & $log 'Recuperación automática: se deshace SOLO lo creado por esta ejecución.'
-    $rb = Invoke-P3Rollback $state $Ops
-    $state.failure = $err; Save-P3State $state
-    if ($rb.Complete) { throw "P3-FALLO (revertido por completo): $err" }
-    throw "P3-FALLO-INCOMPLETO: $err · La limpieza NO terminó. Huella del certificado: $($state.thumbprint). Ejecuta Uninstall-SignedDevPackage.ps1 -RunId $($state.runId) o lee $($state.statePath)."
+    & $log 'Recuperación automática: se deshace SOLO lo creado por esta ejecución y se comprueba después.'
+    $rb = $null; $rbError = ''
+    try { $rb = Invoke-P3Rollback $state $Ops } catch { $rbError = $_.Exception.Message; & $log "La recuperación lanzó una excepción: $rbError" }
+    $state.failure = $err; if ($rbError) { $state.rollbackError = $rbError }
+    try { if ($rb -eq $null) { $state.status = 'cleanup-incomplete' }; Save-P3State $state } catch { }
+    if ($null -ne $rb -and $rb.Complete) {
+      $what = if ($state.certCreated -or $state.packageInstallAttempted) { "comprobado tras limpiar: sin paquete, sin el certificado $($state.thumbprint) en TrustedPeople ni en CurrentUser\My, y la carpeta solo conserva state.json" } else { 'no se había creado nada que revertir' }
+      throw "P3-FALLO (limpieza verificada; $what): $err"
+    }
+    $left = if ($null -ne $rb -and $rb.Residuals) { " Residuos: $(@($rb.Residuals) -join '; ')." } elseif ($rbError) { " Error de la limpieza: $rbError." } else { '' }
+    throw "P3-FALLO-INCOMPLETO: $err · La limpieza NO se pudo demostrar completa.$left Huella del certificado: $($state.thumbprint). Ejecuta Uninstall-SignedDevPackage.ps1 -RunId $($state.runId) o lee $($state.statePath)."
   }
 }
 
