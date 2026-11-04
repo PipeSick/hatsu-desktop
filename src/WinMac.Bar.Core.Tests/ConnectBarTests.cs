@@ -38,14 +38,32 @@ public class ConnectBarTests
     {
         PanelModel M(PhoneState? p) => PanelBuilder.PhonePanel(PanelContext.Initial(new BarConfig(), Now) with { Phone = p });
         var on = M(Connected());
-        Assert.Equal("Conectado", on.Widgets.Single(w => w.Id == "phone-name").Sub); Assert.Equal("75 %", on.Widgets.Single(w => w.Id == "phone-battery").Sub);
-        Assert.Equal("hace 1 min", on.Widgets.Single(w => w.Id == "phone-when").Sub);
-        Assert.Contains("no indica", on.Widgets.Single(w => w.Id == "phone-charge").Sub);   // no se inventa «cargando»
+        Assert.Equal(WidgetKind.PhoneHeader, on.Widgets[0].Kind); Assert.Equal("Conectado", on.Widgets.Single(w => w.Id == "phone-name").Sub);
+        var bat = (PhoneBatteryData)on.Widgets.Single(w => w.Id == "phone-battery").Data!;
+        Assert.Equal("75 %", bat.Big); Assert.Equal(0.75, bat.Fraction); Assert.Equal("Actualizada hace 1 min", bat.Updated);
+        Assert.Null(bat.Charge);   // Bluetooth no indica la carga: no se inventa «cargando»
         var off = M(Connected(minutesAgo: 20) with { Status = PhoneLinkStatus.Disconnected, LastSeenUtc = Now.ToUniversalTime().AddMinutes(-20) });
-        Assert.Equal("Última lectura: 75 % · hace 20 min", off.Widgets.Single(w => w.Id == "phone-battery").Sub);
+        var offBat = (PhoneBatteryData)off.Widgets.Single(w => w.Id == "phone-battery").Data!;
+        Assert.Equal("—", offBat.Big); Assert.Null(offBat.Fraction); Assert.Equal("Última lectura: 75 % · hace 20 min", offBat.Caption);   // sin conexión: nunca el número viejo como actual
         Assert.Contains(off.Widgets, w => w.Id == "phone-seen");
         Assert.Contains(M(null).Widgets, w => w.Id == "phone-off");
-        Assert.Equal("Sin permiso en el iPhone", M(Connected() with { NotificationsStatus = PhoneFeatureStatus.NotAuthorized }).Widgets.Single(w => w.Id == "phone-notifs").Sub);
+        Assert.Equal("Sin permiso en el iPhone", ((PhoneNotifData)M(Connected() with { NotificationsStatus = PhoneFeatureStatus.NotAuthorized }).Widgets.Single(w => w.Id == "phone-notifs").Data!).Status);
+        // «Activas» no es «recibidas»
+        PanelModel N(int? count) => PanelBuilder.PhonePanel(PanelContext.Initial(new BarConfig(), Now) with { Phone = Connected() with { NotificationsStatus = PhoneFeatureStatus.Active }, PhoneNotifCount = count });
+        Assert.Equal("Todavía no se ha recibido ninguna", ((PhoneNotifData)N(0).Widgets.Single(w => w.Id == "phone-notifs").Data!).Detail);
+        Assert.Equal("Recibidas ahora: 3", ((PhoneNotifData)N(3).Widgets.Single(w => w.Id == "phone-notifs").Data!).Detail);
+        // acciones inferiores
+        Assert.Contains(on.Widgets, w => w.Id == "phone:settings-btn" && w.Text == "Ajustes de WinMac Connect"); Assert.Contains(on.Widgets, w => w.Text == "Bluetooth de Windows");
+    }
+
+    [Fact]
+    public void The_phone_header_gear_opens_connect_settings_and_is_a_keyboard_target()
+    {
+        var m = PanelBuilder.PhonePanel(PanelContext.Initial(new BarConfig(), Now) with { Phone = Connected() });
+        var c = new PanelController(); c.SetModel(m);
+        Assert.Contains(c.Targets(), t => t.Id == "phone:settings");
+        var f = PanelLayout.Compute(m, 900, 0).Items[0];
+        Assert.True(PanelLayout.PhoneGearHit(f, f.X + f.Width - 10)); Assert.False(PanelLayout.PhoneGearHit(f, f.X + 20));
     }
 
     [Fact]

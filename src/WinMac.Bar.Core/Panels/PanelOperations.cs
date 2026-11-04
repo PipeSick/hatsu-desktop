@@ -138,7 +138,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
         if (id == "pclearall") { Phone?.HideAll(); ui.Rebuild(); return true; }
         if (id.StartsWith("pgclear:")) { Phone?.HideGroup(id[8..]); ui.Rebuild(); return true; }
         if (id.StartsWith("pdismiss:") && uint.TryParse(id[9..], out var pid)) { Phone?.Hide(pid); ui.Rebuild(); return true; }
-        if (id == "phone:settings") { ui.HidePanel(); ui.OpenSettings("connect"); return true; }
+        if (id is "phone:settings" or "phone:settings-btn") { ui.HidePanel(); ui.OpenSettings("connect"); return true; }
         if (id.StartsWith("ndismiss:") && uint.TryParse(id[9..], out var did)) { nc?.Dismiss(did, win); return true; }
         if (id.StartsWith("nopen:") && uint.TryParse(id[6..], out var oid))
         {

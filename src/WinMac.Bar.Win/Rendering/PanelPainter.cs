@@ -35,6 +35,7 @@ public sealed partial class PanelPainter : IDisposable
         var it = f.Items[fc.Item]; double x = it.X, y = it.Y, w = it.Width, h = it.Height;
         if (it.W.Data is ActionStripData sd && fc.Sub >= 0) { double cw = w / sd.Actions.Count; Brush(Accent); _ctx.DrawEllipse(new Ellipse(new Vector2((float)(x + cw * fc.Sub + cw / 2), (float)(y + 24)), 25, 25), _solid, 2f); return; }
         if (it.W.Data is LinkRowData ld && fc.Sub >= 0) { double cw = w / ld.Links.Count; x += cw * fc.Sub; w = cw; }
+        if (it.W.Data is PhoneHeaderData) { var gr = PanelLayout.PhoneGearRect(it); x = gr.X; y = gr.Y; w = gr.W; h = gr.H; }
         if (it.W.Data is UserHeaderData) { var ar = PanelLayout.UserAccountRect(it); x = ar.X; y = ar.Y; w = ar.W; h = ar.H; }
         Brush(Accent); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(x - 1, y - 1, x + w + 1, y + h + 1), RadiusX = 12, RadiusY = 12 }, _solid, 2f);
     }
@@ -270,6 +271,50 @@ public sealed partial class PanelPainter : IDisposable
                 double by = y + h - 18, bw = wd - 32;
                 FillRR(x + 16, by, x + 16 + bw, by + 8, 4, Fill(0.12f));
                 if (pct > 0) FillRR(x + 16, by, x + 16 + Math.Max(8, bw * pct / 100), by + 8, 4, levelC);
+                break;
+            }
+            case WidgetKind.PhoneHeader when w.Data is PhoneHeaderData ph:
+            {
+                // It7: icono en una pastilla suave, nombre, punto de estado + texto, y los ajustes como un engranaje discreto a la derecha
+                EnsureFonts(); double tile = 46, tx0 = x + 2, ty0 = y + (h - tile) / 2;
+                FillRR(tx0, ty0, tx0 + tile, ty0 + tile, 13, new Color4(Accent.R, Accent.G, Accent.B, Dark ? 0.22f : 0.16f));
+                double pcx = tx0 + tile / 2, pcy = ty0 + tile / 2;
+                Brush(Accent); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(pcx - 7, pcy - 12, pcx + 7, pcy + 12), RadiusX = 3.6f, RadiusY = 3.6f }, _solid, 1.8f);
+                _ctx.DrawLine(new Vector2((float)pcx - 2.4f, (float)pcy - 8.5f), new Vector2((float)pcx + 2.4f, (float)pcy - 8.5f), _solid, 1.8f, _round);
+                var gr = PanelLayout.PhoneGearRect(f); double tx = tx0 + tile + 12, tw = gr.X - tx - 6;
+                Text(w.Text, _title, tx, y + 11, tw, 22, Fg(0.95f));
+                var dot = ph.Tone == "good" ? new Color4(0.20f, 0.78f, 0.35f, 1) : ph.Tone == "warn" ? new Color4(1f, 0.7f, 0.1f, 1) : Fg(0.35f);
+                FillCircle(tx + 4, y + 43, 3.5f, dot);
+                Text(w.Sub ?? "", _small, tx + 14, y + 34, tw - 14, 18, Fg(0.6f));
+                bool hot = hover && HoverPoint is { } hpg && hpg.X >= gr.X;
+                if (hot) FillCircle(gr.X + gr.W / 2, gr.Y + gr.H / 2, 15, Fill(0.14f));
+                Glyph("gear", gr.X + gr.W / 2, gr.Y + gr.H / 2, 8, Fg(hot ? 0.9f : 0.55f));
+                break;
+            }
+            case WidgetKind.PhoneBattery when w.Data is PhoneBatteryData pb:
+            {
+                // It7: tarjeta de batería. Con lectura válida: % grande y barra; sin ella: «—» y la barra vacía (nunca un número viejo como actual)
+                EnsureFonts(); FillRR(x, y, x + wd, y + h, 14, Fill(0.07f));
+                Text("Batería", _small, x + 16, y + 10, 120, 16, Fg(0.55f));
+                Text(pb.Big, _huge, x + 14, y + 26, 170, 52, Fg(pb.Fraction is null ? 0.5f : 0.97f));
+                TextAlign(pb.Caption, _small, x + wd - 200, y + 34, 184, 36, Fg(0.65f), TextAlignment.Trailing, vcenter: false, wrap: true);
+                double pct = (pb.Fraction ?? 0) * 100;
+                var levelC = pct <= 20 ? new Color4(1f, 0.27f, 0.23f, 1) : pct <= 40 ? new Color4(1f, 0.7f, 0.1f, 1) : new Color4(0.20f, 0.78f, 0.35f, 1);
+                double by = y + 84, bw = wd - 32;
+                FillRR(x + 16, by, x + 16 + bw, by + 8, 4, Fill(0.12f));
+                if (pb.Fraction is not null && pct > 0) FillRR(x + 16, by, x + 16 + Math.Max(8, bw * pct / 100), by + 8, 4, levelC);
+                Text(pb.Updated ?? "Sin lectura reciente", _small, x + 16, y + 98, bw / 2, 18, Fg(0.55f));
+                if (pb.Charge is { } ch) TextAlign(ch, _small, x + wd / 2, y + 98, wd / 2 - 16, 18, Fg(0.7f), TextAlignment.Trailing);
+                break;
+            }
+            case WidgetKind.PhoneNotifs when w.Data is PhoneNotifData pn:
+            {
+                EnsureFonts(); FillRR(x, y, x + wd, y + h, 14, Fill(0.07f));
+                Text("Notificaciones", _small, x + 16, y + 10, 160, 16, Fg(0.55f));
+                var dot = pn.Tone == "good" ? new Color4(0.20f, 0.78f, 0.35f, 1) : pn.Tone == "warn" ? new Color4(1f, 0.7f, 0.1f, 1) : Fg(0.35f);
+                FillCircle(x + 20, y + 36, 4, dot);
+                Text(pn.Status, _bodyBold, x + 32, y + 26, wd - 48, 20, Fg(0.95f));
+                TextAlign(pn.Detail, _small, x + 16, y + 48, wd - 32, 30, Fg(0.6f), vcenter: false, wrap: true);
                 break;
             }
             case WidgetKind.StatCards when w.Data is StatCardsData sc:

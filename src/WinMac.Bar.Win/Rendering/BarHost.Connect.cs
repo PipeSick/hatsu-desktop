@@ -54,6 +54,7 @@ public sealed partial class BarHost
     private PanelContext WithPhone(PanelContext p) => p with
     {
         Phone = _phone.State,
+        PhoneNotifCount = _phone.Active && _connectCfg.Notifications ? _phone.Visible.Count : null,
         Nc = p.Nc is { } v ? v with { Phone = _phone.Active && _connectCfg.Notifications ? _phone.Groups : null } : null,
     };
 

@@ -73,6 +73,7 @@ public sealed class PanelController
                 case WidgetKind.ActionStrip when w.Data is ActionStripData sd: for (int k = 0; k < sd.Actions.Count; k++) r.Add(new(i, k, sd.Actions[k].Id)); break;
                 case WidgetKind.LinkRow when w.Data is LinkRowData ld: for (int k = 0; k < ld.Links.Count; k++) if (ld.Links[k].Enabled) r.Add(new(i, k, ld.Links[k].Id)); break;
                 case WidgetKind.UserHeader when w.Data is UserHeaderData uh: r.Add(new(i, 0, uh.AccountId)); break;
+                case WidgetKind.PhoneHeader when w.Data is PhoneHeaderData ph: r.Add(new(i, 0, ph.SettingsId)); break;
                 case WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.MenuItem or WidgetKind.CityRow or WidgetKind.ModeCard: r.Add(new(i, -1, w.Id)); break;
                 case WidgetKind.Header when w.Id == "back": r.Add(new(i, -1, w.Id)); break;
             }
@@ -116,7 +117,7 @@ public sealed class PanelController
     }
 
     private static bool Interactive(Widget w) => w.Enabled && w.Kind is WidgetKind.Tile or WidgetKind.Row or WidgetKind.Button or WidgetKind.Slider or WidgetKind.Month or WidgetKind.Nav or WidgetKind.Tabs or WidgetKind.TabHeader or WidgetKind.Select or WidgetKind.AppRow or WidgetKind.Stats or WidgetKind.CityRow
-        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem or WidgetKind.TrayGrid or WidgetKind.UserHeader or WidgetKind.ActionStrip or WidgetKind.LinkRow or WidgetKind.ModeCard
+        or WidgetKind.NcHeader or WidgetKind.NcSection or WidgetKind.NotifGroup or WidgetKind.NotifCard or WidgetKind.MenuItem or WidgetKind.TrayGrid or WidgetKind.UserHeader or WidgetKind.PhoneHeader or WidgetKind.ActionStrip or WidgetKind.LinkRow or WidgetKind.ModeCard
         || (w.Kind == WidgetKind.Header && w.Id == "back");
 
     private static string ScrollKey(PanelModel m) => m.PinTop > 0 && m.PinTop <= m.Widgets.Count ? m.Kind + "/" + m.Widgets[m.PinTop - 1].Id : m.Kind.ToString();
@@ -210,6 +211,7 @@ public sealed class PanelController
             }
             case WidgetKind.NcHeader: return PanelLayout.NcCloseHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "nc:close") : null;
             case WidgetKind.UserHeader: return w.Data is UserHeaderData uh && PanelLayout.UserPowerHit(f, x) ? new PanelEvent(PanelEventKind.Click, uh.AccountId) : null;
+            case WidgetKind.PhoneHeader: return w.Data is PhoneHeaderData phd && PanelLayout.PhoneGearHit(f, x) ? new PanelEvent(PanelEventKind.Click, phd.SettingsId) : null;
             case WidgetKind.LinkRow: { int k = PanelLayout.LinkAt(f, x); return w.Data is LinkRowData ld && k >= 0 ? new PanelEvent(PanelEventKind.Click, ld.Links[k].Id) : null; }
             case WidgetKind.ActionStrip: { int k = PanelLayout.StripActionAt(f, x); return w.Data is ActionStripData sd2 && k >= 0 && k < sd2.Actions.Count ? new PanelEvent(PanelEventKind.Click, sd2.Actions[k].Id) : null; }
             case WidgetKind.NcSection: return PanelLayout.NcSectionActionHit(f, x) && w.Data is NcSectionData sd ? new PanelEvent(PanelEventKind.Click, sd.ActionId!) : null;

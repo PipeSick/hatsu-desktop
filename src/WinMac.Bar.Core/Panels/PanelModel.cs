@@ -43,12 +43,22 @@ public enum WidgetKind
     ModeCard,    // WM-027: opción de modo de energía: nombre, descripción, selección (On), área de clic de toda la tarjeta
     LinkRow,     // WM-022: pie con enlaces de texto en una fila (Ajustes de WinMac · Acerca de · Forzar salida; Data = LinkRowData)
     ActionStrip, // WM-009: fila de botones redondos con icono y texto (Suspender, Reiniciar…; Data = ActionStripData)
+    PhoneHeader, // It7: cabecera del panel del iPhone: icono, nombre, estado con punto de color y ajustes discretos (Data = PhoneHeaderData; clic en el engranaje)
+    PhoneBattery,// It7: tarjeta de batería del iPhone: % destacado, barra, última lectura y «carga» solo si se sabe (Data = PhoneBatteryData)
+    PhoneNotifs, // It7: tarjeta de notificaciones del iPhone: estado de la integración y cuántas se han recibido (Data = PhoneNotifData)
     TrayGrid,    // cuadrícula de iconos de las apps en segundo plano, como el desplegable de la bandeja de Windows (Data = TrayGridData); clic = abrir, clic derecho = su menú
 }
 
 /// <param name="AccountId">Event of the «Cuenta» button on the right (Windows account settings).</param>
 public sealed record UserHeaderData(string Initials, string AccountId, string? PictureKey = null);
 public sealed record BatteryHeroData(string? Detail);
+/// <param name="Tone">«good» (conectado), «warn» (conectando), «off» (sin conexión).</param>
+public sealed record PhoneHeaderData(string Tone, string SettingsId);
+/// <param name="Big">«82 %» o «—» (sin lectura válida).</param><param name="Caption">Estado de la lectura («Conectado», «Última lectura: 82 % · hace 20 min»).</param>
+/// <param name="Updated">«Actualizada hace 1 min» o null.</param><param name="Charge">Solo si el iPhone lo indica (por Bluetooth no lo hace): «Cargando» / «Sin cargar»; null = no se muestra.</param>
+public sealed record PhoneBatteryData(string Big, string Caption, string? Updated, string? Charge, double? Fraction);
+/// <param name="Status">Estado de la integración (Activas, Desactivadas…).</param><param name="Detail">Lo recibido de verdad («Recibidas ahora: 3») o qué falta.</param><param name="Tone">«good», «warn» u «off».</param>
+public sealed record PhoneNotifData(string Status, string Detail, string Tone);
 /// <param name="Tone">«good», «warn», «bad» or null (neutral).</param>
 public sealed record StatCard(string Label, string Value, string? Tone);
 public sealed record StatCardsData(IReadOnlyList<StatCard> Cards);
@@ -149,6 +159,9 @@ public static class PanelLayout
         WidgetKind.ActionStrip => 80,
         WidgetKind.LinkRow => 30,
         WidgetKind.BatteryHero => 96,
+        WidgetKind.PhoneHeader => 66,
+        WidgetKind.PhoneBattery => 124,
+        WidgetKind.PhoneNotifs => 82,
         WidgetKind.StatCards => 62,
         WidgetKind.ModeCard => 54,
         WidgetKind.TrayGrid => w.Data is TrayGridData g ? Math.Ceiling(g.Cells.Count / (double)Math.Max(1, g.Columns)) * TrayCell : TrayCell,
@@ -313,6 +326,8 @@ public static class PanelLayout
     /// <summary>«×» de cerrar del encabezado (arriba a la derecha).</summary>
     /// <summary>WM-022: the «Cuenta» button at the right of the user header.</summary>
     public static (double X, double Y, double W, double H) UserAccountRect(WidgetFrame f) => (f.X + f.Width - 76, f.Y + (f.Height - 28) / 2, 76, 28);
+    public static (double X, double Y, double W, double H) PhoneGearRect(WidgetFrame f) => (f.X + f.Width - 36, f.Y + (f.Height - 30) / 2, 30, 30);
+    public static bool PhoneGearHit(WidgetFrame f, double x) => x >= PhoneGearRect(f).X;
     public static bool UserPowerHit(WidgetFrame f, double x) => x >= UserAccountRect(f).X;
 
     /// <summary>WM-022: which link of a LinkRow is under x (equal widths; -1 = none).</summary>
