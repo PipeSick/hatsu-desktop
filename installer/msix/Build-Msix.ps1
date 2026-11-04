@@ -30,11 +30,11 @@ foreach ($a in @(@('Square44x44Logo', 44), @('Square150x150Logo', 150), @('Store
 }
 $src.Dispose()
 $virt = if ($Variant -eq 'Unvirtualized') { "    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>`n    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>" } else { '' }
-$caps = '    <DeviceCapability Name="bluetooth" />' + $(if ($Variant -eq 'Unvirtualized') { "`n    <rescap:Capability Name=`"unvirtualizedResources`" />" } else { '' })
+$caps = $(if ($Variant -eq 'Unvirtualized') { "    <rescap:Capability Name=`"unvirtualizedResources`" />`n" } else { '' }) + '    <DeviceCapability Name="bluetooth" />'   # el esquema exige las Capability (restringidas) antes que las DeviceCapability
 $m = (Get-Content (Join-Path $PSScriptRoot 'AppxManifest.xml.in') -Raw -Encoding UTF8).Replace('@@IDENTITY_NAME@@', $IdentityName).Replace('@@PUBLISHER@@', $Publisher).Replace('@@PUBLISHER_DISPLAY@@', $PublisherDisplay).Replace('@@VERSION@@', $msixVersion).Replace('@@VIRTUALIZATION@@', $virt).Replace('@@CAPABILITIES@@', $caps)
 [IO.File]::WriteAllText((Join-Path $stage 'AppxManifest.xml'), $m, (New-Object System.Text.UTF8Encoding($false)))
 $pkg = Join-Path $OutDir "HatsuDesktop-$msixVersion-$Variant.msix"; if (Test-Path $pkg) { Remove-Item $pkg }
-& $makeappx pack /d $stage /p $pkg /o /nv | Out-Host; if ($LASTEXITCODE -ne 0) { throw "makeappx falló ($LASTEXITCODE)" }
+$mo = & $makeappx pack /d $stage /p $pkg /o /nv 2>&1; if ($LASTEXITCODE -ne 0) { $mo | Select-Object -Last 12 | Out-Host; throw "makeappx falló ($LASTEXITCODE)" }
 if ($Sign) {
   $cert = New-SelfSignedCertificate -Type Custom -Subject $Publisher -KeyUsage DigitalSignature -FriendlyName 'Hatsu Desktop CI test (NO confiable)' -CertStoreLocation 'Cert:\CurrentUser\My' -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
   $pwd = ConvertTo-SecureString -String ([Guid]::NewGuid().ToString('N')) -Force -AsPlainText; $pfx = Join-Path $OutDir 'ci-test.pfx'
