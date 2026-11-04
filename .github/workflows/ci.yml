@@ -234,6 +234,8 @@ jobs:
           }
           # las 12 capturas de revisión (6 pantallas × claro y oscuro, escala 2)
           foreach ($theme in 'light', 'dark') { foreach ($step in 'Welcome', 'Components', 'Appearance', 'Windows', 'Review', 'Result') { Render $step $theme '2' "capturas-onboarding/asistente-$($step.ToLower())-$theme.png" } }
+          # Fase 3.1: la bienvenida de migración (usuario que ya tenía WinMac/Hatsu configurado)
+          foreach ($theme in 'light', 'dark') { Render 'Welcome' $theme '2' "capturas-onboarding/asistente-bienvenida-migracion-$theme.png" @('--migration') }
           # otros escalados (100 %, 125 %, 150 %) de las dos pantallas con más texto + el detalle técnico de la pantalla final
           foreach ($theme in 'light', 'dark') { foreach ($sc in '1', '1.25', '1.5') { foreach ($step in 'Appearance', 'Result') { Render $step $theme $sc "capturas-onboarding/escalas/asistente-$($step.ToLower())-$theme-x$sc.png" } }
             Render 'Result' $theme '1.5' "capturas-onboarding/escalas/asistente-result-detalles-$theme-x1.5.png" @('--details') }
@@ -265,6 +267,12 @@ jobs:
       - name: MSI de Hatsu Desktop (compilación; NO se publica ninguna versión)
         shell: pwsh
         run: ./installer/Build-Msi.ps1 -DistDir dist/WinMac -OutDir paquete -Compression medium
+      - name: Auditoría de binarios y del MSI (firma Authenticode, cabeceras PE, metadatos; solo lectura)
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem paquete -Filter *.msi | Select-Object -First 1).FullName
+          ./tools/ci/Audit-Binaries.ps1 -DistDir dist/WinMac -Msi $msi -Out paquete/auditoria-binarios.md
+          Get-Content paquete/auditoria-binarios.md -Raw | Add-Content $env:GITHUB_STEP_SUMMARY
       - name: "MSI: instalación, actualización y desinstalación REALES en el runner (entorno efímero de CI: NO es una prueba en un Windows físico)"
         shell: pwsh
         run: ./tools/ci/Test-Msi.ps1 -DistDir dist/WinMac -OutDir msi-test

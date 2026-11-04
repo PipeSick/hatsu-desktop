@@ -9,7 +9,7 @@ function Check([string]$n, [bool]$ok, [string]$d = '') { if ($ok) { Write-Host "
 $dir = Join-Path ([IO.Path]::GetTempPath()) ('winmac-zip-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 Expand-Archive -Path $Zip -DestinationPath $dir
 $root = Join-Path $dir 'HatsuDesktop'
-foreach ($f in 'HatsuDesktop.exe', 'HatsuDesktop.Bar.exe', 'HatsuDesktop.Dock.exe', 'HatsuDesktop.Connect.exe', 'NotchWin\NotchWin.App.exe', 'Uninstall-HatsuDesktop.ps1', 'Restore-Taskbar.ps1', 'VERSION.txt', 'HatsuDesktop.ico', 'Migrate-FromWinMac.ps1', 'LICENSE', 'SHA256SUMS.txt') {
+foreach ($f in 'HatsuDesktop.exe', 'HatsuDesktop.Bar.exe', 'HatsuDesktop.Dock.exe', 'HatsuDesktop.Connect.exe', 'NotchWin\NotchWin.App.exe', 'Uninstall-HatsuDesktop.ps1', 'Restore-Taskbar.ps1', 'VERSION.txt', 'HatsuDesktop.ico', 'Migrate-FromWinMac.ps1', 'Diagnose-Install.ps1', 'LICENSE', 'SHA256SUMS.txt') {
   Check "contiene $f" (Test-Path (Join-Path $root $f))
 }
 # Hatsu Desktop: identidad pública en los metadatos de los ejecutables y icono incrustado (los NOMBRES de archivo se conservan por compatibilidad)

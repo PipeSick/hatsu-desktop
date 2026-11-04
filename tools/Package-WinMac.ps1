@@ -15,6 +15,7 @@ $sha = (git -C $root rev-parse --short HEAD).Trim(); $when = [DateTime]::Parse((
 "Hatsu Desktop $version (antes WinMac; commit $sha, $($when.ToString('yyyy-MM-dd')))`nSoftware libre (ver LICENSE). Compilación no firmada: no es una versión oficial publicada." | Set-Content (Join-Path $DistDir 'VERSION.txt') -Encoding UTF8
 Copy-Item (Join-Path $root 'assets\brand\HatsuDesktop.ico') $DistDir -Force   # recurso de marca único (accesos directos y futuro instalador)
 Copy-Item (Join-Path $PSScriptRoot 'Migrate-FromWinMac.ps1') $DistDir -Force   # ayuda de actualización desde WinMac (solo simula salvo -Apply)
+Copy-Item (Join-Path $PSScriptRoot 'Diagnose-Install.ps1') $DistDir -Force   # diagnóstico de SOLO LECTURA para el usuario (Fase 3.1)
 foreach ($f in 'LICENSE', 'NOTICE', 'THIRD_PARTY.md') { if (Test-Path (Join-Path $root $f)) { Copy-Item (Join-Path $root $f) $DistDir -Force } }
 Copy-Item (Join-Path $PSScriptRoot 'Uninstall-WinMac.ps1') (Join-Path $DistDir 'Uninstall-HatsuDesktop.ps1') -Force   # nombre público; el script acepta también la instalación antigua
 Copy-Item (Join-Path $PSScriptRoot 'Restore-Taskbar.ps1') $DistDir -Force   # WM-034: recuperación sin HatsuDesktop.exe
