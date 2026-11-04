@@ -193,7 +193,7 @@ En el runner de Windows, `bar.log` de la Barra del paquete mostró **el mismo s�
 ## 13. Resultados de CI (commit `627f633`, ejecución 41921205653: **4 jobs en verde**)
 | Qué | Resultado | Límite |
 |---|---|---|
-| Pruebas unitarias (Host.Core 324, Bar.Core 620, resto sin cambios) | OK | — |
+| Pruebas unitarias (Host.Core 325, Bar.Core 620, resto sin cambios) | OK | — |
 | MSI en el runner: instalar, actualizar (con el host abierto), bajar de versión (rechazado), desinstalar, convivencia con copia portable, **diagnóstico en Windows PowerShell 5.1 sin cambiar nada** | **74 comprobaciones, 0 fallos** | runner efímero con permisos elevados; la entrada de desinstalación quedó en HKLM (con un usuario sin privilegios debe ir a HKCU: pendiente) |
 | **Reserva del borde superior** con la Barra real del paquete: reserva, restaura al cerrar y tras cierre brusco, 2.º arranque, «no reservar» | OK | un monitor, sin DPI mixto, sin reinicio de Explorer, **no mide los iconos del escritorio** |
 | Experimento 2 (AppBar ajena con la Barra en marcha) | reserva (28→56) | idem |
@@ -205,4 +205,4 @@ En el runner de Windows, `bar.log` de la Barra del paquete mostró **el mismo s�
 | Auditoría de binarios | **26 binarios propios, 26 sin firma; MSI `NotSigned`**; 445 de 453 binarios ajenos firmados por Microsoft | confirma la falta de firma; **no explica por qué solo el Dock** |
 | Job de Linux | verde en esta ejecución; una prueba de tiempos del supervisor (`RestartPolicyTests…`) falló una vez en una ejecución anterior y pasó en todas las demás: parece flaky por carga del runner |
 
-**Nuevo MSI de prueba:** `HatsuDesktop-2.0.1-win-x64.msi` (118 MB, **sin firmar**; SHA-256 `e511592c…94b8` en el commit `627f633`; artefacto `hatsu-desktop-paquete-<sha>` de la ejecución 41921205653, 14 días). No se publica ni se versiona fuera de CI. Se instala **encima** del 2.0.0 (misma identidad de producto, versión mayor).
+**Nuevo MSI de prueba:** `HatsuDesktop-2.0.1-win-x64.msi` (118 MB, **sin firmar**; SHA-256 `e511592c…d694c8` en el commit `627f633`; artefacto `hatsu-desktop-paquete-<sha>` de la ejecución 41921205653, 14 días). No se publica ni se versiona fuera de CI. Se instala **encima** del 2.0.0 (misma identidad de producto, versión mayor).
