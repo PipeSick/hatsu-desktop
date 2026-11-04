@@ -13,6 +13,9 @@ public sealed class ConfigService
     public ConfigService(string path, HostConfig initial, Action<string>? log = null) { _path = path; _cfg = initial; _log = log ?? (_ => { }); }
 
     public HostConfig Current { get { lock (_l) return _cfg; } }
+    /// <summary>Error del último guardado en disco (null = se guardó bien). Lo usa el asistente para no dar por aplicado lo que solo vive en memoria.</summary>
+    public string? LastSaveError { get { lock (_l) return _lastSaveError; } }
+    private string? _lastSaveError;
     public NotchSettings Notch => Current.Notch ?? new NotchSettings();
     public bool IsEnabled(string module) => Current.Modules.TryGetValue(module, out var m) ? m.Enabled : true;
     /// <summary>Se dispara tras cada cambio efectivo (anterior, nuevo), fuera del cerrojo.</summary>
@@ -23,9 +26,9 @@ public sealed class ConfigService
         HostConfig old, @new;
         lock (_l)
         {
-            old = _cfg; @new = change(old); if (Equals(old, @new) && SameModules(old, @new)) return false;
+            old = _cfg; _lastSaveError = null; @new = change(old); if (Equals(old, @new) && SameModules(old, @new)) return false;
             _cfg = @new;
-            try { HostConfig.Save(_path, @new); } catch (Exception e) { _log("[config] no se pudo guardar winmac.json: " + e.Message + " (el cambio sigue vigente en memoria)"); }
+            try { HostConfig.Save(_path, @new); _lastSaveError = null; } catch (Exception e) { _lastSaveError = e.Message; _log("[config] no se pudo guardar winmac.json: " + e.Message + " (el cambio sigue vigente en memoria)"); }
         }
         try { Changed?.Invoke(old, @new); } catch (Exception e) { _log("[config] un suscriptor falló: " + e.Message); }
         return true;

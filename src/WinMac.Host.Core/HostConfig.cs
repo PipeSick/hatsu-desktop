@@ -37,6 +37,9 @@ public sealed record HostConfig
     /// <summary>Ajustes de WinMac Connect (batería y notificaciones del iPhone). Null = los de fábrica.</summary>
     public WinMac.Connect.ConnectSettings? Connect { get; init; }
 
+    /// <summary>Fase 3: estado del asistente de primera ejecución. Null = configuración anterior al asistente (WinMac o Hatsu Desktop previo): se trata como usuario existente y no se le fuerza nada. Las versiones antiguas ignoran esta sección.</summary>
+    public OnboardingRecord? Onboarding { get; init; }
+
     /// <summary>Orden de arranque y ejecutables de fábrica (junto a HatsuDesktop.exe).</summary>
     public static readonly (string Id, string Exe, bool Optional)[] Known = [("bar", "HatsuDesktop.Bar.exe", false), ("dock", "HatsuDesktop.Dock.exe", false), ("notch", @"NotchWin\NotchWin.App.exe", true), ("connect", "HatsuDesktop.Connect.exe", true)];
 
