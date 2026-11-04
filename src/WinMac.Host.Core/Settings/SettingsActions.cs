@@ -21,6 +21,9 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
     /// <summary>Clears the Island's clipboard history (pinned included); provided by the host.</summary>
     public Action? ClearClipboard { get; set; }
 
+    /// <summary>Hatsu Desktop: adopción EXPLÍCITA del inicio automático (el host pide la confirmación y escribe el valor). Devuelve true si cambió.</summary>
+    public Func<bool>? AdoptAutostart { get; set; }
+
     /// <summary>WM-019: lectura y guardado de dock.json (el Dock lo vuelve a leer al cambiar). Los da el host; null = sin página del Dock.</summary>
     public Func<WinMac.Dock.DockConfig?>? LoadDock { get; set; }
     public Action<WinMac.Dock.DockConfig>? SaveDock { get; set; }
@@ -111,6 +114,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("bar.ics", "text"): { var t = (e.Text ?? "").Trim(); cfg.ApplyBarPatch(Patch("calendarIcsPath", t.Length == 0 ? null : t)); return true; }
             case ("periph.thr", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int thr)) cfg.ApplyBarPatch(Patch("peripheralAlertThreshold", thr)); return true;
             case ("periph.unhide", _): cfg.ApplyBarPatch(Patch("peripheralHidden", "")); return true;
+            case ("autostart.adopt", _): return AdoptAutostart?.Invoke() ?? false;
             case ("hub.ms", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int ms)) cfg.ApplyBarPatch(Patch("hubRefreshMs", ms)); return true;   // un valor no numérico se ignora (la ventana vuelve a mostrar el vigente)
             case ("notch.pos", "segment") when e.Index >= 0 && e.Index < NotchSettings.Positions.Length: cfg.UpdateNotch(n => n with { Position = NotchSettings.Positions[e.Index] }); return true;
             case ("notch.player", "segment") when e.Index >= 0 && e.Index < NotchSettings.Players.Length: cfg.UpdateNotch(n => n with { MusicPlayer = NotchSettings.Players[e.Index] }); return true;

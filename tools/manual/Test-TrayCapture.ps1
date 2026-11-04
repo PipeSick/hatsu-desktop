@@ -15,7 +15,7 @@ param([string]$PublishDir = 'ci-publish', [string]$OutDir = 'tray-capture')
 $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $OutDir = (Resolve-Path $OutDir).Path; $PublishDir = (Resolve-Path $PublishDir).Path
-$bar = "$PublishDir/Bar.App/WinMac.Bar.App.exe"
+$bar = "$PublishDir/Bar.App/HatsuDesktop.Bar.exe"
 $log = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'
 $report = Join-Path $OutDir 'informe.txt'
 function Say($s) { Write-Host $s; Add-Content -Path $report -Value $s -Encoding utf8 }

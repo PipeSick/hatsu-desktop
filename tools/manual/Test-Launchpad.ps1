@@ -7,7 +7,7 @@ param([string]$PublishDir = 'ci-publish', [string]$OutDir = 'launchpad')
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $OutDir = (Resolve-Path $OutDir).Path; $PublishDir = (Resolve-Path $PublishDir).Path
-$bar = "$PublishDir/Bar.App/WinMac.Bar.App.exe"
+$bar = "$PublishDir/Bar.App/HatsuDesktop.Bar.exe"
 $log = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'
 $script:fails = 0
 function Check([string]$name, [bool]$ok, [string]$detail = '') { $r = if ($ok) { 'PASS' } else { 'FAIL'; $script:fails++ }; Write-Host ("{0,-4} {1}  {2}" -f $r, $name, $detail) }

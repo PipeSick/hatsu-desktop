@@ -33,7 +33,8 @@ public static class ForceQuitGuard
     private static readonly HashSet<string> Protected = new(StringComparer.OrdinalIgnoreCase)
     {
         "explorer", "csrss", "winlogon", "wininit", "services", "lsass", "smss", "dwm", "svchost", "system", "fontdrvhost", "sihost", "ctfmon",
-        "winmac", "winmac.bar.app", "winmac.dock.app", "notchwin.app", "taskmgr",
+        "winmac", "winmac.bar.app", "winmac.dock.app", "winmac.connect.app",   // nombres de antes del cambio a Hatsu Desktop (una instancia antigua puede seguir viva)
+        "hatsudesktop", "hatsudesktop.bar", "hatsudesktop.dock", "hatsudesktop.connect", "notchwin.app", "taskmgr",
     };
 
     /// <summary>Acepta el nombre con o sin «.exe» (<c>Process.ProcessName</c> viene sin extensión y puede llevar puntos, p. ej. «WinMac.Bar.App»).</summary>

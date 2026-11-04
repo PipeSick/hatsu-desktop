@@ -3,11 +3,11 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>WinMac.Dock.App</RootNamespace>
-    <AssemblyName>WinMac.Dock.App</AssemblyName>
+    <AssemblyName>HatsuDesktop.Dock</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <!-- It9 (Hatsu Desktop): lo que el Administrador de tareas y las propiedades del archivo muestran. El nombre del archivo (WinMac*.exe) se conserva en esta fase por compatibilidad. -->
+    <!-- It9 (Hatsu Desktop): lo que el Administrador de tareas y las propiedades del archivo muestran. Fase 2: el ejecutable público ya se llama HatsuDesktop*.exe; los espacios de nombres, el IPC, los mutex y las clases de ventana conservan «WinMac» por compatibilidad. -->
     <AssemblyTitle>Hatsu Desktop — Dock</AssemblyTitle>
-    <ApplicationIcon>..\..\assets\brand\hatsu-provisional.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\assets\brand\HatsuDesktop.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinMac.Dock.Win\WinMac.Dock.Win.csproj" />

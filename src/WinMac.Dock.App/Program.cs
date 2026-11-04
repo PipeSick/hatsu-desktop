@@ -88,7 +88,7 @@ internal static class Program
         {
             using var host = new DockHost(cfg, DockMetrics.ForIconSize(cfg.IconSize), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), demo, Log, persist);
             var link1 = ModuleHostLink.FromArgs(args, "dock", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
-            if (link1 is not null) { link1.ShutdownRequested += host.RequestQuit; link1.HealthCheck = () => host.Responsive; link1.Start(); Log("Modo hosted: enlazado con WinMac.exe."); }
+            if (link1 is not null) { link1.ShutdownRequested += host.RequestQuit; link1.HealthCheck = () => host.Responsive; link1.Start(); Log("Modo hosted: enlazado con HatsuDesktop.exe."); }
             Log("Iniciando dock…");
             int rc1 = host.Run();
             Log("Dock terminado. " + host.Report());
@@ -127,7 +127,7 @@ internal static class Program
 
         List<DockHost> Hosts() { lock (gate) return fleet.Select(x => x.Host).ToList(); }
         var link = ModuleHostLink.FromArgs(args, "dock", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
-        if (link is not null) { link.ShutdownRequested += () => { lock (gate) quitting = true; foreach (var h in Hosts()) h.RequestQuit(); }; link.HealthCheck = () => Hosts().All(h => h.Responsive); link.Start(); Log("Modo hosted: enlazado con WinMac.exe."); }
+        if (link is not null) { link.ShutdownRequested += () => { lock (gate) quitting = true; foreach (var h in Hosts()) h.RequestQuit(); }; link.HealthCheck = () => Hosts().All(h => h.Responsive); link.Start(); Log("Modo hosted: enlazado con HatsuDesktop.exe."); }
 
         using var quitEvent = new EventWaitHandle(false, EventResetMode.ManualReset, DockDefaults.QuitEventName);
         while (true)

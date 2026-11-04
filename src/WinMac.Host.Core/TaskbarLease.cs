@@ -5,7 +5,7 @@ namespace WinMac.Host;
 /// <summary>
 /// WM-034: «Ocultar barra de tareas de Windows». Registro de recuperación (<c>%LOCALAPPDATA%\WinMac\taskbar-restore.json</c>) que se escribe ANTES de ocultar nada.
 /// Mientras existe, la barra de tareas está (o puede estar) oculta por WinMac y dice cómo devolverla a como estaba: el estado de «Ocultar automáticamente» que tenía el usuario.
-/// Lo leen el host al arrancar (si quedó de un cierre forzado), el proceso guardián (<c>WinMac.exe --taskbar-guard</c>) y <c>WinMac.exe --restore-taskbar</c>.
+/// Lo leen el host al arrancar (si quedó de un cierre forzado), el proceso guardián (<c>HatsuDesktop.exe --taskbar-guard</c>) y <c>HatsuDesktop.exe --restore-taskbar</c>.
 /// Borrarlo es la señal de que todo se restauró; si el guardián lo borra, el host deja de ocultar durante esa sesión (nunca pelean).
 /// </summary>
 public sealed record TaskbarLease(int HostPid, bool OriginalAutoHide, DateTime SinceUtc)

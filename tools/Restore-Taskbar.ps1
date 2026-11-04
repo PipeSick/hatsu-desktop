@@ -2,9 +2,9 @@
 .SYNOPSIS
   WM-034: vuelve a mostrar la barra de tareas de Windows si WinMac la dejó oculta y no puede arrancar.
 .DESCRIPTION
-  No necesita WinMac.exe ni permisos de administrador. Muestra las barras de tareas de Explorer (todas las pantallas) y, si existe el registro
+  No necesita HatsuDesktop.exe ni permisos de administrador. Muestra las barras de tareas de Explorer (todas las pantallas) y, si existe el registro
   %LOCALAPPDATA%\WinMac\taskbar-restore.json, devuelve «Ocultar automáticamente la barra de tareas» al valor que tenías antes. Después borra ese registro.
-  Alternativas equivalentes: «WinMac.exe --restore-taskbar», reiniciar el Explorador de Windows o cerrar sesión (y, si hiciera falta,
+  Alternativas equivalentes: «HatsuDesktop.exe --restore-taskbar», reiniciar el Explorador de Windows o cerrar sesión (y, si hiciera falta,
   Configuración › Personalización › Barra de tareas › Comportamientos › «Ocultar automáticamente la barra de tareas»).
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File Restore-Taskbar.ps1

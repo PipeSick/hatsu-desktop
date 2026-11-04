@@ -7,7 +7,7 @@ namespace WinMac.Host;
 public sealed record ModuleConfig
 {
     public bool Enabled { get; init; } = true;
-    /// <summary>Ruta del ejecutable; null = el de fábrica junto a WinMac.exe (solo se cambia en pruebas).</summary>
+    /// <summary>Ruta del ejecutable; null = el de fábrica junto a HatsuDesktop.exe (solo se cambia en pruebas).</summary>
     public string? Path { get; init; }
     public List<string>? Args { get; init; }
 }
@@ -37,8 +37,8 @@ public sealed record HostConfig
     /// <summary>Ajustes de WinMac Connect (batería y notificaciones del iPhone). Null = los de fábrica.</summary>
     public WinMac.Connect.ConnectSettings? Connect { get; init; }
 
-    /// <summary>Orden de arranque y ejecutables de fábrica (junto a WinMac.exe).</summary>
-    public static readonly (string Id, string Exe, bool Optional)[] Known = [("bar", "WinMac.Bar.App.exe", false), ("dock", "WinMac.Dock.App.exe", false), ("notch", @"NotchWin\NotchWin.App.exe", true), ("connect", "WinMac.Connect.App.exe", true)];
+    /// <summary>Orden de arranque y ejecutables de fábrica (junto a HatsuDesktop.exe).</summary>
+    public static readonly (string Id, string Exe, bool Optional)[] Known = [("bar", "HatsuDesktop.Bar.exe", false), ("dock", "HatsuDesktop.Dock.exe", false), ("notch", @"NotchWin\NotchWin.App.exe", true), ("connect", "HatsuDesktop.Connect.exe", true)];
 
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNameCaseInsensitive = true, Converters = { new JsonStringEnumConverter() } };
 

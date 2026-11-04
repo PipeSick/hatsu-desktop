@@ -10,7 +10,7 @@ namespace WinMac.Host.App;
 /// Windows deje de reservar su franja (sin eso las ventanas maximizadas dejarían un hueco). Ese ajuste del usuario se guarda ANTES en <see cref="TaskbarLease"/> y se devuelve tal cual.
 /// <para>Nada es permanente: ocultar una ventana no sobrevive a un reinicio del Explorador ni al cierre de sesión. Lo único que persiste es «Ocultar automáticamente», y por eso
 /// el registro de recuperación lo restauran: este host al desactivar y al salir; el guardián (<c>--taskbar-guard</c>, proceso aparte) si el host muere o se cuelga;
-/// el siguiente arranque si todo se cortó (apagado); y <c>WinMac.exe --restore-taskbar</c> a mano, que no necesita que WinMac arranque.</para>
+/// el siguiente arranque si todo se cortó (apagado); y <c>HatsuDesktop.exe --restore-taskbar</c> a mano, que no necesita que WinMac arranque.</para>
 /// Sin sondeo agresivo: una comprobación barata cada 2 s solo mientras está activo, «TaskbarCreated» para reaccionar enseguida, y un freno si Windows la vuelve a mostrar sin parar.
 /// </summary>
 internal sealed class TaskbarHider
@@ -159,11 +159,11 @@ internal sealed class TaskbarHider
             _guard = Process.Start(new ProcessStartInfo(_exe) { ArgumentList = { "--taskbar-guard", Environment.ProcessId.ToString() }, UseShellExecute = false, CreateNoWindow = true });
             _log("[barra de tareas] guardián iniciado (pid " + _guard?.Id + "): devuelve la barra si Hatsu Desktop se cierra de golpe o deja de responder");
         }
-        catch (Exception e) { _log("[barra de tareas] AVISO: no se pudo iniciar el guardián (" + e.Message + "); la barra se restaura al salir y en el próximo arranque, o con «WinMac.exe --restore-taskbar»"); }
+        catch (Exception e) { _log("[barra de tareas] AVISO: no se pudo iniciar el guardián (" + e.Message + "); la barra se restaura al salir y en el próximo arranque, o con «HatsuDesktop.exe --restore-taskbar»"); }
     }
 
     /// <summary>
-    /// <c>WinMac.exe --taskbar-guard &lt;pid&gt;</c>: espera al host. Si el host termina sin haber restaurado (el registro sigue ahí y es suyo), restaura. Si el host deja de
+    /// <c>HatsuDesktop.exe --taskbar-guard &lt;pid&gt;</c>: espera al host. Si el host termina sin haber restaurado (el registro sigue ahí y es suyo), restaura. Si el host deja de
     /// responder ~20 s, restaura y borra el registro (el host, al volver, ve que ya no es dueño y no la oculta otra vez). Si el registro desaparece, el host restauró: termina.
     /// </summary>
     public static int RunGuard(int hostPid)
@@ -184,7 +184,7 @@ internal sealed class TaskbarHider
         return 0;
     }
 
-    /// <summary><c>WinMac.exe --restore-taskbar</c>: recuperación manual que no depende de que WinMac pueda arrancar ni de ningún proceso de fondo.</summary>
+    /// <summary><c>HatsuDesktop.exe --restore-taskbar</c>: recuperación manual que no depende de que WinMac pueda arrancar ni de ningún proceso de fondo.</summary>
     public static int RestoreFromCommandLine(bool quiet)
     {
         string path = TaskbarLease.DefaultPath; var lease = TaskbarLease.Load(path);
@@ -192,7 +192,7 @@ internal sealed class TaskbarHider
         string text = (lease is { KnowsOriginal: true } ? $"Barra de tareas restaurada («Ocultar automáticamente»: {(lease.OriginalAutoHide ? "activado" : "desactivado")}, como estaba)." : "Barra de tareas visible. Hatsu Desktop no tenía registro del ajuste «Ocultar automáticamente»: no se cambió.")
             + "\n\nSi aun así no aparece: reinicia el Explorador de Windows o cierra sesión. Para que Hatsu Desktop no vuelva a ocultarla, desactiva «Ocultar barra de tareas de Windows» en Ajustes › Escritorio y Dock.";
         try { Console.WriteLine(text); } catch (Exception) { }
-        if (!quiet) MessageBoxW(IntPtr.Zero, text, "Hatsu Desktop", 0x40 /* MB_ICONINFORMATION */);   // WinMac.exe no tiene consola: el aviso se ve igual al hacer doble clic en un acceso directo
+        if (!quiet) MessageBoxW(IntPtr.Zero, text, "Hatsu Desktop", 0x40 /* MB_ICONINFORMATION */);   // el host no tiene consola: el aviso se ve igual al hacer doble clic en un acceso directo
         return 0;
     }
 

@@ -1,5 +1,5 @@
 <#
-  Pruebas AUTOMÁTICAS del host (WinMac.exe) en el runner de Windows, con módulos de mentira (WinMac.FakeModule). No usa Dock ni Barra reales, no registra AppBar
+  Pruebas AUTOMÁTICAS del host (HatsuDesktop.exe) en el runner de Windows, con módulos de mentira (WinMac.FakeModule). No usa Dock ni Barra reales, no registra AppBar
   y solo toca el registro con un nombre de prueba (WinMacCiTest). Cada comprobación imprime PASS/FAIL; el script sale con código 1 si alguna falla.
   Cubre los criterios B1–B8 y A6 de docs/14. Las comprobaciones con ventanas reales (AppBar, Dock en pantalla) son MANUALES (docs/15).
 #>
@@ -7,7 +7,7 @@ param([string]$PublishDir = 'ci-publish', [string]$OutDir = 'smoke')
 $ErrorActionPreference = 'Continue'
 $PublishDir = (Resolve-Path $PublishDir).Path
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
-$hostExe = Join-Path $PublishDir 'Host/WinMac.exe'; $fakeExe = Join-Path $PublishDir 'FakeModule/WinMac.FakeModule.exe'
+$hostExe = Join-Path $PublishDir 'Host/HatsuDesktop.exe'; $fakeExe = Join-Path $PublishDir 'FakeModule/WinMac.FakeModule.exe'
 $base = Join-Path ([IO.Path]::GetTempPath()) ("winmac-host-test-" + [Guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $base | Out-Null
 $script:fails = 0; $script:rows = @()
 
@@ -36,9 +36,9 @@ function Pids($room, [string]$id) { [int[]]$r = @(ModLog $room $id | Where-Objec
 function AnyAlive([int[]]$pids) { foreach ($p in $pids) { if (Get-Process -Id $p -ErrorAction SilentlyContinue) { return $true } }; return $false }
 function Ports { (Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique) -join ',' }
 function Quit($room, $proc) { Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; if ($proc) { [void]$proc.WaitForExit(30000) } }
-function Cleanup { Get-Process -Name 'WinMac', 'WinMac.FakeModule', 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300 }
+function Cleanup { Get-Process -Name 'HatsuDesktop', 'WinMac', 'WinMac.FakeModule', 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300 }
 
-if (-not (Test-Path $hostExe) -or -not (Test-Path $fakeExe)) { Write-Host "::error title=Host::faltan WinMac.exe o WinMac.FakeModule.exe en $PublishDir"; exit 1 }
+if (-not (Test-Path $hostExe) -or -not (Test-Path $fakeExe)) { Write-Host "::error title=Host::faltan HatsuDesktop.exe o WinMac.FakeModule.exe en $PublishDir"; exit 1 }
 Cleanup; $portsBefore = Ports
 
 # ── 1. Arranque normal: ambos módulos listos, la isla (desactivada) no se lanza; ningún puerto TCP nuevo (A6)
@@ -51,7 +51,7 @@ Check 'A6 el host no abre puertos TCP en escucha' ((Ports) -eq $portsBefore) ("a
 
 # ── 2. Instancia única (B1)
 $h2 = StartHost $r1; $exited = $h2.WaitForExit(8000)
-Check 'B1 un segundo WinMac.exe sale solo y sin error' ($exited -and $h2.ExitCode -eq 0) ("salió={0} código={1}" -f $exited, $(if ($exited) { $h2.ExitCode } else { 'n/a' }))
+Check 'B1 un segundo HatsuDesktop.exe sale solo y sin error' ($exited -and $h2.ExitCode -eq 0) ("salió={0} código={1}" -f $exited, $(if ($exited) { $h2.ExitCode } else { 'n/a' }))
 Check 'B1 no se duplicaron los módulos' ((Starts $r1 'bar') -eq 1 -and (Starts $r1 'dock') -eq 1)
 
 # ── 3. Cierre ordenado (B3): --quit → módulos cierran por su camino normal y no queda nada
@@ -60,6 +60,18 @@ Quit $r1 $h1
 Check 'B3 el host termina tras --quit' ($h1.HasExited -and $h1.ExitCode -eq 0)
 Check 'B3 los módulos cerraron por su camino normal (shutdown → bye)' ((ModLog $r1 'bar') -match ' bye$' -and (ModLog $r1 'dock') -match ' bye$')
 Check 'B3 no queda ningún proceso de módulo' (($pids.Count -eq 2) -and -not (AnyAlive $pids)) ("pids: $($pids -join ',')")
+
+# ── 3a. Hatsu Desktop: --replace-running cierra de forma ordenada la instancia en ejecución y continúa. Los nombres de instancia única y de cierre son los de WinMac, así que también
+#        sirve para sustituir una instancia de la versión anterior (SIMULADO en el runner: ambas son esta misma versión; una instancia WinMac real se valida a mano).
+$rr = NewRoom 'reemplazo'; $hA = StartHost $rr
+$ok = WaitFor { (LogHas $rr '[bar] Running') -and (LogHas $rr '[dock] Running') } 30
+Check 'B1b la primera instancia arranca' $ok
+$hB = Start-Process -FilePath $hostExe -ArgumentList ((HostArgs $rr) + @('--replace-running')) -PassThru -WindowStyle Hidden; $null = $hB.Handle
+$closedA = $hA.WaitForExit(40000)
+Check 'B1b --replace-running: la instancia anterior se cierra sola y sin error' ($closedA -and $hA.ExitCode -eq 0) ("salió={0}" -f $closedA)
+Check 'B1b la nueva instancia sigue en marcha (no se duplicó)' ((WaitFor { -not $hB.HasExited -and (Starts $rr 'bar') -ge 2 } 30)) ("bar arrancó {0} veces" -f (Starts $rr 'bar'))
+Quit $rr $hB
+Check 'B1b la nueva instancia también cierra con --quit' ($hB.HasExited)
 
 # ── 3b. Migración de los ajustes de la Barra (bar.json → winmac.json): una sola vez, sin tocar el original
 $r3b = NewRoom 'migracion'; $barJson = Join-Path $r3b.Dir 'bar.json'
@@ -118,7 +130,7 @@ function RunNames { $k = Get-Item $runKey -ErrorAction SilentlyContinue; if ($k)
 $namesBefore = RunNames
 Start-Process -FilePath $hostExe -ArgumentList @('--install-autostart', '--autostart-name', $name) -Wait -WindowStyle Hidden | Out-Null
 $val = (Get-ItemProperty $runKey -Name $name -ErrorAction SilentlyContinue).$name
-Check 'B8 --install-autostart crea una clave con --background' ($val -like '*WinMac.exe*--background*') ("valor: $val")
+Check 'B8 --install-autostart crea una clave con --background' ($val -like '*HatsuDesktop.exe*--background*') ("valor: $val")
 $namesMid = RunNames
 Check 'B8 solo se añadió esa clave' (($namesMid.Count -eq $namesBefore.Count + 1) -and ($namesMid -contains $name))
 Start-Process -FilePath $hostExe -ArgumentList @('--remove-autostart', '--autostart-name', $name) -Wait -WindowStyle Hidden | Out-Null
@@ -134,14 +146,14 @@ Quit $r9 $h9; Check 'M2 (info) con bandeja el cierre termina limpio' ($h9.HasExi
 Cleanup
 
 # ── 10–11. Barra y Dock REALES bajo el host (--hosted): conectan, llegan a Running, se cierran en orden y mueren con el host
-$barExe = Join-Path $PublishDir 'Bar.App/WinMac.Bar.App.exe'; $dockExe = Join-Path $PublishDir 'Dock.App/WinMac.Dock.App.exe'
+$barExe = Join-Path $PublishDir 'Bar.App/HatsuDesktop.Bar.exe'; $dockExe = Join-Path $PublishDir 'Dock.App/HatsuDesktop.Dock.exe'
 function NewRealRoom([string]$name) {
   $d = Join-Path $base $name; New-Item -ItemType Directory -Force -Path $d | Out-Null
   @{ modules = @{ bar = @{ enabled = $true; path = $barExe; args = @('--no-config', '--no-reserve') }; dock = @{ enabled = $true; path = $dockExe; args = @('--no-config') }; notch = @{ enabled = $false } } } |
     ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
   [pscustomobject]@{ Dir = $d; Cfg = Join-Path $d 'winmac.json'; Log = Join-Path $d 'host.log' }
 }
-function RealPids { @(Get-Process -Name 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }) }
+function RealPids { @(Get-Process -Name 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }) }
 if ((Test-Path $barExe) -and (Test-Path $dockExe)) {
   $rr = NewRealRoom 'real-quit'; $hr = StartHost $rr
   $up = WaitFor { (LogHas $rr '[bar] Running') -and (LogHas $rr '[dock] Running') } 45

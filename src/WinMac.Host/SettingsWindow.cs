@@ -37,6 +37,12 @@ internal sealed class SettingsWindow : IDisposable
             try { if (on) Autostart.Install(_exe); else Autostart.Remove(); }
             catch (Exception e) { _log("[host] no se pudo cambiar el inicio automático: " + e.Message); throw new InvalidOperationException(e.Message); }
         }, log);
+        _actions.AdoptAutostart = () =>
+        {   // adopción EXPLÍCITA: confirmación clara y solo si Windows hoy inicia OTRA copia; no se borra nada
+            var other = Autostart.ForeignPath(_exe); if (other is null) return false;
+            if (!WinMac.Dock.Win.Rendering.DarkDialog.Ask("¿Iniciar esta instalación con Windows?", $"Ahora Windows inicia otra copia:\n{other}\n\nSi continúas, iniciará esta:\n{_exe}\n\nLa carpeta anterior no se borra ni se cierra.", "Usar esta instalación", false, _log)) return false;
+            var written = Autostart.Adopt(_exe); _log(written is null ? "[host] adopción del inicio automático: sin cambios" : "[host] el inicio automático ahora apunta a esta instalación"); return written is not null;
+        };
         _actions.LoadDock = () => { try { return WinMac.Dock.DockSettings.Sanitize(WinMac.Dock.DockConfig.LoadOrDefault(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath, WinMac.Dock.Win.Shell.DockDefaults.Create)); } catch (Exception e) { _log("[host] dock.json no se pudo leer: " + e.Message); return null; } };
         _actions.SaveDock = d => { if (d.TrySave(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath)) { _log("[host] ajustes del Dock guardados (el Dock los vuelve a leer)"); PostRefresh(); } else _log("[host] dock.json no se pudo guardar"); };
         _actions.OpenUri = uri => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", uri) { UseShellExecute = false }); } catch (Exception e) { _log("[host] no se pudo abrir " + uri + ": " + e.Message); } };
@@ -168,7 +174,7 @@ internal sealed class SettingsWindow : IDisposable
     {
         IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension, string)>? exts = null;
         try { exts = ExtensionList?.Invoke(); } catch (Exception e) { _log("[extensiones] lista no disponible: " + e.Message); }
-        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "" }));
+        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { AutostartForeignPath = Autostart.ForeignPath(_exe), Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "" }));
         PositionEdit();
     }
 

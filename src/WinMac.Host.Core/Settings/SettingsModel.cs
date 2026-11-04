@@ -24,6 +24,8 @@ public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, M
 {
     /// <summary>Configuración del Dock (su propio archivo dock.json). Null: no se pudo leer; la página lo dice y no muestra controles falsos.</summary>
     public WinMac.Dock.DockConfig? Dock { get; init; }
+    /// <summary>Hatsu Desktop: ruta de OTRA instalación (p. ej. el WinMac antiguo) que Windows inicia hoy con la sesión; null si no hay. Con valor, Ajustes ofrece cambiarla a esta (con confirmación).</summary>
+    public string? AutostartForeignPath { get; init; }
     /// <summary>Permiso de ubicación de Windows para las apps de escritorio, leído sin pedirlo: «Permitido», «Denegado» o vacío si no se sabe.</summary>
     public string LocationPermission { get; init; } = "";
     /// <summary>Installed extensions with their live status (docs/30). Null: the page says extensions are not available.</summary>
@@ -136,6 +138,7 @@ public static class SettingsBuilder
             new("Sistema", [
                 new(RowKind.Toggle, "autostart", "Iniciar con Windows", "Abre Hatsu Desktop al iniciar sesión", input.Autostart),
                 Bar(10, "Pide confirmación antes de reiniciar, apagar o cerrar la sesión"),
+                .. (input.AutostartForeignPath is { } other ? [new SettingsRow(RowKind.Button, "autostart.adopt", "Iniciar esta instalación con Windows", "Hoy Windows inicia otra copia: " + other + ". Se cambia solo si lo confirmas; la carpeta anterior no se borra.")] : Array.Empty<SettingsRow>()),
             ]),
         ]);
 
@@ -303,7 +306,7 @@ public static class SettingsBuilder
         if (input.Cfg.HideTaskbar && input.TaskbarStatus.Length > 0) rows.Add(new(RowKind.Info, "host.taskbarstate", "Ahora: " + input.TaskbarStatus));
         return new SettingsGroup("Barra de tareas de Windows", rows,
             "No se cierra ni se modifica Explorer: se ocultan sus ventanas y se activa temporalmente su «Ocultar automáticamente» para que no reserve espacio; al restaurar vuelve tu ajuste. " +
-            "Si Hatsu Desktop falla, un proceso guardián la devuelve. Si algo queda mal: ejecuta «WinMac.exe --restore-taskbar», reinicia el Explorador o cierra sesión.");
+            "Si Hatsu Desktop falla, un proceso guardián la devuelve. Si algo queda mal: ejecuta «HatsuDesktop.exe --restore-taskbar», reinicia el Explorador o cierra sesión.");
     }
 
     /// <summary>

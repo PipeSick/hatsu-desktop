@@ -21,6 +21,7 @@ internal sealed class TrayPanel : IDisposable
     private const int WM_ACTIVATE = 0x6, WM_KEYDOWN = 0x100, WM_LBUTTONUP = 0x202, WM_MOUSEMOVE = 0x200, WM_PAINT = 0xF, WM_CLOSE = 0x10;
     private static readonly Native.WndProc StaticProc = WndProc;   // registered once for the class: never collected
     private readonly Action<string> _act; private readonly Action<string> _log;
+    private ID2D1Bitmap? _brand;
     private IntPtr _hwnd; private D2DDevice? _dev; private IDXGISwapChain1? _swap; private ID2D1Bitmap1? _bmp; private ID2D1SolidColorBrush? _b;
     private IDWriteFactory? _dw; private IDWriteTextFormat? _title, _body, _small; private double _scale = 1;
     private IReadOnlyList<TrayPanelModel.Item> _items = []; private int _focus = -1; private string? _hover;
@@ -103,9 +104,14 @@ internal sealed class TrayPanel : IDisposable
                 switch (i.Kind)
                 {
                     case TrayPanelModel.Kind.Header:
-                        _b!.Color = C(_p.Ink(0.95f)); Txt(i.Text, _title!, x + 4, y + 6, W - 40, 22);
-                        _b.Color = C(_p.Ink(0.55f)); Txt(i.Sub!, _small!, x + 4, y + 28, W - 40, 18);
+                    {
+                        // Hatsu Desktop (Flux): el icono de la marca a la izquierda del título (si el recurso falta, solo el texto, como antes)
+                        _brand ??= WinMac.Dock.Win.Rendering.BrandIcon.Create(c, 128); float tx = x + 4;
+                        if (_brand is not null) { c.DrawBitmap(_brand, new RawRectF(x + 4, y + 6, x + 4 + 36, y + 6 + 36), 1f, BitmapInterpolationMode.Linear, null); tx = x + 48; }
+                        _b!.Color = C(_p.Ink(0.95f)); Txt(i.Text, _title!, tx, y + 6, W - 40 - (tx - x - 4), 22);
+                        _b.Color = C(_p.Ink(0.55f)); Txt(i.Sub!, _small!, tx, y + 28, W - 40 - (tx - x - 4), 18);
                         break;
+                    }
                     case TrayPanelModel.Kind.Module:
                     {
                         var dot = TrayPanelModel.StateColor(i.State ?? ModuleState.Disabled) switch { "green" => new Color4(0.2f, 0.78f, 0.35f, 1), "amber" => new Color4(1f, 0.7f, 0.1f, 1), "red" => new Color4(1f, 0.27f, 0.23f, 1), _ => new Color4(0.55f, 0.55f, 0.58f, 1) };
@@ -184,7 +190,7 @@ internal sealed class TrayPanel : IDisposable
     {
         var h = _hwnd; _hwnd = IntPtr.Zero;
         if (_dev is not null) _dev.Context.Target = null;
-        _bmp?.Dispose(); _bmp = null; _swap?.Dispose(); _swap = null; _b?.Dispose(); _b = null; _title?.Dispose(); _body?.Dispose(); _small?.Dispose(); _dw?.Dispose(); _dw = null; _dev?.Dispose(); _dev = null;
+        _brand?.Dispose(); _brand = null; _bmp?.Dispose(); _bmp = null; _swap?.Dispose(); _swap = null; _b?.Dispose(); _b = null; _title?.Dispose(); _body?.Dispose(); _small?.Dispose(); _dw?.Dispose(); _dw = null; _dev?.Dispose(); _dev = null;
         if (h != IntPtr.Zero) Native.DestroyWindow(h);
     }
 

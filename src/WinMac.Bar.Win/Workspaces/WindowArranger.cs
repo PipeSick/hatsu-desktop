@@ -12,7 +12,7 @@ namespace WinMac.Bar.Win.Workspaces;
 /// </summary>
 internal static class WindowArranger
 {
-    private static readonly string[] OwnProcesses = ["WinMac", "WinMac.Bar.App", "WinMac.Dock.App", "NotchWin.App"];
+    private static readonly string[] OwnProcesses = ["HatsuDesktop", "HatsuDesktop.Bar", "HatsuDesktop.Dock", "HatsuDesktop.Connect", "WinMac", "WinMac.Bar.App", "WinMac.Dock.App", "WinMac.Connect.App", "NotchWin.App"];
     private static readonly string[] ShellClasses = ["Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "Windows.UI.Core.CoreWindow"];
 
     public static IReadOnlyList<WsMonitor> Monitors()

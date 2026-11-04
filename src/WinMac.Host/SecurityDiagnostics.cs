@@ -5,7 +5,7 @@ using System.Text;
 namespace WinMac.Host.App;
 
 /// <summary>
-/// WM-036: <c>WinMac.exe --diagnose-security</c>. Diagnóstico de SOLO LECTURA de por qué Windows pudo bloquear un módulo (p. ej. el Dock): no cambia ni desactiva nada.
+/// WM-036: <c>HatsuDesktop.exe --diagnose-security</c>. Diagnóstico de SOLO LECTURA de por qué Windows pudo bloquear un módulo (p. ej. el Dock): no cambia ni desactiva nada.
 /// <list type="bullet">
 /// <item>Estado de Smart App Control (registro, solo lectura).</item>
 /// <item>Eventos de Integridad de código (Microsoft-Windows-CodeIntegrity/Operational: 3033, 3034, 3076, 3077, 3089) y del antivirus (1116, 1117) que nombran la carpeta de WinMac.
@@ -26,7 +26,7 @@ internal static class SecurityDiagnostics
         sb.AppendLine("Smart App Control: " + SmartAppControl());
         sb.AppendLine();
         sb.AppendLine("Firma de los ejecutables:");
-        foreach (var exe in new[] { "WinMac.exe", "WinMac.Bar.App.exe", "WinMac.Dock.App.exe", "WinMac.Connect.App.exe", @"NotchWin\NotchWin.App.exe" })
+        foreach (var exe in new[] { "HatsuDesktop.exe", "HatsuDesktop.Bar.exe", "HatsuDesktop.Dock.exe", "HatsuDesktop.Connect.exe", @"NotchWin\NotchWin.App.exe", "WinMac.exe", "WinMac.Bar.App.exe", "WinMac.Dock.App.exe", "WinMac.Connect.App.exe" }.Where(e => !e.StartsWith("WinMac", StringComparison.Ordinal) || File.Exists(Path.Combine(dir, e))))
         {
             var p = Path.Combine(dir, exe);
             sb.AppendLine($"  {exe}: {(File.Exists(p) ? Signed(p) ? "firmado" : "sin firma" : "no está")}");

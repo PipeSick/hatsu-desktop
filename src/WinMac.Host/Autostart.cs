@@ -33,6 +33,23 @@ internal static class Autostart
         catch (Exception) { return null; }
     }
 
+    /// <summary>Estado del inicio automático frente a ESTA instalación (ver <see cref="WinMac.Host.AutostartMigration"/>).</summary>
+    public static WinMac.Host.AutostartAssessment Assess(string currentExe, string name = DefaultName) => WinMac.Host.AutostartMigration.Assess(Current(name), currentExe, File.Exists);
+
+    /// <summary>Ruta de OTRA instalación viva que Windows inicia hoy (para ofrecer cambiarla), o null.</summary>
+    public static string? ForeignPath(string currentExe, string name = DefaultName) => Assess(currentExe, name) is { State: WinMac.Host.AutostartState.OtherInstall } a ? a.StoredExe : null;
+
+    /// <summary>Adopción explícita: hace que el inicio automático apunte a esta instalación, solo si ya existía un valor. Devuelve el valor escrito o null.</summary>
+    public static string? Adopt(string currentExe, string name = DefaultName)
+    {
+        try
+        {
+            var plan = WinMac.Host.AutostartMigration.PlanAdopt(Current(name), currentExe, File.Exists); if (plan is null) return null;
+            using var k = Registry.CurrentUser.CreateSubKey(RunKey, writable: true); k.SetValue(name, plan, RegistryValueKind.String); return plan;
+        }
+        catch (Exception) { return null; }
+    }
+
     public static string? Current(string name = DefaultName)
     {
         using var k = Registry.CurrentUser.OpenSubKey(RunKey); return k?.GetValue(name) as string;

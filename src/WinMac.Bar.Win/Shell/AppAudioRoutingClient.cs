@@ -46,7 +46,7 @@ public sealed class AppAudioRoutingClient(Action<string> log) : IAppAudioRouting
     {
         try
         {
-            var psi = new ProcessStartInfo(Environment.ProcessPath ?? "WinMac.Bar.App.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+            var psi = new ProcessStartInfo(Environment.ProcessPath ?? "HatsuDesktop.Bar.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
             psi.ArgumentList.Add("--audio-route"); foreach (var a in args) psi.ArgumentList.Add(a);
             using var p = Process.Start(psi)!;
             var read = p.StandardOutput.ReadLineAsync();

@@ -93,7 +93,7 @@ Note "Pantalla principal: $($sc.Width)x$($sc.Height) · DPI del sistema: $([Syst
 Note ""
 Note "## Capturas"
 
-Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name 'HatsuDesktop', 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'HatsuDesktop.Connect', 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'WinMac.Connect.App', 'NotchWin.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 $d = Join-Path ([IO.Path]::GetTempPath()) ('winmac-audit-' + [Guid]::NewGuid().ToString('N').Substring(0, 6)); New-Item -ItemType Directory -Force -Path $d | Out-Null
 @{ modules = @{ bar = @{ enabled = $true; args = @('--no-config', '--no-reserve') }; dock = @{ enabled = $true; args = @('--no-config') } }; bar = @{ appMenus = $true } } | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
 $pillLog = Join-Path $OutDir 'isla-registro.log'; Remove-Item $pillLog -ErrorAction SilentlyContinue
@@ -109,7 +109,7 @@ function TestPng([string]$path, [int]$n, [string]$label) {
 for ($k = 1; $k -le 5; $k++) { $p = Join-Path $shotsDir "captura-de-prueba-$k.png"; TestPng $p $k "Captura de prueba $k"; (Get-Item $p).LastWriteTime = (Get-Date).AddHours(-6 * $k) }
 $barLog = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'; Remove-Item $barLog -ErrorAction SilentlyContinue
 $env:WINMAC_PILL_SELFTEST = $pillLog; $env:WINMAC_MENU_DIAG = '1'; $env:WINMAC_QUICKLOOK_IN_CAPTURES = '1'   # Quick Look se excluye de las capturas: solo aquí se deja ver para fotografiarlo (el registro lo dice)
-$hostLog = Join-Path $d 'host.log'; $hostExe = Join-Path $DistDir 'WinMac.exe'; $bar = Join-Path $DistDir 'WinMac.Bar.App.exe'
+$hostLog = Join-Path $d 'host.log'; $hostExe = Join-Path $DistDir 'HatsuDesktop.exe'; $bar = Join-Path $DistDir 'HatsuDesktop.Bar.exe'
 # Extensiones de demostración (docs/30): se «instalan» como lo haría Ajustes (copia a %LOCALAPPDATA%\WinMac\extensions) y se activan las dos
 $extRoot = Join-Path $env:LOCALAPPDATA 'WinMac\extensions'
 if (Test-Path (Join-Path $DistDir 'extensions')) {
@@ -125,7 +125,7 @@ Note "  (host, Barra e Isla en marcha: $up, $([int]((Get-Date) - $t0).TotalSecon
 [Au]::SetCursorPos($sc.X + 60, $sc.Y + [int]($sc.Height / 2)) | Out-Null
 # Medición en reposo (docs/32: medir antes de optimizar). Runner sin GPU (WARP): valores orientativos, no de un PC real.
 function Measure-Idle([string]$label, [int]$seconds = 10) {
-  $names = 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'WinMac.Ext.Demos'
+  $names = 'HatsuDesktop', 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'HatsuDesktop.Connect', 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'WinMac.Connect.App', 'NotchWin.App', 'WinMac.Ext.Demos'
   $a = @{}; Get-Process -Name $names -ErrorAction SilentlyContinue | ForEach-Object { $a["$($_.Name)#$($_.Id)"] = $_.TotalProcessorTime.TotalMilliseconds }
   Start-Sleep -Seconds $seconds
   Note ''; Note "### Medición en reposo: $label ($seconds s, $([Environment]::ProcessorCount) núcleos)"
@@ -625,7 +625,7 @@ Start-Process -FilePath $hostExe -ArgumentList @('--render-tray-panel', '--out',
 Note "- **49i-panel-bandeja-winmac.png**: WM-011, panel del icono de WinMac en la bandeja (estados de MUESTRA: la Isla «falló»), fuera de pantalla con el código de dibujo real"
 Measure-Idle 'al final, tras usar todo' 10
 Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; [void]$hp.WaitForExit(30000)
-Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name 'HatsuDesktop', 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'HatsuDesktop.Connect', 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'WinMac.Connect.App', 'NotchWin.App', 'notepad' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 # ── Registros útiles
 Note ''; Note '## Líneas de registro relevantes'; Note '```'

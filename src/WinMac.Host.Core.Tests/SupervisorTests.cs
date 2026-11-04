@@ -203,7 +203,7 @@ public class HostConfigTests
         var c = new HostConfig { Modules = new HostConfig().Modules.ToDictionary(k => k.Key, v => v.Value) }; c.Modules["bar"] = new ModuleConfig { Path = "/otro/bar", Args = ["--x"] };
         var r = c.Resolve("/app").ToList();
         Assert.Equal(["bar", "dock", "notch", "connect"], r.Select(x => x.Spec.Id)); Assert.False(r[3].Enabled); Assert.Equal("/otro/bar", r[0].Spec.ExePath); Assert.Equal(["--x"], r[0].Spec.Args);
-        Assert.EndsWith("WinMac.Dock.App.exe", r[1].Spec.ExePath); Assert.StartsWith("/app", r[1].Spec.ExePath); Assert.True(r[2].Enabled);
+        Assert.EndsWith("HatsuDesktop.Dock.exe", r[1].Spec.ExePath); Assert.StartsWith("/app", r[1].Spec.ExePath); Assert.True(r[2].Enabled);
         Assert.EndsWith("NotchWin.App.exe", r[2].Spec.ExePath);
     }
 

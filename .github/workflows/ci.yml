@@ -111,7 +111,7 @@ jobs:
           New-Item -ItemType Directory -Force capturas-mezclador | Out-Null
           foreach ($k in 'mixer', 'mixer-routing') { foreach ($t in 'dark', 'light') { foreach ($sc in '1', '1.5') {
             $png = "capturas-mezclador/$k-$t-$sc.png"
-            $p = Start-Process -FilePath (Resolve-Path dist/WinMac/WinMac.Bar.App.exe).Path -ArgumentList @('--render-panel', $k, '--theme', $t, '--scale', $sc, '--out', "`"$png`"") -PassThru -Wait -WindowStyle Hidden
+            $p = Start-Process -FilePath (Resolve-Path dist/WinMac/HatsuDesktop.Bar.exe).Path -ArgumentList @('--render-panel', $k, '--theme', $t, '--scale', $sc, '--out', "`"$png`"") -PassThru -Wait -WindowStyle Hidden
             Write-Host "$k $t x$sc -> código $($p.ExitCode), existe=$(Test-Path $png)"
             if ($p.ExitCode -ne 0 -or -not (Test-Path $png)) { throw "No se pudo renderizar $k ($t, x$sc)" }
           } } }
@@ -128,7 +128,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force capturas-it8 | Out-Null
-          $bar = (Resolve-Path dist/WinMac/WinMac.Bar.App.exe).Path; $host_ = (Resolve-Path dist/WinMac/WinMac.exe).Path; $dock = (Resolve-Path dist/WinMac/WinMac.Dock.App.exe).Path
+          $bar = (Resolve-Path dist/WinMac/HatsuDesktop.Bar.exe).Path; $host_ = (Resolve-Path dist/WinMac/HatsuDesktop.exe).Path; $dock = (Resolve-Path dist/WinMac/HatsuDesktop.Dock.exe).Path
           $jobs = @()
           foreach ($t in 'dark', 'light') {
             foreach ($d in 'shutdown', 'restart', 'logoff', 'forcequit', 'clear-notifications', 'notice') { $jobs += ,@($bar, "capturas-it8/dialogo-$d-$t.png", '--render-dialog', $d, '--theme', $t, '--scale', '2') }
@@ -185,6 +185,42 @@ jobs:
           if ($first -ne $second) { throw 'El empaquetado no es reproducible' }
           if ($runLeft) { throw 'La desinstalación dejó el inicio automático' }
           ./tools/ci/Verify-Package.ps1 -Zip (Get-ChildItem paquete -Filter *.zip | Select-Object -First 1).FullName
+      - name: "Simulación de la transición desde WinMac en el runner (entorno SIMULADO: NO es una actualización real en tu Windows)"
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'; if (-not (Test-Path $run)) { New-Item -Path $run -Force | Out-Null }
+          $new = (Resolve-Path dist/WinMac/HatsuDesktop.exe).Path
+          $oldDir = Join-Path $env:RUNNER_TEMP 'WinMac antigua'; New-Item -ItemType Directory -Force $oldDir | Out-Null
+          Copy-Item "$env:SystemRoot\System32\more.com" (Join-Path $oldDir 'WinMac.exe')   # solo importa que EXISTA (otra instalación «viva», con espacios en la ruta)
+          function Val { (Get-ItemProperty -Path $run -Name 'WinMac' -ErrorAction SilentlyContinue).WinMac }
+          function Adopt { Start-Process -FilePath $new -ArgumentList '--adopt-autostart' -Wait -WindowStyle Hidden }
+          $fail = 0; function Check([string]$n, [bool]$ok, [string]$d = '') { if ($ok) { Write-Host "PASS  $n $d" } else { Write-Host "FAIL  $n $d"; $script:fail++ } }
+          try {
+            # 1. desactivado sigue desactivado (nunca se crea)
+            Remove-ItemProperty -Path $run -Name 'WinMac' -ErrorAction SilentlyContinue; Adopt
+            Check 'inicio automático desactivado sigue desactivado' ($null -eq (Val))
+            # 2. apunta a otra instalación viva: la simulación (sin -Apply) no cambia nada; --adopt-autostart sí, conservando los argumentos
+            $old = "`"$oldDir\WinMac.exe`" --background --prueba"; Set-ItemProperty -Path $run -Name 'WinMac' -Value $old
+            & pwsh -NoProfile -File (Join-Path (Split-Path $new) 'Migrate-FromWinMac.ps1') | Out-Null
+            Check 'Migrate-FromWinMac sin -Apply no cambia nada' ((Val) -eq $old)
+            Adopt; $v = Val
+            Check 'adopción: apunta a esta instalación y conserva los argumentos' ($v -eq "`"$new`" --background --prueba") "valor: $v"
+            Adopt; Check 'idempotente: repetir no cambia el valor' ((Val) -eq $v)
+            # 3. huérfano (carpeta antigua borrada)
+            Set-ItemProperty -Path $run -Name 'WinMac' -Value '"C:\no existe\WinMac.exe" --background'; Adopt
+            Check 'valor huérfano: pasa a esta instalación' ((Val) -eq "`"$new`" --background") "valor: $(Val)"
+            # 4. valor ilegible: no se toca
+            Set-ItemProperty -Path $run -Name 'WinMac' -Value 'cosa-rara'; Adopt
+            Check 'valor ilegible: no se toca' ((Val) -eq 'cosa-rara')
+            # 5. -Apply del script de ayuda (con una instancia inexistente): adopta y no crea una segunda entrada
+            Set-ItemProperty -Path $run -Name 'WinMac' -Value $old
+            & pwsh -NoProfile -File (Join-Path (Split-Path $new) 'Migrate-FromWinMac.ps1') -Apply | Out-Null
+            Check 'Migrate-FromWinMac -Apply adopta el inicio automático' ((Val) -like "*$new*--background --prueba")
+            $names = (Get-Item $run).Property | Where-Object { $_ -match 'WinMac|Hatsu' }
+            Check 'una sola entrada de inicio automático (WinMac); ninguna «Hatsu Desktop»' (@($names).Count -eq 1 -and $names -eq 'WinMac') "entradas: $($names -join ', ')"
+          } finally { Remove-ItemProperty -Path $run -Name 'WinMac' -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $oldDir -ErrorAction SilentlyContinue }
+          if ($fail -gt 0) { throw "$fail comprobación(es) de la transición fallaron" }
       - name: Subir el paquete (artefacto temporal, no es una versión publicada)
         if: always()
         uses: actions/upload-artifact@v4

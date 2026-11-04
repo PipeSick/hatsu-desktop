@@ -1,12 +1,14 @@
 // WinMac — host/supervisor (F1). Un único punto de entrada para el usuario: lanza la Barra superior y el Dock, los vigila y los cierra en orden.
 //
-//   WinMac.exe                      inicia el host (y con él los módulos habilitados en %APPDATA%\WinMac\winmac.json)
-//   WinMac.exe --background         igual; es lo que registra el inicio automático
-//   WinMac.exe --quit               pide al host en ejecución que se cierre normalmente (cierra sus módulos)
-//   WinMac.exe --diagnose-security  informe de solo lectura: Smart App Control, Integridad de código y antivirus sobre archivos de WinMac (WM-036)
-//   WinMac.exe --restore-taskbar    vuelve a mostrar la barra de tareas de Windows y su «Ocultar automáticamente» como estaba (WM-034), aunque WinMac no pueda arrancar
-//   WinMac.exe --install-autostart  crea UNA clave HKCU\...\Run («WinMac») · --remove-autostart la borra
-//   WinMac.exe --render-settings <general|bar|hub|notch> --out f.png [--theme light|dark] [--scale 2] [--scroll N] [--suggest] [--no-notch]   dibuja Ajustes fuera de pantalla (CI)
+//   HatsuDesktop.exe                      inicia el host (y con él los módulos habilitados en %APPDATA%\WinMac\winmac.json)
+//   HatsuDesktop.exe --background         igual; es lo que registra el inicio automático
+//   HatsuDesktop.exe --quit               pide al host en ejecución que se cierre normalmente (cierra sus módulos)
+//   HatsuDesktop.exe --diagnose-security  informe de solo lectura: Smart App Control, Integridad de código y antivirus sobre archivos de WinMac (WM-036)
+//   HatsuDesktop.exe --restore-taskbar    vuelve a mostrar la barra de tareas de Windows y su «Ocultar automáticamente» como estaba (WM-034), aunque WinMac no pueda arrancar
+//   HatsuDesktop.exe --adopt-autostart   el inicio automático pasa a ESTA instalación (solo si ya estaba activado; nunca lo crea)
+//   HatsuDesktop.exe --replace-running   cierra la instancia en ejecución (también una de WinMac anterior) y continúa con esta
+//   HatsuDesktop.exe --install-autostart  crea UNA clave HKCU\...\Run («WinMac») · --remove-autostart la borra
+//   HatsuDesktop.exe --render-settings <general|bar|hub|notch> --out f.png [--theme light|dark] [--scale 2] [--scroll N] [--suggest] [--no-notch]   dibuja Ajustes fuera de pantalla (CI)
 //   Solo pruebas: --config <ruta> · --log <ruta> · --no-tray · --fast · --pipe-name <nombre> · --autostart-name <nombre>
 using WinMac.Host.App;
 
@@ -16,11 +18,19 @@ internal static class Program
     public static int Main(string[] args)
     {
         try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch (Exception) { }
-        string exe = Environment.ProcessPath ?? "WinMac.exe", name = HostOptions.Arg(args, "--autostart-name", Autostart.DefaultName);
+        string exe = Environment.ProcessPath ?? "HatsuDesktop.exe", name = HostOptions.Arg(args, "--autostart-name", Autostart.DefaultName);
         try
         {
             if (args.Contains("--install-autostart")) { Autostart.Install(exe, name); Console.WriteLine($"Inicio automático activado ({name} → {Autostart.Current(name)})."); return 0; }
             if (args.Contains("--remove-autostart")) { Console.WriteLine(Autostart.Remove(name) ? "Inicio automático desactivado." : "El inicio automático no estaba activado."); return 0; }
+            if (args.Contains("--adopt-autostart"))   // adopción EXPLÍCITA: el inicio automático pasa a esta instalación (solo si ya estaba activado; nunca lo crea)
+            {
+                var st = Autostart.Assess(exe, name).State;
+                if (st is WinMac.Host.AutostartState.NotConfigured) { Console.WriteLine("El inicio automático no está activado: no se cambió nada (actívalo en Ajustes › General o con --install-autostart)."); return 0; }
+                var written = Autostart.Adopt(exe, name);
+                Console.WriteLine(written is null ? (st == WinMac.Host.AutostartState.Current ? "El inicio automático ya apunta a esta instalación." : "No se cambió nada (el valor no se entiende).") : $"Inicio automático ({name}) → {written}");
+                return 0;
+            }
             if (args.Contains("--quit")) return HostApp.SignalQuit();
             if (args.Contains("--diagnose-security")) return SecurityDiagnostics.Run(quiet: args.Contains("--quiet"));   // WM-036: solo lectura
             if (args.Contains("--restore-taskbar")) return TaskbarHider.RestoreFromCommandLine(quiet: args.Contains("--quiet"));   // WM-034: recuperación manual, sin arrancar WinMac

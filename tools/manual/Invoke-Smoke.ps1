@@ -27,7 +27,7 @@ $q = @('--quick', '--out', "`"$OutDir`"")
 Run 'S2 WPF layered --quick' "$PublishDir/S2.DockWpf/S2.DockWpf.exe" (@('--variant', 'layered') + $q) 90 -Informational
 Run 'S4 DComp glass --quick' "$PublishDir/S4.DockDComp/S4.DockDComp.exe" (@('--variant', 'glass') + $q) 90 -Informational
 Run 'S3 WinUI acrylic --quick' "$PublishDir/S3.DockWinUI/S3.DockWinUI.exe" (@('--variant', 'acrylic') + $q) 90 -Informational
-$dock = "$PublishDir/Dock.App/WinMac.Dock.App.exe"
+$dock = "$PublishDir/Dock.App/HatsuDesktop.Dock.exe"
 # Escenas con el renderizador REAL (mismo DockController + DockPainter + GlassBackdrop que el dock en pantalla), a 2x para poder revisar detalles.
 foreach ($theme in 'light', 'dark') {
   foreach ($pose in 'rest', 'hover', 'open', 'edge', 'hidden', 'preview') {
@@ -48,7 +48,7 @@ foreach ($app in @('%WINDIR%\explorer.exe', '%WINDIR%\notepad.exe', '%WINDIR%\Sy
   Run "Icono real $leaf" $dock @('--icon-test', "`"$exp`"", '--out', "`"$OutDir\icon-$leaf.png`"") 60 -Informational
 }
 # Barra superior: PNG fuera de pantalla (datos ficticios), lecturas reales del sistema (informativo) y selftest. El AppBar solo se registra en --selftest-appbar (efímero en el runner).
-$bar = "$PublishDir/Bar.App/WinMac.Bar.App.exe"
+$bar = "$PublishDir/Bar.App/HatsuDesktop.Bar.exe"
 foreach ($theme in 'light', 'dark') { foreach ($bg in 'glass', 'transparent') {
   Run "Barra offscreen $theme/$bg" $bar @('--render-png', "`"$OutDir\bar-$theme-$bg.png`"", '--theme', $theme, '--bg', $bg, '--scale', '2') 90
 } }
@@ -65,7 +65,7 @@ foreach ($theme in 'dark', 'light') { Run "Centro de Notificaciones $theme (dato
 Run 'Centro de Notificaciones sin activar (fuera de pantalla)' $bar @('--render-panel', 'notifications-off', '--out', "`"$OutDir\panel-notifications-off.png`"", '--scale', '2') 90
 Run 'Centro de Notificaciones a 150 % de DPI en 1080p (desplazable)' $bar @('--render-panel', 'notifications', '--max-height', '672', '--out', "`"$OutDir\panel-notifications-150dpi-1080p.png`"", '--scale', '1.5') 90
 # Ajustes de WinMac (ventana estilo iOS): se dibuja FUERA de pantalla con el pintor real. Valida el dibujo, NO el ratón ni el foco.
-$hostExe = "$PublishDir/Host/WinMac.exe"
+$hostExe = "$PublishDir/Host/HatsuDesktop.exe"
 function RunSettings($label, $png, $extra) {
   $out = Join-Path $OutDir $png
   Run $label $hostExe (@('--render-settings') + $extra + @('--out', "`"$out`"", '--scale', '2')) 90
@@ -95,7 +95,7 @@ Run 'Barra selftest' $bar @('--selftest') 120
 Run 'Barra selftest-system (informativo: el runner no tiene Wi-Fi, Bluetooth ni brillo)' $bar @('--selftest-system') 120 -Informational
 Run 'Barra selftest-monitors (informativo: monitores y barras previstas)' $bar @('--selftest-monitors') 60 -Informational
 Run 'Barra selftest-appbar (informativo)' $bar @('--selftest-appbar') 120 -Informational
-# Host (WinMac.exe) con módulos de mentira: instancia única, cierre ordenado, host muerto → hijos muertos, caídas, inicio automático, puertos. Es GATING (falla el job si algo falla).
+# Host (HatsuDesktop.exe) con módulos de mentira: instancia única, cierre ordenado, host muerto → hijos muertos, caídas, inicio automático, puertos. Es GATING (falla el job si algo falla).
 $hostOut = Join-Path $OutDir 'host-tests.txt'
 & pwsh -NoProfile -File (Join-Path $PSScriptRoot '..\ci\Test-Host.ps1') -PublishDir $PublishDir -OutDir $OutDir *>&1 | Tee-Object -FilePath $hostOut | ForEach-Object { Write-Host $_ }
 $hostRes = if ($LASTEXITCODE -eq 0) { 'OK' } else { "salió con $LASTEXITCODE" }

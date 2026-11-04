@@ -157,8 +157,8 @@ internal static class Program
             host.ModuleEvent = (topic, payload) => link.Event(topic, payload);
             link.Subscribe("clip.results", d => { if (d is { } e) host.OnClipResults(e); });   // p. ej. cerrar la Isla abierta antes de capturar   // API interna de actividades de la Isla (docs/25)
             host.HostCommand = (cmd, section) => link.Event("host.cmd", new { cmd, section });   // «Ajustes» y «Salir» del panel: las ejecuta el host (cierre ordenado)
-            link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
-        Log("Barra superior iniciada. Cierra con «WinMac.Bar.App --quit» o desde su menú (clic derecho).");
+            link.Start(); Log("Modo hosted: enlazada con HatsuDesktop.exe."); }
+        Log("Barra superior iniciada. Cierra con «HatsuDesktop.Bar --quit» o desde su menú (clic derecho).");
         int rc = host.Run(); Log("Barra superior cerrada. " + host.Report());
         if (link is not null) { if (rc == 0) link.ByeAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult(); link.DisposeAsync().AsTask().GetAwaiter().GetResult(); }   // «bye» = cierre voluntario: el host no nos reinicia
         return rc;

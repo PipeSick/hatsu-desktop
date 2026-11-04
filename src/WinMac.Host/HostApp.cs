@@ -4,7 +4,7 @@ using WinMac.Ipc;
 namespace WinMac.Host.App;
 
 /// <summary>Opciones de línea de comandos del host (las de prueba están marcadas).</summary>
-internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTray, bool Fast, string? PipeName, string NotchWinSettingsPath, string BarJsonPath)
+internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTray, bool Fast, string? PipeName, string NotchWinSettingsPath, string BarJsonPath, bool Replace = false)
 {
     public static string Arg(string[] a, string n, string def) { int i = Array.IndexOf(a, n); return i >= 0 && i + 1 < a.Length ? a[i + 1] : def; }
     public static HostOptions Parse(string[] a) => new(
@@ -14,7 +14,8 @@ internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTra
         a.Contains("--fast"),             // PRUEBAS: tiempos de supervisión reducidos
         a.Contains("--pipe-name") ? Arg(a, "--pipe-name", "") : null,
         Arg(a, "--notchwin-settings", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NotchWin", "settings.json")),
-        Arg(a, "--bar-json", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "bar.json")));   // origen de la migración única (PRUEBAS: se puede redirigir)
+        Arg(a, "--bar-json", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "bar.json")),
+        a.Contains("--replace-running"));   // Hatsu Desktop: cierra la instancia en ejecución (también una de WinMac anterior: mismos nombres de instancia única) y continúa con esta   // origen de la migración única (PRUEBAS: se puede redirigir)
 }
 
 internal sealed class FileLog(string path)
@@ -40,6 +41,15 @@ internal static class HostApp
     {
         var log = new FileLog(o.LogPath).Write;
         using var mutex = new Mutex(true, MutexName, out bool first);
+        if (!first && o.Replace)
+        {   // Adopción explícita de esta instalación (--replace-running): se pide el cierre ordenado a la instancia viva —los nombres de instancia única y de cierre son los mismos que usaba WinMac,
+            // así que también sirve para una versión anterior— y se espera a que libere la exclusión mutua. Si no la libera, esta se cierra sin tocar nada (nunca se mata un proceso).
+            log("[host] --replace-running: se pide el cierre de la instancia en ejecución…");
+            try { using var q = EventWaitHandle.OpenExisting(QuitEventName); q.Set(); } catch (Exception e) { log("[host] no se pudo avisar a la instancia en ejecución: " + e.Message); }
+            try { first = mutex.WaitOne(TimeSpan.FromSeconds(20)); } catch (AbandonedMutexException) { first = true; }
+            log(first ? "[host] la instancia anterior se cerró: esta continúa." : "[host] la instancia anterior no se cerró a tiempo: esta se cierra sin cambios.");
+        }
+
         if (!first)
         {   // Segunda instancia: no duplica nada, pero le pide al host vivo que reabra los módulos que estén cerrados o caídos.
             try { using var ev = EventWaitHandle.OpenExisting(ReopenEventName); ev.Set(); log("[host] ya hay una instancia de Hatsu Desktop: se le pidió reabrir los módulos cerrados; esta se cierra."); }
@@ -79,7 +89,7 @@ internal static class HostApp
         var uiActions = new System.Collections.Concurrent.ConcurrentQueue<Action>();   // lo que llega por el canal (otro hilo) se ejecuta en el hilo de interfaz: las ventanas de Windows no admiten otro
         controller.QuitRequested = () => uiActions.Enqueue(RequestQuit);
         Tray? tray = null; SettingsWindow? settings = null;
-        string exePath = Environment.ProcessPath ?? "WinMac.exe";
+        string exePath = Environment.ProcessPath ?? "HatsuDesktop.exe";
         if (Autostart.Heal(exePath) is { } healed) log("[host] el inicio automático apuntaba a una carpeta que ya no existe: ahora apunta a esta instalación.");
         var taskbar = new TaskbarHider(exePath, log);   // WM-034
         try { taskbar.RecoverStale(); } catch (Exception e) { log("[barra de tareas] no se pudo revisar la sesión anterior: " + e.Message); }
@@ -124,7 +134,7 @@ internal static class HostApp
         }
 
         log("[host] cerrando…");
-        try { taskbar.RestoreNow(); } catch (Exception e) { log("[barra de tareas] no se pudo restaurar al salir: " + e.Message + " (el guardián o «WinMac.exe --restore-taskbar» la devuelven)"); }   // lo primero: la barra vuelve al instante
+        try { taskbar.RestoreNow(); } catch (Exception e) { log("[barra de tareas] no se pudo restaurar al salir: " + e.Message + " (el guardián o «HatsuDesktop.exe --restore-taskbar» la devuelven)"); }   // lo primero: la barra vuelve al instante
         tray?.RemoveIcon();
         sup.StopAllAsync().GetAwaiter().GetResult();
         log("[host] módulos cerrados: " + string.Join(", ", sup.States.Select(kv => $"{kv.Key}={kv.Value}")));

@@ -186,8 +186,14 @@ public sealed class BarPainter : IDisposable
         }
     }
 
+    private ID2D1Bitmap? _brand32, _brand128; private bool _brandTried;
+
     private void DrawLogo(float x, float cy)
     {
+        // Hatsu Desktop (Flux): el icono de la marca, 16 DIP; si el recurso no está, el contorno con la «H» de siempre
+        if (!_brandTried) { _brandTried = true; _brand32 = BrandIcon.Create(_ctx, 32); _brand128 = BrandIcon.Create(_ctx, 128); }
+        var bmp = BrandIcon.PickSize(16 * _ctx.Dpi.Width / 96.0) == 32 ? _brand32 : _brand128;
+        if (bmp is not null) { _ctx.DrawBitmap(bmp, new RawRectF(x - 0.5f, cy - 8f, x + 15.5f, cy + 8f), 1f, BitmapInterpolationMode.Linear, null); return; }
         var rr = new RoundedRectangle { Rect = new RawRectF(x, cy - 7.5f, x + 15, cy + 7.5f), RadiusX = 4.5f, RadiusY = 4.5f };
         Brush(Fg()); _ctx.DrawRoundedRectangle(rr, _solid, 1.3f);
         using var l = _dw.CreateTextLayout("H", _logo, 15, 15); l.TextAlignment = TextAlignment.Center; l.ParagraphAlignment = ParagraphAlignment.Center;
@@ -329,5 +335,5 @@ public sealed class BarPainter : IDisposable
         _ctx.FillEllipse(new Ellipse(new Vector2(x + 4.5f, cy + 3.5f), 1.9f, 1.9f), _solid);
     }
 
-    public void Dispose() { _solid.Dispose(); _round.Dispose(); _regular.Dispose(); _bold.Dispose(); _logo.Dispose(); _dw.Dispose(); }
+    public void Dispose() { _brand32?.Dispose(); _brand128?.Dispose(); _solid.Dispose(); _round.Dispose(); _regular.Dispose(); _bold.Dispose(); _logo.Dispose(); _dw.Dispose(); }
 }

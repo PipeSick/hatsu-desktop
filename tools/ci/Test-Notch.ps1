@@ -1,5 +1,5 @@
 <#
-  Integración WinMac + NotchWin en el runner de Windows: submódulo resuelto, pruebas de NotchWin en Windows, Build-Local.ps1 con la Isla, y arranque REAL bajo WinMac.exe.
+  Integración WinMac + NotchWin en el runner de Windows: submódulo resuelto, pruebas de NotchWin en Windows, Build-Local.ps1 con la Isla, y arranque REAL bajo HatsuDesktop.exe.
   Pasa/falla (PASS/FAIL, sale con 1 si alguna falla): clon y submódulo, pruebas de NotchWin, publicación de los 4 ejecutables, la Barra y el Dock REALES llegan a Running aunque la Isla
   falle, «Isla no instalada» no rompe nada, y el cierre ordenado no deja procesos.
   Informativo (INFO, nunca falla el CI): si NotchWin REAL (WinUI 3) llega a Running en el runner. El runner no tiene escritorio interactivo ni monitor; que la Isla arranque y se enlace
@@ -23,8 +23,8 @@ public static class BarRgn {
   public static int Kind() { var h = FindWindow("WinMacBar", null); if (h == IntPtr.Zero) return -1; RC r; int k = GetWindowRgnBox(h, out r); return k; }
 }
 "@
-function Cleanup { Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 400 }
-function Alive { @(Get-Process -Name 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'NotchWin.App' -ErrorAction SilentlyContinue).Count }
+function Cleanup { Get-Process -Name 'HatsuDesktop', 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'HatsuDesktop.Connect', 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'WinMac.Connect.App', 'NotchWin.App' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 400 }
+function Alive { @(Get-Process -Name 'HatsuDesktop', 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'HatsuDesktop.Connect', 'WinMac', 'WinMac.Bar.App', 'WinMac.Dock.App', 'WinMac.Connect.App', 'NotchWin.App' -ErrorAction SilentlyContinue).Count }
 function LogHas($log, [string]$t) { (Test-Path $log) -and (Select-String -Path $log -SimpleMatch -Pattern $t -Quiet) }
 
 # ── 1. Clon de NotchWin, submódulo y pruebas en Windows
@@ -37,11 +37,11 @@ Check 'Pruebas de NotchWin.Core en Windows (76)' ($m.Success -and $m.Groups[1].V
 if (-not $m.Success -or $m.Groups[1].Value -ne '0') { ($t -split "`n" | Select-String -Pattern 'Failed |error' | Select-Object -First 15) | ForEach-Object { Write-Host "  $_" } }
 
 # ── 2. Salida de Build-Local.ps1 (se ejecuta antes, en el workflow)
-foreach ($f in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'NotchWin\NotchWin.App.exe') { Check "Build-Local dejó $f" (Test-Path (Join-Path $DistDir $f)) }
+foreach ($f in 'HatsuDesktop.exe', 'HatsuDesktop.Bar.exe', 'HatsuDesktop.Dock.exe', 'NotchWin\NotchWin.App.exe') { Check "Build-Local dejó $f" (Test-Path (Join-Path $DistDir $f)) }
 $pri = @(Get-ChildItem (Join-Path $DistDir 'NotchWin') -Filter '*.pri' -ErrorAction SilentlyContinue)   # el nombre del .pri lo decide el SDK (no es necesariamente NotchWin.App.pri)
 Check 'Build-Local dejó el recurso .pri de NotchWin (WinUI 3 sin empaquetar)' ($pri.Count -gt 0) (($pri | ForEach-Object Name) -join ', ')
 Check 'NotchWin publicado autocontenido (trae el runtime de Windows App SDK)' ((Get-ChildItem (Join-Path $DistDir 'NotchWin') -Filter 'Microsoft.WindowsAppRuntime*.dll' -ErrorAction SilentlyContinue).Count -gt 0)
-$hostExe = Join-Path $DistDir 'WinMac.exe'
+$hostExe = Join-Path $DistDir 'HatsuDesktop.exe'
 
 # ── 3. Arranque real bajo el host (Barra y Dock reales + NotchWin real)
 function RunHost([string]$name, $notchModule) {
