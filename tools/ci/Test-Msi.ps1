@@ -16,9 +16,13 @@ $report.Add('| Resultado | Comprobación | Detalle |'); $report.Add('|---|---|--
 $installDir = Join-Path $env:LOCALAPPDATA 'Programs\Hatsu Desktop'; $exe = Join-Path $installDir 'HatsuDesktop.exe'
 $menu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Hatsu Desktop\Hatsu Desktop.lnk'; $desktopLnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Hatsu Desktop.lnk'
 $dataDir = Join-Path $env:APPDATA 'WinMac'; $localData = Join-Path $env:LOCALAPPDATA 'WinMac'; $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-function Arp([string]$pc) { Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{$pc}" -ErrorAction SilentlyContinue }
-function Arps { $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Uninstall'); if (-not $k) { return }; foreach ($n in $k.GetSubKeyNames()) { $sk = $k.OpenSubKey($n); if ($sk -and $sk.GetValue('DisplayName') -eq 'Hatsu Desktop') { [pscustomobject]@{ Key = $n; DisplayName = $sk.GetValue('DisplayName'); DisplayVersion = $sk.GetValue('DisplayVersion') } } } }
-function ArpNames { $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Uninstall'); if ($k) { ($k.GetSubKeyNames() -join ',') } }
+$arpRoots = @(@('HKCU', 'Software\Microsoft\Windows\CurrentVersion\Uninstall'), @('HKLM', 'Software\Microsoft\Windows\CurrentVersion\Uninstall'), @('HKLM', 'Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'))
+function ArpAll { foreach ($r in $arpRoots) { $hive = if ($r[0] -eq 'HKCU') { [Microsoft.Win32.Registry]::CurrentUser } else { [Microsoft.Win32.Registry]::LocalMachine }; $k = $hive.OpenSubKey($r[1]); if (-not $k) { continue }
+    foreach ($n in $k.GetSubKeyNames()) { $sk = $k.OpenSubKey($n); if ($sk -and $sk.GetValue('DisplayName') -eq 'Hatsu Desktop') { [pscustomobject]@{ Where = "$($r[0])\$($r[1])\$n"; Hive = $r[0]; Key = $n; DisplayName = $sk.GetValue('DisplayName'); DisplayVersion = $sk.GetValue('DisplayVersion'); DisplayIcon = $sk.GetValue('DisplayIcon') } } } } }
+function Arp([string]$pc) { ArpAll | Where-Object { $_.Key -eq "{$pc}" } | Select-Object -First 1 }
+function Arps { ArpAll }
+function ArpNames { (ArpAll | ForEach-Object { "$($_.Where)=$($_.DisplayVersion)" }) -join '; ' }
+function Registered([string]$pc) { $wi2 = New-Object -ComObject WindowsInstaller.Installer; try { $wi2.ProductState("{$pc}") -eq 5 } catch { $false } }   # 5 = INSTALLSTATE_DEFAULT: el registro propio de Windows Installer
 function Msi([string]$verb, [string]$target, [string]$log) { $p = Start-Process msiexec.exe -ArgumentList @($verb, "`"$target`"", '/qn', '/norestart', '/l*v', "`"$log`"") -Wait -PassThru; $p.ExitCode }
 function HostRunning { @(Get-Process HatsuDesktop -ErrorAction SilentlyContinue) }
 function Stop-AllHosts { & $exe --quit 2>$null | Out-Null; Get-Process HatsuDesktop -ErrorAction SilentlyContinue | ForEach-Object { if (-not $_.WaitForExit(15000)) { $_ | Stop-Process -Force } } }
@@ -59,8 +63,10 @@ Check 'archivos en %LOCALAPPDATA%\Programs\Hatsu Desktop' ((Test-Path $exe) -and
 Check 'no hay instalación en Archivos de programa (por usuario)' (-not (Test-Path (Join-Path $env:ProgramFiles 'Hatsu Desktop')))
 Check 'acceso directo del menú Inicio' (Test-Path $menu)
 Check 'sin acceso directo en el escritorio por defecto' (-not (Test-Path $desktopLnk))
-$arp = Arp $pc['2.0.0']; Check 'registrado en Aplicaciones instaladas (HKCU)' ($arp -and $arp.DisplayName -eq 'Hatsu Desktop' -and $arp.DisplayVersion -eq '2.0.0') ("$($arp.DisplayName) $($arp.DisplayVersion)")
-Check 'Aplicaciones instaladas muestra el icono' ($arp -and $arp.DisplayIcon)
+$arp = Arp $pc['2.0.0']; Check 'Windows Installer lo da por instalado (ProductState)' (Registered $pc['2.0.0'])
+Check 'registrado en Aplicaciones instaladas con nombre y versión' ($arp -and $arp.DisplayName -eq 'Hatsu Desktop' -and $arp.DisplayVersion -eq '2.0.0') ("ubicación: $($arp.Where)")
+Check 'la entrada de Aplicaciones instaladas es POR USUARIO (HKCU)' ($arp -and $arp.Hive -eq 'HKCU') ("ubicación: $($arp.Where)")
+Check 'Aplicaciones instaladas muestra el icono' ($arp -and $arp.DisplayIcon) ($arp.DisplayIcon)
 Check 'no activa el inicio automático ajeno ni crea el propio' ((Get-ItemProperty $runKey).WinMac -eq $foreign)
 Check 'no ocultó la barra de tareas (sin registro de recuperación)' (-not (Test-Path (Join-Path $localData 'taskbar-restore.json')))
 Check 'datos del usuario intactos tras instalar' ((Get-FileHash $cfg).Hash -eq $cfgHash)
@@ -89,7 +95,7 @@ Stop-AllHosts; Remove-Item $portable -Recurse -Force
 # ── actualizar 2.0.0 → 2.0.1
 $code = Msi '/i' $msis['2.0.1'] (Join-Path $out 'upgrade-2.0.1.log'); Check 'actualiza 2.0.0 → 2.0.1' ($code -eq 0) "código $code"
 $all = @(Arps); Check 'una sola entrada del producto (no duplica la instalación)' ($all.Count -eq 1 -and $all[0].DisplayVersion -eq '2.0.1') ("$($all.Count) entrada(s): " + (($all | ForEach-Object DisplayVersion) -join ', ') + " · claves: " + (ArpNames))
-Check 'la versión anterior ya no está registrada' (-not (Arp $pc['2.0.0']))
+Check 'la versión anterior ya no está registrada' ((-not (Arp $pc['2.0.0'])) -and -not (Registered $pc['2.0.0']))
 Check 'los archivos siguen instalados tras actualizar' (Test-Path $exe)
 Check 'datos y elecciones del usuario intactos tras actualizar' (((Get-FileHash $cfg).Hash -eq $cfgHash) -and ((Get-FileHash (Join-Path $localData 'nota.txt')).Hash -eq $noteHash))
 Check 'el inicio automático ajeno sigue igual tras actualizar' ((Get-ItemProperty $runKey).WinMac -eq $foreign)
