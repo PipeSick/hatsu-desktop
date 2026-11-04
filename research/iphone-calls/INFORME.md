@@ -2,6 +2,17 @@
 
 Fecha: 2026-11-03 · Rama `research/iphone-calls` (worktree aparte, sobre `28f8aee`) · **No se modificó ningún archivo de WinMac ni de NotchWin.**
 
+## Resumen ejecutivo final (iteración de viabilidad, 2026-11-04)
+
+**Conclusión: C — NO DEMOSTRADO bajo las restricciones actuales. Recomendación: detener el desarrollo de esta función en WinMac.** Detalle, fuentes y matriz en §15.
+
+- **Hecho en hardware (P1–P3, build 26300):** `RegisterApp()` retorna sin error pero `IsRegistered()` nunca pasa a `True`, con paquete suelto (`Allowed`) y con MSIX firmado (`DeniedBySystem`). El mismo síntoma está reportado por un tercero en la misma build (Microsoft Q&A 6041632).
+- **Documentación oficial (leída íntegra):** `RegisterApp` solo exige la capacidad restringida; la carga lateral no necesita aprobación; la Store sí. No dice nada de Limited Access Features para esta clase, aunque el ID `phonelinetransportdevice_v1` devuelve `Unavailable` (= sigue limitado y no tenemos acceso). **No hay evidencia pública de un registro efectivo en Windows 11 actual sin saltarse un control.**
+- **Audio:** el SCO solo es accesible por drivers de modo kernel (documentación de Microsoft). Con APIs públicas de usuario solo se llega al audio a través de `PhoneCall`, que depende del registro. RFCOMM propio, ANCS y una app en iOS: **no viables** para el objetivo completo (D).
+- **Única ruta con audio bidireccional demostrado en Windows con un iPhone** (un tercero, un equipo): pila Bluetooth propia en modo usuario sobre el radio reasignado al WinUSB *inbox* (BluetoothHFP `native-poc`). **No cumple el espíritu de las restricciones** (toma el radio, un hardware, licencia de BTstack) y no la hemos reproducido. En Linux, un iPhone con iOS 26.5 sí contesta/cuelga/habla (iphonebridge): el límite está en Windows, no en el iPhone.
+- **¿Store?** Solo hipótesis. **Causa exacta del bloqueo: desconocida.**
+- Confianza: alta (≈85 %) en «hoy no hay ruta reproducible»; baja (≈30 %) en que LAF o Store lo desbloqueen.
+
 ## 0. Alcance y límites de esta investigación (leer primero)
 
 - **No tuve acceso a tu hardware.** Nada de este informe lo verifiqué yo en hardware. Lo «verificado en hardware» viene de terceros o de **tus dos registros originales de `ConnectProbe`** (Apéndice C), que sí son evidencia de hardware real de tu PC.
@@ -129,7 +140,7 @@ Hallazgos adicionales de la auditoría:
 | Generar el token de Acceso Limitado (Sefirah `FeatureTokenGenerator.cs`, algoritmo de withinrafael.com, clave de un gist) | **RECHAZADA** | La atestación incluye la frase «ha registrado su uso con Microsoft y acepta los términos»: sería falsificar una autorización. Sefirah **no la usa en Windows ≥ 22000** (`ShouldSkipLAFCheck`, `CallingFeatureUtils.cs:27`). |
 | `HKLM\SYSTEM\CurrentControlSet\Control\Bluetooth\Audio\Hfp\HandsFree\BypassRegistration = 1` (sugerido en MyPhone #26, oct. 2024) | **RECHAZADA** | Modifica la configuración del sistema (administrador), un solo reporte (n=1) cuyo autor dice que no consiguió funciones. Klangbruecke lo confirma en `BTAGService.dll` pero lo declara innecesario. |
 | Controlador propio / de perfil | **BLOQUEADA** por restricción del proyecto | Sin controladores de kernel; MSIX tampoco instala controladores. |
-| Zadig/WinUSB + pila propia (BTstack) | **BLOQUEADA** | Quita el radio a Windows (rompe mandos y demás dispositivos; Klangbruecke §5). |
+| Zadig/WinUSB + pila propia (BTstack) | **EXCLUIDA por restricciones (pero demostrada por un tercero, ver §15.5)** | Quita el radio a Windows (rompe mandos y demás dispositivos; Klangbruecke §5). BluetoothHFP `native-poc` (`dbd737b`) muestra audio bidireccional con un iPhone sobre WinUSB *inbox* + BTstack en un equipo; no es reproducible aquí ni cumple las restricciones. |
 | Automatizar la interfaz de Phone Link | **BLOQUEADA** | Phone Link está excluido y la automatización de UI es frágil. |
 | App complementaria en el iPhone | **FUERA DE ALCANCE** | Restricción del proyecto (y iOS no deja a ninguna app contestar llamadas). |
 
@@ -426,7 +437,7 @@ Requisitos: sin app en iOS, sin Phone Link, sin drivers propios, libre, control 
 | Phone Link | Funciona (Microsoft) | Funciona | Excluido por requisito |
 | Raspberry/ESP32 como puente HFP | Viable técnicamente [3P] | Sí | Requiere hardware extra y rompe «sin dependencias» |
 
-**Ninguna alternativa cumple a la vez señalización y audio bidireccional sin driver: no se presenta ninguna como viable.** Ruta demostrable pendiente: que `PhoneLineTransportDevice` registre.
+**Ninguna alternativa cumple a la vez señalización y audio bidireccional sin driver dentro de la pila de Windows: no se presenta ninguna como viable.** (Corrección de §15: existe un tercero que lo consigue sustituyendo la pila de Windows por una en modo usuario sobre el WinUSB *inbox*; ver §15.5, ruta E.) Ruta demostrable pendiente: que `PhoneLineTransportDevice` registre.
 
 ### 12.9 Próxima prueba mínima recomendada
 
@@ -626,6 +637,150 @@ pwsh -NoProfile -File .\package\Test-P3.ps1
 powershell.exe -NoProfile -File .\package\Test-P3.ps1
 ```
 Si alguna línea dice `FALLA`, envíame esa línea completa y `$PSVersionTable.PSVersion`; **no instales P3**. Solo cuando la batería pase en tu Windows PowerShell 5.1 sigue valiendo el procedimiento de §13.6.
+
+## 15. Investigación final de viabilidad (2026-11-04)
+
+**Alcance:** solo lectura documental y de código público. No se instaló nada, no se crearon certificados, no se ejecutó nada en el PC del usuario, no se implementó ningún prototipo. Evidencia de hardware propia: P1, P2, P3 (informada por el usuario; los registros de P3 no los he visto).
+
+**Escala de evidencia:** **DEMOSTRADO** = documentación oficial inequívoca o implementación reproducible con evidencia · **INDICIO** = parcial o indirecta · **HIPÓTESIS** = plausible, sin verificar · **NO DISPONIBLE** = falta evidencia. «Autor» = lo afirma el autor del proyecto con sus propios registros, sin reproducción independiente.
+
+**Fuentes primarias leídas en esta iteración** (texto íntegro, vía los repositorios oficiales `MicrosoftDocs` en GitHub, porque `learn.microsoft.com` sigue bloqueado en la sesión):
+- `winrt-api` @ `4c1e9164` (2026-10-20): [`PhoneLineTransportDevice`](https://github.com/MicrosoftDocs/winrt-api/blob/4c1e9164521785f82dc63ab57a5ee4644f9d1888/windows.applicationmodel.calls/phonelinetransportdevice.md), [`RegisterApp`](https://github.com/MicrosoftDocs/winrt-api/blob/4c1e9164521785f82dc63ab57a5ee4644f9d1888/windows.applicationmodel.calls/phonelinetransportdevice_registerapp_1450770636.md), [`RequestAccessAsync`](https://github.com/MicrosoftDocs/winrt-api/blob/4c1e9164521785f82dc63ab57a5ee4644f9d1888/windows.applicationmodel.calls/phonelinetransportdevice_requestaccessasync_380675631.md), [`AudioRoutingStatus`](https://github.com/MicrosoftDocs/winrt-api/blob/4c1e9164521785f82dc63ab57a5ee4644f9d1888/windows.applicationmodel.calls/phonelinetransportdevice_audioroutingstatus.md), [`LimitedAccessFeatures`](https://github.com/MicrosoftDocs/winrt-api/blob/4c1e9164521785f82dc63ab57a5ee4644f9d1888/windows.applicationmodel/limitedaccessfeatures.md), [`TryUnlockFeature`](https://github.com/MicrosoftDocs/winrt-api/blob/4c1e9164521785f82dc63ab57a5ee4644f9d1888/windows.applicationmodel/limitedaccessfeatures_tryunlockfeature_180193416.md), [`LimitedAccessFeatureStatus`](https://github.com/MicrosoftDocs/winrt-api/blob/4c1e9164521785f82dc63ab57a5ee4644f9d1888/windows.applicationmodel/limitedaccessfeaturestatus.md).
+- `windows-uwp` @ `a3812316` (2026-10-14): [App capability declarations](https://github.com/MicrosoftDocs/windows-uwp/blob/a3812316d9d6678be4e526ffb4b1c4f3958d956d/uwp/packaging/app-capability-declarations.md).
+- `windows-driver-docs` @ `b1f6aa5` (2026-10-29): [Introduction to Bluetooth profile drivers](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/bluetooth-profile-drivers-overview.md), [Bluetooth Classic audio](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/bluetooth-classic-audio.md), [HFP bypass audio streaming](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/audio/bluetooth-hfp-bypass-audio-streaming.md).
+
+### 15.1 `PhoneLineTransportDevice`: qué dice la documentación y qué no
+
+| Afirmación | Clase | Fuente / nota |
+|---|---|---|
+| `RegisterApp()` «registra la app con Windows para el transporte»; el registro es necesario para ver la `PhoneLine`; es por usuario; persiste hasta `UnregisterApp` o hasta que se quite el dispositivo | **DEMOSTRADO** | `RegisterApp` (arriba) |
+| `RegisterApp`, `RequestAccessAsync` y `ConnectAsync` requieren la capacidad `phoneLineTransportManagement` (`AudioRoutingStatus` y `PhoneCall`, la capacidad `phoneCall`) | **DEMOSTRADO** | páginas de cada método; lista de capacidades, l. 258 |
+| `IsRegistered()` devuelve el estado de registro de la app para el usuario activo | **DEMOSTRADO** | `IsRegistered` |
+| `RegisterApp` es `void`: no hay valor de retorno ni código que indique que el registro no se materializó | **DEMOSTRADO** | firma en el SDK (`evidence/sdk-10.0.26100.57-…`) |
+| **Ninguna** de las páginas de la clase menciona Limited Access Features, ni otra condición adicional para que el registro surta efecto | **DEMOSTRADO (ausencia)** | las seis páginas de la clase leídas (clase, `RegisterApp`, `IsRegistered`, `RequestAccessAsync`, `ConnectAsync`, `AudioRoutingStatus`) |
+| `phoneLineTransportManagement` figura en la lista de capacidades **restringidas**, **sin** la advertencia «casi nunca se aprueba» que sí llevan otras | **DEMOSTRADO** | l. 258 vs. l. 180–196 |
+| Las apps con capacidades restringidas **pueden instalarse por carga lateral sin aprobación**; la aprobación solo se exige al enviar a la Store (formulario en Partner Center, revisión caso a caso) | **DEMOSTRADO** | l. 126–129, 151–159 |
+| Los Limited Access Features son funciones de Windows que «requieren aprobación específica»; para usarlas «se necesita permiso explícito de Microsoft»: ID de función y token mediante el [formulario de solicitud LAF](https://go.microsoft.com/fwlink/?linkid=2271232&clcid=0x409) | **DEMOSTRADO** | `LimitedAccessFeatures` |
+| `TryUnlockFeature` → `Unavailable` = «el usuario no tiene acceso»; `AvailableWithoutToken` = «la función ya no está limitada»; `Unknown` = ID no encontrado | **DEMOSTRADO** | `LimitedAccessFeatureStatus` |
+| En este PC (26300) el ID `…phonelinetransportdevice_v1` devuelve `Unavailable` (con token vacío) | **DEMOSTRADO** (P2, P3) | por el punto anterior significa que sigue limitado y que no tenemos acceso, no que el ID sea inválido |
+| Que `RegisterApp` dependa de ese LAF | **NO DISPONIBLE** | la documentación no lo dice; en Win10 funciona con `Unavailable` (Klangbruecke FINDINGS §12); en 26300 no |
+| El ID `phonelinetransportdevice_v1` existe y es un LAF real | **INDICIO** | proviene de código de terceros (Sefirah `CallingFeatureUtils.cs`) y del registro de una máquina (Klangbruecke §2); la documentación oficial no lo nombra |
+| Una app **pública de terceros** puede usar legítimamente la API hoy | **NO DISPONIBLE** | la API es pública y documentada; los permisos que la hacen efectiva en Windows 11 actual no están documentados |
+| Existe evidencia de funcionamiento en versiones actuales de Windows 11 | **NO DISPONIBLE** | ver 15.3: todos los reportes de Win11 son negativos o usan vías rechazadas |
+
+**No se confunde presencia con permiso:** `PhoneCall` (v6) y `AudioRoutingStatus` existen en esta build [SDK] y `RequestAccessAsync` dio `Allowed` en P2 [HW], y aun así `IsRegistered()` nunca pasó a `True` [HW].
+
+### 15.2 Paquete suelto, MSIX de desarrollo y Store
+
+| Modalidad | Resultado en este PC [HW] | Lo que dice la documentación | Lo que NO sabemos |
+|---|---|---|---|
+| Sin paquete | `DeniedBySystem` | (sin identidad no hay capacidad) | — |
+| Paquete suelto, firma `None` (P2) | `Allowed`; `RegisterApp` sin error (24–79 ms); `IsRegistered=False` | sideload permitido sin aprobación | por qué Allowed y por qué el registro no se materializa |
+| MSIX firmado, `Developer` (P3) | **`DeniedBySystem`**; `IsRegistered=False` | idem | por qué pasa de Allowed a Denied |
+| Store | **NO PROBADO** | requiere aprobación de la capacidad restringida en Partner Center | **todo**: si se aprobaría, y si la aprobación haría efectivo el registro |
+
+Observación honesta: lo que el usuario esperaba (la firma «ayuda») ocurrió al revés en `RequestAccessAsync`. P3 no demuestra que la Store sea rechazada ni que la firma de desarrollo sea la causa del `DeniedBySystem` (puede deberse a otra variable que cambió entre P2 y P3; ver 15.6).
+
+### 15.3 Evidencia pública sobre funcionamiento en Windows 11
+
+| Fuente | Fecha / build | Qué demuestra | Qué NO demuestra |
+|---|---|---|---|
+| [MyPhone #26](https://github.com/BestOwl/MyPhone/issues/26) (hilo; leído por resumen de la herramienta de lectura web) | 22H2 (22621) → comentarios 2023–abr-2026 | `DeniedBySystem` / `RegisterApp` sin efecto o `UnauthorizedAccess` en Win11; funciona en Win10 21H2 y LTSC 2021; Microsoft contestó de forma contradictoria («se arreglará», «resuelto», «se quitó de la lista LAF, no necesita token»); un comentario de oct-2024 consiguió pasar con `BypassRegistration=1` (HKLM) **y** desbloqueo LAF falsificado (vías rechazadas); abr-2026: Phone Link omite el LAF desde la 22000 y hay que desemparejar si otra app ya registró | funcionamiento sin saltarse un control; funciones de llamada |
+| [Microsoft Q&A 6041632](https://learn.microsoft.com/en-us/answers/questions/6041632/phonelinetransportdevice-registerapp-has-no-effect) (vista por buscador; sin respuesta aceptada) | build 26300 | **El mismo síntoma que P2**: `Allowed`, `RegisterApp` sin error, `IsRegistered=False`, `ConnectAsync=False` | causa ni solución |
+| [Klangbruecke](https://github.com/MYSTRAVIL/klangbruecke) @ `2cb8e00` (2026-09-29), `docs/FINDINGS.md` §12, §15.1 | Win10 19045, **Android** | sí funciona el registro firmado y autofirmado con `RequestAccessAsync` previo; LAF `Unavailable` y aun así registra; en Win11 26200 (prueba de un tercero) `DeniedBySystem` para apps instaladas por carga lateral | iPhone; Windows 11 |
+| [BluetoothHFP](https://github.com/saymonsh/BluetoothHFP/tree/dbd737b) @ `dbd737b` (2026-09-30), mitad Flutter | Win11 (build no indicada), **iPhone** | su README dice textualmente que si Windows deniega el acceso al transporte «incluso con el paquete instalado y los permisos activados», es «una limitación real del SO/API» y la app lo informa; remite a Phone Link | que el registro funcione en ningún equipo |
+| [Sefirah](https://github.com/shrimqy/Sefirah) @ `6db524a` (2026-10-17) | Android | en Win11 **omite** el desbloqueo LAF (`ShouldSkipLAFCheck() => Major >= 22000`) y llama a `RequestAccessAsync`→`RegisterApp`; para Win10 deriva un token con una clave de comunidad (**vía rechazada**) | que en Win11 actual registre (no revisé sus issues) |
+| Thy Phone, CallCenter (Store, cerrados) | sin fecha/versión verificable | **INDICIO** de que apps de Store funcionan (comentarios en MyPhone #26) | build, teléfono (¿iPhone?), audio bidireccional, ni mecanismo |
+
+Conclusión de 15.3: **no existe evidencia verificable de un registro efectivo de una app propia de terceros en Windows 11 actual sin saltarse un control.** Hay un reporte independiente del mismo síntoma en la misma build.
+
+### 15.4 Bluetooth HFP y audio bidireccional con APIs públicas de Windows
+
+Distinciones (aplicadas a lo que sabemos con evidencia):
+
+| Nivel | Qué es | ¿Accesible para una app convencional? | Clase |
+|---|---|---|---|
+| Bluetooth Classic conectado (ACL) | enlace con el teléfono | solo lectura de estado (`BluetoothDevice.ConnectionStatus`) | **DEMOSTRADO** (P1: detecta desconexión/reconexión) |
+| Perfil HFP conectado (SLC por RFCOMM, comandos AT) | señalización | sí en teoría con `Windows.Devices.Bluetooth.Rfcomm` (MyPhone.Demo hace el SLC completo); Windows además mantiene su propio HFP | **INDICIO**; coexistencia con el HFP de Windows: **NO DISPONIBLE** |
+| Control de llamada con AT (`ATA`, `AT+CHUP`, `+CLIP`) | señalización | misma vía RFCOMM; no demostrado contra iPhone en Windows | **NO DISPONIBLE** |
+| Audio SCO/eSCO | voz | **No desde modo usuario**: Microsoft documenta los DDI de SCO como interfaces de modo kernel para *profile drivers*; Windows trae el driver HFP que gestiona la conexión SCO | **DEMOSTRADO** (docs `bluetooth-profile-drivers-overview`, `bluetooth-hfp-bypass-audio-streaming`) |
+| Micrófono y parlantes del PC | endpoints WASAPI | sí (API pública) | **DEMOSTRADO** |
+| Que Windows enrute el audio de la llamada a los endpoints de comunicaciones | lo hace Windows tras el registro | `PhoneCall.ChangeAudioDeviceAsync(LocalDevice)` es la API pública; requiere registro | **INDICIO** (Klangbruecke, Android/Win10); **bloqueado** aquí |
+
+Roles: Windows como **Hands-Free** del iPhone (teléfono = Audio Gateway) es el rol que `PhoneLineTransportDevice` administra; la documentación de audio clásico de Windows solo describe el caso inverso o accesorios (headsets) y no menciona este rol [ausencia]. **Conclusión:** con APIs públicas de usuario solo se llega al audio mediante `PhoneLineTransportDevice`/`PhoneCall`; no hay camino alternativo de usuario a SCO.
+
+Restricción específica del iPhone: **no se encontró ninguna** que impida el rol Hands-Free. Evidencia en contra de esa hipótesis: [iphonebridge](https://github.com/gabrielmeir53/iphonebridge/blob/078e9a4/spike/RESULTS.md) (`078e9a4`, 2026-10-21, **iPhone 16 Pro Max / iOS 26.5**, Linux con BlueZ+oFono+PipeWire): identificación de llamada con `LineIdentification`, `Answer()` con audio SCO al portátil (mSBC), `Hangup()`, y 3/3 llamadas salientes — **autor**, registros en `spike/RESULTS.md`. Es la prueba más clara de que el iPhone sí acepta un PC como manos libres; el cuello de botella está en Windows, no en iOS (**INDICIO fuerte**, no reproducido por nosotros, no es Windows).
+
+### 15.5 Alternativas, proyectos y matriz
+
+**Proyectos revisados (commit, fecha, qué está demostrado):**
+
+| Proyecto | Commit / fecha | Código | Demostrado | Anunciado/no verificado | Audio bidireccional real | Limitaciones |
+|---|---|---|---|---|---|---|
+| MyPhone (MIT) | `dbd0ede` · 2022-12-23 | sí | SLC HFP; registro y llamadas en Win10 | iOS en el README | **No** (autor: «falló SCO») | abandonado; roto en Win11 (#26, #27) |
+| Klangbruecke (sin licencia) | `2cb8e00` · 2026-09-29 | sí | Win10: registro, A2DP, enrutado de llamada (Android) | — | Win10/Android, autor | Win11 no registra; sin iPhone |
+| Sefirah (GPL-3.0) | `6db524a` · 2026-10-17 | sí | llamadas por `PhoneLine` con Android | — | no acreditado | Win10 usa token no autorizado; Android |
+| BluetoothHFP (mitad Flutter) | `dbd737b` · 2026-09-30 | sí | transporte denegado ⇒ lo informa | — | no por la vía Windows | remite a Phone Link |
+| **BluetoothHFP `native-poc`** | `dbd737b` | sí | **iPhone 12 Pro Max**: pila BTstack en modo usuario sobre el radio Intel AX201 reasignado al WinUSB *inbox*; SLC, eSCO, CVSD/mSBC, A2DP; «el usuario confirmó audio en ambos sentidos» (`evidence/ACCEPTANCE.md`, `hfp-sco-success.txt`) | control desde PC (`hfp_hf_answer_incoming_call`, `hfp_hf_terminate_call` en `q7/q7_bridge.c`) existe en el código, no está en los registros | **Sí, por el autor, 1 equipo** | **toma el radio completo** (Windows deja de usar Bluetooth mientras funciona); hardware único (`VID_8087&PID_0026`); operaciones de controlador con permisos de administrador; copia de seguridad y reversión propias; BTstack: «uso no comercial personal; el comercial exige licencia» (su `THIRD-PARTY.md`); falta carga en frío de firmware |
+| iphonebridge → BlueFerry (GPL-2.0) | `078e9a4` · 2026-10-21 | sí | iPhone/iOS 26.5, llamadas completas en **Linux** | — | Sí, autor, Linux | no es Windows |
+| bthaven | página no disponible (404) | — | — | según un resultado de búsqueda, marca el transporte de llamadas y el micrófono como «gated/denied» | — | **NO DISPONIBLE**: no pude verificar |
+| Phone Link / Intel Unison | cerrados | no | Microsoft documenta llamadas por Bluetooth con iPhone; Unison exige app en iOS y ciertos equipos Intel | — | no verificable | excluidos por el proyecto |
+
+**Matriz comparativa** (clase de evidencia por función; ✘ = demostrado imposible por esa vía; vacío = no aplicable):
+
+| Alternativa | Identificar | Contestar | Rechazar | Finalizar | Audio → PC | Mic PC → iPhone | Cumple restricciones | Veredicto |
+|---|---|---|---|---|---|---|---|---|
+| A. `PhoneLineTransportDevice`, carga lateral/dev (P2, P3) | API existe [SDK]; sin línea | NO DISP. | NO DISP. | NO DISP. | NO DISP. | NO DISP. | sí | **bloqueado en nuestro hardware (3 intentos)** |
+| B. Igual, con autorización LAF de Microsoft | NO DISP. | NO DISP. | NO DISP. | NO DISP. | NO DISP. | NO DISP. | sí (proceso oficial) | **C: no probado** |
+| C. Igual, publicada en la Store (capacidad aprobada) | NO DISP. | NO DISP. | NO DISP. | NO DISP. | NO DISP. | NO DISP. | sí, con cuenta Partner Center | **C: hipótesis** |
+| D. RFCOMM/HFP propio en modo usuario | INDICIO | INDICIO | INDICIO | INDICIO | **✘** (SCO solo kernel) | **✘** | sí | **D: no viable** (falta audio) |
+| E. WinUSB *inbox* + BTstack (`native-poc`) | autor | INDICIO | INDICIO | INDICIO | **autor** | **autor** | **parcial/NO**: toma el radio, sólo ese hardware, licencia BTstack | demostrado por terceros; **exige cambiar restricciones** |
+| F. ANCS desde Windows (GATT cliente) | INDICIO (Apple spec + iphonebridge en Linux) | INDICIO (spec: acción positiva «puede contestar») | INDICIO (acción negativa «puede rechazar») | NO DISP. | **✘** | **✘** | sí | **D como solución**: solo control, sin audio |
+| G. App complementaria iOS (APIs públicas de Apple) | parcial (`CXCallObserver`, sin controlar) | **✘** | **✘** | **✘** (solo llamadas propias) | **✘** | **✘** | contradice «sin app» | **D**: iOS no entrega llamadas celulares a apps |
+| H. Phone Link / Unison | sí | sí | sí | sí | sí | sí | **✘ (excluidos)** | fuera de alcance |
+| I. Linux (oFono) | sí (autor) | sí | sí | sí | sí | sí | no es Windows | informativo |
+
+Notas de la matriz: (F) ANCS requiere además un enlace LE enlazado y autorizado en el iPhone; que Windows lo pueda hacer como cliente GATT contra el iPhone: **NO DISPONIBLE** (no encontré proyecto en Windows). El texto de Apple dice que la acción positiva sobre una llamada entrante «puede contestarla» y la negativa «puede rechazarla», y que lo decide el proveedor, no el consumidor ([especificación ANCS](https://developer.apple.com/library/archive/documentation/CoreBluetooth/Reference/AppleNotificationCenterServiceSpecification/Specification/Specification.html)). (G) Las fuentes de Apple que pude leer son foros y la página de `CXCallObserver` (solo título); el reparto «observar sí, controlar no, audio no» es **INDICIO** (foros de desarrolladores de Apple y conocimiento general), no un texto oficial inequívoco.
+
+### 15.6 P2 frente a P3: qué hipótesis son compatibles
+
+Datos [HW]: sin paquete → `DeniedBySystem`; suelto sin firma → `Allowed` + registro sin efecto; firmado `Developer` → `DeniedBySystem` + registro sin efecto; en las tres, LAF `Unavailable`. Variables que cambiaron entre P2 y P3: tipo de firma, instalación vía `Add-AppxPackage -Path` (en lugar de `-Register`), certificado de confianza en `TrustedPeople`, ubicación de instalación, **y el estado previo** (la misma identidad de paquete, `…_qb22tsgw2hqnw`, ya había llamado a `RegisterApp` varias veces antes de P3).
+
+| # | Hipótesis | ¿Compatible con P2 y P3? | Clase |
+|---|---|---|---|
+| H-a | Windows 11 26300 ya no concede el registro a apps de terceros (política de plataforma), y `Allowed` en P2 es solo el resultado de una comprobación de acceso al dispositivo que no implica registro | **Sí** a ambos; explica el mismo síntoma de Q&A 6041632 | **HIPÓTESIS** (la más simple) |
+| H-b | La comprobación de acceso trata distinto el paquete en modo desarrollador (suelto = «de prueba») y el paquete firmado/instalado (sujeto a política de capacidades restringidas); en ambos, el registro real exige una autorización que no tenemos (LAF) | **Sí**; explica `Allowed`→`Denied` | **HIPÓTESIS** |
+| H-c | Estado persistente por identidad (PFN): las llamadas previas a `RegisterApp` dejaron un registro/decisión asociada al mismo PFN que provocó `DeniedBySystem` en P3 | Compatible; no explica por sí sola que P2 no registre | **HIPÓTESIS** (se apoya en el aviso de MyPhone #26 sobre registros previos) |
+| H-d | La firma de desarrollo o el almacén de confianza hacen que Windows no considere el editor «de confianza» para esta capacidad | Compatible con P3; no con P2 (P2 no tiene firma y fue `Allowed`) | **HIPÓTESIS** débil |
+| H-e | El rol Hands-Free del PC no se ofrece al iPhone (restricción de Apple) | Contradicha en lo general por iphonebridge/BluetoothHFP (iPhone acepta PC como HF); no explica `DeniedBySystem` | **INDICIO en contra** |
+| H-f | Activación del proceso (`Invoke-CommandInDesktopPackage`) | **Descartada** por P2 con `shell:AppsFolder` | **DEMOSTRADO** (P2) |
+| — | **Causa exacta** | — | **DESCONOCIDA** |
+
+Observaciones **no invasivas** que podrían distinguir (sin proponer pruebas nuevas ni cambios): HRESULT/eventos de los registros de Windows en el instante de `RequestAccessAsync` y `RegisterApp` (Bluetooth, AppModel y acceso a dispositivos; los nombres exactos de los canales no están verificados aquí); el estado del conmutador por app en *Privacidad y seguridad › Llamadas telefónicas* para cada paquete; si el mismo síntoma ocurre con una app de Store conocida (observación pasiva de su comportamiento, no de nuestro código). Ninguna de las tres decide por sí sola entre H-a y H-b.
+
+### 15.7 Veredicto, preguntas y confianza
+
+**Clasificación** (se separa C de D: faltar evidencia no es imposibilidad):
+
+| Ruta | Categoría |
+|---|---|
+| `PhoneLineTransportDevice` con carga lateral / desarrollo | bloqueada en nuestro hardware; sin evidencia pública de éxito en Windows 11 actual → **C** (no se puede declarar D: no se probó con autorización LAF ni en la Store) |
+| `PhoneLineTransportDevice` con LAF autorizado o Store | **C — NO DEMOSTRADO** (posible, sin ninguna evidencia) |
+| HFP propio por RFCOMM (APIs públicas de usuario) | **D** (audio SCO exige modo kernel, demostrado por la documentación) |
+| ANCS (control sin audio) y app complementaria iOS | **D** como solución completa |
+| WinUSB *inbox* + BTstack | demostrado por un tercero en un equipo; **incompatible con el espíritu de las restricciones** (toma el radio, un hardware, licencia) → solo viable **cambiando restricciones** |
+| **Objetivo completo bajo las restricciones actuales** | **C — NO DEMOSTRADO** (sin ruta reproducible; ninguna ruta de usuario pública cumple por sí sola) |
+
+**Respuestas directas**
+1. **¿Podemos implementarlo hoy en WinMac sin Phone Link?** **No.** No hay una ruta reproducible y compatible con las restricciones; la única API pública completa (`PhoneLineTransportDevice`/`PhoneCall`) no se registra en este PC en tres configuraciones.
+2. **¿Audio bidireccional real con APIs públicas?** **No demostrado.** En principio solo vía `PhoneCall.ChangeAudioDeviceAsync`, que depende de un registro que no se obtiene. Con RFCOMM/Winsock es imposible (SCO es de kernel).
+3. **¿La Store lo resolvería?** **Es solo una hipótesis.** La documentación solo dice que la Store exige aprobar la capacidad restringida; no dice que eso haga efectivo `RegisterApp`. Aplicaciones de Store que lo logran existen según terceros, sin build ni teléfono verificables.
+4. **¿Qué restricciones habría que cambiar?** Una de estas (cada una con coste real): (a) aceptar un proceso de autorización de Microsoft (solicitud LAF y/o Store con cuenta de Partner Center), de resultado incierto; (b) aceptar que la función tome el radio Bluetooth (WinUSB *inbox* + BTstack), solo en hardware validado, con permisos de administrador y una licencia de BTstack que hay que revisar — es la única ruta con audio demostrado, por un tercero; (c) aceptar Phone Link/Unison (excluido). Una app en iOS no resuelve nada.
+5. **¿Seguir?** **Detener el desarrollo de esta función en WinMac.** No hay ningún paso técnico sensato que dar en el código con la información actual. Como única acción no técnica y acotada: si el responsable lo considera valioso, decidir explícitamente si invierte en (a); de no hacerlo, cerrar la investigación. No se recomienda continuar solo porque algo sea imaginable.
+
+**Confianza:** *alta* (≈85 %) en que hoy no hay ruta reproducible bajo las restricciones y en D para RFCOMM/ANCS/iOS; *media* (≈60 %) en que la causa sea una política de plataforma (H-a/H-b) en lugar de algo corregible en nuestro empaquetado; *baja* (≈30 %) sobre si LAF o Store desbloquearían el registro; la causa exacta es **desconocida**.
+
+**Límites de esta lectura:** `learn.microsoft.com` bloqueado (leí el mismo texto desde `MicrosoftDocs`); hilos de MyPhone y Microsoft Q&A leídos a través de herramientas de resumen; no reproduje ninguna de las demostraciones de terceros; no verifiqué si las condiciones de BTstack se aplican a un proyecto de código abierto.
 
 ## Apéndice A — Correcciones a `docs/39` y `docs/41`
 
