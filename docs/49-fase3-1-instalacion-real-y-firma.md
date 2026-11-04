@@ -115,7 +115,24 @@ La Barra reserva el borde superior de **cada monitor** con la API estándar de b
 ### 10.4 Qué se hizo
 - **Diagnóstico de solo lectura** (`--diagnose` y `Diagnose-Install.ps1`): por monitor, la pantalla, la **banda que Windows reservó arriba y abajo**, la escala, el ajuste de reserva, si la Barra corre, y las líneas de `bar.log` sobre la reserva, con una «Lectura» que distingue «Windows sí/no tiene banda reservada». Esto separa las causas 1–4 con **un solo informe**.
 - **Prueba real en CI** (`tools/ci/Test-Appbar.ps1`, informe `appbar-informe-<sha>`): arranca la Barra del paquete y comprueba que `SPI_GETWORKAREA` baja, que **vuelve exactamente** al original al cerrarse y tras un **cierre brusco** (proceso terminado), y que con «no reservar» no cambia. Es un runner efímero (1 monitor): **no** cubre dos monitores, DPI mixto, reinicio de Explorer, desconexión de monitores ni la posición de los iconos.
-- No se cambió el mecanismo de reserva, porque **no hay evidencia de un defecto en él**; cambiarlo sin saber cuál de las causas 1–4 ocurrió sería improvisar.
+- **Después del diagnóstico se encontró y corrigió un defecto real** (10.7). La frase anterior de este apartado («no hay evidencia de un defecto») quedó superada por las mediciones del CI.
+
+### 10.7 CAUSA RAÍZ (medida en Windows del CI) y corrección
+**Experimentos** (`tools/ci/Test-Appbar.ps1`, mismo runner y misma sesión):
+| Experimento | Resultado |
+|---|---|
+| AppBar mínimo según el protocolo documentado (control) | **reserva** (`antes=0; durante=28; después=0`) |
+| 5 variantes que añaden una a una lo de la Barra (oculta al registrar, `NOACTIVATE`, `NOREDIRECTIONBITMAP`, ventana de 100×30, `SetWindowPos`, todo junto) | **todas reservan** → no es la ventana ni el orden de llamadas |
+| **La Barra del paquete con la bandeja desactivada** (`ShowTrayIcons=false`) | **reserva** (`0,28,1024,720`) |
+| **La Barra del paquete con la bandeja activada (valor por defecto)** | **NO reserva** (`0,0,1024,720`), con el guardián registrando «registrada: sí, pero el área de trabajo no excluye la barra» |
+
+**Causa:** con la bandeja activada, la Barra crea una ventana propia de clase `Shell_TrayWnd`, siempre encima, para recibir los iconos de bandeja (`TrayHost`). `SHAppBarMessage` localiza a Explorer con `FindWindow("Shell_TrayWnd")` y devuelve **la primera** de la pila: la de la propia Barra. Las llamadas `ABM_NEW/QUERYPOS/SETPOS` de la Barra se «aceptaban» (de ahí «registrada: sí») pero nunca llegaban a Explorer de forma efectiva y Windows no recortaba el área de trabajo. Es exactamente el síntoma observado en el PC: Barra visible, iconos del escritorio debajo.
+
+**Corrección:** durante cada operación de AppBar de la Barra (`NEW`, `QUERYPOS`, `SETPOS`, `REMOVE`) la ventana-proxy se aparta un instante (`HWND_NOTOPMOST`) para que `FindWindow` devuelva la de **Explorer**, y vuelve a la cima inmediatamente (`TrayHost.WithExplorerDirect`; el temporizador de reafirmación no actúa mientras dura). Los iconos de bandeja siguen funcionando. **No se mueve ni reordena ningún icono del escritorio.**
+
+**Resultado en el CI (mismo runner):** la Barra con la bandeja activada **reserva** (`0,28,1024,720`); al cerrarse ordenadamente y tras un cierre brusco el área de trabajo **vuelve exactamente** a `y=0`; un segundo arranque vuelve a reservar; con «no reservar» no cambia. **Experimento 2:** una AppBar de **otro proceso** (el control) también reserva con la Barra y su proxy en marcha (`antes=28; durante=56`), así que **el Dock y otras barras ajenas no estaban afectados** por esto.
+
+**Qué NO se ha demostrado:** que éste fuera el motivo en el PC de la persona usuaria (es el único hallazgo reproducido que coincide con el síntoma, pero su `bar.log` aún no se ha visto); que los iconos del escritorio se recoloquen en ese PC (depende de Explorer, 10.2); dos monitores, DPI mixto, reinicio de Explorer y desconexión de monitores (el CI tiene un monitor).
 
 ### 10.5 Restauración y casos límite (revisión de diseño, no probados en un PC real)
 | Caso | Comportamiento esperado | Estado |
@@ -137,6 +154,8 @@ Primera prueba real de `HatsuDesktop-2.0.0-win-x64.msi` (CI 41881545350) en el W
 - En el primer arranque el Dock no apareció y Windows mostró una notificación diciendo que bloqueó `HatsuDesktop.Dock.exe` por no poder confirmar quién lo publicó.
 - El asistente no apareció.
 - Los iconos del escritorio quedan bajo la Barra; «Actualizar» no lo arregló.
+- **Reproducido en el CI:** con la configuración por defecto la Barra del paquete no reservaba el borde superior (10.7) — el mismo síntoma, causa medida y corregida.
+- **Del CI:** un ejecutable no válido bloqueaba el arranque del host (sección 12), corregido; un permiso denegado falla limpiamente (código 5).
 - **Del paquete (CI):** ningún `.exe`/`.dll` propio ni el MSI llevan firma Authenticode.
 - **Del código:** con una configuración previa (`winmac.json` de WinMac) la Fase 3 no mostraba el asistente **por diseño**; ya no es así (bienvenida de migración, sección 4).
 - «Reintentar» funciona y es el mecanismo de recuperación a conservar.
@@ -144,12 +163,12 @@ Primera prueba real de `HatsuDesktop-2.0.0-win-x64.msi` (CI 41881545350) en el W
 ### 11.2 SOSPECHADO (compatible con lo observado; sin prueba)
 - Que el bloqueo inicial del Dock lo causara Smart App Control (o Defender/SmartScreen) por archivo sin firma ni reputación **en ese momento**; **no** es permanente (el Dock arrancó después).
 - Que el bloqueo fuera transitorio (veredicto en la nube, análisis de archivos recién instalados o carrera con el arranque inmediato tras instalar) — hipótesis de 2.1.
-- Que «Reservar el borde superior» estuviera desactivado en la configuración heredada, o que `ABM_NEW` fallara, o que Explorer no recolocara los iconos ya situados (10.3).
+- **Reserva del borde superior:** la causa más probable es la del apartado 10.7 (reproducida y corregida en el CI), pero **no se ha confirmado en ese PC**; siguen siendo posibles el ajuste desactivado en la configuración heredada, `ABM_NEW` fallido o que Explorer no recolocara los iconos ya situados (10.3).
 - Que Barra e Isla arrancaran sin bloqueo por una evaluación de reputación distinta de la del Dock: **no se sabe**.
 - Que la Isla apareciera «por reintentar el Dock»: **no se asume ninguna relación causal**.
 
 ### 11.3 PENDIENTE DE VALIDAR EN EL EQUIPO DE LA PERSONA USUARIA
-1. Instalar `HatsuDesktop-2.0.1` (actualiza al 2.0.0). Comprobar la **bienvenida de migración** al abrir desde el menú Inicio.
+1. Instalar `HatsuDesktop-2.0.1` (actualiza al 2.0.0). Comprobar la **bienvenida de migración** al abrir desde el menú Inicio, y que **los iconos del escritorio ya no quedan bajo la Barra** (si no, el informe de diagnóstico dice por qué).
 2. Generar el informe (Ajustes › General › «Generar informe de diagnóstico») **antes y después** de reproducir cualquier fallo, y leerlo antes de compartirlo. En particular:
    - sección «Componentes elegidos y su estado» y las líneas `[dock] …` con **hora** y **código** de `host.log`;
    - sección de eventos de Integridad de código y Defender con **hora**;
@@ -169,3 +188,21 @@ Corregido en dos capas independientes: (1) el host llama a `SetErrorMode(SEM_FAI
 En el runner de Windows, `bar.log` de la Barra del paquete mostró **el mismo síntoma que en tu PC**: `AppBar reservado en …: (0,0)-(1024,28) px` y, segundos después, `el área de trabajo de … no excluye la barra (empieza en 0 px, barra hasta 28 px; registrada: sí): se vuelve a pedir la reserva`, repetido; más tarde `Explorer se reinició (TaskbarCreated)` y `ABM_NEW falló`. La lectura directa del área de trabajo (`SPI_GETWORKAREA`) tampoco cambió.
 **Qué NO significa:** no demuestra un defecto del producto (el runner es una sesión virtual con un solo monitor y su shell puede no atender barras de aplicación). Por eso se añadió un **experimento de control** en `Test-Appbar.ps1`: una barra de aplicación mínima que sigue **al pie de la letra** el protocolo documentado (`ABM_NEW` → `ABM_QUERYPOS` → `ABM_SETPOS` → mover la ventana). Si el control **sí** cambia el área de trabajo y la Barra no, es un **defecto del producto** y la prueba falla; si el control tampoco la cambia, el runner no sirve para esto y la prueba se marca **no concluyente**. Resultado: ver «Resultados de CI» más abajo.
 **Qué sí aporta:** confirma que el guardián existente detecta y registra exactamente el síntoma («registrada: sí pero el área de trabajo no excluye la barra»). Ese es el renglón de `bar.log` que hay que buscar en el informe de tu PC.
+
+
+## 13. Resultados de CI (commit `627f633`, ejecución 41921205653: **4 jobs en verde**)
+| Qué | Resultado | Límite |
+|---|---|---|
+| Pruebas unitarias (Host.Core 324, Bar.Core 620, resto sin cambios) | OK | — |
+| MSI en el runner: instalar, actualizar (con el host abierto), bajar de versión (rechazado), desinstalar, convivencia con copia portable, **diagnóstico en Windows PowerShell 5.1 sin cambiar nada** | **74 comprobaciones, 0 fallos** | runner efímero con permisos elevados; la entrada de desinstalación quedó en HKLM (con un usuario sin privilegios debe ir a HKCU: pendiente) |
+| **Reserva del borde superior** con la Barra real del paquete: reserva, restaura al cerrar y tras cierre brusco, 2.º arranque, «no reservar» | OK | un monitor, sin DPI mixto, sin reinicio de Explorer, **no mide los iconos del escritorio** |
+| Experimento 2 (AppBar ajena con la Barra en marcha) | reserva (28→56) | idem |
+| Módulo que no se puede lanzar (archivo no válido): 5 intentos máximo, `Failed`, código de Windows registrado, la Barra sigue en marcha, informe local | OK | ver 12 |
+| Permiso denegado (error 5, «acceso denegado») | OK | depende de las ACL del runner |
+| Asistente: instalación nueva (ningún módulo antes de decidir), omitir (Barra/Dock arrancan, Connect no, sin inicio automático), usuario existente → bienvenida de migración pendiente | OK | sin ventana (`--no-tray`); la ventana se revisó solo en capturas |
+| Capturas del asistente (14 + escalas + detalle técnico), incluida la **bienvenida de migración** en claro y oscuro | generadas; revisadas a ojo las de migración y las anteriores | Apariencia/Resultado a 125 % y 150 % no revisadas a ojo |
+| Integración con NotchWin (pin `80bd29a`), letras sincronizadas | OK | — |
+| Auditoría de binarios | **26 binarios propios, 26 sin firma; MSI `NotSigned`**; 445 de 453 binarios ajenos firmados por Microsoft | confirma la falta de firma; **no explica por qué solo el Dock** |
+| Job de Linux | verde en esta ejecución; una prueba de tiempos del supervisor (`RestartPolicyTests…`) falló una vez en una ejecución anterior y pasó en todas las demás: parece flaky por carga del runner |
+
+**Nuevo MSI de prueba:** `HatsuDesktop-2.0.1-win-x64.msi` (118 MB, **sin firmar**; SHA-256 `e511592c…94b8` en el commit `627f633`; artefacto `hatsu-desktop-paquete-<sha>` de la ejecución 41921205653, 14 días). No se publica ni se versiona fuera de CI. Se instala **encima** del 2.0.0 (misma identidad de producto, versión mayor).
