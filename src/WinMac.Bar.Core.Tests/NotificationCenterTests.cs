@@ -188,7 +188,7 @@ public class NotificationStoreTests
     {
         var r = new NcRig(); r.Src.Items.AddRange([NcRig.N(1, "Mail", 1), NcRig.N(2, "Mail", 2), NcRig.N(3, "Teams", 3)]); r.Open();
         r.Click("ngclear:Mail"); Assert.Equal([1u, 2u], r.Src.Removed.Order()); Assert.Equal(["Teams"], r.Store.State.Groups.Select(g => g.AppName));
-        r.Base.Ui.ConfirmAnswer = false; r.Click("nc:clearall"); Assert.Equal(0, r.Src.Clears); Assert.Single(r.Base.Ui.Confirms);   // borrar en Windows pide confirmación
+        r.Base.Ui.ConfirmAnswer = false; r.Click("nc:clearall"); Assert.Equal(0, r.Src.Clears); Assert.Single(r.Base.Ui.Confirms); Assert.Equal(ConfirmIcon.Trash, r.Base.Ui.LastIcon);   // borrar en Windows pide confirmación
         r.Base.Ui.ConfirmAnswer = true; r.Click("nc:clearall"); Assert.Equal(1, r.Src.Clears); Assert.Equal(0, r.Store.State.Count);
         Assert.Equal("Eliminar notificaciones", r.Base.Ui.LastConfirmAction);   // WM-024: the button says what it does (Cancelar is the default)
         Assert.Contains(r.Panel().Widgets, w => w.Id == "nc-empty");

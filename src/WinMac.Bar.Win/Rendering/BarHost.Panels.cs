@@ -290,7 +290,7 @@ public sealed partial class BarHost : IPanelUi
     void IPanelUi.ShowInfo(string title, string? text) => ShowInfo(title, text);
     void IPanelUi.OpenUri(string uri) => BarNative.ShellExecuteW(IntPtr.Zero, "open", uri, null, null, 1);
     void IPanelUi.TabChanged(HubTab tab) { _hubTicks = 0; _lastHubTick = DateTime.UtcNow; RefreshHubTab(first: true); }
-    bool IPanelUi.Confirm(string title, string text, string action, bool danger) => Confirm(title, text, action, danger);
+    bool IPanelUi.Confirm(string title, string text, string action, bool danger, ConfirmIcon icon) => Confirm(title, text, action, danger, icon);
 
     void IPanelUi.OpenSettings(string? section)
     {
@@ -353,10 +353,10 @@ public sealed partial class BarHost : IPanelUi
     }
 
     /// <summary>WM-024: WinMac's own dark dialog (Cancelar by default) instead of the white MessageBox; same modal guard as before so the host does not think the bar hung.</summary>
-    private bool Confirm(string title, string text, string action = "Continuar", bool danger = false)
+    private bool Confirm(string title, string text, string action = "Continuar", bool danger = false, ConfirmIcon icon = ConfirmIcon.Warning)
     {
         if (_popover is not null) _popover.KeepOpen = true; _modal = true;
-        try { return WinMac.Dock.Win.Rendering.DarkDialog.Ask(title, text, action, danger, _log); }
+        try { return WinMac.Dock.Win.Rendering.DarkDialog.Ask(title, text, action, danger, _log, Enum.Parse<WinMac.Dock.ConfirmKind>(icon.ToString())); }
         finally { _modal = false; if (_popover is not null) _popover.KeepOpen = false; }
     }
 
@@ -401,7 +401,7 @@ public sealed partial class BarHost : IPanelUi
     private void RunSystemAction(SystemActionKind k, string? appName)
     {
         var info = SystemActions.Get(k);
-        if (SystemActions.NeedsConfirmation(k, _cfg.ConfirmDestructive) && !Confirm(info.ConfirmTitle ?? info.Label, string.Format(info.ConfirmText ?? "¿Continuar?", appName ?? "la app activa"), info.Label.TrimEnd('…', '.'), danger: true)) return;
+        if (SystemActions.NeedsConfirmation(k, _cfg.ConfirmDestructive) && !Confirm(info.ConfirmTitle ?? info.Label, string.Format(info.ConfirmText ?? "¿Continuar?", appName ?? "la app activa"), info.Label.TrimEnd('…', '.'), danger: true, ConfirmIcons.ForAction(k))) return;
         _hub.Run(() => _hub.Services.Session.Run(k), r => { if (!r.IsOk) ShowInfo(info.Label, r.Message); });
     }
 

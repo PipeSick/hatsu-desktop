@@ -95,14 +95,14 @@ internal sealed class FakeUi(SystemHub hub) : IPanelUi
     public void ShowInfo(string title, string? text) => Infos.Add((title, text));
     public void OpenUri(string uri) => Uris.Add(uri);
     // panel multifunción
-    public List<HubTab> TabChanges { get; } = []; public List<string?> SettingsOpened { get; } = []; public int Quits; public List<object> Patches { get; } = []; public bool ConfirmAnswer = true; public List<(string Title, string Text)> Confirms { get; } = [];
+    public List<HubTab> TabChanges { get; } = []; public List<string?> SettingsOpened { get; } = []; public int Quits; public ConfirmIcon LastIcon; public List<object> Patches { get; } = []; public bool ConfirmAnswer = true; public List<(string Title, string Text)> Confirms { get; } = [];
     public List<(string Title, IReadOnlyList<Choice> Choices)> Menus { get; } = []; public string? PickNext { get; set; }
     public void TabChanged(HubTab tab) => TabChanges.Add(tab);
     public void OpenSettings(string? section) => SettingsOpened.Add(section);
     public void QuitWinMac() => Quits++;
     public void ShowChoices(string title, IReadOnlyList<Choice> choices, Action<string> onPick) { Menus.Add((title, choices)); if (PickNext is not null) onPick(PickNext); }
     public void PatchConfig(object patch) => Patches.Add(patch);
-    public bool Confirm(string title, string text, string action = "Continuar", bool danger = false) { Confirms.Add((title, text)); LastConfirmAction = action; return ConfirmAnswer; }
+    public bool Confirm(string title, string text, string action = "Continuar", bool danger = false, ConfirmIcon icon = ConfirmIcon.Warning) { LastIcon = icon; Confirms.Add((title, text)); LastConfirmAction = action; return ConfirmAnswer; }
     public string? LastConfirmAction;
 }
 
