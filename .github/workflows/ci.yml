@@ -3,7 +3,7 @@ name: ci
 # Validación NO interactiva en runners de GitHub. No publica versiones, no crea releases, no escribe en el repositorio.
 on:
   push:
-    branches: ["claude/**", "fix/**", "main"]
+    branches: ["claude/**", "fix/**", "main", "feat/**"]
     paths-ignore: ["docs/**", "*.md"]   # solo documentación: no lanza (ni cancela) una validación
   pull_request:
   workflow_dispatch:
@@ -121,6 +121,38 @@ jobs:
         with:
           name: capturas-mezclador-${{ github.sha }}
           path: capturas-mezclador
+          retention-days: 14
+          if-no-files-found: warn
+      - name: "Capturas de la iteración 7 en tema claro y oscuro (diálogos, Acerca de, panel del iPhone, ventana principal; datos de MUESTRA, NO es validación en hardware)"
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force capturas-it7 | Out-Null
+          $bar = (Resolve-Path dist/WinMac/WinMac.Bar.App.exe).Path
+          $jobs = @()
+          foreach ($t in 'dark', 'light') {
+            foreach ($d in 'shutdown', 'restart', 'logoff', 'forcequit', 'clear-notifications', 'notice') { $jobs += ,@('--render-dialog', $d, '--theme', $t, '--scale', '2', '--out', "capturas-it7/dialogo-$d-$t.png") }
+            foreach ($k in 'phone', 'phone-off', 'phone-unknown', 'apple', 'battery') { $jobs += ,@('--render-panel', $k, '--theme', $t, '--scale', '2', '--out', "capturas-it7/panel-$k-$t.png") }
+            $jobs += ,@('--render-about', '--theme', $t, '--scale', '2', '--out', "capturas-it7/acerca-$t.png")
+            $jobs += ,@('--render-about', '--theme', $t, '--scale', '2', '--expanded', '--out', "capturas-it7/acerca-detalles-$t.png")
+          }
+          foreach ($j in $jobs) {
+            $out = $j[-1]; $a = $j | ForEach-Object { if ($_ -like 'capturas-it7/*') { "`"$_`"" } else { $_ } }
+            $p = Start-Process -FilePath $bar -ArgumentList $a -PassThru -Wait -WindowStyle Hidden
+            Write-Host "$out -> código $($p.ExitCode), existe=$(Test-Path $out)"
+            if ($p.ExitCode -ne 0 -or -not (Test-Path $out)) { throw "No se pudo renderizar $out" }
+          }
+          $host_ = (Resolve-Path dist/WinMac/WinMac.exe).Path
+          foreach ($t in 'dark', 'light') {
+            $out = "capturas-it7/ventana-principal-$t.png"
+            $p = Start-Process -FilePath $host_ -ArgumentList @('--render-tray-panel', '--theme', $t, '--scale', '2', '--out', "`"$out`"") -PassThru -Wait -WindowStyle Hidden
+            Write-Host "$out -> código $($p.ExitCode), existe=$(Test-Path $out)"
+          }
+      - name: Subir capturas de la iteración 7
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-it7-${{ github.sha }}
+          path: capturas-it7
           retention-days: 14
           if-no-files-found: warn
       - name: Subir resultados de la integración

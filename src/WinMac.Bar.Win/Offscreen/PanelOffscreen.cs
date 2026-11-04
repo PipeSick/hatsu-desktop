@@ -101,6 +101,17 @@ public static class PanelOffscreen
                 Sessions = new AudioSessionsState(true, sessions), Routing = routing ? new AppRoutingState(true, null, map) : null };
             model = PanelBuilder.SoundPanel(ctx with { Sys = snap, Cfg = cfg with { SoundMixer = true, AppOutputRouting = routing } });
         }
+        else if (kind.StartsWith("phone", StringComparison.Ordinal))
+        {   // It7: DATOS DE MUESTRA del panel del iPhone: conectado con lectura reciente, desconectado (última lectura vieja) o sin lectura
+            var t = now;
+            var phs = kind switch
+            {
+                "phone-off" => new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Disconnected, DeviceName = "iPhone de Ana", Battery = 64, BatteryAtUtc = t.AddMinutes(-42), LastSeenUtc = t.AddMinutes(-40), BatteryStatus = WinMac.Connect.PhoneFeatureStatus.Active, NotificationsStatus = WinMac.Connect.PhoneFeatureStatus.Active },
+                "phone-unknown" => new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Connected, DeviceName = "iPhone de Ana", BatteryStatus = WinMac.Connect.PhoneFeatureStatus.Active, NotificationsStatus = WinMac.Connect.PhoneFeatureStatus.NotAuthorized },
+                _ => new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Connected, DeviceName = "iPhone de Ana", Battery = 82, BatteryAtUtc = t.AddMinutes(-1), BatteryStatus = WinMac.Connect.PhoneFeatureStatus.Active, NotificationsStatus = WinMac.Connect.PhoneFeatureStatus.Active },
+            };
+            model = PanelBuilder.PhonePanel(ctx with { Phone = phs, PhoneNotifCount = kind == "phone" ? 3 : 0 });
+        }
         else if (kind == "apple") model = PanelBuilder.AppleMenu(ctx with { ForegroundApp = "Spotify", User = new SessionUser("Usuario de prueba", "EQUIPO-CI") });
         else if (kind is "battery" or "battery-partial")   // WM-010: DATOS DE MUESTRA del panel de energía; «battery-partial» = un controlador que no informa de ciclos ni capacidad de diseño
             model = PanelBuilder.BatteryPanel(ctx with { Battery = new BatteryInfo(true, 64, false, false, 3 * 3600 + 20 * 60),
