@@ -132,3 +132,30 @@ En la prueba ONB2 el estado final queda `InProgress` y no `Skipped` porque ahí 
 4. ¿Añadir navegación por Tab y soporte de accesibilidad completo al asistente?
 5. ¿Ofrecer un actualizador? Hoy no se consulta ni descarga nada.
 6. ¿Publicar el MSI? Hoy no se publica nada; el artefacto de CI es temporal.
+
+## 12. Correcciones visuales del asistente (ronda de revisión sobre las 12 capturas de CI)
+Revisadas a ojo las capturas generadas por el CI (volcadas como JPEG reducidos al registro del job, porque la descarga de artefactos no estaba disponible para quien implementó los cambios; el artefacto `capturas-onboarding-<sha>` tiene los PNG a escala 2 y los demás escalados). Identidad Flux sin cambios.
+
+| Defecto | Corrección | Comprobación |
+|---|---|---|
+| Apariencia: la nota del tema pisaba «Tamaño del Dock» | Todas las medidas salen de **una sola clase** (`OnboardingLayout`): cada texto reserva el alto que necesita y el siguiente bloque empieza debajo; controles apilados con separación | Prueba de geometría (sin solapes en 5 variantes × 5 pantallas), prueba específica del orden vertical, capturas claro/oscuro a 100/125/150/200 % |
+| Resultado: los puntos de progreso invadían «Reintentar» | Puntos eliminados de Bienvenida y Resultado; en las demás pantallas viven en una franja propia entre los botones | Prueba: ningún cuadro entra en el pie de botones (y ≥ 492) ni los puntos comparten espacio con un botón |
+| Resultado: aviso desalineado, lejos del módulo, mucho vacío | Mensaje **dentro** de la tarjeta, alineado con su margen interior (x = 64), justo bajo la lista; la tarjeta se ajusta a su contenido | Capturas + prueba con 5, 8 y 12 filas |
+| Resultado: «desactivado» en verde | Indicador **neutro** (gris) para lo desactivado a propósito (`ApplyItem.Inactive`); verde solo para lo correcto, ámbar para incidencias, rojo para fallos | Prueba del aplicador + capturas |
+| Tema claro: contraste bajo | Variantes oscuras de la paleta Flux solo para texto sobre superficies claras (acento `#6D28D9`, aviso `#9A4406`, verde `#166534`, error `#B91C1C`) | **Prueba de contraste WCAG AA (≥ 4,5:1)** sobre fondo y tarjeta en ambos temas; la prueba detectó un naranja a 4,23:1 y se corrigió |
+| Componentes: dependencia de la Barra poco visible | Etiqueta **«Requiere Barra superior»** en Peripherals y Cleanup (la lógica de dependencias no cambió) | Prueba (solo esas dos) + capturas |
+| Vista previa vertical | Escritorio **horizontal** 16:10 con barra, Isla, ventana de muestra y Dock según tema, tamaño y posición | Prueba de proporción + capturas |
+| «No arrancó (estado: Failed)» | «**No se pudo iniciar**»; el detalle técnico (`estado del supervisor: Failed`) aparece aparte, en «Detalles técnicos» (plegado por defecto) | Pruebas + captura con el detalle abierto |
+| «Casi listo» | «**Configuración aplicada con incidencias**» | Prueba del título |
+| «Continuar de todos modos» sin explicar | El mensaje dice qué hace: cierra el asistente con lo que funciona; lo que no arrancó queda anotado y se puede reintentar o desactivar en Ajustes | Prueba de texto |
+| Revisión: etiquetas «Dock» duplicadas | Filas «Dock» y «**Tamaño y posición del Dock**» | Prueba de etiquetas únicas |
+| Bienvenida: «Omitir» ambiguo | «Omitir activa los componentes predeterminados (Dock, Barra superior y Dynamic Island). No cambia el inicio automático ni oculta la barra de tareas.» (la frase anterior, «nada se cambia en Windows», era imprecisa) | Prueba de texto |
+| Botones | «Continuar de todos modos» ocupaba todo su botón: botones ensanchados | Prueba: cada etiqueta cabe en una línea dentro de su botón |
+
+**Comprobaciones funcionales pedidas**
+- *Inicio automático por defecto:* **desactivado**. La captura que lo mostraba «Sí» venía de mi muestra de prueba (hacía clic en el interruptor antes de dibujar), no del valor real. Ahora las capturas usan los valores seguros (+ Peripherals para ver la dependencia) y muestran «No». Pruebas: valores seguros con `Autostart=false`/`HideTaskbar=false`; y en CI real (ONB2) omitir **no crea** el valor `Run\WinMac`.
+- *Fallo de Dynamic Island de las capturas:* es un **escenario de prueba inventado** en `RenderOffscreen` (ahora marcado en cada captura con «Captura de muestra · datos de prueba»). No es un problema del paquete: la Isla arranca de verdad bajo el host en la integración con NotchWin (CI en verde).
+
+**Qué NO prueban las pruebas de geometría:** que el alto real de un texto en Segoe UI coincida con la estimación (por eso se revisaron las capturas), ni la estética, ni la interacción real con la ventana. Quedan para la validación manual (sección 10).
+
+**Revisado a ojo en esta ronda:** las 12 capturas de revisión (6 pantallas × claro/oscuro, escala 2), Apariencia y Resultado a 100 % en ambos temas y el detalle técnico a 150 %. **No revisadas a ojo:** Apariencia/Resultado a 125 % y 150 % (están en el artefacto; la geometría es en DIP y las pruebas de redondeo a píxeles de 100/125/150/175/200 % pasan).
