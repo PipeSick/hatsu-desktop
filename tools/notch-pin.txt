@@ -1,2 +1,2 @@
-# Commit de PipeSick/notch-win (rama feat/winmac-iteration-7-polish, basada en f866eff) que el CI de WinMac compila para validar la integración. Actualizar al publicar cambios de NotchWin.
-b4862204651a9faa80a616ea8e043550c98d9056
+# Commit de PipeSick/notch-win (rama feat/winmac-iteration-8, basada en b486220: solo añade una prueba de contrato) que el CI de WinMac compila para validar la integración. Actualizar al publicar cambios de NotchWin.
+80bd29a4b8aa1280fb2d79db741594d3eeaf42ed
