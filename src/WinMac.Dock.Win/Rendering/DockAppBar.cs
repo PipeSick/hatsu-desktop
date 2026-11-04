@@ -16,7 +16,7 @@ internal sealed class DockAppBar(IntPtr hwnd, uint callbackMessage, Action<strin
     public bool Registered => _registered;
 
     /// <summary>Reserves a strip of <paramref name="heightPx"/> at the bottom of <paramref name="monitor"/>; returns the bottom edge the Dock must sit on.</summary>
-    public int Reserve(Interop.Native.RECT monitor, int heightPx)
+    public int Reserve(Interop.Native.RECT monitor, int heightPx, bool flushWithEdge = false)
     {
         var abd = New();
         if (!_registered)
@@ -28,7 +28,9 @@ internal sealed class DockAppBar(IntPtr hwnd, uint callbackMessage, Action<strin
 
         abd = New(); abd.uEdge = ABE_BOTTOM;
         abd.rc = new RECT { L = monitor.Left, T = monitor.Bottom - heightPx, R = monitor.Right, B = monitor.Bottom };
-        SHAppBarMessage(ABM_QUERYPOS, ref abd);                 // Windows moves it above other AppBars (e.g. a visible taskbar)
+        // flushWithEdge (WM-043): sin barra de tareas visible NO se consulta la posición: ABM_QUERYPOS empujaría el Dock por encima de la franja que Explorer pueda seguir reservando
+        // aunque la barra esté oculta, y el Dock quedaría separado del borde. Con barra visible, Windows lo sube sobre ella como siempre.
+        if (!flushWithEdge) SHAppBarMessage(ABM_QUERYPOS, ref abd);   // Windows moves it above other AppBars (e.g. a visible taskbar)
         abd.rc.T = abd.rc.B - heightPx;
         SHAppBarMessage(ABM_SETPOS, ref abd);
         if (abd.rc.L != _last.L || abd.rc.T != _last.T || abd.rc.R != _last.R || abd.rc.B != _last.B)

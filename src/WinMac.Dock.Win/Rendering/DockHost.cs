@@ -123,7 +123,11 @@ public sealed class DockHost : IDisposable
         _pointerOver = inWin && _view is not null && (InteractiveAt(sx, sy) || _view.HoverIndex >= 0);
         _ctl.SetEdgeHot(DockSettings.EdgeHot(p.X, p.Y, _monitor.Bottom, _winLeftPx, _winWpx, _winTopPx + _winHpx, screenEdgeFree: !_taskbarBelow));
         if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000) { _lastFs = DateTime.UtcNow; _ctl.SetSuppressed(FullscreenWatcher.ShouldSuppress()); }
-        if ((DateTime.UtcNow - _lastWorkCheck).TotalSeconds >= 2) { _lastWorkCheck = DateTime.UtcNow; _taskbarBelow = TaskbarVisibleOn(_monitor); RecheckWorkArea(null); }   // por si Windows no avisó (barata: una consulta)
+        if ((DateTime.UtcNow - _lastWorkCheck).TotalSeconds >= 2) {
+            _lastWorkCheck = DateTime.UtcNow; var top = TaskbarTopOn(_monitor); bool changed = (top is null) != (_taskbarTop is null); _taskbarTop = top; _taskbarBelow = top is not null;
+            if (changed && _hwnd != IntPtr.Zero) { _log($"[dock] la barra de tareas de Windows {(top is null ? "ya no se ve" : "volvió")}: el Dock se recoloca"); PlaceWindow(show: false); _force = true; }
+            else RecheckWorkArea(null);
+        }   // por si Windows no avisó (barata: una consulta)
     }
 
     private void UpdateVisibility()
@@ -197,25 +201,30 @@ public sealed class DockHost : IDisposable
         LogSizes("inicio");
     }
 
-    private DateTime _lastWorkCheck; private Native.RECT _lastWork; private bool _taskbarBelow = true;
+    private DateTime _lastWorkCheck; private Native.RECT _lastWork; private bool _taskbarBelow = true; private int? _taskbarTop;
 
-    /// <summary>¿Hay una barra de tareas de Explorer VISIBLE en el borde inferior de este monitor? (WM-043: oculta por WinMac → el borde de la pantalla queda libre para el Dock).
-    /// Solo ventanas de Explorer: la Barra de WinMac tiene una ventana propia de la misma clase, invisible.</summary>
-    private static bool TaskbarVisibleOn(Native.RECT mon)
+    /// <summary>
+    /// Borde superior de la barra de tareas de Explorer VISIBLE en el borde inferior de este monitor, o null (WM-043). «Visible» = ventana visible y con más de
+    /// <see cref="DockSettings.TaskbarSliverPx"/> px dentro del monitor: oculta por WinMac, o autoocultada (solo asoma 1–2 px) → null.
+    /// Solo ventanas de Explorer: la Barra de WinMac tiene una ventana propia de la misma clase, invisible.
+    /// </summary>
+    private static int? TaskbarTopOn(Native.RECT mon)
     {
-        bool found = false; var shell = Native2.GetShellWindow(); if (shell == IntPtr.Zero) return false;
-        Native2.GetWindowThreadProcessId(shell, out uint shellPid);
+        var shell = Native2.GetShellWindow(); if (shell == IntPtr.Zero) return null;
+        Native2.GetWindowThreadProcessId(shell, out uint shellPid); int? best = null;
+        var monitor = new PxRect(mon.Left, mon.Top, mon.Right, mon.Bottom);
         foreach (var cls in new[] { "Shell_TrayWnd", "Shell_SecondaryTrayWnd" })
         {
             IntPtr h = IntPtr.Zero;
             while ((h = Native2.FindWindowExW(IntPtr.Zero, h, cls, null)) != IntPtr.Zero)
             {
                 Native2.GetWindowThreadProcessId(h, out uint pid);
-                if (pid != shellPid || !Native2.IsWindowVisible(h) || !Native2.GetWindowRect(h, out var r)) continue;
-                if (r.Left < mon.Right && r.Right > mon.Left && r.Bottom >= mon.Bottom - 2 && r.Top < mon.Bottom) found = true;   // pegada al borde inferior de este monitor
+                if (pid != shellPid || !Native2.GetWindowRect(h, out var r)) continue;
+                if (DockSettings.VisibleTaskbarTop(monitor, r.Left, r.Top, r.Right, r.Bottom, Native2.IsWindowVisible(h)) is { } top) best = best is null ? top : Math.Min(best.Value, top);
             }
         }
-        return found;
+
+        return best;
     }
 
     /// <summary>
@@ -249,10 +258,11 @@ public sealed class DockHost : IDisposable
         _winWpx = (int)Math.Ceiling(_ctl.WindowWidth * _scale); _winHpx = (int)Math.Ceiling(_ctl.WindowHeight * _scale);
         // WM-001: reserve the Dock's strip (AppBar) so maximized windows end above it; with auto-hide or the option off, nothing is reserved
         _appBar ??= new DockAppBar(_hwnd, WM_APPBAR, _log);
+        _taskbarTop = TaskbarTopOn(mi.rcMonitor); _taskbarBelow = _taskbarTop is not null; bool freeEdge = _taskbarTop is null;   // WM-043: sin barra visible, el borde físico manda
         if (_cfg.ReserveSpace && !_cfg.AutoHide && !_demo)
         {
             int band = (int)Math.Ceiling((_m.BarHeight + 6 + DockSettings.ClampBottom(_cfg.BottomOffset)) * _scale);
-            int bottom = _appBar.Reserve(mi.rcMonitor, band);
+            int bottom = _appBar.Reserve(mi.rcMonitor, band, flushWithEdge: freeEdge);
             mi.rcWork.Bottom = bottom;   // place the Dock on its own strip, not above it
         }
         else if (_appBar.Registered)
@@ -263,7 +273,10 @@ public sealed class DockHost : IDisposable
         }
         _reserving = _appBar.Registered;
         // Posición según la alineación y la altura elegidas (centro + altura normal = la de siempre: centrada justo sobre la barra de tareas).
-        (_winLeftPx, _winTopPx) = DockSettings.Place(new PxRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom), new PxRect(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom), _winWpx, _winHpx, _scale, _m, _cfg);
+        var monRect = new PxRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom); var workRect = new PxRect(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom);
+        int baseBottom = DockSettings.Baseline(monRect, workRect, _taskbarTop);
+        if (baseBottom != workRect.Bottom) _log($"[dock] base del Dock: {baseBottom} px (área de trabajo: {workRect.Bottom}, pantalla: {monRect.Bottom}, barra de Windows {(_taskbarTop is { } tt ? "visible desde " + tt : "no visible")})");
+        (_winLeftPx, _winTopPx) = DockSettings.Place(monRect, new PxRect(workRect.Left, workRect.Top, workRect.Right, baseBottom), _winWpx, _winHpx, _scale, _m, _cfg, freeEdge);
         Native2.SetWindowPos(_hwnd, new IntPtr(-1), _winLeftPx, _winTopPx, _winWpx, _winHpx, show ? 0x0010u | 0x0040u /* NOACTIVATE | SHOWWINDOW */ : 0x0010u);
         _lastWork = mi.rcWork;
     }
