@@ -3,7 +3,7 @@ name: ci
 # Validación NO interactiva en runners de GitHub. No publica versiones, no crea releases, no escribe en el repositorio.
 on:
   push:
-    branches: ["claude/**", "main"]
+    branches: ["claude/**", "fix/**", "main"]
     paths-ignore: ["docs/**", "*.md"]   # solo documentación: no lanza (ni cancela) una validación
   pull_request:
   workflow_dispatch:
