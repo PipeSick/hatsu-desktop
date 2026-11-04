@@ -267,6 +267,9 @@ jobs:
       - name: MSI de Hatsu Desktop (compilación; NO se publica ninguna versión)
         shell: pwsh
         run: ./installer/Build-Msi.ps1 -DistDir dist/WinMac -OutDir paquete -Compression medium
+      - name: "Verificación de firmas (INFORMATIVA hoy: nada propio está firmado; pasa a obligatoria con -Require cuando exista certificado)"
+        shell: pwsh
+        run: ./tools/ci/Verify-Signatures.ps1 -DistDir dist/WinMac -Msi (Get-ChildItem paquete -Filter *.msi | Select-Object -First 1).FullName
       - name: Auditoría de binarios y del MSI (firma Authenticode, cabeceras PE, metadatos; solo lectura)
         shell: pwsh
         run: |

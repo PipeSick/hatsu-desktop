@@ -36,6 +36,7 @@ internal static class SecurityDiagnostics
         hits = 0;
         hits += Events(sb, "Integridad de código (bloqueos y avisos de Control de aplicaciones)", "Microsoft-Windows-CodeIntegrity/Operational", "3033 or EventID=3034 or EventID=3076 or EventID=3077 or EventID=3089", dir);
         hits += Events(sb, "Antivirus (historial de protección)", "Microsoft-Windows-Windows Defender/Operational", "1116 or EventID=1117", dir);
+        sb.AppendLine("Referencia de políticas (Microsoft, «inbox App Control policies»): {0283ac0f-fff1-49ae-ada1-8a933130cad6} = Smart App Control en modo APLICADO; {1283ac0f-fff1-49ae-ada1-8a933130cad6} = en modo EVALUACIÓN (solo audita).");
         sb.AppendLine();
         sb.AppendLine(hits == 0
             ? "No hay eventos recientes que nombren la carpeta de Hatsu Desktop. Si un módulo no arrancó, mira host.log (el motivo con su código de Windows)."

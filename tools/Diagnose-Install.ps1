@@ -130,6 +130,31 @@ $barLog = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'
 if (Test-Path $barLog) { $bl = @(Get-Content $barLog -Tail 400 -ErrorAction SilentlyContinue | Where-Object { $_ -match 'AppBar|reserva|área de trabajo|ABM_|Explorer' } | Select-Object -Last 25); if ($bl.Count -eq 0) { Out-Line '  bar.log: sin líneas sobre la reserva' } else { Out-Line '  bar.log (reserva):'; foreach ($l in $bl) { Out-Line ('    ' + $l) } } } else { Out-Line '  bar.log no existe' }
 Out-Line '  Nota: Hatsu Desktop reserva espacio con la API estándar de barras de aplicación (AppBar); NO mueve ni reordena los iconos del escritorio. Si Windows no recoloca iconos que ya estaban en esa zona, se quedan donde estaban.'
 
+Section 'Integridad de código: qué archivos se bloquearon y por qué política (resumen)'
+$policyNames = @{ '0283ac0f-fff1-49ae-ada1-8a933130cad6' = 'Smart App Control, modo APLICADO (VerifiedAndReputableDesktop; Microsoft: «inbox App Control policies»)'; '1283ac0f-fff1-49ae-ada1-8a933130cad6' = 'Smart App Control, modo EVALUACIÓN (VerifiedAndReputableDesktopEvaluation; solo audita, no bloquea)' }
+try {
+  $ci = @(Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-CodeIntegrity/Operational'; Id = @(3033, 3034, 3076, 3077); StartTime = (Get-Date).AddDays(-30) } -MaxEvents 1500 -ErrorAction Stop | Where-Object { $_.Message -match 'HatsuDesktop|Hatsu Desktop|NotchWin|WinMac' })
+  if ($ci.Count -eq 0) { Out-Line '  Ningún evento 3033/3034/3076/3077 nombra archivos de Hatsu Desktop en los últimos 30 días.' }
+  else {
+    $rows = foreach ($e in $ci) { $m = ($e.Message -replace '\s+', ' '); $pol = ([regex]::Matches($m, '\{([0-9a-fA-F]{8}-[0-9a-fA-F-]{27})\}') | ForEach-Object { $_.Groups[1].Value.ToLowerInvariant() } | Select-Object -First 1)
+      $files = [regex]::Matches($m, '([^\\/\s"]+\.(?:dll|exe))', 'IgnoreCase') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -match '^(HatsuDesktop|NotchWin|WinMac)' } | Select-Object -Unique
+      foreach ($f in $files) { [pscustomobject]@{ Id = $e.Id; File = $f; Policy = $pol; Time = $e.TimeCreated } } }
+    $groups = @($rows | Group-Object Id, File, Policy | Sort-Object { ($_.Group | Measure-Object Time -Maximum).Maximum } -Descending)
+    Out-Line ('  Eventos que nombran archivos de Hatsu Desktop: {0} (en {1} combinaciones evento/archivo/política)' -f $ci.Count, $groups.Count)
+    foreach ($g in ($groups | Select-Object -First 40)) { $a = $g.Group[0]; $first = ($g.Group | Measure-Object Time -Minimum).Minimum; $last = ($g.Group | Measure-Object Time -Maximum).Maximum
+      $pn = if ($a.Policy -and $policyNames.ContainsKey($a.Policy)) { $policyNames[$a.Policy] } elseif ($a.Policy) { 'política desconocida para este informe' } else { 'sin política en el mensaje' }
+      Out-Line ('  evento {0} · {1} · {2} veces · {3} → {4} · política {{{5}}} = {6}' -f $a.Id, $a.File, $g.Count, $first.ToString('yyyy-MM-dd HH:mm'), $last.ToString('HH:mm'), $a.Policy, $pn) }
+    Out-Line '  Significado: 3077 = una directiva APLICADA bloqueó un archivo; 3033 = un archivo no cumplía el nivel de firma exigido (suele acompañar a 3077); 3076/3034 = lo mismo en modo auditoría/evaluación (no bloquea).'
+  }
+} catch { Out-Line ('  no se pudo leer (' + ($_.Exception.Message -replace '\s+', ' ') + '); algunos registros solo se leen como administrador.') }
+try { $cit = Get-Command citool.exe -ErrorAction Stop; $o = & $cit.Source -lp 2>&1; $lines = @($o | ForEach-Object { "$_" } | Where-Object { $_ -match 'Policy ID|Friendly Name|Is Enforced|Is Currently Enforced|Base Policy ID' })
+  Out-Line '  Directivas de integridad de código activas (citool.exe -lp, solo lectura):'; if ($lines.Count -eq 0) { Out-Line '    (sin datos legibles sin administrador)' } else { foreach ($l in ($lines | Select-Object -First 40)) { Out-Line ('    ' + $l.Trim()) } }
+} catch { Out-Line '  citool.exe no está disponible (o no se pudo ejecutar): se omite.' }
+$cip0 = Join-Path $env:SystemRoot 'System32\CodeIntegrity\CiPolicies\Active\{0283ac0f-fff1-49ae-ada1-8a933130cad6}.cip'; $cip1 = Join-Path $env:SystemRoot 'System32\CodeIntegrity\CiPolicies\Active\{1283ac0f-fff1-49ae-ada1-8a933130cad6}.cip'
+Out-Line ('  Archivo de la directiva Smart App Control APLICADA ({0283ac0f…}): ' + $(if (Test-Path $cip0) { 'existe' } else { 'no existe' }) + ' · de EVALUACIÓN ({1283ac0f…}): ' + $(if (Test-Path $cip1) { 'existe' } else { 'no existe' }))
+if ($dir) { $ownUnsigned = @(Get-ChildItem $dir -Recurse -File -Include *.exe, *.dll -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(HatsuDesktop|WinMac|NotchWin)' } | Where-Object { (Get-AuthenticodeSignature -FilePath $_.FullName).Status -ne 'Valid' })
+  Out-Line ('  Binarios propios sin firma válida en la instalación: ' + $ownUnsigned.Count); foreach ($f in ($ownUnsigned | Select-Object -First 40)) { Out-Line ('    - ' + $f.FullName.Substring($dir.Length).TrimStart('\')) } }
+
 Section 'Procesos de Hatsu Desktop en ejecución'
 $procs = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(HatsuDesktop|NotchWin\.App|WinMac)' } | Sort-Object ProcessName | ForEach-Object { $_.ProcessName })
 Out-Line ($(if ($procs.Count -eq 0) { '  ninguno' } else { '  ' + (($procs | Select-Object -Unique) -join ', ') }))
