@@ -312,20 +312,26 @@ public sealed partial class BarHost : IPanelUi
         catch (Exception e) { _log("[bar] no se pudo guardar el ajuste: " + e.GetType().Name + ": " + e.Message); }
     }
 
-    /// <summary>Menú nativo de selección junto al puntero (dispositivos de audio…). El panel no se cierra mientras está abierto.</summary>
+    /// <summary>
+    /// Desplegable de selección (dispositivos de audio, salida por aplicación). WM-035 (iteración 6): menú propio con el tema del panel, colocado contra el control que lo abrió,
+    /// con los nombres completos y siempre dentro de la pantalla (<see cref="WinMac.Dock.ChoiceMenuLayout"/>); antes era el menú nativo blanco de Windows en la posición del puntero.
+    /// El panel no se cierra mientras está abierto. Sin control de origen conocido, se ancla al puntero.
+    /// </summary>
     void IPanelUi.ShowChoices(string title, IReadOnlyList<Choice> choices, Action<string> onPick)
     {
         if (choices.Count == 0 || _popover is null) return;
-        IntPtr menu = BarNative.CreatePopupMenu(); int cmd = 0; IntPtr owner = _popover.Hwnd;
+        IntPtr owner = _popover.Hwnd; string? picked = null;
+        BarNative.GetCursorPos(out var p);
+        var a = _popover.AnchorPx();
+        var anchor = a is { } r ? new WinMac.Dock.PxRect(r.L, r.T, r.R, r.B) : new WinMac.Dock.PxRect(p.X - 4, p.Y - 4, p.X + 4, p.Y + 4);
         try
         {
-            for (int i = 0; i < choices.Count; i++) BarNative.AppendMenuW(menu, choices[i].Checked ? 0x8u /* MF_CHECKED */ : 0u, (UIntPtr)(uint)(i + 1), choices[i].Text);
-            BarNative.GetCursorPos(out var p); _popover.KeepOpen = true; _modal = true; BarNative.SetForegroundWindow(owner);
-            cmd = BarNative.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, p.X, p.Y, owner, IntPtr.Zero);
+            _popover.KeepOpen = true; _modal = true;
+            picked = WinMac.Dock.Win.Rendering.DarkChoiceMenu.Show(choices.Select(c => new WinMac.Dock.Win.Rendering.ChoiceMenuItem(c.Id, c.Text, c.Checked)).ToList(), anchor, _popover.Scale, _popover.IsDark, _log);
         }
-        finally { _modal = false; _popover.KeepOpen = false; BarNative.DestroyMenu(menu); }
+        finally { _modal = false; _popover.KeepOpen = false; }
         BarNative.SetForegroundWindow(owner);
-        if (cmd > 0 && cmd <= choices.Count) onPick(choices[cmd - 1].Id);
+        if (picked is not null) onPick(picked);
     }
 
     private void OnPanelEvent(PanelEvent e)

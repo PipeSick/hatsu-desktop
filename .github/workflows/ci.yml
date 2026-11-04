@@ -105,6 +105,24 @@ jobs:
       - name: Pruebas de NotchWin, arranque real bajo el host y cierre ordenado
         shell: pwsh
         run: ./tools/ci/Test-Notch.ps1 -DistDir dist/WinMac -NotchPath C:\nw -OutDir notch-out
+      - name: "Capturas del mezclador con datos de muestra (pintor real fuera de pantalla, NO es validación en hardware)"
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force capturas-mezclador | Out-Null
+          foreach ($k in 'mixer', 'mixer-routing') { foreach ($t in 'dark', 'light') { foreach ($sc in '1', '1.5') {
+            $png = "capturas-mezclador/$k-$t-$sc.png"
+            $p = Start-Process -FilePath (Resolve-Path dist/WinMac/WinMac.Bar.App.exe).Path -ArgumentList @('--render-panel', $k, '--theme', $t, '--scale', $sc, '--out', "`"$png`"") -PassThru -Wait -WindowStyle Hidden
+            Write-Host "$k $t x$sc -> código $($p.ExitCode), existe=$(Test-Path $png)"
+            if ($p.ExitCode -ne 0 -or -not (Test-Path $png)) { throw "No se pudo renderizar $k ($t, x$sc)" }
+          } } }
+      - name: "Subir capturas del mezclador (muestras de CI, no son tu PC)"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-mezclador-${{ github.sha }}
+          path: capturas-mezclador
+          retention-days: 14
+          if-no-files-found: warn
       - name: Subir resultados de la integración
         if: always()
         uses: actions/upload-artifact@v4

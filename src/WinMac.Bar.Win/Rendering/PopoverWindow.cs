@@ -27,7 +27,14 @@ internal sealed class PopoverWindow : IDisposable
     /// <summary>Mientras una acción abre un cuadro de diálogo propio, perder el foco NO debe cerrar el panel.</summary>
     public bool KeepOpen { get; set; }
 
-    private PxRect _monitor; private int _barBottom;
+    private PxRect _monitor; private int _barBottom; private double _monWidthDip = double.PositiveInfinity;
+    /// <summary>WM-035: un panel ancho (el menú Sonido, 520 DIP) se ajusta a monitores pequeños: nunca más ancho que la pantalla menos un margen.</summary>
+    private PanelModel Fit(PanelModel m) => PanelLayout.FitWidth(m, _monWidthDip);
+    /// <summary>Control (px de pantalla) que acaba de abrir un menú de opciones: el desplegable se coloca contra él. Null si no hay.</summary>
+    internal (int L, int T, int R, int B)? AnchorPx() => _ctl.Anchor is { } a ? ((int)Math.Round(Position.X + a.X * _scale), (int)Math.Round(Position.Y + a.Y * _scale), (int)Math.Round(Position.X + (a.X + a.W) * _scale), (int)Math.Round(Position.Y + (a.Y + a.H) * _scale)) : null;
+    internal PxRect MonitorPx => _monitor;
+    internal double Scale => _scale;
+    internal bool IsDark => _theme == BarTheme.Dark;
     /// <summary>Alto máximo del panel en DIP: lo que queda del monitor bajo la barra, con un margen. Si el contenido no cabe (1080p, DPI alto), se desplaza.</summary>
     private static double MaxHeightDip(PxRect monitor, int barBottomPx, double scale) => Math.Max(240, (monitor.Bottom - barBottomPx) / scale - 16);
 
@@ -46,7 +53,7 @@ internal sealed class PopoverWindow : IDisposable
     {
         EnsureWindow(scale); _theme = theme; if (_painter is not null) _painter.Theme = theme;
         if (_side || _anim is not null) { _anim = null; _side = false; DropBackdrop(); SetOffset(0); }   // un panel normal tras el lateral: sin vidrio ni desplazamiento
-        _ctl.SetMaxHeight(MaxHeightDip(monitor, barBottomPx, scale)); _monitor = monitor; _barBottom = barBottomPx; _ctl.SetModel(model); ResizeFor(model);
+        _ctl.SetMaxHeight(MaxHeightDip(monitor, barBottomPx, scale)); _monitor = monitor; _monWidthDip = monitor.W / scale; _barBottom = barBottomPx; model = Fit(model); _ctl.SetModel(model); ResizeFor(model);
         var (x, y) = PopoverPlacement.Place(anchorXpx, barBottomPx, _wPx, _hPx, monitor, _scale, alignRight); Position = (x, y);   // siempre entero dentro del monitor de la barra pulsada
         BarNative.SetWindowPos(_hwnd, new IntPtr(-1), x, y, _wPx, _hPx, 0x0040u /* SHOWWINDOW */);
         _open = true; _dirty = true; _shownAt = Environment.TickCount64; bool fgOk = BarNative.SetForegroundWindow(_hwnd); Render();
@@ -110,7 +117,7 @@ internal sealed class PopoverWindow : IDisposable
     /// <summary>«Mostrar animaciones en Windows» (Accesibilidad → Efectos visuales). Si está apagado, el panel aparece y desaparece sin deslizarse.</summary>
     private static bool AnimationsOn() { try { return !BarNative.SystemParametersInfoW(0x1042 /* SPI_GETCLIENTAREAANIMATION */, 0, out int on, 0) || on != 0; } catch (Exception) { return true; } }
 
-    public void SetModel(PanelModel model) { if (!_open) return; _ctl.SetModel(model); ResizeFor(model); _dirty = true; }
+    public void SetModel(PanelModel model) { if (!_open) return; model = Fit(model); _ctl.SetModel(model); ResizeFor(model); _dirty = true; }
 
     public void Hide()
     {

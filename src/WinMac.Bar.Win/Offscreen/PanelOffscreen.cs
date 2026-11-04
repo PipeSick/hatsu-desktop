@@ -91,6 +91,16 @@ public static class PanelOffscreen
                 Nc = new NcView(store.State, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Microsoft.OutlookForWindows" }, 356) };
             model = PanelBuilder.NotificationCenter(ctx); if (double.IsInfinity(maxHeight)) maxHeight = 1040;
         }
+        else if (kind is "mixer" or "mixer-routing")
+        {   // WM-035 (corrección de la iteración 6): DATOS DE MUESTRA del menú Sonido con nombres largos, dos sesiones de la misma app y, en «mixer-routing», el selector de salida por aplicación
+            var outs = new List<AudioDevice> { new("a", "Altavoces (Realtek(R) Audio)", false), new("b", "Altavoces (PRO X Wireless Gaming Headset)", true) };
+            var sessions = new List<AudioSession> { new("pid:1", 1, "Discord", null, 100, false, false, true), new("pid:1b", 11, "Discord", null, 98, false, false, true), new("pid:2", 2, "Microsoft Edge WebView2", null, 100, false, false, true), new("pid:3", 3, "Sonidos del sistema", null, 100, true, false, false) };
+            bool routing = kind == "mixer-routing"; var map = sessions.Where(x => x.Pid > 0).ToDictionary(x => x.Pid, x => x.Pid == 2 ? "b" : (string?)null);
+            var snap = snapshot with { Audio = new AudioState(true, 70, false, outs), OutputSwitchOk = true, CanRestoreOutput = true,
+                Input = new AudioInputState(true, 85, false, true, [new("m", "Micrófono (PRO X Wireless Gaming Headset)", true), new("m2", "Micrófono (Realtek(R) Audio)", false)]),
+                Sessions = new AudioSessionsState(true, sessions), Routing = routing ? new AppRoutingState(true, null, map) : null };
+            model = PanelBuilder.SoundPanel(ctx with { Sys = snap, Cfg = cfg with { SoundMixer = true, AppOutputRouting = routing } });
+        }
         else if (kind == "apple") model = PanelBuilder.AppleMenu(ctx with { ForegroundApp = "Spotify", User = new SessionUser("Usuario de prueba", "EQUIPO-CI") });
         else if (kind is "battery" or "battery-partial")   // WM-010: DATOS DE MUESTRA del panel de energía; «battery-partial» = un controlador que no informa de ciclos ni capacidad de diseño
             model = PanelBuilder.BatteryPanel(ctx with { Battery = new BatteryInfo(true, 64, false, false, 3 * 3600 + 20 * 60),

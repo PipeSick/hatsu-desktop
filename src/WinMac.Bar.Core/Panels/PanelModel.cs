@@ -62,7 +62,7 @@ public sealed record ChartSeries(IReadOnlyList<double> Values, string Color);
 public sealed record ChartData(IReadOnlyList<ChartSeries> Series, double Max, string? MaxLabel);
 public sealed record MeterData(string Color, string? Detail = null);
 public sealed record SelectData(string Glyph, string Label, string Current);
-/// <param name="Compact">WM-035: una sola línea (icono · nombre · deslizador · % · silencio · salida), la del menú Sonido.</param>
+/// <param name="Compact">WM-035: fila del mezclador del menú Sonido, en TRES líneas: (1) icono · nombre · % · silencio, (2) deslizador con todo el ancho, (3) selector de salida (solo con la función experimental).</param>
 /// <param name="Output">WM-035: salida de audio de esta app (selector), solo si la función experimental está activa y comprobada. Null = sin selector.</param>
 /// <param name="SubRow">Otra sesión de la misma app: va debajo de la primera, sin repetir icono ni nombre (agrupada a la vista, cada sesión con su propio volumen).</param>
 public sealed record AppRowData(string? ExePath, string Name, int Volume, bool Muted, bool Active, bool Compact = false, string? Output = null, bool SubRow = false);
@@ -136,7 +136,7 @@ public static class PanelLayout
         WidgetKind.KeyValue => 22,
         WidgetKind.Stats => 54,
         WidgetKind.Select => 32,
-        WidgetKind.AppRow => w.Data is AppRowData { Compact: true } ? 34 : 54,
+        WidgetKind.AppRow => w.Data is AppRowData { Compact: true } cad ? MixerRowHeight(cad) : 54,
         WidgetKind.WeatherHead => 96,
         WidgetKind.Strip => 92,
         WidgetKind.CityRow => 30,
@@ -240,24 +240,59 @@ public static class PanelLayout
 
     // ── Geometría de las filas con sub-áreas pulsables (la usan el dibujo y el controlador: una sola fuente)
     /// <summary>Fila de aplicación: icono a la izquierda, pista del volumen bajo el nombre, porcentaje y silencio a la derecha.</summary>
-    // WM-035: fila compacta del menú Sonido. Columnas fijas para que nombres, deslizadores, porcentajes y botones queden alineados entre filas.
-    public const double AppNameW = 112, AppPctW = 40, AppMuteW = 26, AppOutW = 96;
+    // WM-035 (corrección de la iteración 6): fila del mezclador en tres líneas, con aire. Una sola fuente para el dibujo y las pruebas de clic.
+    //   línea 1 (cabecera): icono · nombre (todo el ancho que sobre) · porcentaje · silencio
+    //   línea 2: deslizador de volumen, del nombre al borde derecho
+    //   línea 3 (solo con la salida por aplicación activada): selector de salida con el nombre completo del dispositivo
+    public const double MixPadTop = 8, MixPadBottom = 8, MixHeader = 30, MixSubHeader = 26, MixGap = 4, MixSlider = 28, MixOut = 32, MixIndent = 40, MixPctW = 58, MixMuteW = 34, MixRight = 4;
+
+    /// <summary>Alto de una fila del mezclador (DIP): 78 sin selector de salida, 114 con él (24 menos para una sesión secundaria sin icono).</summary>
+    public static double MixerRowHeight(AppRowData d) => MixPadTop + (d.SubRow ? MixSubHeader : MixHeader) + MixGap + MixSlider + (d.Output is null ? 0 : MixGap + MixOut) + MixPadBottom;
+
     private static bool Compact(WidgetFrame f) => f.W.Data is AppRowData { Compact: true };
-    private static double OutW(WidgetFrame f) => f.W.Data is AppRowData { Compact: true, Output: not null } ? AppOutW : 0;
+    private static AppRowData? CompactData(WidgetFrame f) => f.W.Data as AppRowData is { Compact: true } d ? d : null;
+    public readonly record struct Box(double X, double Y, double W, double H);
+
+    /// <summary>Línea 1 de la fila: icono, nombre, porcentaje y silencio caben aquí.</summary>
+    public static Box AppHeader(WidgetFrame f) => new(f.X, f.Y + MixPadTop, f.Width, CompactData(f)?.SubRow == true ? MixSubHeader : MixHeader);
+    /// <summary>El nombre: desde el icono hasta el porcentaje (todo el espacio libre).</summary>
+    public static Box AppName(WidgetFrame f) { var h = AppHeader(f); return new(f.X + MixIndent, h.Y, f.Width - MixIndent - MixPctW - MixMuteW - MixRight - 6, h.H); }
+    public static Box AppPct(WidgetFrame f) { var h = AppHeader(f); return new(f.X + f.Width - MixMuteW - MixRight - MixPctW, h.Y, MixPctW, h.H); }
+    /// <summary>Botón de silencio (se pinta el altavoz centrado; el área pulsable es todo este recuadro).</summary>
+    public static Box AppMute(WidgetFrame f) { var h = AppHeader(f); return new(f.X + f.Width - MixMuteW - MixRight, h.Y, MixMuteW, h.H); }
+    /// <summary>Línea 2: el deslizador.</summary>
+    public static Box AppSliderRow(WidgetFrame f) { var h = AppHeader(f); return new(f.X, h.Y + h.H + MixGap, f.Width, MixSlider); }
+    /// <summary>Línea 3: el selector de salida (alto 0 si la fila no lo tiene).</summary>
+    public static Box AppOutput(WidgetFrame f) { var s = AppSliderRow(f); return CompactData(f)?.Output is null ? new(f.X, s.Y + s.H, 0, 0) : new(f.X + MixIndent, s.Y + s.H + MixGap, f.Width - MixIndent - MixRight, MixOut); }
+
     public static (double Left, double Right) AppSliderTrack(WidgetFrame f) => Compact(f)
-        ? (f.X + 34 + AppNameW + 8, f.X + f.Width - OutW(f) - AppMuteW - AppPctW - 6)
+        ? (f.X + MixIndent, f.X + f.Width - MixRight - 10)
         : (f.X + 46, f.X + f.Width - 86);
     public static bool AppMuteHit(WidgetFrame f, double x, double y)
     {
         if (!Compact(f)) return x >= f.X + f.Width - 30 && x <= f.X + f.Width && y >= f.Y + 4 && y <= f.Y + f.Height - 4;
-        double r = f.X + f.Width - OutW(f); return x >= r - AppMuteW && x <= r && y >= f.Y && y <= f.Y + f.Height;
+        var m = AppMute(f); return x >= m.X - 6 && x <= m.X + m.W + 6 && y >= m.Y - 2 && y <= m.Y + m.H + 2;
     }
-    /// <summary>Selector de salida de la app (solo filas compactas con <see cref="AppRowData.Output"/>).</summary>
-    public static bool AppOutputHit(WidgetFrame f, double x, double y) => OutW(f) > 0 && x >= f.X + f.Width - OutW(f) && x <= f.X + f.Width && y >= f.Y && y <= f.Y + f.Height;
+    /// <summary>Selector de salida de la app (solo filas del mezclador con <see cref="AppRowData.Output"/>).</summary>
+    public static bool AppOutputHit(WidgetFrame f, double x, double y) { var o = AppOutput(f); return o.W > 0 && x >= o.X && x <= o.X + o.W && y >= o.Y && y <= o.Y + o.H; }
     public static bool AppSliderHit(WidgetFrame f, double x, double y)
     {
         var (l, r) = AppSliderTrack(f);
-        return Compact(f) ? x >= l - 8 && x <= r + 8 && y >= f.Y && y <= f.Y + f.Height : x >= l - 8 && x <= r + 8 && y >= f.Y + f.Height - 30 && y <= f.Y + f.Height;
+        if (!Compact(f)) return x >= l - 8 && x <= r + 8 && y >= f.Y + f.Height - 30 && y <= f.Y + f.Height;
+        var row = AppSliderRow(f); return x >= l - 10 && x <= r + 10 && y >= row.Y - 2 && y <= row.Y + row.H + 2;
+    }
+    /// <summary>Altura (Y) del centro de la pista del volumen de la fila del mezclador.</summary>
+    public static double AppSliderCenterY(WidgetFrame f) { var row = AppSliderRow(f); return row.Y + row.H / 2; }
+
+    /// <summary>El «botón» del selector (píldora con el dispositivo actual): a la derecha de su rótulo. En paneles anchos el rótulo es una columna fija; en los estrechos, el 40 %.</summary>
+    public static Box SelectPill(WidgetFrame f) { double lab = SelectLabelWidth(f.Width); return new(f.X + lab, f.Y + 3, f.Width - lab, f.Height - 6); }
+    public static double SelectLabelWidth(double width) => width >= 420 ? 92 : width * 0.40;
+
+    /// <summary>Ajusta el ancho de un panel a la pantalla (DIP del monitor): nunca más ancho que ella menos un margen, ni más estrecho que <paramref name="min"/> (si cabe).</summary>
+    public static PanelModel FitWidth(PanelModel m, double monitorWidthDip, double margin = 16, double min = 300)
+    {
+        double w = Math.Min(m.Width, Math.Max(min, monitorWidthDip - 2 * margin)); w = Math.Min(w, Math.Max(200, monitorWidthDip - margin));
+        return w < m.Width ? m with { Width = w } : m;
     }
     /// <summary>Deslizador con icono de silencio a la izquierda (Data = id del clic de silencio): pulsar el icono silencia, pulsar la pista arrastra.</summary>
     public static bool SliderMuteHit(WidgetFrame f, double x) => f.W.Data is string && x < f.X + 36;

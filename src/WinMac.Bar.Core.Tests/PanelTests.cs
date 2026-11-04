@@ -278,7 +278,7 @@ public class PanelBuilderTests
         Assert.All(m.Widgets.Where(w => w.Kind == WidgetKind.AppRow), w => Assert.Null(((AppRowData)w.Data!).Output));   // sin la función experimental: sin selector de salida
         Assert.DoesNotContain(m.Widgets, w => w.Kind == WidgetKind.Note);   // sin texto explicativo de relleno
         Assert.Contains(m.Widgets, w => w.Id == "audio-restore");
-        Assert.Equal(34, PanelLayout.HeightOf(m.Widgets.Single(w => w.Id == "s1")));
+        Assert.Equal(PanelLayout.MixerRowHeight((AppRowData)m.Widgets.Single(w => w.Id == "s1").Data!), PanelLayout.HeightOf(m.Widgets.Single(w => w.Id == "s1")));   // sin selector de salida: dos líneas (78 DIP)
         var f = PanelLayout.Compute(m with { Widgets = m.Widgets.Concat(Enumerable.Range(0, 12).Select(i => new Widget(WidgetKind.AppRow, "x" + i, "App", Data: new AppRowData(null, "App", 50, false, true, Compact: true)))).ToList() });
         Assert.True(f.Height <= PanelBuilder.MixerMaxHeight + 0.5); Assert.NotNull(f.View);   // muchas apps: alto máximo y desplazamiento interno
     }
@@ -327,18 +327,22 @@ public class PanelBuilderTests
     }
 
     [Fact]
-    public void Wm035_compact_rows_align_columns_and_route_clicks_to_mute_output_or_slider()
+    public void Wm035_mixer_rows_align_columns_and_route_clicks_to_mute_output_or_slider()
     {
         var row = new Widget(WidgetKind.AppRow, "d", "Discord", Value: 40, Data: new AppRowData(null, "Discord", 40, false, true, Compact: true, Output: "Altavoces"));
         var plain = row with { Id = "s", Data = new AppRowData(null, "Spotify", 40, false, true, Compact: true) };
         var c = new PanelController(); c.SetModel(new PanelModel(PanelKind.Sound, "", [row, plain], PanelBuilder.MixerWidth));
         var f = c.Frame.Items[0]; var g = c.Frame.Items[1];
         Assert.Equal(PanelLayout.AppSliderTrack(f).Left, PanelLayout.AppSliderTrack(g).Left);   // los deslizadores empiezan en la misma columna
-        c.PointerDown(f.X + f.Width - 10, f.Y + 17); Assert.Equal("appout:d", c.PointerUp(f.X + f.Width - 10, f.Y + 17)!.Id);
-        double mx = f.X + f.Width - PanelLayout.AppOutW - 10;
-        c.PointerDown(mx, f.Y + 17); Assert.Equal("appmute:d", c.PointerUp(mx, f.Y + 17)!.Id);
-        var (l, r) = PanelLayout.AppSliderTrack(f);
-        Assert.Equal(PanelEventKind.SliderChange, c.PointerDown((l + r) / 2, f.Y + 17)!.Kind);
+        var o = PanelLayout.AppOutput(f); double ox = o.X + o.W / 2, oy = o.Y + o.H / 2;
+        c.PointerDown(ox, oy); Assert.Equal("appout:d", c.PointerUp(ox, oy)!.Id);
+        Assert.NotNull(c.Anchor); Assert.Equal(o.X, c.Anchor!.Value.X);   // el desplegable se coloca contra el selector
+        var m = PanelLayout.AppMute(f); double mx = m.X + m.W / 2, my = m.Y + m.H / 2;
+        c.PointerDown(mx, my); Assert.Equal("appmute:d", c.PointerUp(mx, my)!.Id);
+        var (l, r) = PanelLayout.AppSliderTrack(f); double sy = PanelLayout.AppSliderCenterY(f);
+        Assert.Equal(PanelEventKind.SliderChange, c.PointerDown((l + r) / 2, sy)!.Kind);
+        c.PointerUp((l + r) / 2, sy);
+        Assert.Null(c.PointerDown(f.X + 12, f.Y + PanelLayout.MixPadTop + 6));   // pulsar el icono o el nombre no hace nada
     }
 
     [Fact]

@@ -92,7 +92,7 @@ public sealed partial class PanelPainter
             }
             case WidgetKind.Stats: DrawStats(f); break;
             case WidgetKind.Select: DrawSelect(f, hover); break;
-            case WidgetKind.AppRow: DrawAppRow(f); break;
+            case WidgetKind.AppRow: DrawAppRow(f, hover); break;
             case WidgetKind.WeatherHead: DrawWeatherHead(f); break;
             case WidgetKind.Strip: DrawStrip(f); break;
             case WidgetKind.CityRow:
@@ -169,44 +169,55 @@ public sealed partial class PanelPainter
     private void DrawSelect(WidgetFrame f, bool hover)
     {
         if (f.W.Data is not SelectData sd) return; var w = f.W; double x = f.X, y = f.Y, wd = f.Width, h = f.Height; float dim = w.Enabled ? 1f : 0.5f;
-        Glyph(sd.Glyph, x + 14, y + h / 2, 7.5f, Fg(0.7f * dim)); TextAlign(sd.Label, _body, x + 30, y, wd * 0.4 - 30, h, Fg(0.78f * dim));
-        double px = x + wd * 0.40; FillRR(px, y + 3, x + wd, y + h - 3, 9, Fill(hover && w.Enabled ? 0.20f : 0.13f));
-        TextAlign(w.Enabled ? sd.Current : (w.Reason is { Length: > 0 } ? "No disponible" : sd.Current), _body, px + 10, y + 3, wd - (px - x) - 34, h - 6, Fg(dim)); Glyph("updown", x + wd - 14, y + h / 2, 6f, Fg(0.65f * dim));
+        var pill = PanelLayout.SelectPill(f); double lab = pill.X - x;   // WM-035: en el menú Sonido (ancho) el rótulo es una columna fija y el nombre del dispositivo se ve completo
+        Glyph(sd.Glyph, x + 14, y + h / 2, 7.5f, Fg(0.7f * dim)); TextAlign(sd.Label, _body, x + 30, y, lab - 34, h, Fg(0.82f * dim));
+        FillRR(pill.X, pill.Y, pill.X + pill.W, pill.Y + pill.H, 9, Fill(hover && w.Enabled ? 0.20f : 0.13f));
+        TextAlign(w.Enabled ? sd.Current : (w.Reason is { Length: > 0 } ? "No disponible" : sd.Current), _body, pill.X + 10, pill.Y, pill.W - 38, pill.H, Fg(dim)); Glyph("updown", x + wd - 14, y + h / 2, 6f, Fg(0.65f * dim));
     }
 
-    /// <summary>WM-035: fila compacta del menú Sonido (columnas fijas de <see cref="PanelLayout"/>: todo alineado entre filas).</summary>
-    private void DrawCompactAppRow(WidgetFrame f, AppRowData ad)
+    /// <summary>
+    /// WM-035 (corrección de la iteración 6): fila del mezclador en tres líneas dentro de una tarjeta: (1) icono · nombre · % · silencio; (2) deslizador con todo el ancho;
+    /// (3) selector de salida con el nombre completo (solo con la función experimental). Toda la geometría sale de <see cref="PanelLayout"/> (la misma que usan los clics).
+    /// </summary>
+    private void DrawCompactAppRow(WidgetFrame f, AppRowData ad, bool hover)
     {
-        double x = f.X, y = f.Y, wd = f.Width, h = f.Height, cy = y + h / 2; float dim = ad.Active ? 1f : 0.62f;
+        double x = f.X, y = f.Y, wd = f.Width, h = f.Height; float dim = ad.Active ? 1f : 0.62f;
+        FillRR(x, y + 1, x + wd, y + h - 1, 12, Fill(ad.SubRow ? 0.045f : 0.07f));   // tarjeta de la sesión
+        var hd = PanelLayout.AppHeader(f); double cy = hd.Y + hd.H / 2; var nm = PanelLayout.AppName(f);
         if (!ad.SubRow)
         {
             var bmp = IconFor(ad.ExePath);
-            if (bmp is not null) _ctx.DrawBitmap(bmp, (RawRectF?)R(x + 4, cy - 11, x + 26, cy + 11), dim, BitmapInterpolationMode.Linear, (RawRectF?)null);
-            else { FillRR(x + 4, cy - 11, x + 26, cy + 11, 6, Fill(0.16f)); TextAlign(string.IsNullOrEmpty(ad.Name) ? "?" : ad.Name[..1].ToUpperInvariant(), _bodyBold, x + 4, cy - 11, 22, 22, Fg(0.8f), TextAlignment.Center); }   // sin icono: una inicial
-            TextAlign(ad.Name, _bodyBold, x + 34, y, PanelLayout.AppNameW, h, Fg(dim));
+            if (bmp is not null) _ctx.DrawBitmap(bmp, (RawRectF?)R(x + 10, cy - 12, x + 34, cy + 12), dim, BitmapInterpolationMode.Linear, (RawRectF?)null);
+            else { FillRR(x + 10, cy - 12, x + 34, cy + 12, 7, Fill(0.16f)); TextAlign(string.IsNullOrEmpty(ad.Name) ? "?" : ad.Name[..1].ToUpperInvariant(), _bodyBold, x + 10, cy - 12, 24, 24, Fg(0.8f), TextAlignment.Center); }   // sin icono: una inicial
+            TextAlign(ad.Name, _bodyBold, nm.X, nm.Y, nm.W, nm.H, Fg(dim));
         }
         else
         {   // otra sesión de la misma app: sin repetir icono ni nombre, con una guía que la une a la de arriba
-            Line(x + 15, y - 4, x + 15, cy, Fill(0.22f), 1f); Line(x + 15, cy, x + 26, cy, Fill(0.22f), 1f);
-            TextAlign(ad.Name, _body, x + 34, y, PanelLayout.AppNameW, h, Fg(0.6f * dim));
+            Line(x + 22, y - 4, x + 22, cy, Fill(0.24f), 1f); Line(x + 22, cy, x + 34, cy, Fill(0.24f), 1f);
+            TextAlign(ad.Name, _body, nm.X, nm.Y, nm.W, nm.H, Fg(0.7f * dim));
         }
-        var (l, r) = PanelLayout.AppSliderTrack(f); double pct = Math.Clamp(ad.Volume, 0, 100) / 100.0;
-        FillRR(l, cy - 3, r, cy + 3, 3, Fill(0.18f * dim)); if (!ad.Muted) FillRR(l, cy - 3, l + (r - l) * pct, cy + 3, 3, Dark ? new Color4(0.55f, 0.65f, 1f, 0.9f * dim) : new Color4(0.25f, 0.4f, 0.9f, dim));
-        double tx = l + (r - l) * pct; FillCircle(tx, cy, 7, new Color4(0.92f, 0.93f, 0.96f, 1f * dim)); Brush(new Color4(0, 0, 0, 0.25f)); _ctx.DrawEllipse(new Ellipse(new Vector2((float)tx, (float)cy), 7, 7), _solid, 0.8f);
-        double outW = ad.Output is null ? 0 : PanelLayout.AppOutW, muteR = x + wd - outW;
-        TextAlign(ad.Muted ? "Silencio" : $"{ad.Volume} %", _body, r + 4, y, PanelLayout.AppPctW, h, Fg(0.7f * dim), TextAlignment.Trailing);
-        Glyph(ad.Muted ? "sound-muted" : "sound", muteR - PanelLayout.AppMuteW / 2, cy, 6.5f, Fg((ad.Muted ? 0.9f : 0.65f) * dim));
+
+        var pc = PanelLayout.AppPct(f); var mu = PanelLayout.AppMute(f);
+        TextAlign(ad.Muted ? "Silencio" : $"{ad.Volume} %", _body, pc.X, pc.Y, pc.W, pc.H, Fg(0.78f * dim), TextAlignment.Trailing);
+        Glyph(ad.Muted ? "sound-muted" : "sound", mu.X + mu.W / 2, cy, 7.5f, Fg((ad.Muted ? 0.95f : 0.72f) * dim));
+
+        var (l, r) = PanelLayout.AppSliderTrack(f); double sy = PanelLayout.AppSliderCenterY(f), pct = Math.Clamp(ad.Volume, 0, 100) / 100.0;
+        FillRR(l, sy - 3, r, sy + 3, 3, Fill(0.20f * dim)); if (!ad.Muted) FillRR(l, sy - 3, l + (r - l) * pct, sy + 3, 3, Dark ? new Color4(0.55f, 0.65f, 1f, 0.95f * dim) : new Color4(0.25f, 0.4f, 0.9f, dim));
+        double tx = l + (r - l) * pct; FillCircle(tx, sy, 8, new Color4(0.94f, 0.95f, 0.98f, 1f * dim)); Brush(new Color4(0, 0, 0, 0.25f)); _ctx.DrawEllipse(new Ellipse(new Vector2((float)tx, (float)sy), 8, 8), _solid, 0.8f);
+
         if (ad.Output is { } o)
-        {   // selector de salida (experimental): una píldora con el nombre corto y una flecha
-            FillRR(muteR + 4, cy - 11, x + wd, cy + 11, 11, Fill(0.10f));
-            TextAlign(o, _small, muteR + 12, cy - 11, PanelLayout.AppOutW - 26, 22, Fg(0.85f * dim));
-            Glyph("down", x + wd - 11, cy, 3.5f, Fg(0.6f * dim));
+        {   // selector de salida (experimental): rótulo, nombre completo del dispositivo y flecha
+            var ob = PanelLayout.AppOutput(f);
+            FillRR(ob.X, ob.Y, ob.X + ob.W, ob.Y + ob.H, 10, Fill(hover ? 0.18f : 0.13f));
+            TextAlign("Salida", _small, ob.X + 12, ob.Y, 44, ob.H, Fg(0.6f * dim));
+            TextAlign(o, _body, ob.X + 58, ob.Y, ob.W - 58 - 30, ob.H, Fg(0.95f * dim));
+            Glyph("updown", ob.X + ob.W - 16, ob.Y + ob.H / 2, 6f, Fg(0.65f * dim));
         }
     }
 
-    private void DrawAppRow(WidgetFrame f)
+    private void DrawAppRow(WidgetFrame f, bool hover = false)
     {
-        if (f.W.Data is AppRowData { Compact: true } cad) { DrawCompactAppRow(f, cad); return; }
+        if (f.W.Data is AppRowData { Compact: true } cad) { DrawCompactAppRow(f, cad, hover); return; }
         if (f.W.Data is not AppRowData ad) return; var w = f.W; double x = f.X, y = f.Y, wd = f.Width, h = f.Height; float dim = ad.Active ? 1f : 0.62f;
         var bmp = IconFor(ad.ExePath);
         if (bmp is not null) _ctx.DrawBitmap(bmp, (RawRectF?)R(x + 6, y + 4, x + 36, y + 34), dim, BitmapInterpolationMode.Linear, (RawRectF?)null);

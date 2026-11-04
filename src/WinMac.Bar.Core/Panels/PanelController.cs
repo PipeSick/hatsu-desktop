@@ -196,7 +196,7 @@ public sealed class PanelController
             case WidgetKind.Nav: return new PanelEvent(PanelEventKind.Click, x < f.X + f.Width / 2 ? "prev" : "next");
             case WidgetKind.Slider: return _muteDown && PanelLayout.SliderMuteHit(f, x) && w.Data is string muteId ? new PanelEvent(PanelEventKind.Click, muteId) : null;
             case WidgetKind.AppRow:
-                if (_outDown && PanelLayout.AppOutputHit(f, x, y)) return new PanelEvent(PanelEventKind.Click, "appout:" + w.Id);
+                if (_outDown && PanelLayout.AppOutputHit(f, x, y)) { var o = PanelLayout.AppOutput(f); Anchor = new PanelLayout.Box(o.X, o.Y, o.W, o.H); return new PanelEvent(PanelEventKind.Click, "appout:" + w.Id); }
                 return _muteDown && PanelLayout.AppMuteHit(f, x, y) ? new PanelEvent(PanelEventKind.Click, "appmute:" + w.Id) : null;
             case WidgetKind.Tabs:
             {
@@ -223,7 +223,14 @@ public sealed class PanelController
                 if (cd.Stacked > 0) return new PanelEvent(PanelEventKind.Click, "ngtoggle:" + cd.GroupKey);
                 return cd.Origin == "iphone" ? null : new PanelEvent(PanelEventKind.Click, "nopen:" + cd.NotificationId);   // una app del iPhone no se puede abrir desde el PC   // tarjeta apilada: despliega el grupo; si no, abre la app
             }
+            case WidgetKind.Select: Anchor = PanelLayout.SelectPill(f); return new PanelEvent(PanelEventKind.Click, w.Id);   // el menú que abra se coloca contra este botón
             default: return new PanelEvent(PanelEventKind.Click, w.Id);
         }
     }
+
+    /// <summary>
+    /// El control (en DIP del panel) que acaba de generar un clic que abre un menú de opciones (selector de dispositivo o de salida de una app). El anfitrión lo usa para colocar el
+    /// desplegable contra él en vez de donde esté el puntero.
+    /// </summary>
+    public PanelLayout.Box? Anchor { get; private set; }
 }

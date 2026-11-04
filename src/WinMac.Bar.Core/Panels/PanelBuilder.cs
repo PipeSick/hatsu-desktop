@@ -207,9 +207,9 @@ public static partial class PanelBuilder
     }
 
     /// <summary>
-    /// Menú Sonido del icono de volumen. WM-035 (rediseño): ancho (400 DIP), compacto y alineado, con alto máximo y desplazamiento interno.
+    /// Menú Sonido del icono de volumen. WM-035 (rediseño, corregido en la iteración 6): ancho (520 DIP), filas espaciosas de tres líneas, con alto máximo y desplazamiento interno.
     /// Arriba, fijos: título y volumen general (% y silencio en su icono). Después: dispositivos (salida y entrada en selectores, volumen del micrófono) y las aplicaciones,
-    /// una fila por sesión real (icono · nombre · deslizador · % · silencio), con las sesiones de una misma app agrupadas bajo un solo icono y nombre: cada una conserva su
+    /// una tarjeta por sesión real (línea 1: icono · nombre · % · silencio; línea 2: deslizador; línea 3: salida, solo con la función experimental), con las sesiones de una misma app agrupadas bajo un solo icono y nombre: cada una conserva su
     /// volumen (no se suman ni se igualan). Salida por aplicación: solo si la función experimental está activa y Windows la acepta en este equipo (selector por fila).
     /// Abajo, fijos: el mezclador y la configuración de sonido de Windows. Con <see cref="BarConfig.SoundMixer"/> desactivado queda el menú sencillo de antes.
     /// </summary>
@@ -245,7 +245,8 @@ public static partial class PanelBuilder
         return new PanelModel(PanelKind.Sound, "Sonido", w, MixerWidth, PinTop: pinTop, PinBottom: 2, MaxHeight: MixerMaxHeight);
     }
 
-    public const double MixerWidth = 400, MixerMaxHeight = 560;
+    /// <summary>Ancho del menú Sonido (DIP): antes 400; con filas en tres líneas y nombres completos de dispositivo, 520. Se ajusta a pantallas pequeñas con <see cref="PanelLayout.FitWidth"/>.</summary>
+    public const double MixerWidth = 520, MixerMaxHeight = 640;
 
     /// <summary>
     /// Una fila por sesión de audio real, agrupadas por app (mismo ejecutable): la primera lleva icono y nombre; las demás van debajo como «Sesión 2…» con su propio volumen.
