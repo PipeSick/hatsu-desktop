@@ -18,8 +18,8 @@ $fails = 0; $rep = @(); function Check([string]$n, $ok, [string]$d = '') { $ok =
 $exe = (Resolve-Path $BarExe).Path; $before = Top; Write-Host "Área de trabajo antes: $([WorkArea]::Get())"
 Get-Process -Name 'HatsuDesktop.Bar' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 1
 
-# ── EXPERIMENTO DE CONTROL: una barra de aplicación mínima que sigue al pie de la letra el protocolo documentado (ABM_NEW → QUERYPOS → SETPOS → mover la ventana).
-#    Si ESTE control tampoco cambia el área de trabajo, el runner no admite barras de aplicación y la prueba de la Barra no es concluyente aquí. Si el control sí funciona y la Barra no, es un defecto del producto.
+# ── EXPERIMENTO DE CONTROL Y LABORATORIO: una barra de aplicación mínima que sigue el protocolo documentado (ABM_NEW → QUERYPOS → SETPOS → mover la ventana), y variantes que añaden UNA a UNA las
+#    características de la Barra real. Si el control (V0) cambia el área de trabajo y la Barra no, es un defecto del producto; la primera variante que falle señala la causa.
 Add-Type -TypeDefinition @'
 using System; using System.Runtime.InteropServices;
 public static class AppBarControl {
@@ -28,26 +28,39 @@ public static class AppBarControl {
   [DllImport("shell32.dll")] static extern UIntPtr SHAppBarMessage(uint m, ref ABD d);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr inst, IntPtr p);
   [DllImport("user32.dll")] static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hh, bool repaint);
+  [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint flags);
   [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr h);
   [DllImport("user32.dll")] static extern int GetSystemMetrics(int i);
   [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint a, uint b, ref RECT r, uint c);
   [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
   static int WorkTop() { RECT r = new RECT(); SystemParametersInfo(0x30, 0, ref r, 0); return r.T; }
-  public static string Run(int height) {
+  /// ex: estilos extendidos; visibleAtAbm: la ventana ya es visible al registrar; tiny: nace de 100x30 y se coloca con SetWindowPos (como la Barra); setPos: usar SetWindowPos(TOPMOST|SHOWWINDOW|NOACTIVATE) en vez de MoveWindow
+  public static string Run(int height, uint ex, bool visibleAtAbm, bool tiny, bool setPos) {
     SetProcessDPIAware(); int before = WorkTop(); int w = GetSystemMetrics(0);
-    IntPtr h = CreateWindowEx(0x80 | 0x8, "Static", "control-appbar", 0x80000000 | 0x10000000, 0, 0, w, height, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);   // TOOLWINDOW|TOPMOST, POPUP|VISIBLE
+    uint style = 0x80000000 | (visibleAtAbm ? 0x10000000u : 0u);
+    IntPtr h = CreateWindowEx(ex, "Static", "control-appbar", style, 0, 0, tiny ? 100 : w, tiny ? 30 : height, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
     if (h == IntPtr.Zero) return "ventana=falló";
     ABD d = new ABD(); d.cb = (uint)Marshal.SizeOf(typeof(ABD)); d.hWnd = h; d.cbMsg = 0x8000 + 77;
     bool nw = SHAppBarMessage(0, ref d) != UIntPtr.Zero;
-    d.edge = 1; d.rc = new RECT { L = 0, T = 0, R = w, B = height }; SHAppBarMessage(2, ref d); d.rc.B = d.rc.T + height; SHAppBarMessage(3, ref d); MoveWindow(h, d.rc.L, d.rc.T, d.rc.R - d.rc.L, d.rc.B - d.rc.T, true);
-    int during = before; for (int i = 0; i < 20 && during == before; i++) { System.Threading.Thread.Sleep(250); during = WorkTop(); }
+    d.edge = 1; d.rc = new RECT { L = 0, T = 0, R = w, B = height }; SHAppBarMessage(2, ref d); d.rc.B = d.rc.T + height; SHAppBarMessage(3, ref d);
+    if (setPos) SetWindowPos(h, new IntPtr(-1), d.rc.L, d.rc.T, d.rc.R - d.rc.L, d.rc.B - d.rc.T, 0x0010 | 0x0040); else MoveWindow(h, d.rc.L, d.rc.T, d.rc.R - d.rc.L, d.rc.B - d.rc.T, true);
+    int during = before; for (int i = 0; i < 12 && during == before; i++) { System.Threading.Thread.Sleep(250); during = WorkTop(); }
     SHAppBarMessage(1, ref d); DestroyWindow(h); System.Threading.Thread.Sleep(1500); int after = WorkTop();
     return "ABM_NEW=" + nw + ";antes=" + before + ";durante=" + during + ";despues=" + after;
   }
 }
 '@
-$ctl = [AppBarControl]::Run(28); Write-Host "CONTROL: $ctl"; $controlWorks = ($ctl -match 'durante=(\d+)' -and [int]$Matches[1] -gt $before)
-$script:rep += "| INFO | control (AppBar mínimo según el protocolo documentado) | $ctl |"
+$TOOL = 0x80; $TOP = 0x8; $NOACT = 0x08000000; $NOREDIR = 0x00200000
+$variants = @(
+  @('V0 control: visible al registrar, MoveWindow', ($TOOL -bor $TOP), $true, $false, $false),
+  @('V1 oculta al registrar (se muestra después)', ($TOOL -bor $TOP), $false, $false, $false),
+  @('V2 + WS_EX_NOACTIVATE', ($TOOL -bor $TOP -bor $NOACT), $true, $false, $false),
+  @('V3 + WS_EX_NOREDIRECTIONBITMAP', ($TOOL -bor $TOP -bor $NOREDIR), $true, $false, $false),
+  @('V4 nace de 100x30 y se coloca con SetWindowPos', ($TOOL -bor $TOP), $true, $true, $true),
+  @('V5 como la Barra: oculta + NOACTIVATE + NOREDIRECTIONBITMAP + 100x30 + SetWindowPos', ($TOOL -bor $TOP -bor $NOACT -bor $NOREDIR), $false, $true, $true))
+$lab = @(); foreach ($v in $variants) { $r = [AppBarControl]::Run(28, [uint32]$v[1], $v[2], $v[3], $v[4]); $ok = ($r -match 'durante=(\d+)' -and [int]$Matches[1] -gt $before); $lab += [pscustomobject]@{ Variante = $v[0]; Reserva = $ok; Detalle = $r }; Write-Host ("LAB  {0}: {1}  [{2}]" -f $v[0], $(if ($ok) { 'RESERVA' } else { 'NO reserva' }), $r) }
+$ctl = $lab[0].Detalle; $controlWorks = $lab[0].Reserva
+$script:rep += "| INFO | control V0 (AppBar mínimo según el protocolo documentado) | $ctl |"; foreach ($l in ($lab | Select-Object -Skip 1)) { $script:rep += "| INFO | laboratorio · $($l.Variante) | $(if ($l.Reserva) { 'reserva' } else { 'NO reserva' }) — $($l.Detalle) |" }
 # 1) arranque con reserva (valores de fábrica): el borde superior sale del área de trabajo
 $p = Start-Process $exe -ArgumentList @('--no-config') -PassThru -WindowStyle Hidden; $reserved = $false; for ($i = 0; $i -lt 40; $i++) { Start-Sleep -Milliseconds 500; if ((Top) -gt $before) { $reserved = $true; break } }
 $during = [WorkArea]::Get()
