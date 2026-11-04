@@ -69,6 +69,15 @@ public class InstallerTests
             Assert.DoesNotContain(banned, File.ReadAllText(Path.Combine(Root(), "tools", "Diagnose-Install.ps1")));   // solo lectura: ni escribe, ni descarga, ni toca protecciones
     }
 
+    [Fact] public void The_signing_requirements_document_identifies_the_policy_and_rules_out_evasion()
+    {
+        var d = File.ReadAllText(Path.Combine(Root(), "docs", "50-requisitos-distribucion-smart-app-control.md"));
+        Assert.Contains("{0283ac0f-fff1-49ae-ada1-8a933130cad6}", d); Assert.Contains("VerifiedAndReputableDesktop", d); Assert.Contains("Smart App Control en modo aplicado", d.Replace("**Smart App Control está activado (modo aplicado)**", "Smart App Control en modo aplicado"), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Lo que NO se hará (elusión)", d); Assert.Contains("no garantiza", d); Assert.Contains("No se genera ni se pide instalar ningún MSI nuevo", d);
+        var ps = File.ReadAllText(Path.Combine(Root(), "tools", "Diagnose-Install.ps1")); Assert.Contains("0283ac0f-fff1-49ae-ada1-8a933130cad6", ps); Assert.Contains("1283ac0f-fff1-49ae-ada1-8a933130cad6", ps); Assert.Contains("citool.exe", ps);
+        Assert.Contains("-Require", File.ReadAllText(Path.Combine(Root(), "tools", "ci", "Verify-Signatures.ps1")));
+    }
+
     [Fact] public void The_license_rtf_and_the_icon_are_the_single_brand_source()
     {
         Assert.StartsWith("{\\rtf1", Read("installer/License.rtf")); Assert.Contains(@"assets\brand\HatsuDesktop.ico", Read("installer/Build-Msi.ps1"));
