@@ -90,4 +90,18 @@ public class InstallerTests
         Assert.Contains("NO es una prueba en un Windows físico", ci); Assert.DoesNotContain("softprops/action-gh-release", ci); Assert.DoesNotContain("gh release", ci);   // nada se publica
         var t = Read("tools/ci/Test-Msi.ps1"); foreach (var s in new[] { "/i", "/x", "2.0.1", "downgrade", "--replace-running", "NO borra la configuración", "NO quita el inicio automático de otra copia" }) Assert.Contains(s, t);
     }
+
+    [Fact] public void The_experimental_MSIX_manifest_is_a_full_trust_package_with_a_startup_task_and_no_evasion()
+    {
+        var t = File.ReadAllText(Path.Combine(Root(), "installer", "msix", "AppxManifest.xml.in"));
+        var x = System.Xml.Linq.XDocument.Parse(t.Replace("@@IDENTITY_NAME@@", "A.B").Replace("@@PUBLISHER@@", "CN=T").Replace("@@PUBLISHER_DISPLAY@@", "T").Replace("@@VERSION@@", "2.0.1.0").Replace("@@VIRTUALIZATION@@", "").Replace("@@CAPABILITIES@@", ""));
+        Assert.Contains("runFullTrust", t); Assert.Contains("windows.startupTask", t); Assert.Contains("HatsuDesktopStartup", t);
+        Assert.Equal("HatsuDesktopStartup", WinMac_Autostart_TaskId());   // el código y el manifiesto usan el mismo identificador
+        Assert.DoesNotContain("allowElevation", t); Assert.DoesNotContain("packagedServices", t);   // nada de elevación ni servicios
+        var build = File.ReadAllText(Path.Combine(Root(), "installer", "msix", "Build-Msix.ps1"));
+        Assert.Contains("Remove-Item $pfx", build);   // la clave privada de prueba no sobrevive al script
+        Assert.NotNull(x.Root);
+    }
+
+    private static string WinMac_Autostart_TaskId() => System.Text.RegularExpressions.Regex.Match(File.ReadAllText(Path.Combine(Root(), "src", "WinMac.Host", "Autostart.cs")), "StartupTaskId = \"([^\"]+)\"").Groups[1].Value;
 }

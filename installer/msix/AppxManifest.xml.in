@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hatsu Desktop · manifiesto MSIX EXPERIMENTAL (Fase 3.2). Plantilla: Build-Msix.ps1 sustituye @@...@@.
+     Identity Name/Publisher: en la Store los ASIGNA Partner Center (hay que copiarlos); aquí valores de prueba que NO sirven para publicar.
+     Aplicación de plena confianza (runFullTrust): proceso Win32 normal, no AppContainer. -->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+         xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap uap10 desktop desktop6 rescap">
+  <Identity Name="@@IDENTITY_NAME@@" Publisher="@@PUBLISHER@@" Version="@@VERSION@@" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>Hatsu Desktop</DisplayName>
+    <PublisherDisplayName>@@PUBLISHER_DISPLAY@@</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+@@VIRTUALIZATION@@
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="es" />
+    <Resource Language="en-us" />
+  </Resources>
+  <Applications>
+    <Application Id="HatsuDesktop" Executable="HatsuDesktop.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Hatsu Desktop" Description="Barra de menús, Dock e Isla para Windows 11" BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <desktop:Extension Category="windows.startupTask" Executable="HatsuDesktop.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="HatsuDesktopStartup" Enabled="false" DisplayName="Hatsu Desktop" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+@@CAPABILITIES@@
+  </Capabilities>
+</Package>

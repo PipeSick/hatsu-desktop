@@ -301,6 +301,26 @@ jobs:
           path: appbar-test
           retention-days: 14
           if-no-files-found: warn
+      - name: "MSIX EXPERIMENTAL (Fase 3.2): empaquetado y prueba REAL en el runner con certificado AUTOFIRMADO de CI (NO prueba nada sobre Smart App Control; el MSI no se toca)"
+        if: always()
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          foreach ($v in 'Default', 'Unvirtualized') {
+            ./installer/msix/Build-Msix.ps1 -DistDir dist/WinMac -OutDir msix-out -Variant $v -Sign
+            ./tools/ci/Test-Msix.ps1 -Package (Get-ChildItem msix-out -Filter "*-$v.msix" | Select-Object -First 1).FullName -Cert msix-out/ci-test.cer -OutDir msix-test -Label $v
+          }
+          Get-ChildItem msix-test -Filter 'msix-report-*.md' | ForEach-Object { Get-Content $_.FullName -Raw | Add-Content $env:GITHUB_STEP_SUMMARY }
+      - name: "Subir el informe MSIX (sin el paquete: la prueba usa un certificado que no sirve para distribuir)"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msix-informe-${{ github.sha }}
+          path: |
+            msix-test
+            !msix-test/*.json
+          retention-days: 14
+          if-no-files-found: warn
       - name: Subir el paquete (artefacto temporal, no es una versión publicada)
         if: always()
         uses: actions/upload-artifact@v4
