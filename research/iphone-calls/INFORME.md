@@ -6,6 +6,8 @@ Fecha: 2026-11-03 · Rama `research/iphone-calls` (worktree aparte, sobre `28f8a
 
 **Conclusión: C — NO DEMOSTRADO bajo las restricciones actuales. Recomendación: detener el desarrollo de esta función en WinMac.** Detalle, fuentes y matriz en §15.
 
+**Fase 4 (arquitecturas HFP alternativas, §16):** ninguna arquitectura estudiada llega a A (viable y demostrada) ni a B (plausible, pendiente de prueba). Respuesta a «¿hay una arquitectura defendible con el Bluetooth existente y sin sustituir su controlador?»: **NO DEMOSTRADA**. Falta un transporte SCO de modo usuario (Windows solo expone RFCOMM; SCO es de kernel) o un registro efectivo del rol HF. BluetoothHFP exige poseer el controlador (fundamental, sin licencia, BTstack no comercial); iphonebridge delega en oFono+BlueZ+PipeWire y sockets SCO de usuario que Windows no tiene. Único experimento propuesto: E1 (§16.9), solo observación.
+
 - **Hecho en hardware (P1–P3, build 26300):** `RegisterApp()` retorna sin error pero `IsRegistered()` nunca pasa a `True`, con paquete suelto (`Allowed`) y con MSIX firmado (`DeniedBySystem`). El mismo síntoma está reportado por un tercero en la misma build (Microsoft Q&A 6041632).
 - **Documentación oficial (leída íntegra):** `RegisterApp` solo exige la capacidad restringida; la carga lateral no necesita aprobación; la Store sí. No dice nada de Limited Access Features para esta clase, aunque el ID `phonelinetransportdevice_v1` devuelve `Unavailable` (= sigue limitado y no tenemos acceso). **No hay evidencia pública de un registro efectivo en Windows 11 actual sin saltarse un control.**
 - **Audio:** el SCO solo es accesible por drivers de modo kernel (documentación de Microsoft). Con APIs públicas de usuario solo se llega al audio a través de `PhoneCall`, que depende del registro. RFCOMM propio, ANCS y una app en iOS: **no viables** para el objetivo completo (D).
@@ -781,6 +783,220 @@ Observaciones **no invasivas** que podrían distinguir (sin proponer pruebas nue
 **Confianza:** *alta* (≈85 %) en que hoy no hay ruta reproducible bajo las restricciones y en D para RFCOMM/ANCS/iOS; *media* (≈60 %) en que la causa sea una política de plataforma (H-a/H-b) en lugar de algo corregible en nuestro empaquetado; *baja* (≈30 %) sobre si LAF o Store desbloquearían el registro; la causa exacta es **desconocida**.
 
 **Límites de esta lectura:** `learn.microsoft.com` bloqueado (leí el mismo texto desde `MicrosoftDocs`); hilos de MyPhone y Microsoft Q&A leídos a través de herramientas de resumen; no reproduje ninguna de las demostraciones de terceros; no verifiqué si las condiciones de BTstack se aplican a un proyecto de código abierto.
+
+## 16. Fase 4 — Arquitecturas alternativas para HFP en Windows (2026-11-04)
+
+**Alcance:** lectura de documentación oficial y de código público. No se instaló nada, no se crearon certificados, no se tocó Bluetooth ni el PC del usuario, no se escribió ningún prototipo. Los fragmentos de código de terceros se **estudian**, no se copian.
+
+**Escala de evidencia** (la pedida en esta fase): **DEMOSTRADO** = prueba reproducible o código/registro verificable · **DOCUMENTADO** = lo dice documentación oficial · **INFERIDO** = deducido de la arquitectura · **HIPÓTESIS** = pendiente de prueba · **NO DEMOSTRADO** · **INCOMPATIBLE** = choca con una restricción. «Autor» = lo afirma el autor sin reproducción independiente.
+
+**Clasificación de arquitecturas:** A viable y demostrada · B plausible, pendiente de prueba · C no demostrada · D inviable bajo nuestras restricciones.
+
+**Fuentes que no pude leer:** especificación HFP del Bluetooth SIG (`www.bluetooth.com` no resuelve en esta sesión), `learn.microsoft.com` (leí el mismo texto desde `MicrosoftDocs`), y el código de oFono (`git.kernel.org` bloqueado; lo que digo de oFono sale del código de iphonebridge y de PipeWire que lo consume). Para permitirlo hay que añadir esos dominios a la red de la sesión.
+
+### 16.1 Resumen ejecutivo y decisión
+
+**¿Existe una arquitectura técnicamente defendible para llamadas del iPhone en Windows 11, con audio bidireccional, usando el Bluetooth existente y sin reemplazar su controlador?** → **NO DEMOSTRADA.** Ninguna de las arquitecturas estudiadas llega a A o B. Ninguna ruta de usuario pública puede transportar SCO; la única interfaz documentada para SCO es de **modo kernel**; y la ruta nativa (`PhoneLineTransportDevice`) sigue bloqueada en el registro por una causa **desconocida**.
+
+Lo que se aprendió en esta fase:
+1. **Windows ya implementa el rol Hands-Free completo** (señalización HFP, SCO y puntos finales de audio) en componentes propios (stack Bluetooth + driver HFP de modo kernel). Una app solo puede **registrarse** para ese rol vía `PhoneLineTransportDevice`; no puede «añadir» audio por su cuenta. (DOCUMENTADO + INDICIO de Klangbruecke en Win10.)
+2. **BluetoothHFP necesita WinUSB por construcción, no por comodidad:** BTstack es una pila *host* completa que habla HCI; solo puede haber un host por controlador, y en Windows el controlador lo posee `BTHUSB`. La dependencia es **fundamental** para esa arquitectura (INFERIDO con evidencia de código y del propio autor). Además **no tiene licencia** (el repositorio no trae `LICENSE`) y BTstack prohíbe uso comercial (`LICENSE`, cláusula 4) → **INCOMPATIBLE** con un proyecto de código abierto.
+3. **iphonebridge no implementa HFP:** delega todo en **oFono + BlueZ + PipeWire**, y se apoya en tres cosas que Windows no ofrece a una app: `RegisterProfile` de BlueZ (el HFP lo implementa una app), **sockets SCO de modo usuario** (`AF_BLUETOOTH/BTPROTO_SCO`) y una pila de audio que consume el descriptor SCO. No hay equivalente público en Windows.
+4. **Un driver propio firmado** es *plausible en el papel* (existen BRB de SCO documentados para *profile drivers*) pero **no hay evidencia de coexistencia** con el driver HFP de Windows y el camino de firma para público general es costoso y, en su variante barata, «solo pruebas».
+5. **Experimento mínimo propuesto (E1, solo observación, sin instalar nada):** comprobar, durante una llamada real, si el iPhone ofrece el PC como destino de audio y si Windows expone/activa los puntos finales «Hands-Free» del iPhone **sin ninguna app registrada**. Es la única observación nueva que distingue entre «el rol HF de Windows está vivo y solo falla el registro» y «el rol HF no existe para este iPhone en la 26300». Aunque diera positivo, **solo resolvería el audio**, no el control desde Windows.
+
+### 16.2 Arquitectura HFP de Windows (qué es accesible y desde dónde)
+
+| Afirmación | Clase | Fuente |
+|---|---|---|
+| El stack Bluetooth de Windows tiene componentes de modo usuario (APIs publicadas vía `BthProps`), un servicio (`BthServ`) y componentes de kernel (`BthPort`, `RFCOMM`, `BthEnum`, `BthLEEnum`, `BthUsb`). Los *profile drivers* (incluido el de audio HFP/HSP «incluido desde Windows 8») acceden a SCO a través de `BthPort` | **DOCUMENTADO** | [Bluetooth driver stack](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/bluetooth-driver-stack.md) |
+| Un app de usuario llega a RFCOMM **por Winsock**; `BthEnum` crea un PDO por cada **servicio** del dispositivo remoto (salvo los listados en `UnsupportedServices` de `Bth.inf`) → el driver HFP de Windows se engancha por sí solo al servicio HFP del teléfono | **DOCUMENTADO** | misma página |
+| Winsock Bluetooth: `AF_BTH`, `SOCK_STREAM`, y **«`BTHPROTO_RFCOMM` es el protocolo soportado»**; no hay protocolo SCO ni L2CAP en la API de sockets (la página es de 2018; no encontré documentación posterior que añada otros) | **DOCUMENTADO** | [Bluetooth and socket](https://github.com/MicrosoftDocs/win32/blob/ca8274d/desktop-src/Bluetooth/bluetooth-and-socket.md) |
+| Los **DDI de SCO** (abrir, aceptar, transferir) son de **modo kernel**, para *profile drivers*: `BRB_SCO_OPEN_CHANNEL`, `BRB_SCO_REGISTER_SERVER`, `BRB_SCO_TRANSFER`, enviados con `IOCTL_INTERNAL_BTH_SUBMIT_BRB` | **DOCUMENTADO** | [Introducción a profile drivers](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/bluetooth-profile-drivers-overview.md), [Aceptar SCO](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/accepting-sco-connections-in-a-bluetooth-profile-driver.md), [Cliente SCO](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/creating-a-sco-client-connection-to-a-remote-device.md) (los BRB enlazan a `previous-versions`: documentación heredada) |
+| El driver HFP de Windows gestiona la conexión SCO del dispositivo HFP; el driver de audio le envía `IOCTL_BTHHFP_STREAM_OPEN/CLOSE`; ante desconexión remota reintenta por su cuenta. La documentación describe el caso «PC como AG» (auriculares) y no menciona el rol «PC como HF de un teléfono» | **DOCUMENTADO** + ausencia | [HFP device connection](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/audio/hfp-device-connection.md), [HFP DDI IOCTLs](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/audio/bluetooth-hfp-ddi-ioctls.md) |
+| Audio clásico: HFP da captura y reproducción **mono**, 8 kHz (CVSD/SBC) o 16 kHz (mSBC); al abrir el micrófono HFP, el estéreo A2DP se descarta | **DOCUMENTADO** | [Bluetooth Classic audio](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/bluetooth-classic-audio.md) |
+| Existe una API de usuario documentada que **habilita o deshabilita servicios de un dispositivo remoto** (`BluetoothSetServiceState`, `BLUETOOTH_SERVICE_ENABLE/DISABLE`, por GUID de servicio) | **DOCUMENTADO** | [BluetoothSetServiceState](https://github.com/MicrosoftDocs/sdk-api/blob/656e965/sdk-api-src/content/bluetoothapis/nf-bluetoothapis-bluetoothsetservicestate.md) |
+| En Windows 10 19045 el PC actúa como **HF** y el teléfono como **AG**: Windows publica un servicio Hands-Free (`Bluetooth\Audio\Hfp\HandsFree`, `RfcommServerChannel=2`, HFP 1.7), aplica `AT+VGM` al micrófono de comunicaciones y **no crea un punto final intermedio**: toma el micrófono/altavoz de comunicaciones predeterminados y los codifica en SCO | **INDICIO** (Win10, Android, un equipo) | Klangbruecke [`FINDINGS.md`](https://github.com/MYSTRAVIL/klangbruecke/blob/2cb8e00/docs/FINDINGS.md) §7 (l. 184-202) y §11 (l. 366-431) |
+| Para que el teléfono ofrezca el PC como destino de audio de llamada, **una app debe registrar el rol**; el registro no es opcional | **INDICIO** (Win10/Android; «Android no ofrecía el PC en absoluto antes de registrar») | Klangbruecke §12 (l. 480-530), diagnóstico 3 |
+| En Windows 11 25H2 el HFP del iPhone aparece en el Administrador de dispositivos pero los puntos finales de audio **no se activan** | **INDICIO** (un hilo, sin respuesta) | [Microsoft Q&A 5956795](https://learn.microsoft.com/en-ca/answers/questions/5956795/phone-link-initiates-iphone-calls-but-transfer-to) |
+| Canal RFCOMM propio contra el AG del teléfono desde modo usuario: SLC completa (`AT+BRSF`, `+BAC`, `+CIND`, `+CMER`…) | **DEMOSTRADO** (código MIT; «llamadas por el SLC, falló SCO») | [MyPhone.Demo `HFP.cs`](https://github.com/BestOwl/MyPhone/blob/dbd0ede/MyPhone.Demo/MyPhone.Demo.HFP/HFP.cs) y su README |
+| Coexistencia entre un SLC propio y el HFP de Windows para el mismo teléfono | **NO DEMOSTRADO**; **INFERIDO** que no es posible a la vez, porque el driver HFP de Windows ya se conecta al servicio y el AG suele aceptar un solo HF por dirección (HFP normal; no verificado contra iOS) | — |
+| El rol HF de Windows frente a un teléfono es opaco: no figura en la documentación de driver ni de audio, y su registro por apps está controlado por la capacidad restringida | **DOCUMENTADO** (ausencia) + [P1–P3] | §15 |
+
+**Distinción pedida — abrir RFCOMM ≠ transportar SCO/eSCO:**
+
+| Nivel | Usuario sin privilegios | Cómo |
+|---|---|---|
+| ACL conectado | lectura de estado | `BluetoothDevice.ConnectionStatus` (P1 lo detectó) |
+| Canal RFCOMM / SLC HFP | **sí** (si el HFP de Windows no lo ocupa) | Winsock `AF_BTH`/`BTHPROTO_RFCOMM`, DOCUMENTADO |
+| Comandos de llamada (`ATA`, `AT+CHUP`, `+CLIP`) | **sí en teoría**, sobre ese RFCOMM | INFERIDO (MyPhone.Demo hace el SLC; las órdenes de llamada no se probaron contra iPhone en Windows) |
+| **SCO/eSCO** | **no**: DDI de kernel; sin protocolo en Winsock | DOCUMENTADO |
+| Micrófono y altavoz del PC | sí | WASAPI |
+| Puente SCO ↔ endpoints | lo hace Windows (driver HFP + audio), solo tras el registro | INDICIO |
+
+### 16.3 Análisis técnico de iphonebridge (código real, `078e9a4`, 2026-10-21, GPL-2.0-or-later)
+
+Repositorio archivado; continúa como BlueFerry (no revisado). Descripción por capas:
+
+| Pregunta | Respuesta (con fuente) | Clase |
+|---|---|---|
+| ¿Quién implementa HFP? | **oFono**, no el proyecto. El módulo `hfp/ofono_client.py` solo observa `org.ofono` en el bus de sistema: `Manager.ModemAdded`, `VoiceCallManager.CallAdded/Dial/HangupAll`, `VoiceCall.Answer/Hangup/LineIdentification` ([`ofono_client.py` l. 1-21, 156, 231-335](https://github.com/gabrielmeir53/iphonebridge/blob/078e9a4/src/iphonebridge/hfp/ofono_client.py)) | **DEMOSTRADO** (código) |
+| Roles | Linux = **Hands-Free (HF)**; iPhone = **Audio Gateway (AG)** (el módem oFono «hfp» es el iPhone; `bluez5.roles` incluye `hfp_hf`) | DEMOSTRADO |
+| Descubrir/conectar | emparejamiento BR/EDR normal con BlueZ; ajusta la **Class of Device a «A/V Hands-Free»** con `btmgmt class 4 8` ([`bluez_setup.py` l. 59-73](https://github.com/gabrielmeir53/iphonebridge/blob/078e9a4/src/iphonebridge/bluez_setup.py)) porque iOS solo muestra los conmutadores por perfil con esa clase | DEMOSTRADO (autor) |
+| Eventos de llamada | señales D-Bus de oFono (`CallAdded`, `PropertyChanged`); número en `LineIdentification` (`+CLIP`), nombre vía PBAP/contactos | DEMOSTRADO (código); en vivo: autor, iPhone 16 Pro Max / iOS 26.5 ([`spike/RESULTS.md` l. 22-57](https://github.com/gabrielmeir53/iphonebridge/blob/078e9a4/spike/RESULTS.md)) |
+| Contestar / colgar / marcar | `Answer()`, `Hangup()`, `Dial()`; oFono las traduce a `ATA`, `AT+CHUP`, `ATD…;` | DEMOSTRADO (código del cliente); traducción AT: INFERIDO (no pude leer oFono) |
+| Audio | **SCO** lo abre oFono vía BlueZ y lo entrega a **PipeWire** (backend `ofono`, MIT): el agente `org.ofono.HandsfreeAudioAgent.NewConnection` recibe el **descriptor de un socket SCO** y lo lee/escribe ([`backend-ofono.c` l. 64-66, 484-590](https://github.com/PipeWire/pipewire/blob/acc0f78c148d0eb4e18475368687b87b40cdc51a/spa/plugins/bluez5/backend-ofono.c)). Códec negociado: mSBC | DEMOSTRADO (código) |
+| Componentes BlueZ/kernel | `org.bluez.ProfileManager1.RegisterProfile` (UUID HFP; BlueZ solo entrega el descriptor RFCOMM a la app, [doc](https://github.com/bluez/bluez/blob/7a713dc0c1b7550bb16b67a7b0f8298e04a807b8/doc/org.bluez.ProfileManager.rst)); **socket SCO del kernel**, `socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_SCO)` ([`sco.c` l. 680-697](https://github.com/torvalds/linux/blob/05441d697f7f9a927264f4058cbbc6a03dfcac9d/net/bluetooth/sco.c#L680); `sco_sock_create` no exige capacidades especiales) | DEMOSTRADO (código) |
+| Alternativa sin oFono | PipeWire trae un backend **nativo** (MIT) que implementa el HF en modo usuario sobre BlueZ: `ATA` (l. 1538), `AT+CHUP` (l. 1572), `ATD` (l. 1632), `+CLIP`, `+CIEV` (l. 2112), con `BRSF`/códecs ([`backend-native.c`](https://github.com/PipeWire/pipewire/blob/acc0f78c148d0eb4e18475368687b87b40cdc51a/spa/plugins/bluez5/backend-native.c)) | DEMOSTRADO (código); en vivo no lo ejecuté |
+| ANCS | el proyecto lo hace por BLE; **no convive** con el emparejamiento BR/EDR por la misma MAC: necesita `LastUsedBearer=le` escrito en el registro de BlueZ (`systemd/set-le-bearer.sh`), y el autor documenta el «mutex BR/EDR-vs-BLE» ([`RESULTS.md` §5, l. 86-106](https://github.com/gabrielmeir53/iphonebridge/blob/078e9a4/spike/RESULTS.md)) | DEMOSTRADO (autor) |
+
+**Equivalentes en Windows:**
+
+| Mecanismo Linux | Equivalente público en Windows | Veredicto |
+|---|---|---|
+| `RegisterProfile` de HFP (la app es el perfil) | **Ninguno público.** `PhoneLineTransportDevice.RegisterApp` es el equivalente funcional, pero bloqueado en P2/P3 | no disponible / bloqueado |
+| Socket RFCOMM entregado por el stack | Winsock `AF_BTH/RFCOMM` (sí), pero Windows ya tiene su servicio HFP | parcial |
+| **Socket SCO de modo usuario** | **Ninguno.** Kernel-only (DDI BRB) | **sin equivalente conocido** |
+| oFono (HFP + máquina de llamadas) | Rol HF interno de Windows + `PhoneLine`/`PhoneCall` | gated por registro |
+| PipeWire consume el SCO | Windows lo hace internamente (driver HFP + audio) | solo a través del registro |
+| `btmgmt class` (Class of Device) | **Ninguno público documentado** | sin equivalente |
+| `LastUsedBearer=le` / ANCS | Cliente GATT (`Windows.Devices.Bluetooth.GenericAttributeProfile`) existe, pero sin evidencia de ANCS contra iPhone desde Windows ni forma de elegir portador | NO DEMOSTRADO |
+
+**Conclusión:** iphonebridge prueba que **el iPhone sí acepta un PC como Hands-Free con control y audio** (INDICIO fuerte, un autor, Linux) y que el cuello de botella es la **ausencia de sockets SCO de usuario y de un registro de perfil** en Windows. **No se puede portar el código** (oFono/BlueZ/PipeWire/D-Bus no existen en Windows; GPL-2.0+ además).
+
+### 16.4 Análisis técnico de BluetoothHFP (`dbd737b`, 2026-09-30)
+
+El repositorio tiene **un solo commit**, ningún archivo `LICENSE` en el árbol y dos partes:
+
+**Parte Flutter (pila de Windows):** `AudioPlaybackConnection` (A2DP) + `PhoneLineTransportDevice`. Su README admite que si Windows deniega el acceso «incluso con el paquete instalado y los permisos activados» es «una limitación real del SO/API» y remite a Phone Link ([README](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/README.md), pasos 4-5). Corrobora P2/P3. Un experimento de registro `HFP-EXPERIMENT.md` (cambio en el registro) se cita pero no está en el árbol.
+
+**`native-poc/` (pila propia):**
+
+| Pregunta | Respuesta |
+|---|---|
+| Acceso al adaptador | Reasigna el **Intel AX201 (`USB\VID_8087&PID_0026`, instancia exacta)** del driver Intel al **WinUSB incluido en Windows** y abre el dispositivo con `WinUsb_*` ([`ax201_transport.cpp`](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/bluetooth/ax201_transport.cpp), [`Set-BluetoothDriver.ps1`](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/tools/Set-BluetoothDriver.ps1)) |
+| HFP | **BTstack** (BlueKitchen) como HF: `hci_init(hci_transport_usb_instance())`, `hfp_hf_init`, `hfp_hf_establish_service_level_connection`, `hfp_hf_answer_incoming_call`, `hfp_hf_terminate_call` ([`q7_bridge.c` l. 738-778, 502-507](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/q7/q7_bridge.c)) |
+| Audio | `ENABLE_SCO_OVER_HCI` ([`btstack_config.h` l. 14](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/q7/btstack_config.h)): paquetes SCO por el endpoint **isócrono USB** del controlador; CVSD/mSBC en BTstack; WASAPI para micrófono/altavoz |
+| Hardware | Intel AX201 concreto; carga de firmware en frío **no implementada**; probado en **un** equipo ([`ACCEPTANCE.md`](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/evidence/ACCEPTANCE.md): iPhone 12 Pro Max, «el usuario confirmó audio en ambos sentidos», mSBC) |
+| Efecto en el sistema | «Los periféricos Bluetooth de Windows no están disponibles mientras WinUSB posee el controlador» (README); la guía del puente Q7 (hebreo) dice que **el Bluetooth de Windows queda apagado mientras funciona** y que se desactivan los dispositivos de audio Bluetooth de Windows; **copia las claves de enlace de Windows** a su carpeta ([`Set-BluetoothDriver.ps1` cabecera](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/tools/Set-BluetoothDriver.ps1)) |
+| Límites propios | el controlador de ese equipo **se negó a abrir un segundo canal de audio** (teléfono + auriculares a la vez) en el puente Q7 (`GUIDE-HE.md`) |
+
+**¿WinUSB es fundamental o una decisión de implementación?** **Fundamental para esa arquitectura (INFERIDO, con evidencia):** BTstack es un *host*; el host habla HCI; solo puede existir uno por controlador. `COMPATIBILITY.md` registra que `WinUsb_Initialize` falla con error 50 mientras `BTHUSB` es el driver. No hay en Windows un canal HCI de usuario que permita compartir el controlador (conocimiento general, no verificado aquí: en Linux el canal HCI «de usuario» también es exclusivo). No es una decisión de comodidad; **cualquier pila host propia exige poseer el controlador**, lo que choca con tus restricciones.
+
+**¿Qué se puede reutilizar sin sustituir el driver?** Solo **ideas**, no código:
+- La secuencia SLC/AT de HFP — ya está en MIT en `MyPhone.Demo` y en PipeWire (`backend-native.c`).
+- La gestión de códec (CVSD/mSBC) y el deriva de reloj — válidas **solo si** se tuviera SCO, que es lo que falta.
+- **Licencia:** BTstack (`LICENSE`, cláusula 4) exige que «cualquier redistribución, uso o modificación se haga únicamente para beneficio personal y no con fines comerciales ni de lucro» ([texto](https://github.com/bluekitchen/btstack/blob/9edb5d82ea6e/LICENSE)); es una restricción de campo de uso, **incompatible con distribución abierta general**. Sus dependencias (FDK AAC) tienen aviso propio. El repo de BluetoothHFP **no concede licencia** alguna → su código no se puede reutilizar.
+- Hay además un riesgo de seguridad de diseño: leer las claves de enlace de Windows y apagar el Bluetooth del sistema. **INCOMPATIBLE** con «no modificar el sistema de manera insegura o difícil de revertir».
+
+### 16.5 Comparación de arquitecturas
+
+| Arq. | Descripción | Clase | Por qué |
+|---|---|---|---|
+| **A** | `PhoneLineTransportDevice`/`PhoneCall` + stack Windows (ya probado) | **C** | P1-P3 sin registro; causa desconocida; sin explicación verificable de cómo superar el bloqueo (§15). |
+| **B** | HFP propio en modo usuario sobre Winsock RFCOMM, audio por el stack | **D** | Control posible en teoría (SLC + AT); **audio imposible** en modo usuario (solo `BTHPROTO_RFCOMM`; SCO = kernel). La variante «yo llevo la señalización y el driver HFP de Windows lleva el SCO» exigiría dos dueños del mismo HFP: INFERIDO incompatible. |
+| **C** | Componentes nativos de Windows sin Phone Link ni registro (rol HF del sistema; el usuario elige el PC como audio en el iPhone) | **C** | No hay API de control; solo audio y solo si el sistema publica y activa el rol HF sin app (INDICIO en contra: Klangbruecke §12, Q&A 5956795). **Insuficiente por sí sola** (sin control desde Windows). El experimento E1 mide justo esto. |
+| **D** | Componente/driver propio **firmado** (perfil de kernel con `BRB_SCO_*`; RFCOMM en modo usuario o en el driver) | **C** | Existe el DDI documentado, pero **no hay evidencia de coexistencia** con el driver HFP de Windows ni de que BthEnum/BthPort admitan dos consumidores SCO para el mismo dispositivo; firma: ver 16.6. Todo el diseño sería de cero, en kernel. |
+| **E1** | Pila host propia (BTstack/WinUSB) — BluetoothHFP | **D** | **Demostrada por un tercero**, pero toma el controlador, hardware único, sin licencia, BTstack no comercial, claves de enlace copiadas. Incumple varias restricciones. |
+| **E2** | Control por ANCS (BLE) + audio por el rol HF nativo (C) | **C** | ANCS permite «contestar/rechazar» según Apple (acciones positiva/negativa) pero no hay prueba en Windows y el mutex BR/EDR-vs-BLE de iphonebridge exige elegir portador (BlueZ); depende de C para el audio. |
+| **E3** | LE Audio / Telephone Bearer Service | **C** (NO DISPONIBLE) | Windows documenta BAP/VCP/MICP/TMAP en LE Audio, no TBS/CCP; no encontré evidencia de que iOS exponga TBS a terceros. |
+| **E4** | Sistema Linux (VM/WSL/segundo equipo) o hardware puente | **D** | Exige un controlador exclusivo (passthrough) o hardware adicional. |
+| **E5** | Audio por cable USB-C | **D** | Hardware/cable adicional; BluetoothHFP indica que un cable de carga/datos no expone los endpoints necesarios. |
+| **E6** | App complementaria iOS | **D** | iOS no entrega llamadas celulares a apps (§15). |
+
+**Ninguna arquitectura recibe A ni B.**
+
+### 16.6 Obstáculos técnicos y de distribución
+
+| Obstáculo | Detalle | Clase |
+|---|---|---|
+| Sin SCO en modo usuario | Winsock solo RFCOMM; DDI SCO de kernel | DOCUMENTADO |
+| Un host por controlador | Una pila propia exige poseer el radio | INFERIDO (+ evidencia de BluetoothHFP) |
+| Rol HF de Windows opaco y con registro restringido | Registro bloqueado en 26300; causa desconocida | DEMOSTRADO (P1-P3) + desconocido |
+| Driver HFP de Windows ya se engancha al servicio HFP del teléfono | Competencia por el mismo SLC | INFERIDO (`BthEnum` crea el PDO; `BluetoothSetServiceState` es la palanca de usuario documentada para apagarlo por dispositivo) |
+| Firma de un driver propio | Se necesita Hardware Developer Program y **certificado EV**. La firma por *attestation* es, según Microsoft, «**solo para pruebas**» y **no se puede publicar en Windows Update para el público**; el camino para el público es **HLK/WHCP**. | DOCUMENTADO ([offerings](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/dashboard/driver-signing-offerings.md), [attestation](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/dashboard/code-signing-attestation.md)) |
+| Instalación de un driver | requiere administrador y un instalador de driver (INF); un MSIX no instala controladores (conocimiento general, **no verificado aquí**) | INFERIDO |
+| Mantenimiento de un driver de kernel | Riesgo de bloqueos del sistema, compatibilidad por cada build, y la documentación BRB está en «previous-versions» | INFERIDO |
+| Licencias | BTstack no comercial; BluetoothHFP sin licencia; iphonebridge GPL-2.0+; oFono/BlueZ GPL; PipeWire MIT; MyPhone MIT | DEMOSTRADO |
+| Hardware | BluetoothHFP: un único chipset | DEMOSTRADO |
+| Class of Device | iOS usa la clase «A/V Hands-Free» para ofrecer perfiles; Windows no expone API pública para fijarla | NO DEMOSTRADO para HFP; DEMOSTRADO para los conmutadores MAP/PBAP en Linux |
+
+### 16.7 Matriz de capacidades
+
+(Clase de evidencia por capacidad; ✘ = imposible por esa vía según documentación o diseño.)
+
+| Arq. | Detección | Identificación | Control | Audio entrante | Audio saliente | Coexistencia | Distribución |
+|---|---|---|---|---|---|---|---|
+| A. PhoneLine | NO DEMOSTRADO (bloqueado) | NO DEMOSTRADO | NO DEMOSTRADO | NO DEMOSTRADO | NO DEMOSTRADO | sí (stack propio) | buena (MSIX) si funcionara |
+| B. HFP usuario | INFERIDO | INFERIDO | INFERIDO | **✘** | **✘** | parcial (apagar HFP del teléfono) | buena |
+| C. Nativo | ✘ (sin API) | ✘ | ✘ (solo en el iPhone) | NO DEMOSTRADO | NO DEMOSTRADO | sí | buena |
+| D. Driver firmado | NO DEMOSTRADO | NO DEMOSTRADO | NO DEMOSTRADO | NO DEMOSTRADO (DDI existe) | NO DEMOSTRADO | NO DEMOSTRADO | **mala** (EV, WHCP, instalador) |
+| E1. BTstack/WinUSB | autor | autor | INFERIDO (código) | autor | autor | **✘** (apaga Windows BT) | **✘** (hardware, licencia) |
+| E2. ANCS + C | INFERIDO | INFERIDO | INFERIDO (Apple) | = C | = C | sí | media |
+| E3. LE Audio/TBS | NO DISP. | NO DISP. | NO DISP. | NO DISP. | NO DISP. | — | — |
+| Ref.: Linux (oFono) | autor | autor | autor | autor | autor | sí | no es Windows |
+
+**Ninguna arquitectura cumple a la vez las siete columnas con evidencia.** No se considera viable una que solo controle.
+
+### 16.8 Evidencia verificable (índice)
+
+| Tema | Enlace |
+|---|---|
+| Arquitectura del stack | [bluetooth-driver-stack.md](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/bluetooth-driver-stack.md) |
+| SCO kernel | [bluetooth-profile-drivers-overview.md](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/bluetooth-profile-drivers-overview.md), [accepting-sco…](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/accepting-sco-connections-in-a-bluetooth-profile-driver.md), [creating-a-sco-client…](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/creating-a-sco-client-connection-to-a-remote-device.md) |
+| Driver HFP/IOCTL | [hfp-device-connection.md](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/audio/hfp-device-connection.md), [bluetooth-hfp-ddi-ioctls.md](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/audio/bluetooth-hfp-ddi-ioctls.md), [bypass](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/audio/bluetooth-hfp-bypass-audio-streaming.md) |
+| Winsock solo RFCOMM | [bluetooth-and-socket.md](https://github.com/MicrosoftDocs/win32/blob/ca8274d/desktop-src/Bluetooth/bluetooth-and-socket.md) |
+| Servicios por dispositivo | [BluetoothSetServiceState](https://github.com/MicrosoftDocs/sdk-api/blob/656e965/sdk-api-src/content/bluetoothapis/nf-bluetoothapis-bluetoothsetservicestate.md) |
+| Audio clásico, LE Audio | [classic-audio](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/bluetooth-classic-audio.md), [le-audio](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/bluetooth/bluetooth-low-energy-audio.md) |
+| Firma de drivers | [offerings](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/dashboard/driver-signing-offerings.md), [attestation](https://github.com/MicrosoftDocs/windows-driver-docs/blob/b1f6aa5/windows-driver-docs-pr/dashboard/code-signing-attestation.md) |
+| Linux SCO / perfil | [sco.c](https://github.com/torvalds/linux/blob/05441d697f7f9a927264f4058cbbc6a03dfcac9d/net/bluetooth/sco.c#L680), [ProfileManager](https://github.com/bluez/bluez/blob/7a713dc0c1b7550bb16b67a7b0f8298e04a807b8/doc/org.bluez.ProfileManager.rst) |
+| PipeWire HFP (MIT) | [backend-ofono.c](https://github.com/PipeWire/pipewire/blob/acc0f78c148d0eb4e18475368687b87b40cdc51a/spa/plugins/bluez5/backend-ofono.c), [backend-native.c](https://github.com/PipeWire/pipewire/blob/acc0f78c148d0eb4e18475368687b87b40cdc51a/spa/plugins/bluez5/backend-native.c) |
+| iphonebridge | [ofono_client.py](https://github.com/gabrielmeir53/iphonebridge/blob/078e9a4/src/iphonebridge/hfp/ofono_client.py), [RESULTS.md](https://github.com/gabrielmeir53/iphonebridge/blob/078e9a4/spike/RESULTS.md) |
+| BluetoothHFP | [README](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/README.md), [native-poc/README](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/README.md), [COMPATIBILITY](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/COMPATIBILITY.md), [q7_bridge.c](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/q7/q7_bridge.c), [THIRD-PARTY](https://github.com/saymonsh/BluetoothHFP/blob/dbd737b/native-poc/THIRD-PARTY.md) |
+| BTstack licencia | [LICENSE](https://github.com/bluekitchen/btstack/blob/9edb5d82ea6e/LICENSE) |
+| Windows HF en Win10 | [Klangbruecke FINDINGS](https://github.com/MYSTRAVIL/klangbruecke/blob/2cb8e00/docs/FINDINGS.md) |
+| SLC en modo usuario | [MyPhone.Demo HFP.cs](https://github.com/BestOwl/MyPhone/blob/dbd0ede/MyPhone.Demo/MyPhone.Demo.HFP/HFP.cs) |
+| ANCS (Apple) | [especificación](https://developer.apple.com/library/archive/documentation/CoreBluetooth/Reference/AppleNotificationCenterServiceSpecification/Specification/Specification.html) |
+| iPhone/HFP en Win11 25H2 | [Q&A 5956795](https://learn.microsoft.com/en-ca/answers/questions/5956795/phone-link-initiates-iphone-calls-but-transfer-to) |
+
+### 16.9 Hipótesis nuevas y experimento mínimo
+
+| # | Hipótesis | Evidencia | ¿Experimento? |
+|---|---|---|---|
+| H1 | **El rol HF de Windows, sin ninguna app registrada, ya está o no está disponible para este iPhone:** el iPhone ofrece (o no) el PC como destino de audio de llamada y Windows crea/activa (o no) los puntos finales «Hands-Free» del iPhone | Klangbruecke §12 (Win10: sin registro el teléfono no ofrecía el PC); Q&A 5956795 (Win11 25H2: endpoints inactivos); P1 `AudioRoutingStatus=CannotRoute…` (sin llamada, poco informativo) | **Sí → E1** |
+| H2 | Se puede liberar el SLC del iPhone con `BluetoothSetServiceState` para que una app lo use por RFCOMM | API documentada | **No**: aporta solo control (sin SCO), modifica el estado Bluetooth del usuario; no cambia el veredicto |
+| H3 | Un *profile driver* firmado puede coexistir con el driver HFP de Windows | BRB documentados | **No**: exigiría escribir un driver; fuera de esta fase y sin evidencia previa |
+| H4 | El iPhone expone TBS/CCP (LE Audio) a un cliente Windows | ninguna | **No**: NO DISPONIBLE |
+
+**E1 — pre-registro del experimento (no ejecutado; requiere tu autorización explícita):**
+- **Qué queremos demostrar:** si, con el iPhone conectado por Bluetooth Classic y **sin ninguna app de investigación instalada ni registrada** (estado actual del PC: paquete de pruebas desinstalado y limpio; basta confirmar con `Get-AppxPackage WinMac.Research.CallProbe` que no devuelve nada), el iPhone ofrece el PC en su menú de audio de llamada y Windows activa un punto final «Hands-Free» del iPhone que transporta voz.
+- **Evidencia que lo respalda:** las del cuadro anterior (H1).
+- **Procedimiento mínimo:** (1) antes de la llamada, listar en PowerShell los dispositivos de audio con «Hands-Free» y su estado (`Get-PnpDevice -Class AudioEndpoint`; solo lectura); (2) recibir una **llamada real** en el iPhone; (3) en el iPhone abrir el menú de audio de la llamada y anotar si el PC aparece; si aparece, seleccionarlo (acción del usuario en su propio teléfono); (4) repetir el listado del punto 1 y anotar si algún endpoint pasa a *Active*, y si se oye al interlocutor / lo oye el interlocutor mientras hay micrófono y auriculares del PC como dispositivos de comunicaciones predeterminados; (5) volver a seleccionar el iPhone en el menú de audio y colgar.
+- **Resultado que confirmaría:** el PC aparece y el audio fluye en ambos sentidos → el rol HF nativo está vivo sin app; el hueco se reduce a *control desde Windows* (E2).
+- **Resultado que refutaría:** el PC **no aparece** → el rol HF solo se publica tras el registro de una app autorizada (la puerta es la misma que ya está bloqueada) → las vías nativas pasan a **D**. Aparece pero **no hay endpoints activos / sin voz** → coincide con Q&A 5956795: el rol HF de la 26300 no es usable para este iPhone.
+- **Riesgos:** ninguno para el sistema (no se instala, registra ni modifica nada). Una llamada real y un posible cambio de ruta de audio del teléfono; si el menú de audio deja la llamada en el PC sin voz, basta volver a seleccionar el iPhone.
+- **Reversión:** volver a seleccionar el iPhone como ruta de audio; no hay estado en Windows que revertir.
+- **Qué aporta que P1, P2 y P3 no dieron:** esas pruebas midieron **registro y permisos de la API**, nunca la **ruta de voz nativa en una llamada real**. E1 separa «Windows no sabe hablar HFP con este iPhone» de «Windows sí, pero no deja a mi app registrarse».
+- **Límite:** incluso con resultado positivo, solo habría audio; el control (contestar/rechazar/colgar) seguiría en el iPhone. No cumpliría por sí solo el objetivo.
+
+### 16.10 Recomendación final
+
+**Decisión:** **NO DEMOSTRADA.** No existe hoy una arquitectura defendible con A o B para llamadas del iPhone en Windows 11 con audio bidireccional, usando el Bluetooth existente y sin sustituir su controlador.
+
+**Qué acceso, interfaz o capacidad falta (exactamente):**
+1. Un **medio legítimo de transportar SCO/eSCO desde modo usuario** — no existe ni en la API documentada (Winsock = solo RFCOMM) ni como socket del kernel (cf. `BTPROTO_SCO` en Linux).
+2. O bien un **registro efectivo del rol HF de Windows para una app de terceros** (`RegisterApp` con `IsRegistered()==True` y una `PhoneLine` visible) en la 26300 — hoy denegado o inefectivo por una causa **desconocida**.
+3. O bien una **vía de kernel documentada y soportada que permita coexistir** con el driver HFP de Windows (un *profile driver* propio), con un canal de firma viable para el público (hoy «attestation = solo pruebas»).
+
+**Evidencia que haría reconsiderarlo:**
+- Una app de terceros, reproducible, que muestre `IsRegistered()==True` y una `PhoneLine` Bluetooth con un iPhone en Windows 11 ≥ 26100, con su manifiesto, firma y forma de distribución (un hilo de Q&A, un issue o un binario con código fuente).
+- O una declaración/documentación de Microsoft que describa las condiciones reales del registro (p. ej. LAF + Store) y la respuesta a una solicitud LAF para este caso.
+- O el resultado de E1 con aparición del PC y voz bidireccional (reduce el problema al control).
+- O documentación/pruebas de coexistencia entre un *profile driver* propio y el driver HFP de Windows.
+
+**Experimento único recomendado:** E1 (16.9). Si el usuario no lo autoriza, la recomendación es **cerrar la investigación** sin más trabajo técnico en WinMac. No se recomienda ninguna implementación (ni driver, ni pila propia, ni port de iphonebridge): no hay camino que cumpla las restricciones.
+
+**Confianza:** *alta (≈85 %)* en que no hay hoy una ruta reproducible bajo estas restricciones (SCO de usuario inexistente y pila propia incompatible); *alta (≈80 %)* en que BluetoothHFP depende fundamentalmente de poseer el controlador y no es redistribuible; *media (≈55 %)* en que un driver firmado sea realmente inviable para público general (faltan pruebas de coexistencia, no de imposibilidad); *baja (≈30 %)* en el valor de E1 para cambiar el veredicto global (puede cerrar la puerta nativa pero no abre el control).
 
 ## Apéndice A — Correcciones a `docs/39` y `docs/41`
 
