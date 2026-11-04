@@ -127,12 +127,14 @@ internal sealed class OnboardingPainter : IDisposable
         double cx = OnboardingController.WinW / 2;
         Orb(cx, 140, 150, new Color4(Violet.R, Violet.G, Violet.B, _dark ? .45f : .28f));
         var lg = L("w.logo"); if (_logo is not null) _ctx.DrawBitmap(_logo, new RawRectF((float)lg.X, (float)lg.Y, (float)lg.Right, (float)lg.Bottom), 1f, BitmapInterpolationMode.Linear, null);
-        TextIn("w.title", "Bienvenido a Hatsu Desktop", _h1, Ink, center: true); TextIn("w.tag", "Tu escritorio, a tu estilo.", _tag, AccentText, center: true);
-        TextIn("w.body", OnboardingLayout.WelcomeBody, _body, Muted, center: true, wrap: true, top: true);
+        bool mig = c.Mode == OnboardingMode.Migration;
+        TextIn("w.title", mig ? "WinMac ahora es Hatsu Desktop" : "Bienvenido a Hatsu Desktop", _h1, Ink, center: true); TextIn("w.tag", mig ? "Tu configuración sigue como estaba." : "Tu escritorio, a tu estilo.", _tag, AccentText, center: true);
+        TextIn("w.body", mig ? OnboardingLayout.MigrationBody : OnboardingLayout.WelcomeBody, _body, Muted, center: true, wrap: true, top: true);
         foreach (var h in c.Hits)
-            if (h.Id == "next") Button(h, c.Mode == OnboardingMode.Resume ? "Continuar" : "Comenzar", true, c.Hover == h.Id);
-            else Text(h.Id == "skip" ? "Omitir configuración" : "Cancelar", c.Hover == h.Id ? _bodyB : _body, h.X, h.Y, h.W, h.H, c.Hover == h.Id ? Ink : Muted, center: true);
-        if (Has("w.note")) TextIn("w.note", OnboardingLayout.WelcomeSkipNote, _small, Muted, center: true, wrap: true, top: true);
+            if (h.Id is "next" && !mig) Button(h, c.Mode == OnboardingMode.Resume ? "Continuar" : "Comenzar", true, c.Hover == h.Id);
+            else if (h.Id == "keep") Button(h, "Mantener mi configuración", true, c.Hover == h.Id);
+            else Text(h.Id == "skip" ? "Omitir configuración" : h.Id == "next" ? "Revisar componentes" : "Cancelar", c.Hover == h.Id ? _bodyB : _body, h.X, h.Y, h.W, h.H, c.Hover == h.Id ? Ink : Muted, center: true);
+        if (Has("w.note")) TextIn("w.note", mig ? OnboardingLayout.MigrationNote : OnboardingLayout.WelcomeSkipNote, _small, Muted, center: true, wrap: true, top: true);
     }
 
     private void Components(OnboardingController c)

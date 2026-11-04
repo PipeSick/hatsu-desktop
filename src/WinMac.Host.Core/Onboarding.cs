@@ -28,6 +28,8 @@ public sealed record OnboardingRecord
     public OnboardingChoices? Pending { get; init; }
     /// <summary>Lo que no se pudo aplicar y el usuario aceptó dejar así (informativo; se puede reintentar desde Ajustes).</summary>
     public List<string>? Warnings { get; init; }
+    /// <summary>Fase 3.1: cuándo se le mostró (o se descartó) la bienvenida de migración a un usuario con configuración anterior. Null = aún no se le ha ofrecido; con valor no se repite.</summary>
+    public DateTime? WelcomeShownUtc { get; init; }
 }
 
 /// <summary>Todo lo que el asistente puede decidir. Cada campo está conectado con un ajuste real (módulo, Barra, Dock, inicio automático, barra de tareas); no hay controles decorativos.</summary>
@@ -164,7 +166,8 @@ public static class OnboardingRules
 }
 
 /// <summary>Qué hacer al arrancar el host respecto al asistente.</summary>
-public enum OnboardingAction { None, ShowWizard, ResumeWizard }
+/// <summary>ShowMigrationWelcome: usuario con configuración anterior (WinMac o Hatsu previo) al que aún no se le ofreció la bienvenida; no se fuerza nada y sus módulos arrancan como siempre.</summary>
+public enum OnboardingAction { None, ShowWizard, ResumeWizard, ShowMigrationWelcome }
 
 public static class OnboardingDecision
 {
@@ -177,10 +180,11 @@ public static class OnboardingDecision
             {
                 OnboardingStatus.InProgress => (OnboardingAction.ResumeWizard, r),
                 OnboardingStatus.NotStarted => (OnboardingAction.ShowWizard, r),
+                OnboardingStatus.Existing when r.WelcomeShownUtc is null => (OnboardingAction.ShowMigrationWelcome, r),
                 _ => (OnboardingAction.None, r),
             };
-        // sin registro: configuración de WinMac o de Hatsu Desktop anterior al asistente → se conserva y no se fuerza nada; instalación nueva → asistente
-        if (configFileExisted || legacyDataExists) return (OnboardingAction.None, new OnboardingRecord { Status = OnboardingStatus.Existing, Origin = configFileExisted ? "winmac-upgrade" : "preexisting", AtUtc = DateTime.UtcNow });
+        // sin registro: configuración de WinMac o de Hatsu Desktop anterior al asistente → se conserva (no se fuerza el asistente) y se le ofrece UNA bienvenida de migración; instalación nueva → asistente
+        if (configFileExisted || legacyDataExists) return (OnboardingAction.ShowMigrationWelcome, new OnboardingRecord { Status = OnboardingStatus.Existing, Origin = configFileExisted ? "winmac-upgrade" : "preexisting", AtUtc = DateTime.UtcNow });
         return (OnboardingAction.ShowWizard, new OnboardingRecord { Status = OnboardingStatus.NotStarted, Origin = "fresh" });
     }
 
@@ -215,7 +219,7 @@ public enum ApplyOutcome { Ok, Warning, Failed }
 /// <param name="Detail">Texto para el usuario («No se pudo iniciar»).</param>
 /// <param name="Technical">Detalle técnico aparte (estado del supervisor…), disponible en «Detalles técnicos» y en el registro; null si no hay.</param>
 /// <param name="Inactive">Desactivado a propósito: no es un acierto ni un fallo (indicador neutro).</param>
-public sealed record ApplyItem(string Id, string Label, ApplyOutcome Outcome, string? Detail = null, string? Technical = null, bool Inactive = false);
+public sealed record ApplyItem(string Id, string Label, ApplyOutcome Outcome, string? Detail = null, string? Technical = null, bool Inactive = false, FailureKind? Cause = null);
 
 public sealed record ApplyResult(IReadOnlyList<ApplyItem> Items, OnboardingStatus Status, bool RolledBack)
 {
@@ -236,6 +240,8 @@ public interface IOnboardingPorts
     /// <summary>Lanza si no se pudo (registro bloqueado por una directiva, etc.).</summary>
     void SetAutostart(bool on);
     IReadOnlyDictionary<string, ModuleState> ModuleStates { get; }
+    /// <summary>Causa conocida de cada módulo que no está en marcha (vacío si todo va bien).</summary>
+    IReadOnlyDictionary<string, ModuleFailure> ModuleFailures { get; }
     /// <summary>Espera (hasta el plazo) a que el módulo salga de Starting; se sustituye por un reloj falso en las pruebas.</summary>
     Task DelayAsync(TimeSpan t);
 }
@@ -290,11 +296,13 @@ public sealed class OnboardingApplier(IOnboardingPorts ports, Action<string>? lo
             string label = OnboardingRules.Name(id);
             if (!on) { items.Add(new("mod:" + id, label, ApplyOutcome.Ok, "Desactivado: no se inicia", Inactive: true)); continue; }
             var st = await WaitAsync(id).ConfigureAwait(false);
+            var f = ports.ModuleFailures.TryGetValue(id, out var ff) ? ff : null;
             items.Add(st switch
             {
                 ModuleState.Running => new("mod:" + id, label, ApplyOutcome.Ok, "En ejecución"),
-                ModuleState.NotInstalled => new("mod:" + id, label, ApplyOutcome.Warning, "No está incluido en esta instalación", "estado del supervisor: NotInstalled"),
-                _ => new("mod:" + id, label, ApplyOutcome.Warning, st == ModuleState.Starting ? "Sigue iniciándose" : "No se pudo iniciar", "estado del supervisor: " + st),
+                ModuleState.NotInstalled => new("mod:" + id, label, ApplyOutcome.Warning, "No está incluido en esta instalación", "estado del supervisor: NotInstalled", Cause: FailureKind.Missing),
+                _ => new("mod:" + id, label, ApplyOutcome.Warning, st == ModuleState.Starting ? "Sigue iniciándose" : "No se pudo iniciar",
+                    f is null ? "estado del supervisor: " + st : $"{f.Reason}. {f.Advice} [{f.Technical}; estado del supervisor: {st}]", Cause: f?.Kind),
             });
         }
 

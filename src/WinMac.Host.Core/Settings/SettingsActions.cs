@@ -23,6 +23,10 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
 
     /// <summary>Hatsu Desktop: adopción EXPLÍCITA del inicio automático (el host pide la confirmación y escribe el valor). Devuelve true si cambió.</summary>
     public Func<bool>? AdoptAutostart { get; set; }
+    /// <summary>Reintenta UN módulo que no arrancó (la ventana llama a Supervisor.Restart).</summary>
+    public Func<string, bool>? RetryModule { get; set; }
+    /// <summary>Genera el informe de diagnóstico local (solo lectura) y lo abre.</summary>
+    public Action? RunDiagnostics { get; set; }
     /// <summary>Reabre el asistente de primera ejecución (no borra nada: solo lo muestra con las elecciones actuales).</summary>
     public Action? RunOnboarding { get; set; }
 
@@ -89,8 +93,10 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             cfg.ApplyBarPatch(Patch("weatherFavorites", favs.Count == 0 ? null : WinMac.Bar.Hub.GeoPoint.SerializeList(favs))); return true;
         }
 
+        if (id.StartsWith("module.retry:", StringComparison.Ordinal)) return RetryModule?.Invoke(id[13..]) ?? false;
         switch (id, e.Kind)
         {
+            case ("diagnose.run", _): if (RunDiagnostics is null) return false; RunDiagnostics(); return true;
             case ("dock.size", "segment") when e.Index >= 0 && e.Index < WinMac.Dock.DockSettings.Presets.Length: return Dock(d => WinMac.Dock.DockSettings.WithIconSize(d, WinMac.Dock.DockSettings.Presets[e.Index].Size));
             case ("dock.fine", "slider"): return Dock(d => WinMac.Dock.DockSettings.WithIconSize(d, SettingsBuilder.DockFineSize(e.Number)));
             case ("dock.magnify", "toggle"): return Dock(d => d with { MagnificationEnabled = e.On });

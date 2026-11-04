@@ -2,6 +2,7 @@
 //
 //   HatsuDesktop.exe                      inicia el host (y con él los módulos habilitados en %APPDATA%\WinMac\winmac.json)
 //   HatsuDesktop.exe --background         igual; es lo que registra el inicio automático
+//   HatsuDesktop.exe --diagnose [--out f.txt] [--open] [--quiet]   informe local de SOLO LECTURA (versión, componentes, procesos, firma, asistente, inicio automático, barra de tareas); no envía nada
 //   HatsuDesktop.exe --uninstall-cleanup  (desinstalador MSI) restaura la barra de tareas y quita SOLO el inicio automático de esta instalación; no borra datos
 //   HatsuDesktop.exe --no-onboarding · --onboarding-auto skip   (pruebas) sin asistente / asistente aplicado sin ventana
 //   HatsuDesktop.exe --render-onboarding <Welcome|Components|Appearance|Windows|Review|Result> --out f.png [--theme light|dark] [--scale 2]   dibuja el asistente fuera de pantalla (CI)
@@ -42,6 +43,10 @@ internal static class Program
                 else Console.WriteLine(stored is null ? "No había inicio automático." : "El inicio automático pertenece a otra copia: no se toca.");
                 return rc;
             }
+            if (args.Contains("--diagnose"))   // informe local de SOLO LECTURA (Fase 3.1)
+            {
+                var path = InstallDiagnose.Run(HostOptions.Parse(args), args.Contains("--out") ? HostOptions.Arg(args, "--out", "") : null, open: args.Contains("--open"), print: !args.Contains("--quiet")); return path is null ? 1 : 0;
+            }
             if (args.Contains("--quit")) return HostApp.SignalQuit();
             if (args.Contains("--diagnose-security")) return SecurityDiagnostics.Run(quiet: args.Contains("--quiet"));   // WM-036: solo lectura
             if (args.Contains("--restore-taskbar")) return TaskbarHider.RestoreFromCommandLine(quiet: args.Contains("--quiet"));   // WM-034: recuperación manual, sin arrancar WinMac
@@ -53,7 +58,7 @@ internal static class Program
                 try
                 {
                     var step = Enum.Parse<WinMac.Host.OnboardingStep>(stepName, ignoreCase: true);
-                    File.WriteAllText(png + ".txt", OnboardingWindow.RenderOffscreen(png, step, HostOptions.Arg(args, "--theme", "dark") != "light", double.TryParse(HostOptions.Arg(args, "--scale", "2"), System.Globalization.CultureInfo.InvariantCulture, out var osc) ? osc : 2, args.Contains("--details") ? "details" : null)); return 0;
+                    File.WriteAllText(png + ".txt", OnboardingWindow.RenderOffscreen(png, step, HostOptions.Arg(args, "--theme", "dark") != "light", double.TryParse(HostOptions.Arg(args, "--scale", "2"), System.Globalization.CultureInfo.InvariantCulture, out var osc) ? osc : 2, args.Contains("--details") ? "details" : args.Contains("--migration") ? "migration" : null)); return 0;
                 }
                 catch (Exception e) { try { File.WriteAllText(png + ".txt", "ERROR: " + e); } catch (IOException) { } return 1; }
             }

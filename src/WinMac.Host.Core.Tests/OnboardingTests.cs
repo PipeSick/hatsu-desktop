@@ -27,6 +27,8 @@ internal sealed class FakePorts : IOnboardingPorts
     public bool SaveDock(DockConfig d) { if (FailDockWrite) return false; Dock = d; return true; }
     public void SetAutostart(bool on) { if (FailAutostart) throw new InvalidOperationException("directiva de grupo"); AutostartOn = on; }
     public IReadOnlyDictionary<string, ModuleState> ModuleStates => States;
+    public Dictionary<string, ModuleFailure> Failures { get; } = new();
+    public IReadOnlyDictionary<string, ModuleFailure> ModuleFailures => Failures;
     public Task DelayAsync(TimeSpan t) => Task.CompletedTask;
 }
 
@@ -100,12 +102,12 @@ public class OnboardingDecisionTests
     [Fact] public void A_WinMac_or_previous_Hatsu_config_is_kept_and_never_forced_through_the_wizard()
     {
         var (a, rec) = OnboardingDecision.Decide(new HostConfig(), configFileExisted: true, legacyDataExists: false);
-        Assert.Equal(OnboardingAction.None, a); Assert.Equal(OnboardingStatus.Existing, rec.Status); Assert.Equal("winmac-upgrade", rec.Origin);
-        var (b, rec2) = OnboardingDecision.Decide(new HostConfig(), false, legacyDataExists: true); Assert.Equal(OnboardingAction.None, b); Assert.Equal("preexisting", rec2.Origin);
+        Assert.Equal(OnboardingAction.ShowMigrationWelcome, a); Assert.Equal(OnboardingStatus.Existing, rec.Status); Assert.Equal("winmac-upgrade", rec.Origin);
+        var (b, rec2) = OnboardingDecision.Decide(new HostConfig(), false, legacyDataExists: true); Assert.Equal(OnboardingAction.ShowMigrationWelcome, b); Assert.Equal("preexisting", rec2.Origin);
     }
 
     [Theory]
-    [InlineData(OnboardingStatus.Completed, OnboardingAction.None)] [InlineData(OnboardingStatus.Skipped, OnboardingAction.None)] [InlineData(OnboardingStatus.Existing, OnboardingAction.None)]
+    [InlineData(OnboardingStatus.Completed, OnboardingAction.None)] [InlineData(OnboardingStatus.Skipped, OnboardingAction.None)] [InlineData(OnboardingStatus.Existing, OnboardingAction.ShowMigrationWelcome)]
     [InlineData(OnboardingStatus.InProgress, OnboardingAction.ResumeWizard)] [InlineData(OnboardingStatus.NotStarted, OnboardingAction.ShowWizard)]
     public void The_stored_status_decides_and_a_finished_wizard_never_comes_back(OnboardingStatus s, OnboardingAction expected) =>
         Assert.Equal(expected, OnboardingDecision.Decide(new HostConfig { Onboarding = new OnboardingRecord { Status = s } }, true, true).Action);

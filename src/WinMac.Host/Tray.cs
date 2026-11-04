@@ -30,6 +30,8 @@ internal sealed class Tray : IDisposable
 
     /// <summary>Explorer se reinició (WM-034: su barra de tareas nueva aparece visible).</summary>
     public Action? TaskbarCreated { get; set; }
+    /// <summary>Causa conocida de cada módulo que no arrancó (para la fila de la bandeja).</summary>
+    public Func<IReadOnlyDictionary<string, ModuleFailure>>? Failures { get; set; }
 
     public Tray(Func<IReadOnlyDictionary<string, ModuleState>> states, Action quit, Action<string> open, Action settings, Action<string> log, bool showIcon)
     {
@@ -84,7 +86,7 @@ internal sealed class Tray : IDisposable
             var states = _states();
             _panel ??= new TrayPanel(a => RunPanelAction(a, states), _log);
             Native.GetCursorPos(out var p);
-            _panel.Show(TrayPanelModel.Build(states, Version), p.X, p.Y);
+            _panel.Show(TrayPanelModel.Build(states, Version, Failures?.Invoke()), p.X, p.Y);
             return;
         }
         catch (Exception e) { _log("[host] panel de la bandeja no disponible, menú clásico: " + e.GetType().Name + ": " + e.Message); _panel?.Close(); }

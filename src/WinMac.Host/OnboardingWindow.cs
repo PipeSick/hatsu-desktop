@@ -127,7 +127,7 @@ internal sealed class OnboardingWindow : IDisposable
     {
         // elecciones de MUESTRA = los valores seguros + Peripherals (para mostrar la dependencia de la Barra). El inicio automático y la barra de tareas se quedan APAGADOS, como en una instalación nueva.
         var choices = OnboardingChoices.Safe with { Peripherals = true, DockSize = 2 };
-        var ctl = new OnboardingController(OnboardingMode.Fresh, choices);
+        var ctl = new OnboardingController(variant == "migration" ? OnboardingMode.Migration : OnboardingMode.Fresh, choices);
         switch (step)
         {
             case OnboardingStep.Components: ctl.Click("next"); break;

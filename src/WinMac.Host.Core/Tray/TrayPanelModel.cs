@@ -28,7 +28,7 @@ public static class TrayPanelModel
         ModuleState.Running => "green", ModuleState.Starting or ModuleState.Stopping or ModuleState.Crashed => "amber", ModuleState.Failed or ModuleState.Stopped => "red", _ => "grey",
     };
 
-    public static IReadOnlyList<Item> Build(IReadOnlyDictionary<string, ModuleState> states, string version)
+    public static IReadOnlyList<Item> Build(IReadOnlyDictionary<string, ModuleState> states, string version, IReadOnlyDictionary<string, ModuleFailure>? failures = null)
     {
         int problems = states.Count(k => k.Value is ModuleState.Failed or ModuleState.Stopped or ModuleState.Crashed);
         var items = new List<Item> { new(Kind.Header, "Hatsu Desktop " + version, problems == 0 ? "Todo en marcha" : problems == 1 ? "1 módulo necesita atención" : $"{problems} módulos necesitan atención") };
@@ -41,7 +41,8 @@ public static class TrayPanelModel
                 ModuleState.Disabled => ("enable:" + id, "Activar"),
                 _ => (null, null),
             };
-            items.Add(new(Kind.Module, Label(id), StateText(st), act, label, st));
+            string text = st is ModuleState.Failed && failures is not null && failures.TryGetValue(id, out var fl) ? "No se pudo iniciar · " + fl.Short : StateText(st);
+            items.Add(new(Kind.Module, Label(id), text, act, label, st));
         }
 
         items.Add(new(Kind.Separator, ""));

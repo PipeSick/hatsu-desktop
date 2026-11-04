@@ -84,9 +84,9 @@ internal static class HostApp
         var (onbAction, onbRecord) = o.NoOnboarding ? (OnboardingAction.None, cfg.Onboarding ?? new OnboardingRecord { Status = OnboardingStatus.Existing }) : OnboardingDecision.Decide(cfg, cfgExisted, legacyData);
         if (!o.NoOnboarding && cfg.Onboarding is null)
         {   // primera vez que se decide: usuario existente → se anota y no se toca nada más; instalación nueva → ningún módulo arranca hasta que el usuario decida (el escritorio no cambia antes)
-            cfg = onbAction == OnboardingAction.None ? cfg with { Onboarding = onbRecord } : OnboardingDecision.GateFresh(cfg, onbRecord);
+            cfg = onbAction is OnboardingAction.None or OnboardingAction.ShowMigrationWelcome ? cfg with { Onboarding = onbRecord } : OnboardingDecision.GateFresh(cfg, onbRecord);
             try { HostConfig.Save(o.ConfigPath, cfg); } catch (Exception e) { log("[host] no se pudo guardar el estado del asistente: " + e.Message); }
-            log(onbAction == OnboardingAction.None ? $"[host] configuración existente ({onbRecord.Origin}): se conserva; no se muestra el asistente." : "[host] instalación nueva: se muestra el asistente; los módulos esperan a que elijas.");
+            log(onbAction == OnboardingAction.ShowMigrationWelcome ? $"[host] configuración existente ({onbRecord.Origin}): se conserva y los módulos arrancan como siempre; se ofrece una bienvenida de migración (una vez)." : "[host] instalación nueva: se muestra el asistente; los módulos esperan a que elijas.");
         }
         string baseDir = AppContext.BaseDirectory, pipe = o.PipeName ?? PipeNames.ForCurrentUser(), token = PipeNames.NewToken();
         log($"[host] iniciado (pid {Environment.ProcessId}); configuración: {o.ConfigPath}; canal: {pipe}");
@@ -119,7 +119,7 @@ internal static class HostApp
         void OpenWizard(OnboardingMode mode)
         {
             if (wizard is { IsOpen: true }) { wizard.Show(); return; }
-            var initial = mode == OnboardingMode.Rerun ? OnboardingRules.FromCurrent(config.Current, ports.LoadDock(), ports.AutostartOn) : config.Current.Onboarding?.Pending ?? OnboardingChoices.Safe;
+            var initial = mode is OnboardingMode.Rerun or OnboardingMode.Migration ? OnboardingRules.FromCurrent(config.Current, ports.LoadDock(), ports.AutostartOn) : config.Current.Onboarding?.Pending ?? OnboardingChoices.Safe;
             var ctl = new OnboardingController(mode, initial); ApplyResult? last = null; bool skipped = false;
             var w = new OnboardingWindow(ctl, log); wizard = w;
             void RunApply(bool skip)
@@ -142,10 +142,16 @@ internal static class HostApp
                     case OnboardingCommand.Skip: RunApply(true); break;
                     case OnboardingCommand.Accept: if (last is not null) { var err = applier.AcceptWarnings(last, skipped); if (err is not null) log("[asistente] no se pudo anotar la aceptación: " + err); } w.Close(); break;
                     case OnboardingCommand.Finish: w.Close(); break;
-                    case OnboardingCommand.Cancel: w.Close(); break;   // cerrar sin aplicar: lo ya aplicado se queda; si no se aplicó nada, el asistente vuelve en el próximo arranque (instalación nueva)
+                    case OnboardingCommand.Cancel: w.Close(); break;
+                    case OnboardingCommand.Keep: log("[asistente] el usuario conserva su configuración anterior"); w.Close(); break;   // Closed marca la bienvenida como mostrada   // cerrar sin aplicar: lo ya aplicado se queda; si no se aplicó nada, el asistente vuelve en el próximo arranque (instalación nueva)
                 }
             };
-            w.Closed = () => { log("[asistente] ventana cerrada"); wizard = null; };
+            w.Closed = () =>
+            {
+                log("[asistente] ventana cerrada"); wizard = null;
+                if (mode == OnboardingMode.Migration)   // «conservar», cerrar o completar la revisión: la bienvenida no se repite (nunca se insiste)
+                    config.Update(c => c with { Onboarding = (c.Onboarding ?? new OnboardingRecord { Status = OnboardingStatus.Existing }) with { WelcomeShownUtc = c.Onboarding?.WelcomeShownUtc ?? DateTime.UtcNow } });
+            };
             w.Show();
         }
         Tray? tray = null; SettingsWindow? settings = null;
@@ -157,9 +163,13 @@ internal static class HostApp
         {
             settings = new SettingsWindow(config, () => sup.States, controller.OpenNotchLocalSettings, exePath, log);
             settings.RunOnboarding = () => uiActions.Enqueue(() => OpenWizard(OnboardingMode.Rerun));
+            settings.ModuleFailures = () => sup.Failures;
+            settings.RetryModule = id => { bool ok = sup.Restart(id); log(ok ? $"[host] reintento manual de {id} pedido desde Ajustes" : $"[host] reintento de {id}: nada que reintentar ahora"); return ok; };
+            settings.RunDiagnostics = () => _ = Task.Run(() => { try { var f = InstallDiagnose.Run(o, null, open: true, print: false); log("[host] informe de diagnóstico: " + (f ?? "no se pudo guardar")); } catch (Exception e) { log("[host] informe de diagnóstico falló: " + e.Message); } });
             var win = settings; controller.SettingsRequested = section => uiActions.Enqueue(() => win.Show(section));
             tray = new Tray(() => sup.States, RequestQuit, id => { if (sup.States.TryGetValue(id, out var st) && st == ModuleState.Disabled) config.SetModuleEnabled(id, true); else sup.Restart(id); }, settings.Show, log, showIcon: !o.NoTray);
             tray.TaskbarCreated = () => taskbar.OnTaskbarCreated(config.Current.HideTaskbar);
+            tray.Failures = () => sup.Failures;
             settings.TaskbarStatus = () => taskbar.Status;
         }
         catch (Exception e) { log("[host] sin ventana/bandeja: " + e.Message); }
@@ -176,8 +186,9 @@ internal static class HostApp
             settings.ClearClipboard = () => { bus.Emit(NotchSettings.CommandTopic, new { cmd = "clear-clipboard" }); log("[host] historial del portapapeles borrado desde Ajustes"); };
         }
 
-        if (onbAction != OnboardingAction.None && o.OnboardingAuto is null && !o.NoTray) uiActions.Enqueue(() => OpenWizard(onbAction == OnboardingAction.ResumeWizard ? OnboardingMode.Resume : OnboardingMode.Fresh));
-        if (onbAction != OnboardingAction.None && o.OnboardingAuto is { } auto)
+        if (onbAction is OnboardingAction.ShowWizard or OnboardingAction.ResumeWizard && o.OnboardingAuto is null && !o.NoTray) uiActions.Enqueue(() => OpenWizard(onbAction == OnboardingAction.ResumeWizard ? OnboardingMode.Resume : OnboardingMode.Fresh));
+        if (onbAction == OnboardingAction.ShowMigrationWelcome && o.OnboardingAuto is null && !o.NoTray && !o.Background) uiActions.Enqueue(() => OpenWizard(OnboardingMode.Migration));   // no en el inicio automático: no se abre una ventana al iniciar sesión
+        if (onbAction is OnboardingAction.ShowWizard or OnboardingAction.ResumeWizard && o.OnboardingAuto is { } auto)
         {   // PRUEBAS: el mismo camino de aplicación, sin ventana (valores seguros). Verifica de verdad que el arranque queda gobernado por el asistente.
             _ = Task.Run(async () =>
             {
@@ -282,5 +293,6 @@ internal sealed class HostOnboardingPorts(ConfigService config, Supervisor sup, 
     public bool AutostartOn => Autostart.Current() is not null;
     public void SetAutostart(bool on) { if (on) Autostart.Install(exePath); else Autostart.Remove(); }
     public IReadOnlyDictionary<string, ModuleState> ModuleStates => sup.States;
+    public IReadOnlyDictionary<string, ModuleFailure> ModuleFailures => sup.Failures;
     public Task DelayAsync(TimeSpan t) => Task.Delay(t);
 }

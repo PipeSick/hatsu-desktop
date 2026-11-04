@@ -4,9 +4,9 @@ using WinMac.Dock;
 namespace WinMac.Host;
 
 public enum OnboardingStep { Welcome, Components, Appearance, Windows, Review, Result }
-/// <summary>Fresh: instalación nueva · Resume: quedó a medias · Rerun: reabierto a propósito desde Ajustes (no se puede «omitir»; se puede cancelar sin cambiar nada).</summary>
-public enum OnboardingMode { Fresh, Resume, Rerun }
-public enum OnboardingCommand { None, Skip, Apply, Retry, Accept, Finish, Cancel }
+/// <summary>Fresh: instalación nueva · Resume: quedó a medias · Rerun: reabierto a propósito desde Ajustes (no se puede «omitir»; se puede cancelar sin cambiar nada) · Migration: bienvenida a quien ya tenía WinMac/Hatsu configurado (conservar o revisar; nada se aplica sin confirmar).</summary>
+public enum OnboardingMode { Fresh, Resume, Rerun, Migration }
+public enum OnboardingCommand { None, Skip, Apply, Retry, Accept, Finish, Cancel, Keep }
 
 /// <summary>Zona clicable de la ventana (DIP). El pintor dibuja con estas mismas medidas: lo que se ve es lo que se pulsa.</summary>
 public sealed record OnboardingHit(string Id, double X, double Y, double W, double H, bool Enabled = true)
@@ -72,6 +72,7 @@ public sealed class OnboardingController
                 GoTo(NextStep(-1)); return OnboardingCommand.None;
             case "skip": return Mode == OnboardingMode.Rerun ? OnboardingCommand.Cancel : OnboardingCommand.Skip;
             case "cancel": return OnboardingCommand.Cancel;
+            case "keep": return OnboardingCommand.Keep;
             case "apply": return OnboardingCommand.Apply;
             case "retry": return OnboardingCommand.Retry;
             case "details": ShowDetails = !ShowDetails; return OnboardingCommand.None;
@@ -108,6 +109,6 @@ public sealed class OnboardingController
     public string ResultMessage => Result is not { } r ? "" :
         r.RolledBack ? "No se aplicó nada: se restauró el estado anterior. Puedes reintentar o cerrar el asistente sin cambios." :
         r.EssentialFailed ? "Algo esencial falló y no se aplicó. Puedes volver a revisar, reintentar o cerrar sin aplicar." :
-        r.HasWarnings ? "Lo que sí funciona ya está aplicado. «Reintentar» vuelve a probar lo que falló. «Continuar de todos modos» cierra el asistente con lo que funciona; lo que no se pudo iniciar queda anotado y puedes reintentarlo o desactivarlo en Ajustes." :
+        r.HasWarnings ? "Lo que sí funciona ya está aplicado. «Reintentar» vuelve a probar lo que falló. «Continuar de todos modos» cierra el asistente con lo que funciona; lo que no se pudo iniciar queda anotado y puedes reintentarlo o desactivarlo en Ajustes." + (r.Items.Any(i => i.Cause == FailureKind.PolicyBlocked) ? " Windows impidió iniciar un componente con una directiva de seguridad; Hatsu Desktop no la cambia (mira «Detalles técnicos»)." : "") :
         "Todo se aplicó y los módulos están en marcha. Puedes cambiar lo que quieras en Ajustes.";
 }

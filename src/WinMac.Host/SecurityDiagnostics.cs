@@ -16,7 +16,8 @@ namespace WinMac.Host.App;
 /// </summary>
 internal static class SecurityDiagnostics
 {
-    public static int Run(bool quiet)
+    /// <summary>El informe de seguridad (solo lectura) como texto; lo reutiliza el informe de diagnóstico general.</summary>
+    internal static string BuildReport(out int hits)
     {
         string dir = AppContext.BaseDirectory.TrimEnd('\\'); var sb = new StringBuilder();
         sb.AppendLine($"Hatsu Desktop — diagnóstico de seguridad · {DateTime.Now:yyyy-MM-dd HH:mm} · Windows {Environment.OSVersion.Version}");
@@ -32,7 +33,7 @@ internal static class SecurityDiagnostics
             sb.AppendLine($"  {exe}: {(File.Exists(p) ? Signed(p) ? "firmado" : "sin firma" : "no está")}");
         }
         sb.AppendLine();
-        int hits = 0;
+        hits = 0;
         hits += Events(sb, "Integridad de código (bloqueos y avisos de Control de aplicaciones)", "Microsoft-Windows-CodeIntegrity/Operational", "3033 or EventID=3034 or EventID=3076 or EventID=3077 or EventID=3089", dir);
         hits += Events(sb, "Antivirus (historial de protección)", "Microsoft-Windows-Windows Defender/Operational", "1116 or EventID=1117", dir);
         sb.AppendLine();
@@ -41,7 +42,12 @@ internal static class SecurityDiagnostics
             : "Hay eventos que nombran archivos de Hatsu Desktop: el archivo indicado es el que Windows bloqueó. No desactives la protección: comparte este informe.");
         sb.AppendLine("Por qué puede pasar: la beta no está firmada digitalmente; Smart App Control bloquea los ejecutables sin firma ni reputación, y cada beta tiene archivos nuevos (sin reputación).");
 
-        string report = sb.ToString();
+        return sb.ToString();
+    }
+
+    public static int Run(bool quiet)
+    {
+        string report = BuildReport(out int hits); string dir = AppContext.BaseDirectory.TrimEnd('\\');
         string outFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "security-report.txt");
         try { Directory.CreateDirectory(Path.GetDirectoryName(outFile)!); File.WriteAllText(outFile, report); } catch (Exception) { outFile = "(no se pudo guardar)"; }
         try { Console.WriteLine(report); } catch (Exception) { }
@@ -86,7 +92,7 @@ internal static class SecurityDiagnostics
     }
 
     /// <summary>¿Tiene el archivo una firma Authenticode válida? (WinVerifyTrust, solo comprobación).</summary>
-    private static bool Signed(string path)
+    internal static bool Signed(string path)
     {
         var file = new WINTRUST_FILE_INFO { cbStruct = (uint)Marshal.SizeOf<WINTRUST_FILE_INFO>(), pcwszFilePath = path };
         IntPtr pFile = Marshal.AllocHGlobal(Marshal.SizeOf<WINTRUST_FILE_INFO>());

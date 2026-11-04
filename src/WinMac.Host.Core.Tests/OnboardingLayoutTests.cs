@@ -11,7 +11,7 @@ namespace WinMac.Host.Core.Tests;
 /// </summary>
 public class OnboardingLayoutTests
 {
-    private static OnboardingController At(OnboardingStep step, OnboardingChoices? choices = null, OnboardingMode mode = OnboardingMode.Fresh, ApplyResult? result = null, bool busy = false)
+    internal static OnboardingController At(OnboardingStep step, OnboardingChoices? choices = null, OnboardingMode mode = OnboardingMode.Fresh, ApplyResult? result = null, bool busy = false)
     {
         var c = new OnboardingController(mode == OnboardingMode.Resume ? OnboardingMode.Fresh : mode, choices ?? OnboardingChoices.Safe);
         int steps = Array.IndexOf(OnboardingController.Flow, step); for (int i = 0; i < steps; i++) c.Click("next");
@@ -32,11 +32,12 @@ public class OnboardingLayoutTests
             yield return [step, "sin Dock", OnboardingChoices.Safe with { Dock = false }, OnboardingMode.Fresh];
             yield return [step, "sin Barra", OnboardingChoices.Safe with { Bar = false }, OnboardingMode.Fresh];
             yield return [step, "reabierto", OnboardingChoices.Safe, OnboardingMode.Rerun];
+            yield return [step, "migración", OnboardingChoices.Safe, OnboardingMode.Migration];
         }
     }
 
     private static bool IsContainer(LayoutBox b) => b.Kind == BoxKind.Card || b.Id.StartsWith("c:") || b.Id.StartsWith("t:") || b.Id.EndsWith(".seg") || b.Id == "p.desk";
-    private static void AssertGeometry(OnboardingController c, string what)
+    internal static void AssertGeometry(OnboardingController c, string what)
     {
         var boxes = OnboardingLayout.Compute(c);
         foreach (var b in boxes) Assert.True(b.X >= -0.01 && b.Y >= -0.01 && b.Right <= OnboardingLayout.W + 0.01 && b.Bottom <= OnboardingLayout.H + 0.01, $"{what}: {b.Id} se sale de la ventana ({b})");

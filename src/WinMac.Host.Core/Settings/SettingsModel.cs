@@ -32,6 +32,8 @@ public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, M
     public IReadOnlyList<(Extensions.InstalledExtension Ext, string Status)>? Extensions { get; init; }
     /// <summary>WM-034: estado real de la ocultación de la barra de tareas («Oculta», «Suspendida: …»). Vacío si no se sabe.</summary>
     public string TaskbarStatus { get; init; } = "";
+    /// <summary>Fase 3.1: causa conocida de cada módulo que no arrancó (vacío si todo va bien). Un módulo DESACTIVADO por el usuario no aparece aquí.</summary>
+    public IReadOnlyDictionary<string, ModuleFailure> ModuleFailures { get; init; } = new Dictionary<string, ModuleFailure>();
 }
 
 /// <summary>Construye las páginas de Ajustes a partir de la configuración vigente. Puro: se prueba sin Windows.</summary>
@@ -119,6 +121,19 @@ public static class SettingsBuilder
     private static SettingsRow BarF(string field, string? subtitle = null) => Bar(Array.FindIndex(BarToggles, t => t.Field == field), subtitle);   // por nombre: añadir opciones al final de la tabla no desplaza a las demás
     [ThreadStatic] private static BarConfig? _bar;   // solo durante Build (evita pasar el parámetro por cada fila)
 
+    /// <summary>Fase 3.1: un módulo que no arrancó se ve y se puede reintentar sin abrir la bandeja. Solo aparece si hay un problema real (Failed/Crashed); lo desactivado a propósito no lo es.</summary>
+    private static IEnumerable<SettingsGroup> ProblemGroups(SettingsInput input)
+    {
+        var rows = new List<SettingsRow>();
+        foreach (var (id, st) in input.States.Where(kv => kv.Value is ModuleState.Failed or ModuleState.Crashed).OrderBy(kv => kv.Key))
+        {
+            string name = TrayPanelModel.Label(id); input.ModuleFailures.TryGetValue(id, out var f);
+            string sub = st == ModuleState.Crashed ? "Se está reiniciando tras una caída" : "No se pudo iniciar" + (f is null ? "" : " · " + f.Reason);
+            rows.Add(new(RowKind.Button, "module.retry:" + id, "Reintentar " + name, sub));
+        }
+        if (rows.Count > 0) yield return new("Módulos con problemas", rows, "El informe de diagnóstico (más abajo) incluye el detalle técnico. Hatsu Desktop no cambia las protecciones de Windows.");
+    }
+
     public static IReadOnlyList<SettingsPage> Build(SettingsInput input)
     {
         var cfg = input.Cfg; var n = cfg.Notch ?? new NotchSettings(); _bar = cfg.Bar ?? new BarConfig(); var bar = _bar;
@@ -135,9 +150,11 @@ public static class SettingsBuilder
                 new(RowKind.Toggle, "mod:connect", "Hatsu Connect", "Batería y notificaciones del iPhone (opcional)", On("connect")),
                 new(RowKind.Toggle, "mod:notch", "Isla", "Música, actividades y más en la parte superior", installed && On("notch"), installed, installed ? null : noNotch),
             ], "Cada módulo es un proceso aparte: si uno falla, los demás siguen."),
+            .. ProblemGroups(input),
             new("Sistema", [
                 new(RowKind.Toggle, "autostart", "Iniciar con Windows", "Abre Hatsu Desktop al iniciar sesión", input.Autostart),
                 new(RowKind.Button, "onboarding.rerun", "Abrir el asistente de configuración", "No cambia nada hasta que confirmes"),
+                new(RowKind.Button, "diagnose.run", "Generar informe de diagnóstico", "Se guarda en tu equipo y se abre para que lo revises; no se envía nada"),
                 Bar(10, "Pide confirmación antes de reiniciar, apagar o cerrar la sesión"),
                 .. (input.AutostartForeignPath is { } other ? [new SettingsRow(RowKind.Button, "autostart.adopt", "Iniciar esta instalación con Windows", "Hoy Windows inicia otra copia: " + other + ". Se cambia solo si lo confirmas; la carpeta anterior no se borra.")] : Array.Empty<SettingsRow>()),
             ]),

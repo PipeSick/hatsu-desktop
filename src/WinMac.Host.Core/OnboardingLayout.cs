@@ -67,12 +67,19 @@ public static class OnboardingLayout
         switch (c.Step)
         {
             case OnboardingStep.Welcome:
+            {
+                bool mig = c.Mode == OnboardingMode.Migration;
                 Add("w.logo", 344, 84, 112, 112, BoxKind.Decor); Add("w.title", 100, 206, 600, 44, BoxKind.Text); Add("w.tag", 100, 252, 600, 30, BoxKind.Text);
-                Add("w.body", 140, 296, 520, TextFit.Height(WelcomeBody, 520, FontBody, LineBody), BoxKind.Text);
-                Add("next", 290, 392, 220, 46, BoxKind.Control);
-                Add(c.Mode == OnboardingMode.Rerun ? "cancel" : "skip", 270, 446, 260, 32, BoxKind.Control);
-                if (c.Mode != OnboardingMode.Rerun) Add("w.note", 120, 484, 560, TextFit.Height(WelcomeSkipNote, 560, FontSmall, LineSmall), BoxKind.Text);
+                string body = mig ? MigrationBody : WelcomeBody;
+                Add("w.body", 140, 296, 520, TextFit.Height(body, 520, FontBody, LineBody), BoxKind.Text);
+                if (mig) { Add("keep", 270, 392, 260, 46, BoxKind.Control); Add("next", 270, 446, 260, 32, BoxKind.Control); Add("w.note", 120, 484, 560, TextFit.Height(MigrationNote, 560, FontSmall, LineSmall), BoxKind.Text); }
+                else
+                {
+                    Add("next", 290, 392, 220, 46, BoxKind.Control); Add(c.Mode == OnboardingMode.Rerun ? "cancel" : "skip", 270, 446, 260, 32, BoxKind.Control);
+                    if (c.Mode != OnboardingMode.Rerun) Add("w.note", 120, 484, 560, TextFit.Height(WelcomeSkipNote, 560, FontSmall, LineSmall), BoxKind.Text);
+                }
                 break;
+            }
 
             case OnboardingStep.Components:
                 for (int i = 0; i < OnboardingRules.Components.Length; i++)
@@ -169,6 +176,8 @@ public static class OnboardingLayout
 
     // textos que ocupan espacio (los usan el pintor y las pruebas: una sola copia)
     public const string WelcomeBody = "Hatsu Desktop personaliza Windows con herramientas opcionales. Tú eliges cuáles usar y puedes cambiarlo después en Ajustes. Hasta que confirmes, no se modifica nada en tu equipo.";
+    public const string MigrationBody = "Encontramos tu configuración anterior y la conservamos tal cual: tus módulos, tu inicio automático y tus ajustes siguen como estaban. Puedes seguir así o revisar qué componentes quieres usar. No se cambia nada hasta que lo confirmes.";
+    public const string MigrationNote = "Puedes abrir el asistente cuando quieras en Ajustes › General › «Abrir el asistente de configuración».";
     public const string WelcomeSkipNote = "Omitir activa los componentes predeterminados (Dock, Barra superior y Dynamic Island). No cambia el inicio automático ni oculta la barra de tareas.";
     public const string ThemeNote = "Se aplica al Dock. La Barra superior y la Isla siguen siempre el tema de Windows.";
     public const string AppearanceDockOff = "El Dock está desactivado: sus opciones no se aplican.";

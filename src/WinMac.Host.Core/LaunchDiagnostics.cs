@@ -27,11 +27,36 @@ public static class LaunchDiagnostics
             ErrorAccessDisabledByPolicy => "una directiva del sistema impide ejecutar este programa (AppLocker, Control de aplicaciones o directiva de grupo)",
             ErrorVirusInfected or ErrorVirusDeleted => "el antivirus bloqueó o eliminó el archivo (revisa el historial de protección de Seguridad de Windows)",
             ErrorAccessDenied => "acceso denegado (permisos de la carpeta o el antivirus)",
+            ErrorBadExeFormat => "el archivo no es un programa válido para esta versión de Windows",
             ErrorFileNotFound => "no existe el ejecutable",
             _ => w.Message,
         };
         return $"{why} [error {w.NativeErrorCode}]";
     }
+
+    public const int ErrorBadExeFormat = 193, ErrorElevationRequired = 740, ErrorPathNotFound = 3, ErrorAccessDisabledNoSaferUi = 786;
+
+    /// <summary>Clasifica un error AL LANZAR un proceso por su código de Windows (sin suponer qué protección concreta lo causó).</summary>
+    public static ModuleFailure Classify(Exception e, int attempts = 1)
+    {
+        string tech = Explain(e);
+        if (e is FileNotFoundException) return new(FailureKind.Missing, tech, ErrorFileNotFound, null, attempts);
+        if (e is not Win32Exception w) return new(FailureKind.Unknown, tech, null, null, attempts);
+        var kind = w.NativeErrorCode switch
+        {
+            ErrorFileNotFound or ErrorPathNotFound => FailureKind.Missing,
+            ErrorAppControlBlocked or ErrorAppControlAudit or ErrorAccessDisabledByPolicy or ErrorAccessDisabledNoSaferUi or ErrorInvalidImageHash => FailureKind.PolicyBlocked,
+            ErrorVirusInfected or ErrorVirusDeleted => FailureKind.AntivirusBlocked,
+            ErrorAccessDenied or ErrorElevationRequired => FailureKind.AccessDenied,
+            ErrorBadExeFormat => FailureKind.BadImage,
+            _ => FailureKind.Unknown,
+        };
+        return new(kind, tech, w.NativeErrorCode, null, attempts);
+    }
+
+    /// <summary>Clasifica un módulo que ARRANCÓ y terminó solo, por su código de salida.</summary>
+    public static ModuleFailure ClassifyExit(int code, int attempts = 1) =>
+        new(unchecked((uint)code) == 0xC0000428 ? FailureKind.PolicyBlocked : FailureKind.ExitedUnexpectedly, ExitText(code), null, code, attempts);
 
     /// <summary>Texto del código de salida de un módulo que terminó sin avisar. Los NTSTATUS de carga (DLL bloqueada o ausente) se nombran.</summary>
     public static string ExitText(int code) => unchecked((uint)code) switch
