@@ -101,6 +101,32 @@ public static class PanelOffscreen
                 Sessions = new AudioSessionsState(true, sessions), Routing = routing ? new AppRoutingState(true, null, map) : null };
             model = PanelBuilder.SoundPanel(ctx with { Sys = snap, Cfg = cfg with { SoundMixer = true, AppOutputRouting = routing } });
         }
+        else if (kind.StartsWith("peripherals", StringComparison.Ordinal))
+        {   // It8: DATOS DE MUESTRA (no son dispositivos reales): un ratón con batería actual, un teclado sin lectura, unos auriculares desconectados y un mando sin batería
+            var st = new WinMac.Bar.Peripherals.PeripheralStore(); var t0 = now;
+            if (kind != "peripherals-empty")
+            {
+                WinMac.Bar.Peripherals.RawReading Rr(string id, string n, WinMac.Bar.Peripherals.DeviceKind k, WinMac.Bar.Peripherals.ConnectionKind c, bool on, int? p, WinMac.Bar.Peripherals.ChargeState ch = default, WinMac.Bar.Peripherals.BatteryCapability cap = default, string? note = null) => new(id, n, k, c, on, p, ch, cap, note);
+                var all = new[] { Rr("m", "Ratón de muestra", WinMac.Bar.Peripherals.DeviceKind.Mouse, WinMac.Bar.Peripherals.ConnectionKind.Bluetooth, true, 18, WinMac.Bar.Peripherals.ChargeState.NotCharging), Rr("k", "Teclado de muestra", WinMac.Bar.Peripherals.DeviceKind.Keyboard, WinMac.Bar.Peripherals.ConnectionKind.Bluetooth, true, null),
+                    Rr("h", "Auriculares de muestra", WinMac.Bar.Peripherals.DeviceKind.Headset, WinMac.Bar.Peripherals.ConnectionKind.Bluetooth, true, 64, WinMac.Bar.Peripherals.ChargeState.Charging), Rr("g", "Mando de muestra", WinMac.Bar.Peripherals.DeviceKind.Gamepad, WinMac.Bar.Peripherals.ConnectionKind.Usb, true, null, default, WinMac.Bar.Peripherals.BatteryCapability.Unsupported) };
+                st.Apply(new("bt", WinMac.Bar.Peripherals.ProviderStatus.Ok, all), t0);
+                st.Apply(new("bt", WinMac.Bar.Peripherals.ProviderStatus.Ok, all.Append(Rr("x", "Ratón antiguo de muestra", WinMac.Bar.Peripherals.DeviceKind.Mouse, WinMac.Bar.Peripherals.ConnectionKind.Dongle, true, 55)).ToArray()), t0.AddHours(-1));
+                st.Apply(new("bt", WinMac.Bar.Peripherals.ProviderStatus.Ok, all), t0);   // el «antiguo» ya no aparece: queda desconectado con su última lectura
+            }
+
+            model = PanelBuilder.PeripheralsPanel(ctx with { Cfg = cfg with { ShowPeripherals = true, PeripheralAlerts = true }, Periph = new PeripheralsView(st.View(t0.AddMinutes(1)), 0, false, true, 20) });
+        }
+        else if (kind.StartsWith("cleanup", StringComparison.Ordinal))
+        {   // It8: DATOS DE MUESTRA (tamaños inventados para ver el diseño; no se ha analizado ningún disco)
+            var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["LOCALAPPDATA"] = @"C:\Users\muestra\AppData\Local", ["TEMP"] = @"C:\Users\muestra\AppData\Local\Temp", ["USERPROFILE"] = @"C:\Users\muestra" };
+            var cats = WinMac.Bar.Cleanup.CleanupCatalog.Build(env); long[] sizes = [1_340_000_000, 214_000_000, 88_000_000, 0, 12_000_000, 3_000_000, 460_000_000, 0, 0];
+            var rows = cats.Select((cat, i) => new WinMac.Bar.Cleanup.CleanupRow(cat, sizes[i], sizes[i] > 0 ? 100 : 0, cat.Kind == WinMac.Bar.Cleanup.CleanupKind.Folder && sizes[i] > 0, cat.Kind != WinMac.Bar.Cleanup.CleanupKind.ReviewOnly && sizes[i] > 0, cat.Kind != WinMac.Bar.Cleanup.CleanupKind.ReviewOnly, cat.WhyNotCleanable)).ToList();
+            bool done = kind == "cleanup-done", scanning = kind == "cleanup-scanning", idle = kind == "cleanup-idle";
+            var phase = idle ? WinMac.Bar.Cleanup.CleanupPhase.Idle : scanning ? WinMac.Bar.Cleanup.CleanupPhase.Scanning : done ? WinMac.Bar.Cleanup.CleanupPhase.Done : WinMac.Bar.Cleanup.CleanupPhase.Ready;
+            long sel = rows.Where(r => r.Checked && r.Selectable).Sum(r => r.Bytes);
+            model = PanelBuilder.CleanupPanel(ctx with { Cfg = cfg with { ShowCleanup = true }, Clean = new CleanupView(phase, rows, sel, scanning ? "Analizando archivos temporales" : done ? "Limpieza parcial: se liberaron 1,6 GB" : $"Espacio recuperable encontrado: {WinMac.Bar.Cleanup.CleanupText.Size(sel)}", scanning ? 0.42 : 1, false,
+                done ? "Liberado: 1,6 GB (812 archivos). Omitidos: 6 en uso, 2 cambiaron tras el análisis." : null, false) });
+        }
         else if (kind.StartsWith("phone", StringComparison.Ordinal))
         {   // It7: DATOS DE MUESTRA del panel del iPhone: conectado con lectura reciente, desconectado (última lectura vieja) o sin lectura
             var t = now;

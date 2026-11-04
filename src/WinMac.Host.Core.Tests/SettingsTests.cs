@@ -264,3 +264,15 @@ public class SettingsActionsTests
         finally { try { File.Delete(f); } catch (IOException) { } }
     }
 }
+
+public class It8SettingsTests
+{
+    [Fact]
+    public void Peripherals_and_cleanup_are_off_by_default_and_every_edit_persists()
+    {
+        var def = new BarConfig(); Assert.False(def.ShowPeripherals); Assert.False(def.PeripheralAlerts); Assert.False(def.ShowCleanup); Assert.True(def.CleanupIsland);
+        Assert.Contains(SettingsBuilder.BarToggles, t => t.Field == "showPeripherals"); Assert.Contains(SettingsBuilder.BarToggles, t => t.Field == "showCleanup");
+        // los ajustes de antes siguen en su sitio (se añadieron al final de la tabla)
+        Assert.Equal("showNetwork", SettingsBuilder.BarToggles[0].Field);
+    }
+}

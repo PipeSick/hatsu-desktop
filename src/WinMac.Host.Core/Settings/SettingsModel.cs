@@ -60,6 +60,10 @@ public static class SettingsBuilder
         ("showPhonePercent", "Porcentaje junto al iPhone", b => b.ShowPhonePercent),
         ("showPowerWithoutBattery", "Icono de corriente en equipos sin batería", b => b.ShowPowerWithoutBattery),
         ("showTaskManager", "Botón del Administrador de tareas", b => b.ShowTaskManager),
+        ("showPeripherals", "Icono de Periféricos en la barra", b => b.ShowPeripherals),
+        ("peripheralAlerts", "Avisar cuando la batería de un periférico esté baja", b => b.PeripheralAlerts),
+        ("showCleanup", "Icono de Limpieza en la barra", b => b.ShowCleanup),
+        ("cleanupIsland", "Mostrar el progreso de la limpieza en la Isla", b => b.CleanupIsland),
     ];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];
@@ -110,6 +114,7 @@ public static class SettingsBuilder
 
     private static int Index(string[] arr, string v) => Math.Max(0, Array.FindIndex(arr, x => string.Equals(x, v, StringComparison.OrdinalIgnoreCase)));
     private static SettingsRow Bar(int i, string? subtitle = null, string? title = null) => new(RowKind.Toggle, "bar:" + BarToggles[i].Field, title ?? BarToggles[i].Text, subtitle, BarToggles[i].Get(_bar!));
+    private static SettingsRow BarF(string field, string? subtitle = null) => Bar(Array.FindIndex(BarToggles, t => t.Field == field), subtitle);   // por nombre: añadir opciones al final de la tabla no desplaza a las demás
     [ThreadStatic] private static BarConfig? _bar;   // solo durante Build (evita pasar el parámetro por cada fila)
 
     public static IReadOnlyList<SettingsPage> Build(SettingsInput input)
@@ -142,9 +147,9 @@ public static class SettingsBuilder
                 new(RowKind.Segmented, "bar.bg", "Fondo", Options: SettingsBuilder.BackgroundNames, Selected: Index(BackgroundValues, bar.Background.ToString())),
             ]),
             new("Elementos", [Bar(0), Bar(1), Bar(2), Bar(3), Bar(4), Bar(5), Bar(6), Bar(7), Bar(8), Bar(28, "Los de la bandeja de Windows; siguen también en la barra de tareas"),
-                Bar(BarToggles.Length - 3, "Si el iPhone está conectado pero Windows no da una lectura reciente, se muestra «—» en vez de un número viejo"),
-                Bar(BarToggles.Length - 2, "Solo si el equipo no tiene batería y está conectado a la corriente; sin porcentaje. Apagado, el módulo de batería no aparece"),
-                Bar(BarToggles.Length - 1, "Abre el Administrador de tareas de Windows"),
+                BarF("showPhonePercent", "Si el iPhone está conectado pero Windows no da una lectura reciente, se muestra «—» en vez de un número viejo"),
+                BarF("showPowerWithoutBattery", "Solo si el equipo no tiene batería y está conectado a la corriente; sin porcentaje. Apagado, el módulo de batería no aparece"),
+                BarF("showTaskManager", "Abre el Administrador de tareas de Windows"),
                 new(RowKind.Button, "bar.orderreset", "Restaurar orden predeterminado", "Arrastra los iconos de la barra para cambiar su orden")]),
             new("Comportamiento", [
                 Bar(9, "Las ventanas maximizadas empiezan debajo de la barra y no quedan tapadas"),
@@ -153,6 +158,16 @@ public static class SettingsBuilder
             ]),
             new("Sonido", [Bar(34, "Micrófono y volumen de cada aplicación en el mismo menú del icono de volumen. Desactivado, no se leen ni el micrófono ni las apps"), Bar(36, "Elegir altavoces o audífonos para cada app desde el menú Sonido. Usa una interfaz interna de Windows (la de su propio mezclador): cada cambio se comprueba y, si Windows no lo acepta, se dice")]),
             new("Centro de control", [Bar(13), Bar(14), Bar(15), Bar(16), Bar(17), Bar(18), Bar(19), Bar(20)], "Qué controles aparecen en el panel de la Barra."),
+            new("Periféricos", [
+                BarF("showPeripherals", "Batería de ratón, teclado y auriculares que Windows y el propio dispositivo informan (Bluetooth estándar y HID). Apagado: no se lee nada y no queda nada en memoria"),
+                BarF("peripheralAlerts", "Una sola vez por dispositivo al bajar del umbral; vuelve a avisar solo tras cargarlo. Sale por las notificaciones de la Isla"),
+                new(RowKind.Field, "periph.thr", "Umbral de batería baja (%)", "Entre 5 y 50", Text: bar.PeripheralAlertThreshold.ToString(), Placeholder: "20"),
+                new(RowKind.Button, "periph.unhide", "Mostrar los dispositivos ocultos"),
+            ], "Los receptores 2,4 GHz y el software de cada fabricante (Armoury Crate, Synapse…) no se consultan: sin interfaz documentada no se inventa nada."),
+            new("Limpieza", [
+                BarF("showCleanup", "Analiza primero y pide confirmación antes de borrar. Nunca limpia por sí sola ni en segundo plano; no toca documentos, descargas ni proyectos"),
+                BarF("cleanupIsland", "Análisis y limpieza como actividad de la Isla; no sustituye la música, las letras ni las notificaciones"),
+            ]),
             new("Panel de WinMac", [
                 Bar(21),
                 new(RowKind.Field, "hub.ms", "Leer sensores cada (ms)", "Solo mientras el panel está abierto", Text: bar.HubRefreshMs.ToString(), Placeholder: "1000"),

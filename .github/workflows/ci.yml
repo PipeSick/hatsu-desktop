@@ -123,38 +123,41 @@ jobs:
           path: capturas-mezclador
           retention-days: 14
           if-no-files-found: warn
-      - name: "Capturas de la iteración 7 en tema claro y oscuro (diálogos, Acerca de, panel del iPhone, ventana principal; datos de MUESTRA, NO es validación en hardware)"
+      - name: "Capturas de la iteración 8 en tema claro y oscuro (datos de MUESTRA, NO es validación en hardware). Si falta UNA, el paso falla"
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force capturas-it7 | Out-Null
-          $bar = (Resolve-Path dist/WinMac/WinMac.Bar.App.exe).Path
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force capturas-it8 | Out-Null
+          $bar = (Resolve-Path dist/WinMac/WinMac.Bar.App.exe).Path; $host_ = (Resolve-Path dist/WinMac/WinMac.exe).Path; $dock = (Resolve-Path dist/WinMac/WinMac.Dock.App.exe).Path
           $jobs = @()
           foreach ($t in 'dark', 'light') {
-            foreach ($d in 'shutdown', 'restart', 'logoff', 'forcequit', 'clear-notifications', 'notice') { $jobs += ,@('--render-dialog', $d, '--theme', $t, '--scale', '2', '--out', "capturas-it7/dialogo-$d-$t.png") }
-            foreach ($k in 'phone', 'phone-off', 'phone-unknown', 'apple', 'battery') { $jobs += ,@('--render-panel', $k, '--theme', $t, '--scale', '2', '--out', "capturas-it7/panel-$k-$t.png") }
-            $jobs += ,@('--render-about', '--theme', $t, '--scale', '2', '--out', "capturas-it7/acerca-$t.png")
-            $jobs += ,@('--render-about', '--theme', $t, '--scale', '2', '--expanded', '--out', "capturas-it7/acerca-detalles-$t.png")
+            foreach ($d in 'shutdown', 'restart', 'logoff', 'forcequit', 'clear-notifications', 'notice') { $jobs += ,@($bar, "capturas-it8/dialogo-$d-$t.png", '--render-dialog', $d, '--theme', $t, '--scale', '2') }
+            foreach ($k in 'phone', 'phone-off', 'phone-unknown', 'apple', 'battery', 'peripherals', 'peripherals-empty', 'cleanup-idle', 'cleanup', 'cleanup-scanning', 'cleanup-done') { $jobs += ,@($bar, "capturas-it8/panel-$k-$t.png", '--render-panel', $k, '--theme', $t, '--scale', '2') }
+            $jobs += ,@($bar, "capturas-it8/acerca-$t.png", '--render-about', '--theme', $t, '--scale', '2')
+            $jobs += ,@($bar, "capturas-it8/acerca-detalles-$t.png", '--render-about', '--theme', $t, '--scale', '2', '--expanded')
+            $jobs += ,@($host_, "capturas-it8/ventana-principal-$t.png", '--render-tray-panel', '--theme', $t, '--scale', '2')
+            foreach ($pose in 'rest', 'hover') { $jobs += ,@($dock, "capturas-it8/dock-$pose-$t.png", '--render-png', "capturas-it8/dock-$pose-$t.png", '--pose', $pose, '--theme', $t, '--scale', '2') }
           }
+          $failed = @()
           foreach ($j in $jobs) {
-            $out = $j[-1]; $a = $j | ForEach-Object { if ($_ -like 'capturas-it7/*') { "`"$_`"" } else { $_ } }
-            $p = Start-Process -FilePath $bar -ArgumentList $a -PassThru -Wait -WindowStyle Hidden
-            Write-Host "$out -> código $($p.ExitCode), existe=$(Test-Path $out)"
-            if ($p.ExitCode -ne 0 -or -not (Test-Path $out)) { throw "No se pudo renderizar $out" }
+            $exe = $j[0]; $out = $j[1]; $rest = $j[2..($j.Count - 1)]
+            $a = @(); foreach ($x in $rest) { $a += $x }
+            if ($exe -ne $dock) { $a += '--out'; $a += "`"$out`"" }
+            $p = Start-Process -FilePath $exe -ArgumentList $a -PassThru -Wait -WindowStyle Hidden
+            $ok = ($p.ExitCode -eq 0) -and (Test-Path $out) -and ((Get-Item $out).Length -gt 2000)
+            Write-Host "$out -> código $($p.ExitCode), existe=$(Test-Path $out), ok=$ok"
+            if (-not $ok) { $failed += $out }
           }
-          $host_ = (Resolve-Path dist/WinMac/WinMac.exe).Path
-          foreach ($t in 'dark', 'light') {
-            $out = "capturas-it7/ventana-principal-$t.png"
-            $p = Start-Process -FilePath $host_ -ArgumentList @('--render-tray-panel', '--theme', $t, '--scale', '2', '--out', "`"$out`"") -PassThru -Wait -WindowStyle Hidden
-            Write-Host "$out -> código $($p.ExitCode), existe=$(Test-Path $out)"
-          }
-      - name: Subir capturas de la iteración 7
+          if ($failed.Count -gt 0) { throw "Faltan capturas obligatorias ($($failed.Count)): $($failed -join ', ')" }
+          Write-Host "Capturas generadas: $($jobs.Count)"
+      - name: Subir capturas de la iteración 8
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: capturas-it7-${{ github.sha }}
-          path: capturas-it7
+          name: capturas-it8-${{ github.sha }}
+          path: capturas-it8
           retention-days: 14
-          if-no-files-found: warn
+          if-no-files-found: error
       - name: Subir resultados de la integración
         if: always()
         uses: actions/upload-artifact@v4

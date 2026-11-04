@@ -128,7 +128,7 @@ public sealed partial class BarHost : IPanelUi
 
     private void PanelsTick()
     {
-        _popover?.Pump(); HubTick(); TrayTick(); NotchTick(); LauncherTick(); SpotlightTick(); CaptureTick(); MenuDiag();
+        _popover?.Pump(); HubTick(); TrayTick(); NotchTick(); PeripheralsTick(); CleanupTick(); LauncherTick(); SpotlightTick(); CaptureTick(); MenuDiag();
         if (_popover is not { IsOpen: true }) return;
         var now = DateTime.UtcNow;
         if (_pkind == PanelKind.Notifications && _nc.NeedsPolling && now - _lastNcPoll >= NcPollEvery) { _lastNcPoll = now; _nc.Refresh(); }   // sin evento de Windows: relectura suave, solo con el panel abierto
@@ -165,7 +165,7 @@ public sealed partial class BarHost : IPanelUi
     {
         _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
         _popSource = src; _pkind = kind; _anchorX = anchorX; _alignRight = alignRight; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
-        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab, Tray = _trayStore.Visible }; _pctx = WithPhone(_pctx with { Hub = MakeHubData() });
+        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab, Tray = _trayStore.Visible }; _pctx = WithModules(_pctx with { Hub = MakeHubData() });
         if (kind == PanelKind.Notifications) { OpenNotificationCenter(src); return; }
         var model = PanelBuilder.Build(kind, _pctx);
         _popover.Show(model, anchorX, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight);   // se abre en el monitor donde se hizo clic, escalado a SU DPI
@@ -196,11 +196,13 @@ public sealed partial class BarHost : IPanelUi
         }
 
         _pkind = kind; _pctx = _pctx with { Message = null, Busy = new Dictionary<string, string>() };
-        _popover.SetModel(PanelBuilder.Build(kind, WithPhone(_pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now }))); RefreshFor(kind, firstOpen: false);
+        _popover.SetModel(PanelBuilder.Build(kind, WithModules(_pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now }))); RefreshFor(kind, firstOpen: false);
     }
 
     private void RefreshFor(PanelKind kind, bool firstOpen)
     {
+        if (kind == PanelKind.Peripherals) { RefreshPeripherals(force: false); return; }
+        if (kind == PanelKind.Cleanup) { EnsureClean(); return; }
         if (kind == PanelKind.Weather) { _weather.Refresh(); return; }
         if (kind == PanelKind.Hub) { _hubMon.StartSession(); _hubTicks = 0; _lastHubTick = DateTime.UtcNow; RefreshHubTab(first: true); return; }
         _hub.RefreshAudio();
@@ -264,7 +266,7 @@ public sealed partial class BarHost : IPanelUi
         // El menú de una app no sale de PanelBuilder ni usa el contexto de los paneles (que puede no existir aún): se rehace desde su propio árbol.
         // Antes caía aquí, _pctx era null → NullReferenceException en el bucle de la barra → la barra se cerraba y el host la reiniciaba (P1, visto en el CI).
         if (_pkind == PanelKind.AppMenu) { if (_amTop is not null) _popover.SetModel(WinMac.Bar.Menus.AppMenuPanel.Build(_amTop, _amPath)); return; }
-        _pctx = WithPhone(_pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData(), Nc = _pctx.Nc is { } v ? v with { State = _nc.State } : null, Tray = _trayStore.Visible });
+        _pctx = WithModules(_pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData(), Nc = _pctx.Nc is { } v ? v with { State = _nc.State } : null, Tray = _trayStore.Visible });
         _popover.SetModel(PanelBuilder.Build(_pkind, _pctx));
     }
 
@@ -338,6 +340,8 @@ public sealed partial class BarHost : IPanelUi
     {
         if (_pkind == PanelKind.AppleMenu && e.Id.StartsWith("apple:", StringComparison.Ordinal)) { AppleAction(e); return; }   // WM-009: tiles and sliders of the panel go to the same operations as the Control Center
         if (_pkind == PanelKind.Tray) { TrayPanelAction(e); return; }
+        if (_pkind == PanelKind.Peripherals) { PeripheralsAction(e); return; }
+        if (_pkind == PanelKind.Cleanup) { CleanupAction(e); return; }
         if (e.Kind == PanelEventKind.Click && e.Id == "bat:details") { _pctx = _pctx with { BatteryDetailsOpen = !_pctx.BatteryDetailsOpen }; RebuildPanel(); return; }   // WM-027
         if (_pkind == PanelKind.AppMenu) { AppMenuAction(e); return; }
         _ops.Handle(e);

@@ -51,6 +51,13 @@ public sealed partial class BarHost
         Send(NotchFeed.Call(s));
     });
 
+    /// <summary>It8: el contexto de los paneles con el estado de Periféricos y Cleanup (solo existen con su módulo activo).</summary>
+    private PanelContext WithModules(PanelContext p) => WithPhone(p) with
+    {
+        Periph = _cfg.ShowPeripherals ? PeripheralsViewNow() : null,
+        Clean = _cfg.ShowCleanup ? CleanupViewNow() : null,
+    };
+
     private PanelContext WithPhone(PanelContext p) => p with
     {
         Phone = _phone.State,

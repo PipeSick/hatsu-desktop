@@ -196,7 +196,7 @@ public static class CleanupIsland
 
     /// <summary>Resumen breve al terminar el análisis, para la Isla (una sola actividad finalizada con el resultado).</summary>
     public static object? ScanFinished(CleanupSession s) => s.Phase == CleanupPhase.Ready && !s.WasCancelled
-        ? new { op = "upsert", activity = new { id = Id, kind = "extension", title = s.Status, subtitle = "WinMac Cleanup", source = "WinMac Cleanup", progress = (double?)null, state = "paused" } }
+        ? new { op = "upsert", activity = new { id = Id, kind = "extension", title = s.Status, subtitle = "WinMac Cleanup", source = "WinMac Cleanup", progress = (double?)null, state = "completed" } }
         : null;
 
     private static object Upsert(string title, string sub, double? progress) =>

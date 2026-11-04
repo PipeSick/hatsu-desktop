@@ -109,6 +109,8 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("bar.spot", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.SpotKeyValues.Length: cfg.ApplyBarPatch(Patch("spotlightHotkey", SettingsBuilder.SpotKeyValues[e.Index])); return true;
             case ("hub.rate", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.RateValues.Length: cfg.ApplyBarPatch(Patch("rateUnit", SettingsBuilder.RateValues[e.Index])); return true;
             case ("bar.ics", "text"): { var t = (e.Text ?? "").Trim(); cfg.ApplyBarPatch(Patch("calendarIcsPath", t.Length == 0 ? null : t)); return true; }
+            case ("periph.thr", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int thr)) cfg.ApplyBarPatch(Patch("peripheralAlertThreshold", thr)); return true;
+            case ("periph.unhide", _): cfg.ApplyBarPatch(Patch("peripheralHidden", "")); return true;
             case ("hub.ms", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int ms)) cfg.ApplyBarPatch(Patch("hubRefreshMs", ms)); return true;   // un valor no numérico se ignora (la ventana vuelve a mostrar el vigente)
             case ("notch.pos", "segment") when e.Index >= 0 && e.Index < NotchSettings.Positions.Length: cfg.UpdateNotch(n => n with { Position = NotchSettings.Positions[e.Index] }); return true;
             case ("notch.player", "segment") when e.Index >= 0 && e.Index < NotchSettings.Players.Length: cfg.UpdateNotch(n => n with { MusicPlayer = NotchSettings.Players[e.Index] }); return true;

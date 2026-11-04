@@ -347,6 +347,11 @@ public sealed partial class PanelPainter
                 Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), (float)(s * .55), (float)(s * .55)), _solid, 1.5f);
                 for (int i = 0; i < 8; i++) { double a = i * Math.PI / 4; Line(cx + Math.Cos(a) * s * .72, cy + Math.Sin(a) * s * .72, cx + Math.Cos(a) * s * 1.0, cy + Math.Sin(a) * s * 1.0, c, 2.4f); }
                 break;
+            case "sparkles":
+            {   // It8: destellos (estrella de cuatro puntas grande y una pequeña)
+                void Star(double sx, double sy, double r) { using var g = Poly(true, new Vector2((float)sx, (float)(sy - r)), new Vector2((float)(sx + r * .28), (float)(sy - r * .28)), new Vector2((float)(sx + r), (float)sy), new Vector2((float)(sx + r * .28), (float)(sy + r * .28)), new Vector2((float)sx, (float)(sy + r)), new Vector2((float)(sx - r * .28), (float)(sy + r * .28)), new Vector2((float)(sx - r), (float)sy), new Vector2((float)(sx - r * .28), (float)(sy - r * .28))); Brush(c); _ctx.FillGeometry(g, _solid); }
+                Star(cx - s * .15, cy + s * .1, s * .85); Star(cx + s * .7, cy - s * .65, s * .38); break;
+            }
             case "eject":
             { using var tri = Poly(true, new Vector2((float)cx, (float)(cy - s * .75)), new Vector2((float)(cx + s * .85), (float)(cy + s * .25)), new Vector2((float)(cx - s * .85), (float)(cy + s * .25))); Brush(c); _ctx.FillGeometry(tri, _solid); FillRR(cx - s * .85, cy + s * .5, cx + s * .85, cy + s * .85, 1.5f, c); break; }
             case "folder":

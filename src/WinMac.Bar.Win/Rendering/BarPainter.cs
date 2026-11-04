@@ -118,6 +118,8 @@ public sealed class BarPainter : IDisposable
                 case BarItemKind.Phone: DrawPhone(x, cy, f.Item.Look); break;
                 case BarItemKind.TaskManager: DrawActivity(x, cy); break;
                 case BarItemKind.PowerPlug: DrawPlug(x + 8, cy); break;
+                case BarItemKind.Peripherals: DrawMouse(x + 8, cy); break;
+                case BarItemKind.Cleanup: DrawSparkles(x + 8, cy); break;
             }
             x += (float)(f.Item.GlyphWidth + (string.IsNullOrEmpty(f.Item.Text) ? 0 : _m.GlyphTextGap));
         }
@@ -275,6 +277,30 @@ public sealed class BarPainter : IDisposable
             s.EndFigure(FigureEnd.Open); s.Close();
         }
         _ctx.DrawGeometry(g, _solid, 1.4f, _round);
+    }
+
+    /// <summary>Periféricos: un ratón de perfil.</summary>
+    private void DrawMouse(float cx, float cy)
+    {
+        Brush(Fg());
+        _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.6f, cy - 7f, cx + 4.6f, cy + 7f), RadiusX = 4.6f, RadiusY = 4.6f }, _solid, 1.3f);
+        _ctx.DrawLine(new Vector2(cx, cy - 7f), new Vector2(cx, cy - 1.5f), _solid, 1.2f, _round); _ctx.DrawLine(new Vector2(cx - 4.6f, cy - 1.5f), new Vector2(cx + 4.6f, cy - 1.5f), _solid, 1.2f, _round);
+    }
+
+    /// <summary>Cleanup: destellos (una estrella de cuatro puntas grande y una pequeña).</summary>
+    private void DrawSparkles(float cx, float cy)
+    {
+        void Star(float sx, float sy, float r)
+        {
+            using var g = _dev.Factory.CreatePathGeometry(); using (var s = g.Open())
+            {
+                s.BeginFigure(new Vector2(sx, sy - r), FigureBegin.Filled);
+                foreach (var p in new[] { new Vector2(sx + r * .28f, sy - r * .28f), new Vector2(sx + r, sy), new Vector2(sx + r * .28f, sy + r * .28f), new Vector2(sx, sy + r), new Vector2(sx - r * .28f, sy + r * .28f), new Vector2(sx - r, sy), new Vector2(sx - r * .28f, sy - r * .28f) }) s.AddLine(p);
+                s.EndFigure(FigureEnd.Closed); s.Close();
+            }
+            Brush(Fg()); _ctx.FillGeometry(g, _solid);
+        }
+        Star(cx - 1.5f, cy + 1.5f, 6.2f); Star(cx + 5.2f, cy - 5f, 2.8f);
     }
 
     /// <summary>Enchufe (equipo sin batería conectado a la corriente).</summary>

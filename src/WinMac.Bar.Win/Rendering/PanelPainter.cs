@@ -35,6 +35,7 @@ public sealed partial class PanelPainter : IDisposable
         var it = f.Items[fc.Item]; double x = it.X, y = it.Y, w = it.Width, h = it.Height;
         if (it.W.Data is ActionStripData sd && fc.Sub >= 0) { double cw = w / sd.Actions.Count; Brush(Accent); _ctx.DrawEllipse(new Ellipse(new Vector2((float)(x + cw * fc.Sub + cw / 2), (float)(y + 24)), 25, 25), _solid, 2f); return; }
         if (it.W.Data is LinkRowData ld && fc.Sub >= 0) { double cw = w / ld.Links.Count; x += cw * fc.Sub; w = cw; }
+        if (it.W.Data is DeviceCardData) { x = x + w - 74; w = 74; h = 34; }
         if (it.W.Data is PhoneHeaderData) { var gr = PanelLayout.PhoneGearRect(it); x = gr.X; y = gr.Y; w = gr.W; h = gr.H; }
         if (it.W.Data is UserHeaderData) { var ar = PanelLayout.UserAccountRect(it); x = ar.X; y = ar.Y; w = ar.W; h = ar.H; }
         Brush(Accent); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(x - 1, y - 1, x + w + 1, y + h + 1), RadiusX = 12, RadiusY = 12 }, _solid, 2f);
@@ -315,6 +316,42 @@ public sealed partial class PanelPainter : IDisposable
                 FillCircle(x + 20, y + 36, 4, dot);
                 Text(pn.Status, _bodyBold, x + 32, y + 26, wd - 48, 20, Fg(0.95f));
                 TextAlign(pn.Detail, _small, x + 16, y + 48, wd - 32, 30, Fg(0.6f), vcenter: false, wrap: true);
+                break;
+            }
+            case WidgetKind.DeviceCard when w.Data is DeviceCardData dc:
+            {
+                // It8: tarjeta de periférico. Barra solo con lectura ACTUAL; «Cargando» solo si el dispositivo lo informa; nada de porcentajes inventados.
+                EnsureFonts(); FillRR(x, y, x + wd, y + h, 14, Fill(0.07f));
+                bool hideHot = hover && HoverPoint is { } hh && hh.X >= x + wd - 74 && hh.Y <= y + 34;
+                Text(w.Text, _bodyBold, x + 14, y + 8, wd - 96, 20, Fg(0.95f));
+                TextAlign(dc.HideLabel, _small, x + wd - 70, y + 9, 58, 18, Fg(hideHot ? 0.9f : 0.42f), TextAlignment.Trailing);
+                Text(dc.Type + " · " + dc.Connection, _small, x + 14, y + 29, wd - 28, 16, Fg(0.55f));
+                bool conn = dc.Status.StartsWith("Conectado", StringComparison.Ordinal);
+                var tone = dc.Tone == "good" ? new Color4(0.20f, 0.78f, 0.35f, 1) : dc.Tone == "warn" ? new Color4(1f, 0.7f, 0.1f, 1) : dc.Tone == "bad" ? new Color4(1f, 0.27f, 0.23f, 1) : Fg(0.4f);
+                Text(dc.BatteryText, _bodyBold, x + 14, y + 48, wd * 0.62, 20, dc.Fraction is null ? Fg(0.7f) : Fg(0.95f));
+                FillCircle(x + wd - 14 - MeasureText(dc.Status, _small) - 10, y + 58, 3.5f, conn ? new Color4(0.20f, 0.78f, 0.35f, 1) : Fg(0.35f));
+                TextAlign(dc.Status, _small, x + wd - 14 - MeasureText(dc.Status, _small) - 4, y + 49, MeasureText(dc.Status, _small) + 6, 18, Fg(0.6f), TextAlignment.Trailing);
+                double by = y + 72;
+                if (dc.Fraction is { } fr)
+                {
+                    FillRR(x + 14, by, x + wd - 14, by + 6, 3, Fill(0.12f)); FillRR(x + 14, by, x + 14 + Math.Max(6, (wd - 28) * fr), by + 6, 3, tone);
+                    if (dc.Charge is { } chg) TextAlign(chg, _small, x + wd * 0.5, y + 46, wd * 0.5 - 14 - MeasureText(dc.Status, _small) - 22, 18, new Color4(0.20f, 0.78f, 0.35f, 1), TextAlignment.Trailing);
+                }
+                if (dc.Note is { } nt) TextAlign(nt, _small, x + 14, by + 8, wd - 28, 22, Fg(0.5f), vcenter: false, wrap: true);
+                break;
+            }
+            case WidgetKind.CleanRow when w.Data is CleanRowData cr:
+            {
+                // It8: categoría de limpieza: casilla, título, tamaño analizado y por qué se puede (o no) limpiar.
+                EnsureFonts(); bool dimmed = cr.Locked && !cr.Checked; FillRR(x, y, x + wd, y + h, 12, Fill(hover && !cr.Locked ? 0.11f : 0.06f));
+                double bx = x + 14, by2 = y + 12; float a = dimmed ? 0.4f : 1f;
+                if (cr.Checked) { FillRR(bx, by2, bx + 20, by2 + 20, 6, new Color4(Accent.R, Accent.G, Accent.B, a)); Line(bx + 5, by2 + 10.5, bx + 9, by2 + 14.5, new Color4(1, 1, 1, 1), 2f); Line(bx + 9, by2 + 14.5, bx + 15.5, by2 + 6, new Color4(1, 1, 1, 1), 2f); }
+                else { Brush(Fg(0.5f * a)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(bx + 1, by2 + 1, bx + 19, by2 + 19), RadiusX = 5, RadiusY = 5 }, _solid, 1.5f); }
+                double sw = Math.Max(54, MeasureText(cr.Size, _bodyBold) + 4);
+                Text(w.Text, _bodyBold, x + 46, y + 7, wd - 46 - sw - 20, 20, Fg(0.95f * a));
+                TextAlign(cr.Size, _bodyBold, x + wd - sw - 12, y + 7, sw, 20, Fg((cr.Locked ? 0.55f : 0.9f)), TextAlignment.Trailing);
+                if (cr.Badge is { } bd) TextAlign(bd, _small, x + wd - sw - 12, y + 27, sw, 16, new Color4(1f, 0.35f, 0.3f, 1), TextAlignment.Trailing);
+                TextAlign(cr.Reason, _small, x + 46, y + 28, wd - 46 - (cr.Badge is null ? 14 : sw + 16), 32, Fg(0.52f * a + 0.05f), vcenter: false, wrap: true);
                 break;
             }
             case WidgetKind.StatCards when w.Data is StatCardsData sc:
