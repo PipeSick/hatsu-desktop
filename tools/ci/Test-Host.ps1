@@ -27,8 +27,8 @@ function NewRoom([string]$name, [string]$barMode = 'normal', [string]$dockMode =
   $cfg | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
   return [pscustomobject]@{ Dir = $d; Cfg = Join-Path $d 'winmac.json'; Log = Join-Path $d 'host.log' }
 }
-function HostArgs($room, [switch]$Tray, [string]$BarJson = '') { $a = @('--fast', '--notchwin-settings', "`"$(Join-Path $room.Dir 'sin-notchwin.json')`"", '--bar-json', "`"$(if ($BarJson) { $BarJson } else { Join-Path $room.Dir 'sin-bar.json' })`"", '--config', "`"$($room.Cfg)`"", '--log', "`"$($room.Log)`""); if (-not $Tray) { $a = @('--no-tray') + $a }; $a }
-function StartHost($room, [switch]$Tray, [string]$BarJson = '') { $p = Start-Process -FilePath $hostExe -ArgumentList (HostArgs $room -Tray:$Tray -BarJson $BarJson) -PassThru -WindowStyle Hidden; $null = $p.Handle; $p }   # .Handle: sin él, ExitCode puede quedar vacío
+function HostArgs($room, [switch]$Tray, [string]$BarJson = '', [switch]$Onboarding, [string]$Auto = '') { $a = @('--fast', '--notchwin-settings', "`"$(Join-Path $room.Dir 'sin-notchwin.json')`"", '--bar-json', "`"$(if ($BarJson) { $BarJson } else { Join-Path $room.Dir 'sin-bar.json' })`"", '--config', "`"$($room.Cfg)`"", '--log', "`"$($room.Log)`""); if (-not $Tray) { $a = @('--no-tray') + $a }; if (-not $Onboarding) { $a = @('--no-onboarding') + $a }; if ($Auto) { $a = @('--onboarding-auto', $Auto) + $a }; $a }
+function StartHost($room, [switch]$Tray, [string]$BarJson = '', [switch]$Onboarding, [string]$Auto = '') { $p = Start-Process -FilePath $hostExe -ArgumentList (HostArgs $room -Tray:$Tray -BarJson $BarJson -Onboarding:$Onboarding -Auto $Auto) -PassThru -WindowStyle Hidden; $null = $p.Handle; $p }   # .Handle: sin él, ExitCode puede quedar vacío
 function LogHas($room, [string]$text) { (Test-Path $room.Log) -and (Select-String -Path $room.Log -SimpleMatch -Pattern $text -Quiet) }
 function ModLog($room, [string]$id) { $f = Join-Path $room.Dir "$id.log"; if (Test-Path $f) { Get-Content $f } else { @() } }
 function Starts($room, [string]$id) { @(ModLog $room $id | Where-Object { $_ -match ' started$' }).Count }
@@ -72,6 +72,38 @@ Check 'B1b --replace-running: la instancia anterior se cierra sola y sin error' 
 Check 'B1b la nueva instancia sigue en marcha (no se duplicó)' ((WaitFor { -not $hB.HasExited -and (Starts $rr 'bar') -ge 2 } 30)) ("bar arrancó {0} veces" -f (Starts $rr 'bar'))
 Quit $rr $hB
 Check 'B1b la nueva instancia también cierra con --quit' ($hB.HasExited)
+
+# ── 3c. Fase 3 · asistente de primera ejecución, de verdad contra el host y el supervisor (sin ventana: --no-tray / --onboarding-auto)
+# (1) instalación nueva (sin winmac.json): ningún módulo arranca hasta que el usuario decida; el estado queda anotado
+$rf = Join-Path $base 'onb-fresh'; New-Item -ItemType Directory -Force -Path $rf | Out-Null
+$roomF = [pscustomobject]@{ Dir = $rf; Cfg = Join-Path $rf 'winmac.json'; Log = Join-Path $rf 'host.log' }
+$hF = StartHost $roomF -Onboarding; $okF = WaitFor { LogHas $roomF 'instalación nueva' } 20; Start-Sleep 3
+Check 'ONB1 instalación nueva: el host detecta que debe mostrar el asistente' $okF
+$jf = if (Test-Path $roomF.Cfg) { Get-Content $roomF.Cfg -Raw | ConvertFrom-Json } else { $null }
+Check 'ONB1 queda anotado «NotStarted» y TODOS los módulos esperan (desactivados)' ($jf -and $jf.onboarding.status -eq 'NotStarted' -and -not ($jf.modules.PSObject.Properties | Where-Object { $_.Value.enabled })) ($jf.onboarding.status)
+Check 'ONB1 no se lanzó ningún proceso de módulo antes de decidir' (-not (Get-Process -Name 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'HatsuDesktop.Connect', 'NotchWin.App' -ErrorAction SilentlyContinue))
+Quit $roomF $hF; Check 'ONB1 cierra con --quit' ($hF.HasExited)
+# (2) configuración «pendiente» con módulos de mentira + omitir (valores seguros) sin ventana: el supervisor arranca lo elegido y SOLO eso
+$ro = NewRoom 'onb-skip'; $oc = Get-Content $ro.Cfg -Raw | ConvertFrom-Json
+$oc.modules.bar.enabled = $false; $oc.modules.dock.enabled = $false; $oc | Add-Member -NotePropertyName onboarding -NotePropertyValue ([pscustomobject]@{ status = 'NotStarted'; origin = 'fresh' }) -Force
+$oc.modules | Add-Member -NotePropertyName connect -NotePropertyValue ([pscustomobject]@{ enabled = $false; path = $fakeExe; args = @('--id', 'connect', '--mode', 'ok', '--out', $ro.Dir) }) -Force
+$oc | ConvertTo-Json -Depth 8 | Set-Content $ro.Cfg -Encoding UTF8
+$hO = StartHost $ro -Onboarding -Auto 'skip'
+$okO = WaitFor { (LogHas $ro '[bar] Running') -and (LogHas $ro '[dock] Running') } 30
+Check 'ONB2 omitir aplica los valores seguros: la Barra y el Dock arrancan por el supervisor' $okO ("bar={0} dock={1}" -f (Starts $ro 'bar'), (Starts $ro 'dock'))
+Check 'ONB2 Hatsu Connect (desactivado por defecto) NO se lanza' ((Starts $ro 'connect') -eq 0)
+Check 'ONB2 el asistente anotó su resultado en el registro' (WaitFor { LogHas $ro '[asistente]' } 10)
+Quit $ro $hO
+$jo = Get-Content $ro.Cfg -Raw | ConvertFrom-Json
+Check 'ONB2 la configuración guardada tiene Dock, Barra e Isla activados y nada más; sin inicio automático ni barra de tareas oculta' ($jo.modules.bar.enabled -and $jo.modules.dock.enabled -and -not $jo.modules.connect.enabled -and -not $jo.hideTaskbar -and -not $jo.autostart)
+Check 'ONB2 el estado del asistente no queda «NotStarted»' ($jo.onboarding.status -ne 'NotStarted') ($jo.onboarding.status)
+# (3) un winmac.json que ya existía (WinMac o Hatsu anterior): no se fuerza el asistente; los módulos arrancan como siempre y solo se anota «Existing»
+$re = NewRoom 'onb-existing'; $hE = StartHost $re -Onboarding
+$okE = WaitFor { (LogHas $re '[bar] Running') -and (LogHas $re '[dock] Running') } 30
+Check 'ONB3 usuario existente: arranca como siempre, sin asistente de por medio' $okE
+Quit $re $hE; $je = Get-Content $re.Cfg -Raw | ConvertFrom-Json
+Check 'ONB3 se anota «Existing» y los módulos y rutas siguen como estaban' (($je.onboarding.status -eq 'Existing') -and $je.modules.bar.enabled -and $je.modules.dock.enabled -and $je.modules.bar.path -eq $fakeExe) ($je.onboarding.status)
+Check 'ONB3 el registro dice que se conserva la configuración' (LogHas $re 'configuración existente')
 
 # ── 3b. Migración de los ajustes de la Barra (bar.json → winmac.json): una sola vez, sin tocar el original
 $r3b = NewRoom 'migracion'; $barJson = Join-Path $r3b.Dir 'bar.json'

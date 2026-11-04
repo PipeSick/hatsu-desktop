@@ -50,7 +50,7 @@ function RunHost([string]$name, $notchModule) {
   if ($notchModule) { $mods.notch = $notchModule }
   @{ modules = $mods } | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
   $log = Join-Path $d 'host.log'
-  $p = Start-Process -FilePath $hostExe -ArgumentList @('--no-tray', '--fast', '--notchwin-settings', "`"$(Join-Path $d 'sin-notchwin.json')`"", '--config', "`"$(Join-Path $d 'winmac.json')`"", '--log', "`"$log`"") -PassThru -WindowStyle Hidden; $null = $p.Handle
+  $p = Start-Process -FilePath $hostExe -ArgumentList @('--no-tray', '--no-onboarding', '--fast', '--notchwin-settings', "`"$(Join-Path $d 'sin-notchwin.json')`"", '--config', "`"$(Join-Path $d 'winmac.json')`"", '--log', "`"$log`"") -PassThru -WindowStyle Hidden; $null = $p.Handle
   [pscustomobject]@{ Dir = $d; Log = $log; Proc = $p }
 }
 function QuitHost($r) { Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; [void]$r.Proc.WaitForExit(45000) }

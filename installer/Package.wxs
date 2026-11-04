@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Hatsu Desktop — instalador MSI por usuario (WiX 5.x, mismo esquema que WiX 4). Ver docs/48-fase3-instalador-onboarding.md.
+
+  Identidad (NO cambiar sin una decisión explícita; ver el documento):
+    UpgradeCode  ae38cbf7-6543-463e-9067-50e88f162fa1   fijo para siempre: es lo que une todas las versiones
+    ProductCode  derivado de forma determinista de UpgradeCode + versión (Build-Msi.ps1): una versión = un ProductCode
+    Versión      major.minor.build (MSI ignora el 4.º campo)
+    Ruta         %LOCALAPPDATA%\Programs\Hatsu Desktop   (por usuario, sin administrador)
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Hatsu Desktop" Manufacturer="Hatsu Desktop" Version="$(var.Version)" ProductCode="$(var.ProductCode)"
+           UpgradeCode="ae38cbf7-6543-463e-9067-50e88f162fa1" Scope="perUser" Language="3082" InstallerVersion="500" Compressed="yes">
+
+    <SummaryInformation Description="Hatsu Desktop — tu escritorio, a tu estilo" Comments="Software libre (Apache-2.0). Instalación por usuario: no requiere administrador." />
+
+    <!-- Una sola instalación del producto: una versión nueva sustituye a la anterior; una anterior no sustituye a una nueva. -->
+    <MajorUpgrade DowngradeErrorMessage="Ya hay instalada una versión más reciente de Hatsu Desktop. Desinstálala primero si quieres volver a una anterior." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="$(var.Compression)" />
+
+    <Icon Id="HatsuDesktop.ico" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="HatsuDesktop.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/PipeSick/win11-macos" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- Por usuario: carpeta estándar de programas del usuario. -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsDir" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Hatsu Desktop" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="HatsuMenuDir" Name="Hatsu Desktop" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="Main" Title="Hatsu Desktop" Description="Hatsu Desktop, la Barra superior, el Dock, la Isla (NotchWin) y Hatsu Connect." Level="1" AllowAbsent="no" ConfigurableDirectory="INSTALLFOLDER">
+      <Files Include="$(var.DistDir)\**" Directory="INSTALLFOLDER">
+        <!-- el desinstalador de la versión portable no aplica a un MSI (Windows desinstala desde «Aplicaciones instaladas»); el resto del paquete es idéntico al ZIP -->
+        <Exclude Files="$(var.DistDir)\Uninstall-HatsuDesktop.ps1" />
+        <Exclude Files="$(var.DistDir)\SHA256SUMS.txt" />
+      </Files>
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!-- Opcional y APAGADO por defecto (Level 2 > INSTALLLEVEL 1): se activa en «Personalizar». -->
+    <Feature Id="DesktopShortcutFeature" Title="Acceso directo en el escritorio" Description="Crea un acceso directo a Hatsu Desktop en el escritorio." Level="2" AllowAbsent="yes">
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <ComponentGroup Id="Shortcuts">
+      <Component Id="StartMenuShortcut" Directory="HatsuMenuDir" Guid="*">
+        <Shortcut Id="StartMenuApp" Name="Hatsu Desktop" Description="Hatsu Desktop" Target="[INSTALLFOLDER]HatsuDesktop.exe" WorkingDirectory="INSTALLFOLDER" Icon="HatsuDesktop.ico" />
+        <RemoveFolder Id="RemoveHatsuMenuDir" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Hatsu Desktop\Installer" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*">
+        <Shortcut Id="DesktopApp" Name="Hatsu Desktop" Description="Hatsu Desktop" Target="[INSTALLFOLDER]HatsuDesktop.exe" WorkingDirectory="INSTALLFOLDER" Icon="HatsuDesktop.ico" />
+        <RegistryValue Root="HKCU" Key="Software\Hatsu Desktop\Installer" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Desinstalación: antes de quitar archivos, devuelve la barra de tareas de Windows y quita SOLO el inicio automático que apunta a esta instalación.
+         Nunca borra %APPDATA%\WinMac, %LOCALAPPDATA%\WinMac ni datos de NotchWin, ni toca otra copia (portable o la versión anterior). No se limpia el Registro más allá de lo que este paquete creó. -->
+    <CustomAction Id="HatsuUninstallCleanup" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]HatsuDesktop.exe&quot; --uninstall-cleanup" Execute="deferred" Impersonate="yes" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="HatsuUninstallCleanup" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+
+    <!-- Interfaz estándar de WiX: licencia, «Personalizar» (acceso directo del escritorio opcional), avisos de archivos en uso. Sin asistente propio: la configuración es el onboarding de Hatsu Desktop. -->
+    <ui:WixUI Id="WixUI_FeatureTree" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Abrir Hatsu Desktop ahora" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <CustomAction Id="LaunchHatsuDesktop" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]HatsuDesktop.exe&quot;" Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchHatsuDesktop" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+  </Package>
+</Wix>

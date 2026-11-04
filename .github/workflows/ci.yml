@@ -221,6 +221,49 @@ jobs:
             Check 'una sola entrada de inicio automático (WinMac); ninguna «Hatsu Desktop»' (@($names).Count -eq 1 -and $names -eq 'WinMac') "entradas: $($names -join ', ')"
           } finally { Remove-ItemProperty -Path $run -Name 'WinMac' -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $oldDir -ErrorAction SilentlyContinue }
           if ($fail -gt 0) { throw "$fail comprobación(es) de la transición fallaron" }
+      - name: Capturas del asistente de primera ejecución en tema claro y oscuro (pantallas con elecciones de MUESTRA, NO es validación en hardware ni de ratón/foco). Si falta UNA, el paso falla
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force capturas-onboarding | Out-Null; $exe = (Resolve-Path dist/WinMac/HatsuDesktop.exe).Path; $failed = @()
+          foreach ($theme in 'light', 'dark') { foreach ($step in 'Welcome', 'Components', 'Appearance', 'Windows', 'Review', 'Result') {
+            $png = "capturas-onboarding/asistente-$($step.ToLower())-$theme.png"
+            $p = Start-Process $exe -ArgumentList @('--render-onboarding', $step, '--out', "`"$png`"", '--theme', $theme, '--scale', '2') -Wait -PassThru -WindowStyle Hidden
+            $ok = ($p.ExitCode -eq 0) -and (Test-Path $png) -and ((Get-Item $png).Length -gt 5000)
+            $info = if (Test-Path "$png.txt") { (Get-Content "$png.txt" -Raw).Trim() } else { '' }
+            Write-Host "$png -> código $($p.ExitCode), ok=$ok  $info"; if (-not $ok) { $failed += $png }
+          } }
+          if ($failed.Count -gt 0) { throw "Faltan capturas del asistente ($($failed.Count)): $($failed -join ', ')" }
+      - name: Subir capturas del asistente
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-onboarding-${{ github.sha }}
+          path: capturas-onboarding
+          retention-days: 14
+          if-no-files-found: error
+      - name: Instalar WiX (código abierto, MS-RL) para construir el MSI
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add --global WixToolset.UI.wixext/5.0.2
+          wix --version
+      - name: MSI de Hatsu Desktop (compilación; NO se publica ninguna versión)
+        shell: pwsh
+        run: ./installer/Build-Msi.ps1 -DistDir dist/WinMac -OutDir paquete -Compression medium
+      - name: "MSI: instalación, actualización y desinstalación REALES en el runner (entorno efímero de CI: NO es una prueba en un Windows físico)"
+        shell: pwsh
+        run: ./tools/ci/Test-Msi.ps1 -DistDir dist/WinMac -OutDir msi-test
+      - name: Subir el informe y los registros del MSI
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msi-informe-${{ github.sha }}
+          path: |
+            msi-test/msi-report.md
+            msi-test/*.log
+          retention-days: 14
+          if-no-files-found: warn
       - name: Subir el paquete (artefacto temporal, no es una versión publicada)
         if: always()
         uses: actions/upload-artifact@v4
