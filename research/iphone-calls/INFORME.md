@@ -447,6 +447,137 @@ Requisitos: sin app en iOS, sin Phone Link, sin drivers propios, libre, control 
 - **Detener la vía nativa** si P2 y P3 dan `IsRegistered()==False` con `Allowed`, iPhone conectado y revertido limpio: el bloqueo es de plataforma (hipótesis A). Entonces solo quedaría un control informativo (Thy Phone/otro teléfono) y documentar que, con los requisitos actuales, la función no es viable en esta compilación. No se pasa a bypass, token ni driver.
 - Si P1 muestra que `AudioRoutingStatus` cambia con el enlace, se documenta como diagnóstico (no desbloquea nada).
 
+## 13. P3 — MSIX firmado: preparación segura (NO ejecutada por la investigación)
+
+Etiquetas como en §12. **Nada de esto se ha ejecutado en tu PC ni en mi entorno** (aquí solo se corrieron las pruebas simuladas de 13.8). Un certificado autofirmado **no equivale** a una firma de Microsoft Store: P3 solo responde si *un paquete firmado y de confianza local* cambia el resultado; un fallo de P3 no descarta la Store y un éxito no la implica.
+
+### 13.1 Estado de partida (informado por el usuario; los registros de P1/P2 no los he visto) [HW]
+Build 10.0.26300.9711 · iPhone por Classic · Phone Link cerrado · paquete suelto (`None`) · `RequestAccessAsync=Allowed` · `RegisterApp()` retorna, `IsRegistered()=False`. P1: detecta desconexión/reconexión sin cambios de registro. P2 (activación por `shell:AppsFolder`): `RegisterApp()` en 24 ms y `IsRegistered()` False 10 s → **H3 (activación) queda descartada [HW]**. Sin llamadas reales ni audio. SDK `10.0.28000.0` instalado (el script elige el SDK más nuevo con `makeappx` y `signtool` en `x64`).
+
+### 13.2 Auditoría: qué estaba mal y cómo quedó
+
+| # | Requisito | Problema en la versión anterior | Corrección |
+|---|---|---|---|
+| 1 | Auditar | Un solo script monolítico sin pruebas; sin estado | `P3.Common.ps1` (lógica) + dos scripts finos + `Test-P3.ps1` |
+| 2 | Huella antes de lo que puede fallar | La huella solo existía en memoria; si fallaba la importación o la instalación se perdía | `state.json` (escritura atómica) en `%LOCALAPPDATA%\CallProbeP3\<id>\` se crea **antes** de crear nada; la huella se guarda justo al crear el certificado, y la *intención* de importar/instalar se guarda **antes** de ejecutarlo. `state.json` nunca se borra |
+| 3 | Borrar solo por huella exacta | El desinstalador borraba por `Subject` | Solo `Cert:\<almacén>\<huella-de-40-hex>` de **esa** ejecución; antes de borrar se exige huella válida y sujeto coincidente. Una huella vacía, corta, con comodín o `CN=…` se rechaza y no se borra nada |
+| 4 | Recuperación ante fallos parciales | Ninguna | Cualquier excepción tras crear el certificado dispara `Invoke-P3Rollback` automático; si no termina, estado `cleanup-incomplete` y mensaje con huella y comando |
+| 5 | No borrar paquetes ajenos / parar ante identidad inesperada | `Remove-AppxPackage` por nombre | Precondición: si ya existe **cualquier** `WinMac.Research.CallProbe` (el suelto, uno de Store…) se detiene sin crear nada. Al limpiar solo se quita un paquete cuyo `PackageFullName`, versión y publisher son los anotados por esa ejecución; si no, **se detiene todo** y lo explica |
+| 6 | No tocar otras ejecuciones | Directorio fijo en `%TEMP%` | Carpeta por ejecución; solo se vacía esa (y solo si tiene la forma `CallProbeP3\<id>`); una ejecución pendiente bloquea una nueva |
+| 7 | Publisher = sujeto | No se comprobaba | Se compara manifiesto de origen, certificado, manifiesto del MSIX **empaquetado** y manifiesto **instalado** |
+| 8 | Identidad y capacidades | No se comprobaba | Conjunto exacto `bluetooth, phoneCall, phoneLineTransportManagement, runFullTrust`, nombre `WinMac.Research.CallProbe`, ejecutable `CallProbe.exe`; se lee del MSIX y del paquete instalado. Además `signtool verify /pa /v` debe mostrar **la huella de esta ejecución** y Windows no puede registrar el paquete con firma `None` |
+| 9 | Sin tocar protecciones | — | No se toca Defender, Smart App Control ni directivas. Si Windows bloquea el paquete, la instalación falla y se revierte |
+| 10 | Sin tocar Bluetooth/audio/apps | — | Los scripts no llaman a nada de Bluetooth, audio ni WinMac |
+
+Extras: certificado de **30 días** y **clave no exportable**; confirmación escrita `INSTALAR-P3` con la lista de cambios; el nombre del informe de `Run-Probe.ps1` ahora incluye `SignatureKind` (`con-paquete-None` vs `con-paquete-<firmado>`) para no mezclar resultados.
+
+### 13.3 Cambios persistentes que hace P3 (todos reversibles)
+
+| Dónde | Qué | Quién lo quita |
+|---|---|---|
+| `%LOCALAPPDATA%\CallProbeP3\<id>\` | copia de la app (~cientos de MB si es self-contained), `.cer`, `.msix`, `state.json` | el desinstalador deja solo `state.json` (registro) |
+| `Cert:\CurrentUser\My` | certificado `CN=WinMacResearch` (30 días, clave no exportable) | el desinstalador, por huella |
+| `Cert:\LocalMachine\TrustedPeople` | parte pública del mismo certificado | el desinstalador, por huella |
+| Paquete MSIX `WinMac.Research.CallProbe` (usuario actual) | app firmada con sus datos en `%LOCALAPPDATA%\Packages\…` | el desinstalador (los **informes** están en `Documentos\CallProbe` y se conservan) |
+| Registro de eventos de Windows | entradas normales de instalación | no aplica |
+
+No cambia: Bluetooth, emparejamiento, audio, Defender, Smart App Control, directivas, Modo desarrollador. Durante la prueba, `stage3 register` mantiene su propio diario (`Documentos\CallProbe\stage3-journal.json`) y revierte solo.
+
+### 13.4 Riesgos residuales (los que no se pueden eliminar)
+1. **Confianza local:** mientras el certificado esté en `TrustedPeople`, cualquier MSIX firmado con *esa* clave se instala sin aviso. La clave es no exportable y vive en tu perfil, caduca en 30 días y la prueba dura minutos; aun así existe esa ventana. Se mitiga limpiando inmediatamente.
+2. **Control de aplicaciones:** si Smart App Control u otra directiva bloquea un paquete autofirmado, la instalación fallará (se revierte). No se desactiva nada; en ese caso P3 no es ejecutable en este PC sin cambiar protecciones y **se detiene**. [HIP: no sé si está activo en tu equipo.]
+3. **Mismo usuario:** hay que elevar con la **misma cuenta** que usa la app (en un PC con una sola cuenta administradora es lo normal). Si elevas con otra cuenta, el paquete se instalaría para ella y no para ti; en ese caso no continúes.
+4. **Identidad compartida:** el paquete firmado tiene la misma identidad que el suelto, por lo que **no pueden coexistir**; hay que quitar el suelto primero (paso 2 de 13.6). Tras P3 puedes volver a `Register-DevPackage.ps1`.
+5. Si el equipo se apaga a mitad: ver 13.5.
+Ninguno de estos riesgos exige detener la preparación; el 1 y el 2 los decide el usuario.
+
+### 13.5 Si P3 falla a mitad
+
+| Punto del fallo | Qué queda | Qué pasa |
+|---|---|---|
+| Precondición (paquete existente, SDK ausente, ejecución pendiente, manifiesto incorrecto, no confirmas) | nada | Se detiene sin crear nada |
+| Tras crear el certificado, antes de exportar / empaquetar / firmar | cert en `My` | Rollback automático lo quita por huella |
+| Durante o tras importar a `TrustedPeople` | cert en `My` y quizá en `TrustedPeople` | Rollback intenta ambos almacenes (la intención quedó anotada antes de importar) |
+| Durante `Add-AppxPackage` (incluida instalación a medias) | posible paquete | Se quita **solo** si es exactamente el esperado; si es otro, se detiene y avisa sin tocar el cert |
+| Corte de luz / cierre de la consola | `state.json` en estado `in-progress` | Bloquea nuevas ejecuciones; `Uninstall-SignedDevPackage.ps1` lo completa leyendo la huella del estado |
+| El rollback tampoco puede terminar | estado `cleanup-incomplete` | Mensaje `P3-FALLO-INCOMPLETO` con huella y `-RunId`; los comandos manuales por huella exacta están en 13.6 |
+
+### 13.6 Comandos exactos (nadie los ha ejecutado aún)
+
+**0. Ver el estado actual (Windows PowerShell normal):**
+```powershell
+cd <repo>\research\iphone-calls
+git pull origin research/iphone-calls
+.\package\Run-Probe.ps1 stage3 status
+```
+Debe decir `IsRegistered() False` y diario `clean`. Si no, para y revisa.
+
+**1. Publicar la versión actual:**
+```powershell
+dotnet publish CallProbe -c Release -r win-x64 --self-contained -o publish
+```
+
+**2. Quitar el paquete suelto (misma identidad; usuario normal):**
+```powershell
+.\package\Unregister-DevPackage.ps1
+```
+
+**3. Probar los scripts sin tocar nada (opcional, en pwsh o PowerShell 5.1):**
+```powershell
+.\package\Test-P3.ps1
+```
+
+**4. Instalar (consola de Windows PowerShell 5.1 «Ejecutar como administrador», misma cuenta):**
+```powershell
+cd <repo>\research\iphone-calls
+.\package\Install-SignedDevPackage.ps1 -BuildDir .\publish
+```
+Lista los cambios y pide escribir `INSTALAR-P3`. **Apunta la huella** que imprime.
+
+**5. Comprobar la instalación (usuario normal):**
+```powershell
+Get-AppxPackage WinMac.Research.CallProbe | Format-List Name, Publisher, Version, SignatureKind, PackageFullName
+```
+Esperado: `Publisher: CN=WinMacResearch`, `SignatureKind` distinto de `None` (supongo `Developer` [HIP]).
+
+**6. Ejecutar la prueba (usuario normal, iPhone conectado y desbloqueado, Phone Link cerrado, sin llamadas):**
+```powershell
+.\package\Run-Probe.ps1 stage2
+.\package\Run-Probe.ps1 stage3 status
+.\package\Run-Probe.ps1 stage3 register
+```
+Escribe `REGISTRAR` cuando lo pida; revierte solo al terminar.
+
+**7. Limpiar siempre al terminar, sea cual sea el resultado (administrador, PowerShell 5.1):**
+```powershell
+.\package\Uninstall-SignedDevPackage.ps1
+```
+Si hay varias ejecuciones pendientes pide `-RunId <id>`.
+
+**8. Verificar la limpieza (sustituye `<HUELLA>` por la que apuntaste):**
+```powershell
+Get-AppxPackage WinMac.Research.CallProbe
+Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object Thumbprint -eq '<HUELLA>'
+Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq '<HUELLA>'
+```
+Las tres no deben devolver nada. Último recurso manual, **solo por huella exacta** (administrador): `Remove-Item Cert:\LocalMachine\TrustedPeople\<HUELLA>` y `Remove-Item Cert:\CurrentUser\My\<HUELLA> -DeleteKey`. No borres certificados por nombre.
+
+**9. Volver al estado anterior (opcional):** `.\package\Register-DevPackage.ps1 -BuildDir .\publish`.
+
+### 13.7 Cómo interpretar el resultado de P3
+| Resultado de `stage3 register` | Lectura | Siguiente |
+|---|---|---|
+| `IsRegistered=True` **y** línea telefónica visible | H1/C confirmada para un paquete firmado de desarrollo (no implica Store) | Informar; después, y solo con tu autorización, plan de llamada real |
+| `IsRegistered=True`, sin línea | Registro aceptado; línea no expuesta | Informar; no avanzar a llamadas |
+| `IsRegistered=False` con `Allowed` | La firma local no basta en esta build: se refuerza la hipótesis A (restricción de plataforma). **No** prueba nada sobre Store | Limpiar (paso 7). Decidir el cierre del proyecto con los criterios de §12.9 |
+| Error de instalación (SAC/directiva/0x800B…) | P3 no ejecutable sin cambiar protecciones | Se detiene; no se desactiva nada |
+
+### 13.8 Pruebas ejecutadas (en mi entorno, simuladas)
+- `pwsh 7.6.9`: `Test-P3.ps1` → **165 comprobaciones correctas, 0 fallidas**. Cubren: sintaxis de todos los `.ps1`, rutas/carga de `P3.Common.ps1`, validador de huella (vacía, corta, comodín, con espacios, `CN=…`), coincidencia publisher/sujeto, identidad y capacidades exactas (falta una, sobra una, nombre distinto), instalación completa, desinstalación exacta, fallo simulado en cada paso (`export`, `pack`, `sign`, `import`, `import` a medias, `verify`, `add`, `add` a medias), manifiesto empaquetado distinto, huella de `.cer` distinta, firma `None`, paquete previo (Store/None/Developer) sin crear nada, cancelación, ejecución pendiente que bloquea, varias pendientes con y sin `-RunId`, estado ilegible, huella inválida (no se borra por `Subject`), mismo hash con otro sujeto, carpeta con forma inesperada, tabla de decisión de paquetes, y que los certificados *señuelo* con el mismo `Subject` y los archivos de otras ejecuciones quedan intactos.
+- Comprobación de que las pruebas detectan errores: quitando la verificación del sujeto o la guarda «no intentó instalar», fallan.
+- `dotnet test CallProbe.Logic.Tests` → ver commit; `dotnet build CallProbe` sin errores.
+- **No probado (requiere Windows real):** `New-SelfSignedCertificate`, `makeappx`, `signtool`, `Add-AppxPackage`, almacenes `Cert:\`, el valor real de `SignatureKind`, y el comportamiento de Smart App Control. Esas operaciones solo se ejercitan en tu ejecución; por eso cada una tiene su comprobación y reversión.
+
 ## Apéndice A — Correcciones a `docs/39` y `docs/41`
 
 | Documento | Afirmación | Corrección |

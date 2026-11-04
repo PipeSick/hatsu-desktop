@@ -14,7 +14,7 @@ param([Parameter(Mandatory, Position = 0)][string]$Stage, [Parameter(Position = 
 $ErrorActionPreference = 'Stop'
 $exe = if ($Unpackaged) { Join-Path (Split-Path $PSScriptRoot) 'publish\CallProbe.exe' } else { $p = Get-AppxPackage WinMac.Research.CallProbe; if ($p) { Join-Path $p.InstallLocation 'CallProbe.exe' } else { "$env:USERPROFILE\CallProbePkg\CallProbe.exe" } }
 if (-not (Test-Path $exe)) { throw "No encuentro $exe. Publica antes: dotnet publish CallProbe -c Release -r win-x64 --self-contained -o publish (y, para la prueba empaquetada, Register-DevPackage.ps1)." }
-$tag = if ($Unpackaged) { 'sin-paquete' } else { 'con-paquete' }
+$tag = if ($Unpackaged) { 'sin-paquete' } else { $q = Get-AppxPackage WinMac.Research.CallProbe; if ($q) { 'con-paquete-' + $q.SignatureKind } else { 'con-paquete' } }   # distingue suelto (None) de firmado (P3) en el nombre del informe
 $out = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "CallProbe\$Stage-$Action-$tag-$(Get-Date -Format 'yyyyMMdd-HHmmss').txt"
 $probeArgs = @($Stage) + $(if ($Action) { @($Action) } else { @() }) + $(if ($Device) { @('--device', $Device) } else { @() }) + @('--out', $out) + $(if ($ExtraArgs) { $ExtraArgs -split ' ' } else { @() })
 # Las etapas interactivas (stage3 register/unregister, stage5) necesitan teclado: se lanzan dentro de cmd /k para que la consola siga abierta.

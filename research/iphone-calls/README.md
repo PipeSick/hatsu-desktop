@@ -22,4 +22,4 @@ dotnet publish CallProbe -c Release -r win-x64 --self-contained -o publish
 
 Resultado real: `RegisterApp()` retorna sin excepción pero `IsRegistered()` sigue en False (ver INFORME §12). Nuevas herramientas de **solo lectura**:
 `stage3 observe --seconds N [--interval MS]` (línea de tiempo de IsRegistered / AudioRoutingStatus / enlace Classic con eventos del transporte, presencia de API en la build y propiedades del transporte). `stage3 status` y `stage3 register` ahora imprimen la misma línea de tiempo.
-`package/Install-SignedDevPackage.ps1` / `Uninstall-SignedDevPackage.ps1` preparan la prueba H1 (paquete firmado); **modifican el almacén de confianza y no se han ejecutado**.
+P3 (paquete firmado): `package/Install-SignedDevPackage.ps1` / `Uninstall-SignedDevPackage.ps1` (lógica en `P3.Common.ps1`, pruebas simuladas en `Test-P3.ps1`). Modifican el almacén de confianza; procedimiento, riesgos y comandos en INFORME §13.
