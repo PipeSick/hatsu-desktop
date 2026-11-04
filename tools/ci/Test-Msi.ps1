@@ -65,8 +65,11 @@ Check 'acceso directo del menú Inicio' (Test-Path $menu)
 Check 'sin acceso directo en el escritorio por defecto' (-not (Test-Path $desktopLnk))
 $arp = Arp $pc['2.0.0']; Check 'Windows Installer lo da por instalado (ProductState)' (Registered $pc['2.0.0'])
 Check 'registrado en Aplicaciones instaladas con nombre y versión' ($arp -and $arp.DisplayName -eq 'Hatsu Desktop' -and $arp.DisplayVersion -eq '2.0.0') ("ubicación: $($arp.Where)")
-Check 'la entrada de Aplicaciones instaladas es POR USUARIO (HKCU)' ($arp -and $arp.Hive -eq 'HKCU') ("ubicación: $($arp.Where)")
-Check 'Aplicaciones instaladas muestra el icono' ($arp -and $arp.DisplayIcon) ($arp.DisplayIcon)
+# informativo, NO es un criterio de éxito: el runner instala con un token ELEVADO y ahí Windows Installer escribe la entrada de desinstalación en HKLM; con un usuario sin privilegios debe quedar en HKCU (pendiente de la prueba manual, docs/48)
+$report.Add("| INFO | ubicación de la entrada de Aplicaciones instaladas en este runner (elevado) | $($arp.Where) |"); Write-Host "INFO  entrada de Aplicaciones instaladas en: $($arp.Where)"
+$wiIcon = try { (New-Object -ComObject WindowsInstaller.Installer).ProductInfo("{$($pc['2.0.0'])}", 'ProductIcon') } catch { $null }
+$report.Add("| INFO | icono registrado por Windows Installer (ProductIcon) | $wiIcon |"); Write-Host "INFO  ProductIcon: $wiIcon"
+Check 'Aplicaciones instaladas tiene icono (DisplayIcon o ProductIcon de Windows Installer)' (($arp -and $arp.DisplayIcon) -or $wiIcon) "DisplayIcon=$($arp.DisplayIcon); ProductIcon=$wiIcon"
 Check 'no activa el inicio automático ajeno ni crea el propio' ((Get-ItemProperty $runKey).WinMac -eq $foreign)
 Check 'no ocultó la barra de tareas (sin registro de recuperación)' (-not (Test-Path (Join-Path $localData 'taskbar-restore.json')))
 Check 'datos del usuario intactos tras instalar' ((Get-FileHash $cfg).Hash -eq $cfgHash)
