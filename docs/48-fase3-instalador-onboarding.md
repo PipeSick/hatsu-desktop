@@ -83,8 +83,25 @@ Orden de `OnboardingApplier` (probado con un doble que falla a propósito):
 ## 7. Desinstalación
 Desde «Aplicaciones instaladas» o `msiexec /x`. Antes de quitar archivos corre `HatsuDesktop.exe --uninstall-cleanup`: devuelve la barra de tareas de Windows si estaba oculta y quita **solo** el valor de inicio automático **si apunta a esta instalación**. Quita archivos, accesos directos y su entrada. **No** borra `%APPDATA%\WinMac`, `%LOCALAPPDATA%\WinMac` ni datos de NotchWin; no toca otra copia (portable o WinMac) ni su inicio automático; no hace limpieza agresiva del Registro. Borrar los datos personales es una acción aparte (`Uninstall-HatsuDesktop.ps1 -RemoveData` de la versión portable, con su confirmación).
 
-## 8. Resultados de CI
-_(se completan al cerrar la fase; ver la sección «Resultado de CI» del informe final)_
+## 8. Resultados de CI (commit `d6dfc53`, ejecución 41872300428: 4 jobs en verde)
+| Qué | Resultado | Qué NO demuestra |
+|---|---|---|
+| Compilación y pruebas unitarias (Host.Core 243, resto sin cambios) | OK | — |
+| Estructura del MSI (nombre, UpgradeCode, versión, fabricante, sin ALLUSERS, archivos incluidos, sin ejecutables antiguos) | OK | — |
+| ProductCode determinista (3 versiones distintas; 2 compilaciones de la misma = mismo código) | OK | — |
+| **Instalación real** en el runner (`msiexec /i`; 66 comprobaciones, 0 fallos) | OK | No es un Windows físico: runner efímero y con token elevado |
+| Actualización 2.0.0→2.0.1, y 2.0.1→2.0.2 **con el host en ejecución** (código 0); rechazo de bajar de versión (1603); una sola entrada del producto | OK | Las tres versiones tienen el **mismo contenido** (solo cambia el número): no prueba una actualización con cambios reales de archivos |
+| Desinstalación real: archivos, accesos directos y entrada fuera; datos y NotchWin intactos; inicio automático de otra copia intacto; el propio se quita; barra de tareas sin registro de recuperación | OK | — |
+| Convivencia con una copia portable (`--background` no la toca; `--replace-running` la cierra y continúa) | OK | El diálogo de confirmación interactivo no se puede accionar en CI |
+| Host real: instalación nueva (ningún módulo arranca antes de decidir), «omitir» (Barra y Dock arrancan por el supervisor, Connect no), usuario existente → `Existing` (ONB1–3) | OK | Con módulos de mentira; la ventana del asistente no se abre en CI |
+| Capturas del asistente: 6 pantallas × claro/oscuro (`capturas-onboarding-<sha>`) | Generadas (1600×1120, WARP) | **No las he mirado**: CI comprueba que se generan, no que se vean bien. Hay que revisarlas a mano |
+| Integración con NotchWin (pin `80bd29a`) | OK | — |
+
+**Observación del runner:** con un token elevado, Windows Installer dejó la entrada de desinstalación en `HKLM\...\Uninstall\{ProductCode}` (el icono lo registra en `%APPDATA%\Microsoft\Installer\{ProductCode}\HatsuDesktop.ico`). Con un usuario sin privilegios debe ir a `HKCU`, pero **no está verificado**: es un punto de la checklist manual. Archivos, accesos directos y datos sí son por usuario (comprobado).
+
+Artefactos descargables de la ejecución: `hatsu-desktop-paquete-<sha>` (ZIP portable + **MSI** + SHA-256 + ProductCode), `msi-informe-<sha>` (informe y registros `msiexec /l*v`), `capturas-onboarding-<sha>`, `capturas-it8-<sha>`, `integracion-notchwin-<sha>`. Temporales (14 días); no se publica nada.
+
+En la prueba ONB2 el estado final queda `InProgress` y no `Skipped` porque ahí NotchWin no existe: la Isla activada no tiene ejecutable y el asistente lo **informa en vez de declarar éxito** (es el comportamiento buscado); en el paquete real la Isla sí está.
 
 ## 9. Limitaciones y riesgos pendientes
 - Nada de esto se ha probado en un **Windows físico**; el runner de CI es efímero y administrador.
@@ -95,7 +112,7 @@ _(se completan al cerrar la fase; ver la sección «Resultado de CI» del inform
 - WiX 5.x se fija en 5.0.2; actualizarlo es una decisión a tomar.
 
 ## 10. Checklist de validación manual (Windows físico)
-1. Instalar el MSI como usuario normal (sin administrador): ¿pide permisos? ¿aparece en «Aplicaciones instaladas» con el icono Flux?
+1. Instalar el MSI como usuario normal (sin administrador): ¿pide permisos? ¿aparece en «Aplicaciones instaladas» con el icono Flux, y la entrada está en `HKCU` (no `HKLM`)?
 2. Menú Inicio: acceso directo con icono. Escritorio: **no** hay acceso directo salvo que se marque en «Personalizar».
 3. Primer arranque (sin `%APPDATA%\WinMac`): aparece el asistente; **no** hay Dock ni Barra todavía; recorrer las cinco pantallas, ida y vuelta, y comprobar que no cambia nada hasta «Aplicar y comenzar».
 4. Claro y oscuro de Windows, 100/150/200 % de DPI y dos monitores: textos, tarjetas e icono nítidos.
