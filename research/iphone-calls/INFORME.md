@@ -4,7 +4,7 @@ Fecha: 2026-11-03 · Rama `research/iphone-calls` (worktree aparte, sobre `28f8a
 
 ## 0. Alcance y límites de esta investigación (leer primero)
 
-- **No tuve acceso a tu hardware.** Nada de este informe está «VERIFICADO EN HARDWARE» por mí. Todo lo que dice «probado en hardware» viene de terceros o de `docs/39` (ver §2).
+- **No tuve acceso a tu hardware.** Nada de este informe lo verifiqué yo en hardware. Lo «verificado en hardware» viene de terceros o de **tus dos registros originales de `ConnectProbe`** (Apéndice C), que sí son evidencia de hardware real de tu PC.
 - **Lo que sí verifiqué yo, con código y comandos reproducibles:** (a) los metadatos oficiales del SDK de Windows (paquete NuGet `Microsoft.Windows.SDK.NET.Ref` 10.0.19041.57 y 10.0.26100.57), (b) el código fuente de MyPhone, Klangbruecke y Sefirah clonados con `git`, (c) los documentos 39, 40 y 41 y el código de WinMac Connect de la rama `claude/relaxed-turing-cijzko`, (d) que la prueba de concepto compila y que su lógica pasa 19 pruebas.
 - **Dominios bloqueados en esta sesión:** `learn.microsoft.com`, `inthehand.com`, `microsoft.github.io`, `kiwix.lema.org`, `api.github.com`. Las páginas de Microsoft Q&A y de documentación de Microsoft las conozco **solo por los resultados de búsqueda** (resumen, no texto íntegro). Si quieres que las lea enteras, hay que permitir esos dominios en la red de la sesión.
 - La especificación HFP del Bluetooth SIG no se pudo consultar; lo que digo de comandos AT y SCO sale de documentación pública de Microsoft, del código de MyPhone y de Klangbruecke, y de conocimiento general (marcado como tal).
@@ -26,23 +26,23 @@ Lo que **sí está bloqueado** por tus restricciones: forjar tokens de Acceso Li
 
 ## 2. Auditoría de `DeniedBySystem`
 
-**Conclusión de la auditoría: la afirmación no tiene evidencia reproducible y, tal como se describe, no prueba lo que se le atribuyó.**
+**Conclusión de la auditoría (actualizada con los registros originales que enviaste, Apéndice C): el `DeniedBySystem` es real y está registrado en hardware, pero se obtuvo SIN identidad de paquete y SIN la capacidad, y la propia herramienta lo declara «lo esperable». Es un resultado verdadero y no concluyente: no prueba nada sobre una app empaquetada, ni sobre contestar, ni sobre audio.**
 
 | Pregunta | Respuesta | Evidencia |
 |---|---|---|
 | 1. ¿Existe el código de la prueba? | **No en ningún repositorio.** `docs/39` dice que `ConnectProbe` quedó «fuera de los repositorios» y que su código iba «junto en el ZIP». Ese ZIP no está en el repo ni en este entorno. | `docs/39:4`, `:70`; búsqueda en el árbol y en `git log --all -S ConnectProbe`: solo aparece en documentos. |
-| 2. ¿Existe un registro original? | **No.** Solo hay una fila resumen en una tabla («Telefonía de Windows: `DeniedBySystem`, no registrado»). No hay salida de consola, ni método, ni hora. | `docs/39:99`. Ninguna transcripción de esa sesión en esta máquina. |
-| 3. ¿En qué equipo? | Según el documento, «PC del usuario, Windows 11 compilación 26300, iPhone 17 Pro» (`docs/39:91`). No verificable. | **Aviso:** «26300» es también el número de compilación del título del reporte de Microsoft Q&A 6041632, citado en el mismo documento. No puedo descartar que el número se haya copiado de ahí. `stage1` imprime la compilación real. |
+| 2. ¿Existe un registro original? | **Sí, ahora.** Me enviaste `informe.txt` (comando `all`, 2026-11-03 17:14:11) e `informe2.txt` (`round2`, 17:20:20). En el repositorio y en esta máquina no estaban: solo había la fila resumen de `docs/39:99`. | Apéndice C. |
+| 3. ¿En qué equipo? | Tu PC, **Windows 10.0.26300.0** (cabecera de ambos registros), iPhone «de PipeSick» con HFP AG, MAP y PBAP. | Cabecera de `informe.txt` e `informe2.txt`. **Mi sospecha anterior de que el «26300» se hubiera copiado de un reporte ajeno queda descartada:** es la compilación real de tu PC. (Es posterior a 26100/26200; probablemente una compilación de Insider, no verificado.) |
 | 4. ¿Local, runner o terceros? | Local, en tu PC (un runner de GitHub no puede emparejar un iPhone). Los *dos informes de terceros* (Q&A) son aparte. | `docs/39:25` (terceros) y `:91` (local). |
 | 5. ¿Versión de Windows? | «26300» (sin build menor ni versión). | ídem |
-| 6. ¿Identidad de paquete? | **Probablemente no.** El documento describe la herramienta como «una consola autocontenida para Windows x64 que no necesita instalar nada» (`docs/39:70`). Un exe suelto no tiene identidad de paquete. | `docs/39:70`. Hipótesis: no se puede confirmar sin el código. |
+| 6. ¿Identidad de paquete? | **No. El propio registro lo dice:** «Sin identidad de paquete y sin la capacidad «phoneLineTransportManagement» lo esperable es DeniedBySystem». | `informe.txt` línea 84; `docs/39:70` (consola autocontenida). |
 | 7. ¿Capacidades declaradas? | **Ninguna posible sin paquete.** Una capacidad restringida solo se declara en un manifiesto de paquete. | Klangbruecke FINDINGS §2 y §12. |
-| 8. ¿Qué método devolvió `DeniedBySystem`? | **No consta.** Lo más probable es `PhoneLineTransportDevice.RequestAccessAsync()` (`DeviceAccessStatus.DeniedBySystem`). | `docs/39:99` no lo dice. |
+| 8. ¿Qué método devolvió `DeniedBySystem`? | El registro no nombra el método; imprime «acceso DeniedBySystem · registrado: False». Corresponde a `RequestAccessAsync()` (estado de acceso) e `IsRegistered()`. Inferencia, sin código que la confirme. | `informe.txt` línea 83. |
 | 9. ¿Se puede reproducir? | Con `CallProbe stage2` (esta carpeta), **sin** paquete y **con** paquete. | §7 |
 
 Hallazgos adicionales de la auditoría:
 
-1. **El resultado se predijo antes de medirse.** La tabla de pruebas decía «Telefonía: probablemente `DeniedBySystem`; `Allowed` sería una sorpresa positiva» (`docs/39:85`). Después apareció `DeniedBySystem`. Eso no invalida el resultado, pero obliga a verlo con cautela.
+1. **El resultado se esperaba antes de medirse y la herramienta lo etiqueta como esperable.** La tabla de pruebas decía «Telefonía: probablemente `DeniedBySystem`; `Allowed` sería una sorpresa positiva» (`docs/39:85`) y el registro repite la expectativa (`informe.txt` línea 84). El resultado no está falseado (el registro lo respalda), pero se diseñó como una comprobación de línea base, no como una prueba de la vía empaquetada.
 2. **Un `DeniedBySystem` sin paquete es el resultado *esperado* y no prueba un bloqueo.** MyPhone issue #7 (mantenedor, 18-oct-2021): `PhoneLineTransportDevice` «solo se puede llamar desde una app empaquetada en MSIX»; una consola Win32 falla con ese mismo error. Hay un reporte de Microsoft Q&A de WPF con el mismo síntoma (`1341397`, solo por resultado de búsqueda).
 3. **Detectar ≠ contestar ≠ audio.** `docs/41` (WM-039/040) pasó de «`DeniedBySystem` en una consola» a «contestar está bloqueado». Eso mezcla tres cosas distintas, como pediste evitar.
 4. **Errores factuales en `docs/39` y `docs/41`** (corregidos en el Apéndice A): atribuyen a MyPhone «no logró el audio» cuando eso describe su *propia pila HFP* experimental, no la vía de `PhoneLineTransportDevice`; y afirman «WinMac controla las llamadas con API pública: **No**», cuando `PhoneCall` existe en el SDK 26100.
@@ -253,3 +253,41 @@ Antes de nada: cierra Phone Link y desvincula el iPhone de él; el iPhone, empar
 - **Microsoft Q&A** (solo por resultados de búsqueda; el dominio está bloqueado en esta sesión): [6041632](https://learn.microsoft.com/en-us/answers/questions/6041632/phonelinetransportdevice-registerapp-has-no-effect), [1803696](https://learn.microsoft.com/en-in/answers/questions/1803696/issues-with-access-permissions-in-phonelinetranspo), [1663702](https://learn.microsoft.com/en-us/answers/questions/1663702/deniedbysystem-returned-when-i-was-used-phonelinet), [1341397](https://learn.microsoft.com/en-us/answers/questions/1341397/in-wpf-phonelinetransportdevice-requestaccessasync).
 - **Microsoft, controladores de Bluetooth:** `windows-driver-docs` → `bluetooth-driver-stack.md` (leído desde GitHub): el audio SCO pasa por un controlador de perfil en modo kernel.
 - **Thy Phone / Phone Link / Intel Unison:** solo por resultados de búsqueda (blog del autor, prensa); sin verificar.
+
+## Apéndice C — Registros originales de `ConnectProbe` (los que enviaste)
+
+Archivos: `informe.txt` (comando `all`, 2026-11-03 17:14:11, Windows 10.0.26300.0) e `informe2.txt` (comando `round2`, 17:20:20). No los añadí al repositorio porque contienen nombres de tus dispositivos y de las apps de tus notificaciones; aquí van solo las líneas relevantes, con el nombre del dispositivo sustituido por `<iPhone>`.
+
+**Las líneas que sostienen la auditoría** (`informe.txt`):
+
+```
+Telefonía de Windows (PhoneLineTransportDevice, API pública con capacidad restringida):
+  dispositivos de transporte de llamadas: 1
+  · <iPhone>: acceso DeniedBySystem · registrado: False
+  (Sin identidad de paquete y sin la capacidad «phoneLineTransportManagement» lo esperable es DeniedBySystem:
+   así se comprueba si WinMac podría controlar llamadas.)
+```
+
+**Qué demuestra y qué no:**
+
+| Afirmación | Estado |
+|---|---|
+| Windows expone tu iPhone como **transporte de telefonía Bluetooth** (1 dispositivo) | **VERIFICADO EN HARDWARE** (registro original). Esto es un dato nuevo y favorable: el transporte existe. |
+| `RequestAccessAsync` devolvió `DeniedBySystem` y `IsRegistered` = `False` **sin identidad de paquete ni capacidad** | **VERIFICADO EN HARDWARE** (registro original), **no concluyente** para una app empaquetada. |
+| El iPhone publica HFP Audio Gateway (`0000111f`), MAP (`00001132`) y PBAP (`0000112f`), con cifrado y autenticación | **VERIFICADO EN HARDWARE** (registro original). |
+| «Llamadas con audio desde WinMac: bloqueado» (`docs/39:99`, `docs/41`) | **No se desprende de este registro.** El registro no probó contestar, ni audio, ni una app empaquetada. |
+
+**Comprobación cruzada contra `docs/39`** (todo coincide con los registros):
+
+- Adaptador: Classic, LE, rol central y periférico, LE y Classic Secure Connections, publicidad extendida: todo `True` ✓.
+- iPhone en Classic (`Connected`) y en LE (`Random`, `EncryptionAndAuthentication`) ✓.
+- GATT: Battery Service, ANCS, AMS, Current Time, Device Information (más Continuity y Nearby, privados, y servicios `0xFE15`); batería 75 % y suscripción `Success` ✓.
+- ANCS, primera ronda (30 s): **0** eventos; segunda ronda (120 s, sesión GATT mantenida): **322 ya existentes**, 9 nuevas, 4 eliminadas ✓.
+- Llamada: `Llamada entrante` (`com.apple.mobilephone`) con **acción positiva y negativa**, luego eliminada y `Llamada perdida` ✓; un `ProtocolError (0xA2)` al pedir datos de una notificación ya borrada ✓.
+- MAP: `0xC3` (prohibido) en la primera ronda y `0xA0` (éxito) en la segunda, tras activar el permiso en el iPhone ✓.
+
+**Lo que añaden para la decisión:**
+
+1. La compilación es **26300**. Un reporte ajeno de Microsoft Q&A (6041632) describe **justo esa compilación** con una app **empaquetada**: acceso `Allowed` pero registro sin efecto. Si tu PC se comporta igual con paquete, el obstáculo sería la compilación y no la carga lateral. La etapa 2 con paquete lo separa.
+2. Como el transporte **ya existe** y Windows lo enumera, el primer obstáculo real es solo el permiso de registro, que es justo lo que la comparación sin paquete frente a con paquete mide.
+3. Las acciones positiva y negativa de ANCS están anunciadas en la llamada entrante, pero **no se ejecutaron**: la vía C (contestar/rechazar por ANCS en el iPhone) sigue sin validar.
