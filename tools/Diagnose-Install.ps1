@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Diagnóstico de SOLO LECTURA de una instalación de Hatsu Desktop en tu Windows. No cambia nada, no pide desactivar ninguna protección y no envía nada a ningún sitio.
 .DESCRIPTION

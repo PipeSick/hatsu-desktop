@@ -60,6 +60,15 @@ public class InstallerTests
         Assert.Contains("--uninstall-cleanup", Read("src/WinMac.Host/Program.cs"));
     }
 
+    [Fact] public void User_run_scripts_with_non_ascii_text_carry_a_UTF8_BOM_so_Windows_PowerShell_5_1_reads_them()
+    {
+        // sin BOM, PowerShell 5.1 lee el archivo como ANSI y un carácter como «…» o «—» pasa a ser una comilla tipográfica que rompe la sintaxis (visto en CI)
+        var bytes = File.ReadAllBytes(Path.Combine(Root(), "tools", "Diagnose-Install.ps1")); Assert.True(bytes is [0xEF, 0xBB, 0xBF, ..], "Diagnose-Install.ps1 debe empezar con BOM UTF-8");
+        Assert.Contains("SOLO LECTURA", File.ReadAllText(Path.Combine(Root(), "tools", "Diagnose-Install.ps1")));
+        foreach (var banned in new[] { "Set-ItemProperty", "New-ItemProperty", "Remove-Item", "Remove-ItemProperty", "New-Item", "Set-Content", "Start-Process", "Invoke-WebRequest", "Invoke-RestMethod", "Disable-", "Add-MpPreference", "Set-MpPreference" })
+            Assert.DoesNotContain(banned, File.ReadAllText(Path.Combine(Root(), "tools", "Diagnose-Install.ps1")));   // solo lectura: ni escribe, ni descarga, ni toca protecciones
+    }
+
     [Fact] public void The_license_rtf_and_the_icon_are_the_single_brand_source()
     {
         Assert.StartsWith("{\\rtf1", Read("installer/License.rtf")); Assert.Contains(@"assets\brand\HatsuDesktop.ico", Read("installer/Build-Msi.ps1"));

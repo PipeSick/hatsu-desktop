@@ -111,6 +111,7 @@ Check 'ONB3 sin ventana (--no-tray) no se marca la bienvenida como mostrada (se 
 $rb = NewRoom 'f31-badexe'; $badExe = Join-Path $rb.Dir 'HatsuDesktop.Dock.exe'; 'esto no es un ejecutable de Windows' | Set-Content $badExe -Encoding ASCII
 $cb = Get-Content $rb.Cfg -Raw | ConvertFrom-Json; $cb.modules.dock.path = $badExe; $cb.modules.dock.args = @(); $cb | ConvertTo-Json -Depth 8 | Set-Content $rb.Cfg -Encoding UTF8
 $hb = StartHost $rb; $okB = WaitFor { (LogHas $rb '[dock] Failed') -and (LogHas $rb '[bar] Running') } 40
+if (-not $okB) { Write-Host '--- registro del host (F31-1), últimas líneas:'; if (Test-Path $rb.Log) { Get-Content $rb.Log -Tail 40 | ForEach-Object { Write-Host "    $_" } }; Write-Host '--- configuración:'; Get-Content $rb.Cfg -Raw | Write-Host }
 Check 'F31-1 un módulo que no se puede lanzar acaba en Failed y la Barra sigue en marcha' $okB ("dock Failed={0} bar Running={1}" -f (LogHas $rb '[dock] Failed'), (LogHas $rb '[bar] Running'))
 $tries = @(Get-Content $rb.Log | Where-Object { $_ -match '\[dock\] no se pudo lanzar' }).Count
 Check 'F31-2 no hay reintentos infinitos (a lo sumo 5 intentos)' ($tries -ge 1 -and $tries -le 5) ("intentos: $tries")
@@ -122,7 +123,7 @@ $rep = if (Test-Path $repFile) { Get-Content $repFile -Raw } else { '' }
 Check 'F31-5 HatsuDesktop.exe --diagnose termina bien y escribe el informe local' ($dp.ExitCode -eq 0 -and $rep.Length -gt 500)
 Check 'F31-6 el informe dice que el Dock NO está en ejecución y por qué, y que la Barra sí' ($rep -match 'Dock: elegido=sí · NO está en ejecución' -and $rep -match '\[error 193\]' -and $rep -match 'Barra superior: elegido=sí')
 Check 'F31-7 el informe es de solo lectura, local y sin datos personales ni telemetría' ($rep -match 'NO se envía a ningún sitio' -and -not $rep.Contains($env:USERPROFILE) -and -not ($rep -match 'WeatherCity|Molina'))
-Quit $rb $hb
+Quit $rb $hb; Cleanup
 # (b) «Dock inaccesible»: permisos denegados sobre el ejecutable (si el entorno no lo permite, se informa y no se falla: depende de las ACL del runner)
 $rd = NewRoom 'f31-denied'; $denyExe = Join-Path $rd.Dir 'HatsuDesktop.Dock.exe'; Copy-Item $fakeExe $denyExe -Force
 $aclOk = $false; try { & icacls.exe $denyExe /deny '*S-1-1-0:(RX)' | Out-Null; $aclOk = ($LASTEXITCODE -eq 0) } catch { }
@@ -130,7 +131,7 @@ $cd = Get-Content $rd.Cfg -Raw | ConvertFrom-Json; $cd.modules.dock.path = $deny
 $hd = StartHost $rd; $okD = WaitFor { (LogHas $rd '[dock] Failed') -and (LogHas $rd '[bar] Running') } 40
 if ($aclOk -and $okD) { Check 'F31-8 un ejecutable sin permiso de ejecución: Failed, los demás siguen y la causa es «acceso denegado»' ((LogHas $rd '[error 5]')) ((Select-String -Path $rd.Log -Pattern '\[dock\] no se pudo lanzar' | Select-Object -First 1).Line) }
 else { Write-Host "INFO  F31-8 no concluyente en este runner (icacls=$aclOk, Failed=$okD): las ACL del runner no permiten reproducirlo; el caso está cubierto por las pruebas unitarias de clasificación" }
-Quit $rd $hd; & icacls.exe $denyExe /remove:d '*S-1-1-0' 2>&1 | Out-Null
+Quit $rd $hd; & icacls.exe $denyExe /remove:d '*S-1-1-0' 2>&1 | Out-Null; Cleanup
 
 # ── 3b. Migración de los ajustes de la Barra (bar.json → winmac.json): una sola vez, sin tocar el original
 $r3b = NewRoom 'migracion'; $barJson = Join-Path $r3b.Dir 'bar.json'
