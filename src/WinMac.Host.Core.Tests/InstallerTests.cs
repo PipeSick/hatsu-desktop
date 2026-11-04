@@ -104,4 +104,30 @@ public class InstallerTests
     }
 
     private static string WinMac_Autostart_TaskId() => System.Text.RegularExpressions.Regex.Match(File.ReadAllText(Path.Combine(Root(), "src", "WinMac.Host", "Autostart.cs")), "StartupTaskId = \"([^\"]+)\"").Groups[1].Value;
+
+    [Fact] public void The_Store_identity_is_exactly_the_one_reserved_in_Partner_Center_and_the_Store_package_is_never_signed_by_us()
+    {
+        var j = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(Root(), "installer", "msix", "store-identity.json"))).RootElement;
+        Assert.Equal("PipeSick.HatsuDesktop", j.GetProperty("identityName").GetString());
+        Assert.Equal("CN=ACC0FCB8-4D92-4E20-9731-7254D5E43289", j.GetProperty("publisher").GetString());
+        Assert.Equal("PipeSick", j.GetProperty("publisherDisplayName").GetString());
+        Assert.Equal("PipeSick.HatsuDesktop_83tr6qzbbarj8", j.GetProperty("packageFamilyName").GetString());
+        Assert.Equal("9NJ0XLP6NXVJ", j.GetProperty("storeId").GetString());
+        var build = File.ReadAllText(Path.Combine(Root(), "installer", "msix", "Build-Msix.ps1"));
+        Assert.Contains("store-unsigned", build); Assert.Contains("citest-signed", build); Assert.Contains("Identidad incorrecta", build);   // el artefacto de la Store es el sin firmar y se verifica su identidad
+        var tpl = File.ReadAllText(Path.Combine(Root(), "installer", "msix", "AppxManifest.xml.in"));
+        Assert.DoesNotContain("PipeSick", tpl); Assert.DoesNotContain("CiTest", tpl);   // la identidad sale de un único archivo
+        foreach (var cap in new[] { "userNotificationListener", "runFullTrust" }) Assert.Contains(cap, tpl);
+        foreach (var cap in new[] { "bluetooth", "location", "webcam" }) Assert.Contains(cap, build);
+        Assert.DoesNotContain("allowElevation", tpl + build);
+    }
+
+    [Fact] public void A_StartupTask_launch_without_arguments_becomes_a_background_launch_and_nothing_else_changes()
+    {
+        Assert.Equal(["--background"], WinMac.Host.LaunchArguments.Effective([], true));
+        Assert.Equal(["--config", "x", "--background"], WinMac.Host.LaunchArguments.Effective(["--config", "x"], true));
+        Assert.Equal(["--background"], WinMac.Host.LaunchArguments.Effective(["--background"], true));   // sin duplicar
+        Assert.Empty(WinMac.Host.LaunchArguments.Effective([], false));   // MSI/zip/Start: ni se toca
+        Assert.Equal(["--diagnose"], WinMac.Host.LaunchArguments.Effective(["--diagnose"], false));
+    }
 }

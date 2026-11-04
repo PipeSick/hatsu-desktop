@@ -301,17 +301,15 @@ jobs:
           path: appbar-test
           retention-days: 14
           if-no-files-found: warn
-      - name: "MSIX EXPERIMENTAL (Fase 3.2): empaquetado y prueba REAL en el runner con certificado AUTOFIRMADO de CI (NO prueba nada sobre Smart App Control; el MSI no se toca)"
+      - name: "MSIX con la identidad OFICIAL de Partner Center: artefacto SIN FIRMAR para la Store + copia firmada con certificado de PRUEBA solo para instalarla en este runner (NO prueba nada sobre Smart App Control; el MSI no se toca)"
         if: always()
         shell: pwsh
         continue-on-error: true
         run: |
-          foreach ($v in 'Default', 'Unvirtualized') {
-            ./installer/msix/Build-Msix.ps1 -DistDir dist/WinMac -OutDir msix-out -Variant $v -Sign
-            ./tools/ci/Test-Msix.ps1 -Package (Get-ChildItem msix-out -Filter "*-$v.msix" | Select-Object -First 1).FullName -Cert msix-out/ci-test.cer -OutDir msix-test -Label $v
-          }
+          ./installer/msix/Build-Msix.ps1 -DistDir dist/WinMac -OutDir msix-out -Variant Default -Sign
+          ./tools/ci/Test-Msix.ps1 -Package (Get-ChildItem msix-out -Filter '*-citest-signed.msix' | Select-Object -First 1).FullName -Cert msix-out/ci-test.cer -OutDir msix-test -Label Default
           Get-ChildItem msix-test -Filter 'msix-report-*.md' | ForEach-Object { Get-Content $_.FullName -Raw | Add-Content $env:GITHUB_STEP_SUMMARY }
-      - name: "Subir el informe MSIX (sin el paquete: la prueba usa un certificado que no sirve para distribuir)"
+      - name: "Subir el informe MSIX (sin paquetes)"
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -319,6 +317,16 @@ jobs:
           path: |
             msix-test
             !msix-test/*.json
+          retention-days: 14
+          if-no-files-found: warn
+      - name: "Subir el MSIX SIN FIRMAR para Partner Center (artefacto temporal; NO es una versión publicada ni se envía a certificación)"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msix-store-sin-firmar-${{ github.sha }}
+          path: |
+            msix-out/*-store-unsigned.msix
+            msix-out/*-store-unsigned.msix.sha256
           retention-days: 14
           if-no-files-found: warn
       - name: Subir el paquete (artefacto temporal, no es una versión publicada)

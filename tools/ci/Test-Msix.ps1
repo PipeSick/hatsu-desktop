@@ -6,7 +6,7 @@
   NO demuestra nada sobre Smart App Control: el runner no lo tiene y un certificado de prueba no es de confianza en ningún PC. Eso solo se prueba con el paquete firmado
   por la Microsoft Store en un Windows con SAC activo (ver docs/52). Las filas «INFO» son observaciones (la virtualización por defecto SE ESPERA que redirija).
 #>
-param([Parameter(Mandatory)][string]$Package, [Parameter(Mandatory)][string]$Cert, [string]$OutDir = 'msix-test', [string]$Label = 'Default', [string]$IdentityName = 'HatsuDesktop.CiTest')
+param([Parameter(Mandatory)][string]$Package, [Parameter(Mandatory)][string]$Cert, [string]$OutDir = 'msix-test', [string]$Label = 'Default', [string]$IdentityName = 'PipeSick.HatsuDesktop', [string]$ExpectedPfn = 'PipeSick.HatsuDesktop_83tr6qzbbarj8')
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null; $out = (Resolve-Path $OutDir).Path; $Package = (Resolve-Path $Package).Path
 $rows = [Collections.Generic.List[string]]::new(); $fails = 0
@@ -27,6 +27,8 @@ Check 'Add-AppxPackage instala el MSIX' $inst $err
 $p = Get-AppxPackage -Name $IdentityName | Select-Object -First 1
 if (-not $p) { $rows | Set-Content (Join-Path $out "msix-report-$Label.md") -Encoding UTF8; exit 1 }
 $script:pfn = $p.PackageFamilyName; $loc = $p.InstallLocation
+Check 'la Package Family Name instalada es EXACTAMENTE la de Partner Center' ($p.PackageFamilyName -eq $ExpectedPfn) "$($p.PackageFamilyName)"
+Check 'el manifiesto instalado declara las capacidades que el código necesita (notificaciones, ubicación, Bluetooth, cámara) y NO unvirtualizedResources' (($mfx = (Get-AppxPackageManifest -Package $p).OuterXml) -match 'userNotificationListener' -and $mfx -match 'Name="location"' -and $mfx -match 'Name="bluetooth"' -and $mfx -match 'Name="webcam"' -and $mfx -notmatch 'unvirtualizedResources') ''
 Check 'el paquete es de plena confianza (no AppContainer) y está en WindowsApps' ($loc -like '*WindowsApps*') $loc
 $mf = Get-AppxPackageManifest -Package $p
 Check 'el manifiesto declara runFullTrust y la tarea de inicio HatsuDesktopStartup' (($mf.Package.Capabilities.InnerXml -match 'runFullTrust') -and ($mf.OuterXml -match 'HatsuDesktopStartup')) ''

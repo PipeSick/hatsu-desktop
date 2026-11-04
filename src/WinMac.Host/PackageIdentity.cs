@@ -30,4 +30,12 @@ internal static class PackageIdentity
     }
 
     public static bool IsPackaged => FullName is not null;
+
+    /// <summary>¿Windows inició este proceso por la tarea de inicio de sesión del paquete (StartupTask)? Solo tiene sentido empaquetado; cualquier fallo = false (arranque normal).</summary>
+    public static bool IsStartupTaskActivation()
+    {
+        if (!IsPackaged) return false;
+        try { return Windows.ApplicationModel.AppInstance.GetActivatedEventArgs()?.Kind == Windows.ApplicationModel.Activation.ActivationKind.StartupTask; }
+        catch (Exception) { return false; }
+    }
 }
