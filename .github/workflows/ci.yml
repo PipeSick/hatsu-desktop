@@ -267,6 +267,17 @@ jobs:
       - name: MSI de Hatsu Desktop (compilación; NO se publica ninguna versión)
         shell: pwsh
         run: ./installer/Build-Msi.ps1 -DistDir dist/WinMac -OutDir paquete -Compression medium
+      - name: "Reserva del borde superior: la Barra reserva el área de trabajo de Windows y la devuelve (runner efímero: NO es un PC real, un monitor, sin iconos)"
+        shell: pwsh
+        run: ./tools/ci/Test-Appbar.ps1 -BarExe dist/WinMac/HatsuDesktop.Bar.exe -OutDir appbar-test
+      - name: Subir el informe de la reserva del borde superior
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appbar-informe-${{ github.sha }}
+          path: appbar-test
+          retention-days: 14
+          if-no-files-found: warn
       - name: Auditoría de binarios y del MSI (firma Authenticode, cabeceras PE, metadatos; solo lectura)
         shell: pwsh
         run: |

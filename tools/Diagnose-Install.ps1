@@ -50,6 +50,24 @@ function Get-PeInfo([string]$path) {   # cabeceras PE a mano: máquina, fecha de
 }
 function Get-Mark([string]$path) { try { $z = Get-Content -LiteralPath $path -Stream Zone.Identifier -ErrorAction Stop | Where-Object { $_ -like 'ZoneId=*' } | Select-Object -First 1; if ($z) { return $z } else { return 'sin marca' } } catch { return 'sin marca' } }
 
+Add-Type -TypeDefinition @'
+using System; using System.Collections.Generic; using System.Runtime.InteropServices;
+public static class HatsuMon {
+  [StructLayout(LayoutKind.Sequential)] public struct RC { public int L, T, R, B; }
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] public struct MI { public uint Size; public RC Monitor, Work; public uint Flags; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string Device; }
+  delegate bool Proc(IntPtr h, IntPtr hdc, IntPtr rc, IntPtr data);
+  [DllImport("user32.dll")] static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, Proc p, IntPtr data);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMonitorInfoW(IntPtr h, ref MI mi);
+  [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+  public static string[] Read() {
+    SetProcessDPIAware(); var l = new List<string>();
+    EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, delegate (IntPtr h, IntPtr hdc, IntPtr rc, IntPtr data) {
+      MI mi = new MI(); mi.Size = (uint)Marshal.SizeOf(typeof(MI)); if (GetMonitorInfoW(h, ref mi)) l.Add(string.Format("{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}", mi.Device, (mi.Flags & 1) != 0 ? "principal" : "", mi.Monitor.L, mi.Monitor.T, mi.Monitor.R, mi.Monitor.B, mi.Work.T, mi.Work.B, mi.Work.L));
+      return true; }, IntPtr.Zero);
+    return l.ToArray(); }
+}
+'@
+
 $dir = Find-Install
 [void]$sb.AppendLine('Hatsu Desktop — diagnóstico de la instalación · ' + (Get-Date -Format 'yyyy-MM-dd HH:mm'))
 [void]$sb.AppendLine('SOLO LECTURA: este script no cambia nada, no desactiva ni añade excepciones a ninguna protección, y no envía datos. Revisa el informe antes de compartirlo.')
@@ -97,6 +115,20 @@ Read-Events 'Microsoft-Windows-CodeIntegrity/Operational' @(3033, 3034, 3076, 30
 Read-Events 'Microsoft-Windows-Windows Defender/Operational' @(1116, 1117)
 Read-Events 'Microsoft-Windows-AppLocker/EXE and DLL' @(8003, 8004)
 Out-Line '  (3076/3077 = Integridad de código auditó/bloqueó un archivo; 3033/3034 = una DLL no cumplía la directiva; 1116/1117 = Defender detectó/actuó.) El archivo nombrado es el que Windows rechazó.'
+
+Section 'Reserva del borde superior (Barra superior) y área de trabajo de Windows'
+$reserve = 'sí (valor de fábrica)'; try { $jj = Get-Content (Join-Path $env:APPDATA 'WinMac\winmac.json') -Raw | ConvertFrom-Json; if ($jj.bar -and $null -ne $jj.bar.reserveSpace) { $reserve = $(if ($jj.bar.reserveSpace) { 'sí' } else { 'NO (la Barra se superpone y no reserva espacio)' }) } } catch { }
+Out-Line ('  Reservar el borde superior (ajuste de la Barra): ' + $reserve)
+$barRunning = @(Get-Process -Name 'HatsuDesktop.Bar' -ErrorAction SilentlyContinue).Count -gt 0; Out-Line ('  Barra superior en ejecución: ' + $(if ($barRunning) { 'sí' } else { 'no' }))
+$anyTop = $false
+try {
+  foreach ($line in [HatsuMon]::Read()) { $f = $line.Split('|'); $top = [int]$f[6] - [int]$f[3]; $bottom = [int]$f[5] - [int]$f[7]; if ($top -gt 0) { $anyTop = $true }
+    Out-Line ('  Monitor {0}{1}: {2}x{3} px en ({4},{5}) · Windows reservó arriba {6} px y abajo {7} px (área de trabajo desde y={8})' -f $f[0].TrimStart('\', '.'), $(if ($f[1]) { ' (principal)' } else { '' }), ([int]$f[4] - [int]$f[2]), ([int]$f[5] - [int]$f[3]), $f[2], $f[3], $top, $bottom, $f[6]) }
+  if ($barRunning) { if ($anyTop) { Out-Line '  Lectura: Windows SÍ tiene una banda reservada arriba en algún monitor (coherente con la reserva de la Barra; otra barra también podría causarla).' } else { Out-Line '  Lectura: con la Barra en ejecución, Windows NO tiene ninguna banda reservada arriba: la reserva no está aplicada (mira las líneas de bar.log).' } }
+} catch { Out-Line ('  no se pudo leer el área de trabajo: ' + $_.Exception.Message) }
+$barLog = Join-Path $env:LOCALAPPDATA 'WinMac\logs\bar.log'
+if (Test-Path $barLog) { $bl = @(Get-Content $barLog -Tail 400 -ErrorAction SilentlyContinue | Where-Object { $_ -match 'AppBar|reserva|área de trabajo|ABM_|Explorer' } | Select-Object -Last 25); if ($bl.Count -eq 0) { Out-Line '  bar.log: sin líneas sobre la reserva' } else { Out-Line '  bar.log (reserva):'; foreach ($l in $bl) { Out-Line ('    ' + $l) } } } else { Out-Line '  bar.log no existe' }
+Out-Line '  Nota: Hatsu Desktop reserva espacio con la API estándar de barras de aplicación (AppBar); NO mueve ni reordena los iconos del escritorio. Si Windows no recoloca iconos que ya estaban en esa zona, se quedan donde estaban.'
 
 Section 'Procesos de Hatsu Desktop en ejecución'
 $procs = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(HatsuDesktop|NotchWin\.App|WinMac)' } | Sort-Object ProcessName | ForEach-Object { $_.ProcessName })

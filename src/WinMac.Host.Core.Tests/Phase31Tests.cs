@@ -145,6 +145,20 @@ public class DiagnosticsTests
         Assert.Contains("NO se envía a ningún sitio", r);
     }
 
+    [Fact] public void The_report_reads_the_work_area_and_says_whether_windows_reserved_the_top_band_for_the_bar()
+    {
+        var bad = new[] { new MonitorArea("DISPLAY1", true, 0, 0, 1920, 1080, 0, 0, 1920, 1040, 1.0) };    // solo la barra de tareas de abajo: arriba NO hay reserva
+        var good = new[] { new MonitorArea("DISPLAY1", true, 0, 0, 1920, 1080, 0, 32, 1920, 1040, 1.0), new MonitorArea("DISPLAY2", false, 1920, 0, 3840, 1080, 1920, 0, 3840, 1080, 1.25) };
+        var i0 = Input(new HostConfig());
+        var notReserved = InstallDiagnostics.Build(i0 with { Monitors = bad }); Assert.Contains("Windows NO tiene ninguna banda reservada arriba", notReserved); Assert.Contains("reservó arriba 0 px y abajo 40 px", notReserved);
+        var reserved = InstallDiagnostics.Build(i0 with { Monitors = good }); Assert.Contains("Windows SÍ tiene una banda reservada arriba", reserved); Assert.Contains("reservó arriba 32 px", reserved); Assert.Contains("DISPLAY2", reserved); Assert.Contains("escala 1,25", reserved.Replace('.', ','));
+        // si el usuario desactivó la reserva, el informe lo dice (causa posible de iconos bajo la Barra) y no afirma un fallo
+        var off = InstallDiagnostics.Build(i0 with { Config = new HostConfig { Bar = new WinMac.Bar.BarConfig { ReserveSpace = false } }, Monitors = bad }); Assert.Contains("DESACTIVADO (la Barra se superpone", off); Assert.DoesNotContain("la reserva no se aplicó", off);
+        Assert.Contains("NO mueve ni reordena los iconos del escritorio", notReserved);   // no se prometen iconos recolocados
+        // las líneas del registro de la Barra sobre la reserva se incluyen (y solo esas)
+        var withLog = InstallDiagnostics.Build(i0 with { Monitors = bad, BarLogTail = ["10:00 [bar] ABM_NEW falló en DISPLAY1: la barra se muestra superpuesta, sin reservar espacio.", "10:00 otra cosa"] }); Assert.Contains("ABM_NEW falló", withLog); Assert.DoesNotContain("otra cosa", withLog);
+    }
+
     [Fact] public void The_report_covers_onboarding_legacy_autostart_taskbar_and_signatures()
     {
         var r = InstallDiagnostics.Build(Input(new HostConfig { Onboarding = new OnboardingRecord { Status = OnboardingStatus.Existing, Origin = "winmac-upgrade" }, HideTaskbar = true, Autostart = true }));

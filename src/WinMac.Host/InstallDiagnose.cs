@@ -25,9 +25,34 @@ internal static class InstallDiagnose
         foreach (var p in Process.GetProcesses()) using (p) { try { if (p.ProcessName.StartsWith("HatsuDesktop", StringComparison.OrdinalIgnoreCase) || p.ProcessName.Equals("NotchWin.App", StringComparison.OrdinalIgnoreCase) || p.ProcessName.Equals("WinMac", StringComparison.OrdinalIgnoreCase)) procs.Add(p.ProcessName); } catch (Exception) { } }
         List<string> tail = []; try { if (File.Exists(o.LogPath)) tail = File.ReadLines(o.LogPath).TakeLast(600).ToList(); } catch (Exception) { }
         string sec; try { sec = SecurityDiagnostics.BuildReport(out _); } catch (Exception e) { sec = "no disponible: " + e.GetType().Name; }
+        List<string> barTail = []; try { var bl = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "bar.log"); if (File.Exists(bl)) barTail = File.ReadLines(bl).TakeLast(400).ToList(); } catch (Exception) { }
         var input = new DiagnosticsInput(version, dir, Environment.OSVersion.VersionString, DateTime.Now.ToString("yyyy-MM-dd HH:mm"), cfg, File.Exists(o.ConfigPath), legacy, auto, File.Exists(TaskbarLease.DefaultPath), sigs, procs.ToList(), tail, sec,
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.UserName);
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.UserName, ReadMonitors(), barTail);
         return InstallDiagnostics.Build(input);
+    }
+
+    // ── monitores y área de trabajo (solo lectura: EnumDisplayMonitors + GetMonitorInfo)
+    private delegate bool MonitorEnumProc(IntPtr h, IntPtr hdc, IntPtr rc, IntPtr data);
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct Rc { public int L, T, R, B; }
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)] private struct Mi { public uint Size; public Rc Monitor, Work; public uint Flags; [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 32)] public string Device; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] private static extern bool GetMonitorInfoW(IntPtr h, ref Mi mi);
+    [System.Runtime.InteropServices.DllImport("shcore.dll")] private static extern int GetDpiForMonitor(IntPtr h, int type, out uint x, out uint y);
+
+    private static List<MonitorArea> ReadMonitors()
+    {
+        var list = new List<MonitorArea>();
+        try
+        {
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (h, _, _, _) =>
+            {
+                var mi = new Mi { Size = (uint)System.Runtime.InteropServices.Marshal.SizeOf<Mi>() }; if (!GetMonitorInfoW(h, ref mi)) return true;
+                double scale = 1; try { if (GetDpiForMonitor(h, 0, out var dx, out _) == 0 && dx > 0) scale = dx / 96.0; } catch (Exception) { }
+                list.Add(new MonitorArea(mi.Device.Replace(@"\\.\", ""), (mi.Flags & 1) != 0, mi.Monitor.L, mi.Monitor.T, mi.Monitor.R, mi.Monitor.B, mi.Work.L, mi.Work.T, mi.Work.R, mi.Work.B, scale)); return true;
+            }, IntPtr.Zero);
+        }
+        catch (Exception) { }
+        return list;
     }
 
     /// <summary>Genera el informe, lo guarda y (si se pide) lo abre en el Bloc de notas para que el usuario lo revise. Devuelve la ruta o null.</summary>

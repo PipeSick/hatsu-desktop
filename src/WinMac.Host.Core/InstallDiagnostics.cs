@@ -7,7 +7,16 @@ namespace WinMac.Host;
 public sealed record DiagnosticsInput(
     string Version, string InstallDir, string WindowsVersion, string TimeLocal, HostConfig Config, bool ConfigFileExists, IReadOnlyList<string> LegacyFound,
     string AutostartState, bool TaskbarRecoveryFilePresent, IReadOnlyDictionary<string, string> Signatures, IReadOnlyList<string> RunningProcesses,
-    IReadOnlyList<string> HostLogTail, string? SecurityReport, string UserProfile, string UserName);
+    IReadOnlyList<string> HostLogTail, string? SecurityReport, string UserProfile, string UserName,
+    IReadOnlyList<MonitorArea>? Monitors = null, IReadOnlyList<string>? BarLogTail = null);
+
+/// <summary>Un monitor tal como Windows lo informa: rectángulo completo y área de trabajo (lo que queda tras las barras reservadas), en píxeles.</summary>
+public sealed record MonitorArea(string Name, bool Primary, int Left, int Top, int Right, int Bottom, int WorkLeft, int WorkTop, int WorkRight, int WorkBottom, double Scale)
+{
+    /// <summary>Píxeles que Windows reservó arriba (lo que ocupan las barras registradas con ABM_SETPOS en el borde superior).</summary>
+    public int ReservedTop => WorkTop - Top;
+    public int ReservedBottom => Bottom - WorkBottom;
+}
 
 /// <summary>
 /// Informe de diagnóstico LOCAL (Fase 3.1): versión, ruta, componentes elegidos y en ejecución, módulos que no arrancaron (con su causa), estado del asistente, configuración heredada, inicio automático,
@@ -67,6 +76,20 @@ public static class InstallDiagnostics
             if (on && !running && l.Failure is { } f) sb.AppendLine($"      causa registrada: {R(f)}");
         }
         var bar = c.Bar; sb.AppendLine($"  Hatsu Peripherals (función de la Barra): {(bar?.ShowPeripherals == true ? "sí" : "no")} · Hatsu Cleanup (función de la Barra): {(bar?.ShowCleanup == true ? "sí" : "no")}");
+
+        H("Reserva del borde superior (Barra superior) y área de trabajo de Windows");
+        bool reserveCfg = (c.Bar ?? new WinMac.Bar.BarConfig()).ReserveSpace; bool barRunning = d.RunningProcesses.Any(p => string.Equals(p, "HatsuDesktop.Bar", StringComparison.OrdinalIgnoreCase));
+        sb.AppendLine($"  Reservar el borde superior (ajuste): {(reserveCfg ? "activado" : "DESACTIVADO (la Barra se superpone y no reserva espacio)")} · Barra en ejecución: {(barRunning ? "sí" : "no")}");
+        if (d.Monitors is { Count: > 0 })
+            foreach (var m in d.Monitors)
+                sb.AppendLine($"  Monitor {m.Name}{(m.Primary ? " (principal)" : "")}: pantalla {m.Right - m.Left}×{m.Bottom - m.Top} px en ({m.Left},{m.Top}) · escala {m.Scale:0.##} · Windows reservó arriba {m.ReservedTop} px y abajo {m.ReservedBottom} px (área de trabajo desde y={m.WorkTop})");
+        else sb.AppendLine("  (no se pudo leer el área de trabajo de los monitores)");
+        if (reserveCfg && barRunning && d.Monitors is { Count: > 0 })
+            sb.AppendLine(d.Monitors.Any(m => m.ReservedTop > 0) ? "  Lectura: Windows SÍ tiene una banda reservada arriba en al menos un monitor (coherente con la reserva de la Barra; otra barra también podría causarla)."
+                : "  Lectura: con la Barra en ejecución y la reserva activada, Windows NO tiene ninguna banda reservada arriba: la reserva no se aplicó (ver las líneas «[bar] …» de abajo).");
+        var barLines = (d.BarLogTail ?? []).Where(l => l.Contains("AppBar") || l.Contains("reserva") || l.Contains("área de trabajo") || l.Contains("ABM_") || l.Contains("Explorer")).TakeLast(25).ToList();
+        sb.AppendLine(barLines.Count == 0 ? "  bar.log: sin líneas sobre la reserva" : "  bar.log (reserva):"); foreach (var l in barLines) sb.AppendLine("    " + R(l));
+        sb.AppendLine("  Nota: Hatsu Desktop reserva espacio con la API estándar de barras de aplicación (AppBar); NO mueve ni reordena los iconos del escritorio. Si Windows no recoloca los iconos que ya estaban en esa zona, se quedan donde estaban.");
 
         H("Procesos de Hatsu Desktop en ejecución");
         sb.AppendLine(d.RunningProcesses.Count == 0 ? "  ninguno" : "  " + string.Join(", ", d.RunningProcesses.OrderBy(x => x)));
