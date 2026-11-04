@@ -147,8 +147,14 @@ try {
     Out-Line '  Significado: 3077 = una directiva APLICADA bloqueó un archivo; 3033 = un archivo no cumplía el nivel de firma exigido (suele acompañar a 3077); 3076/3034 = lo mismo en modo auditoría/evaluación (no bloquea).'
   }
 } catch { Out-Line ('  no se pudo leer (' + ($_.Exception.Message -replace '\s+', ' ') + '); algunos registros solo se leen como administrador.') }
-try { $cit = Get-Command citool.exe -ErrorAction Stop; $o = & $cit.Source -lp 2>&1; $lines = @($o | ForEach-Object { "$_" } | Where-Object { $_ -match 'Policy ID|Friendly Name|Is Enforced|Is Currently Enforced|Base Policy ID' })
-  Out-Line '  Directivas de integridad de código activas (citool.exe -lp, solo lectura):'; if ($lines.Count -eq 0) { Out-Line '    (sin datos legibles sin administrador)' } else { foreach ($l in ($lines | Select-Object -First 40)) { Out-Line ('    ' + $l.Trim()) } }
+try {
+  $cit = Get-Command citool.exe -ErrorAction Stop; $tmp = Join-Path $env:TEMP ('hatsu-citool-' + [guid]::NewGuid().ToString('N') + '.txt')
+  # citool puede quedarse esperando (visto en un runner de CI): se ejecuta con un tiempo máximo y se descarta si no responde
+  $proc = Start-Process -FilePath $cit.Source -ArgumentList '-lp' -NoNewWindow -PassThru -RedirectStandardOutput $tmp -RedirectStandardError ($tmp + '.err')
+  if ($proc.WaitForExit(15000)) { $lines = @(Get-Content $tmp -ErrorAction SilentlyContinue | Where-Object { $_ -match 'Policy ID|Friendly Name|Is Enforced|Is Currently Enforced|Base Policy ID' })
+    Out-Line '  Directivas de integridad de código activas (citool.exe -lp, solo lectura):'; if ($lines.Count -eq 0) { Out-Line '    (sin datos legibles sin administrador)' } else { foreach ($l in ($lines | Select-Object -First 40)) { Out-Line ('    ' + $l.Trim()) } } }
+  else { try { $proc.Kill() } catch { }; Out-Line '  citool.exe no respondió en 15 s: se omite (no es un fallo de Hatsu Desktop).' }
+  foreach ($f in @($tmp, ($tmp + '.err'))) { try { [System.IO.File]::Delete($f) } catch { } }   # solo sus propios temporales de citool
 } catch { Out-Line '  citool.exe no está disponible (o no se pudo ejecutar): se omite.' }
 $cip0 = Join-Path $env:SystemRoot 'System32\CodeIntegrity\CiPolicies\Active\{0283ac0f-fff1-49ae-ada1-8a933130cad6}.cip'; $cip1 = Join-Path $env:SystemRoot 'System32\CodeIntegrity\CiPolicies\Active\{1283ac0f-fff1-49ae-ada1-8a933130cad6}.cip'
 Out-Line ('  Archivo de la directiva Smart App Control APLICADA ({0283ac0f…}): ' + $(if (Test-Path $cip0) { 'existe' } else { 'no existe' }) + ' · de EVALUACIÓN ({1283ac0f…}): ' + $(if (Test-Path $cip1) { 'existe' } else { 'no existe' }))

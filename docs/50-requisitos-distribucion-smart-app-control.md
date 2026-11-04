@@ -17,7 +17,7 @@ Cada afirmación lleva una etiqueta de confianza: **[MEDIDO]** observado en el P
 | Registro | `Microsoft-Windows-CodeIntegrity/Operational` |
 | Evento **3077** | `HatsuDesktop.exe` intentó cargar `HatsuDesktop.dll`; Windows rechazó la carga (no cumplía los requisitos de firma o violaba la política de integridad de código) |
 | Evento **3033** | `HatsuDesktop.dll` no cumplía el nivel de firma exigido |
-| Ruta | `C:\Users\felip\AppData\Local\Programs\Hatsu Desktop\HatsuDesktop.dll` |
+| Ruta | `C:\Users\<usuario>\AppData\Local\Programs\Hatsu Desktop\HatsuDesktop.dll` |
 | Política | `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` |
 | Repetición | varios intentos de ejecución |
 
@@ -63,7 +63,16 @@ Cada afirmación lleva una etiqueta de confianza: **[MEDIDO]** observado en el P
 | R8 | La verificación de firmas **bloquea la entrega** en CI (`Verify-Signatures.ps1 -Require`) | proyecto |
 
 ### 5.1 Bibliotecas de terceros sin firma de Microsoft
-*(En elaboración: la lista nominal de los binarios ajenos sin firma de Microsoft sale del informe `auditoria-binarios.md` del CI de este commit y se incorpora aquí en cuanto termina esa ejecución.)* La cuestión de fondo ya se conoce: **SignPath Foundation no firma binarios de terceros** y firmarlos con nuestra identidad no es apropiado; si alguno de ellos carece de firma y de reputación conocida, hay que sustituirlo, pedir a su autor que firme o aceptar que SAC pueda bloquearlo.
+**Medido en el CI (auditoría de binarios, paquete 2.0.1):** 26 binarios propios, todos sin firma; MSI sin firma; 445 de 453 binarios ajenos llevan firma válida de Microsoft. Los **8 restantes** son bibliotecas MIT sin firma, todas del ecosistema Vortice/SharpGen (Direct2D/Direct3D/DXGI para la Isla y el Dock):
+
+`SharpGen.Runtime.COM`, `SharpGen.Runtime`, `Vortice.Direct2D1`, `Vortice.Direct3D11`, `Vortice.DirectComposition`, `Vortice.DirectX`, `Vortice.DXGI`, `Vortice.Mathematics`.
+
+**SignPath Foundation no firma binarios de terceros** y firmarlos con nuestra identidad no es apropiado. Opciones, de menor a mayor impacto (decisión pendiente; ninguna se ha aplicado):
+1. **Confiar en la reputación** de esos hashes (son paquetes NuGet muy descargados, mismos bytes que en otros programas). [INFERIDO]: SAC puede permitirlos por reputación, pero no está medido.
+2. **Preguntar a SignPath** si permite firmar dependencias reconstruidas desde fuente por nosotros. Sin respuesta aún.
+3. **Empaquetar como ejecutable único** (single-file) firmado: reduce los DLL sueltos sin firma; coste en tamaño y extracción de nativos, hay que probarlo.
+4. **Sustituir o integrar** el código necesario (todas MIT) y compilarlo como parte de binarios propios.
+5. **Aceptar el riesgo** de que SAC bloquee alguno: se documenta y el diagnóstico lo muestra.
 
 ## 6. Vías legítimas de firma y distribución (sin elegir todavía)
 Hecho el filtro por R1–R6, **ninguna garantiza la aceptación por SAC** (la reputación y el estado del certificado siguen contando).

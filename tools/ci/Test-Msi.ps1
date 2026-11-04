@@ -80,14 +80,16 @@ Check 'la versión del ejecutable instalado' ((Get-Item $exe).VersionInfo.Produc
 # ── Fase 3.1: el diagnóstico es de SOLO LECTURA, funciona con Windows PowerShell 5.1 y con el ejecutable instalado
 $diagPs = Join-Path $installDir 'Diagnose-Install.ps1'; Check 'el paquete instalado trae Diagnose-Install.ps1' (Test-Path $diagPs)
 $runBefore = (Get-ItemProperty $runKey -ErrorAction SilentlyContinue).WinMac; $cfgBefore = (Get-FileHash $cfg).Hash; $diagOut = Join-Path $out 'diagnostico-script.txt'
-$dpr = Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$diagPs`"", '-OutFile', "`"$diagOut`"") -Wait -PassThru -WindowStyle Hidden
+$dpr = Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$diagPs`"", '-OutFile', "`"$diagOut`"") -PassThru -WindowStyle Hidden
+if (-not $dpr.WaitForExit(240000)) { Write-Host 'Diagnose-Install.ps1 NO terminó en 4 min: se termina el proceso'; Get-Process -Name citool -ErrorAction SilentlyContinue | Stop-Process -Force; try { $dpr.Kill() } catch { }; $dpr.WaitForExit(5000) | Out-Null }
 $dtxt = if (Test-Path $diagOut) { Get-Content $diagOut -Raw } else { '' }
-Check 'Diagnose-Install.ps1 (Windows PowerShell 5.1) termina bien y escribe el informe' ($dpr.ExitCode -eq 0 -and $dtxt.Length -gt 800) "código $($dpr.ExitCode), $($dtxt.Length) caracteres"
+Check 'Diagnose-Install.ps1 (Windows PowerShell 5.1) termina bien (sin colgarse) y escribe el informe' ($dpr.HasExited -and $dpr.ExitCode -eq 0 -and $dtxt.Length -gt 800) "código $($dpr.ExitCode), $($dtxt.Length) caracteres"
 Check 'el informe nombra la instalación, el estado de Smart App Control y la firma de cada ejecutable' ($dtxt -match 'Carpeta: ' -and $dtxt -match 'Smart App Control: ' -and $dtxt -match 'HatsuDesktop\.Dock\.exe' -and $dtxt -match 'firma Authenticode: ')
 Check 'el informe no contiene el nombre de usuario ni la ruta del perfil (se ocultan)' (-not $dtxt.Contains($env:USERPROFILE) -and -not ($dtxt -match [regex]::Escape($env:USERNAME + '\'))) 
 Check 'el informe declara que es de solo lectura y que no se envía nada' ($dtxt -match 'SOLO LECTURA' -and $dtxt -match 'no envía datos')
 Check 'el diagnóstico NO cambió nada (configuración, inicio automático, barra de tareas)' (((Get-FileHash $cfg).Hash -eq $cfgBefore) -and ((Get-ItemProperty $runKey -ErrorAction SilentlyContinue).WinMac -eq $runBefore) -and -not (Test-Path (Join-Path $localData 'taskbar-restore.json')))
-$exeDiag = Join-Path $out 'diagnostico-exe.txt'; $de = Start-Process $exe -ArgumentList @('--diagnose', '--quiet', '--out', "`"$exeDiag`"") -Wait -PassThru -WindowStyle Hidden
+$exeDiag = Join-Path $out 'diagnostico-exe.txt'; $de = Start-Process $exe -ArgumentList @('--diagnose', '--quiet', '--out', "`"$exeDiag`"") -PassThru -WindowStyle Hidden
+if (-not $de.WaitForExit(240000)) { Write-Host 'HatsuDesktop.exe --diagnose NO terminó en 4 min: se termina el proceso'; try { $de.Kill() } catch { } }
 $etxt = if (Test-Path $exeDiag) { Get-Content $exeDiag -Raw } else { '' }
 Check 'HatsuDesktop.exe --diagnose (instalado) escribe el informe local' ($de.ExitCode -eq 0 -and $etxt -match 'instalación MSI por usuario' -and $etxt -match 'Versión: ')
 Check 'el informe del ejecutable tampoco cambió la configuración' ((Get-FileHash $cfg).Hash -eq $cfgBefore)

@@ -1,0 +1,155 @@
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+#  BORRADOR INERTE — NO está en .github/workflows/ y NO se ejecuta. Es el diseño del flujo de firma con SignPath Foundation (docs/51).
+#  Para activarlo hace falta, EN ESTE ORDEN y con autorización expresa del propietario:
+#    1) solicitud aceptada por SignPath Foundation y proyecto creado en SignPath (con «Trusted Build System» de GitHub vinculado);
+#    2) secreto SIGNPATH_API_TOKEN y variables SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG, SIGNPATH_POLICY_SLUG, SIGNPATH_CONFIG_BINARIES, SIGNPATH_CONFIG_INSTALLER
+#       guardados en un ENTORNO de GitHub llamado «signing» (con revisores obligatorios) — nunca en el repositorio;
+#    3) mover este archivo a .github/workflows/release-signed.yml y comprobar las versiones vigentes de las acciones de SignPath en su documentación.
+#  Nada de esto se ha hecho. Los pasos de SignPath siguen el patrón ya preparado (sin activar) en PipeSick/notch-win/.github/workflows/release.yml.
+#  Aprobación: cada solicitud de firma la aprueba manualmente un aprobador en SignPath (modo «release-signing»).
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+name: release-signed
+
+on:
+  push:
+    tags: ["v*"]          # solo etiquetas de versión; la política de SignPath debe limitar el origen a la rama principal protegida
+
+permissions:
+  contents: read
+  actions: read           # SignPath descarga el artefacto sin firmar a través de la API de GitHub
+
+concurrency:
+  group: release-signed-${{ github.ref }}
+  cancel-in-progress: false   # una firma en curso no se cancela
+
+jobs:
+  build:
+    name: Compilar (GitHub-hosted, Windows)
+    runs-on: windows-latest   # SignPath (código abierto) exige que TODOS los trabajos previos a la firma corran en agentes de GitHub
+    outputs:
+      binaries-artifact-id: ${{ steps.up-bin.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "10.0.x" }
+      - name: Compilar y publicar (dist/WinMac) y pasar las pruebas
+        shell: pwsh
+        run: |
+          ./tools/ci/Invoke-Ci.ps1 -Configuration Release
+          ./tools/Build-Local.ps1 -NotchPath C:\nw
+      - name: La configuración de artefacto de SignPath debe coincidir con lo que se publica
+        shell: pwsh
+        run: |
+          ./tools/signing/New-ArtifactConfiguration.ps1 -Mode Binaries -DistDir dist/WinMac -Out signing/generated-binaries.xml
+          $gen = ([xml](Get-Content signing/generated-binaries.xml -Raw)).SelectNodes('//*[local-name()="pe-file"]/@path') | ForEach-Object { $_.Value } | Sort-Object
+          $ref = ([xml](Get-Content installer/signpath/binaries.artifact-configuration.xml -Raw)).SelectNodes('//*[local-name()="pe-file"]/@path') | ForEach-Object { $_.Value } | Sort-Object
+          if (Compare-Object $gen $ref) { throw 'La configuración de artefacto versionada no coincide con los binarios propios actuales' }
+      - name: Reunir SOLO los binarios propios (los de terceros y NotchWin no se envían)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path to-sign | Out-Null
+          Get-ChildItem dist/WinMac -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll' -and $_.Name -match '^(HatsuDesktop|WinMac)' } | ForEach-Object {
+            $rel = $_.FullName.Substring((Resolve-Path dist/WinMac).Path.Length + 1); $dst = Join-Path to-sign $rel; New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null; Copy-Item $_.FullName $dst }
+      - id: up-bin
+        uses: actions/upload-artifact@v4
+        with: { name: hatsu-binaries-unsigned, path: to-sign/, if-no-files-found: error }
+      - uses: actions/upload-artifact@v4
+        with: { name: hatsu-dist-unsigned, path: dist/WinMac/, if-no-files-found: error }
+
+  sign-binaries:
+    name: Firmar binarios (SignPath)
+    needs: build
+    runs-on: ubuntu-latest
+    environment: signing        # revisores obligatorios + secretos solo aquí
+    steps:
+      - uses: signpath/github-action-submit-signing-request@v1    # ← verificar la versión vigente en docs.signpath.io antes de activar
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_CONFIG_BINARIES }}
+          github-artifact-id: ${{ needs.build.outputs.binaries-artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-binaries
+      - uses: actions/upload-artifact@v4
+        with: { name: hatsu-binaries-signed, path: signed-binaries/, if-no-files-found: error }
+
+  package:
+    name: Empaquetar con binarios firmados y construir el MSI
+    needs: [build, sign-binaries]
+    runs-on: windows-latest
+    outputs:
+      msi-artifact-id: ${{ steps.up-msi.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: hatsu-dist-unsigned, path: dist/WinMac }
+      - uses: actions/download-artifact@v4
+        with: { name: hatsu-binaries-signed, path: signed-binaries }
+      - name: Superponer lo firmado (comprueba que cada firma es válida y con sello de tiempo)
+        shell: pwsh
+        run: ./tools/signing/Merge-SignedBinaries.ps1 -DistDir dist/WinMac -SignedDir signed-binaries
+      - name: Instalar WiX y construir ZIP + MSI
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2; wix extension add --global WixToolset.UI.wixext/5.0.2
+          ./tools/Package-WinMac.ps1 -DistDir dist/WinMac -OutDir paquete
+          ./installer/Build-Msi.ps1 -DistDir dist/WinMac -OutDir paquete -Compression medium
+      - id: up-msi
+        uses: actions/upload-artifact@v4
+        with: { name: hatsu-msi-unsigned, path: 'paquete/*.msi', if-no-files-found: error }
+      - uses: actions/upload-artifact@v4
+        with: { name: hatsu-zip, path: 'paquete/*.zip*', if-no-files-found: error }
+
+  sign-installer:
+    name: Firmar el MSI (SignPath)
+    needs: package
+    runs-on: ubuntu-latest
+    environment: signing
+    steps:
+      - uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_CONFIG_INSTALLER }}
+          github-artifact-id: ${{ needs.package.outputs.msi-artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-msi
+      - uses: actions/upload-artifact@v4
+        with: { name: hatsu-msi-signed, path: signed-msi/, if-no-files-found: error }
+
+  verify:
+    name: Verificar firmas e instalar de verdad (runner efímero)
+    needs: [package, sign-installer]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: hatsu-msi-signed, path: final }
+      - uses: actions/download-artifact@v4
+        with: { name: hatsu-dist-unsigned, path: dist/WinMac }     # base; la fusión de firmados se repite igual que en «package»
+      - uses: actions/download-artifact@v4
+        with: { name: hatsu-binaries-signed, path: signed-binaries }
+      - shell: pwsh
+        run: |
+          ./tools/signing/Merge-SignedBinaries.ps1 -DistDir dist/WinMac -SignedDir signed-binaries
+          ./tools/ci/Verify-Signatures.ps1 -DistDir dist/WinMac -Msi (Get-ChildItem final -Filter *.msi).FullName -Require   # FALLA si algo propio no está firmado
+          ./tools/ci/Test-Msi.ps1 -DistDir dist/WinMac -OutDir msi-test
+      - uses: actions/upload-artifact@v4
+        with: { name: hatsu-release-candidate, path: final/, if-no-files-found: error }
+
+  # La publicación NO es automática: crea un BORRADOR de release, que el propietario revisa y publica a mano.
+  draft-release:
+    name: Borrador de release (revisión manual)
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: release        # revisores obligatorios
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: hatsu-release-candidate, path: out }
+      - env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: gh release create "${{ github.ref_name }}" out/*.msi --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --draft --generate-notes

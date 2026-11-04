@@ -65,8 +65,8 @@ public class InstallerTests
         // sin BOM, PowerShell 5.1 lee el archivo como ANSI y un carácter como «…» o «—» pasa a ser una comilla tipográfica que rompe la sintaxis (visto en CI)
         var bytes = File.ReadAllBytes(Path.Combine(Root(), "tools", "Diagnose-Install.ps1")); Assert.True(bytes is [0xEF, 0xBB, 0xBF, ..], "Diagnose-Install.ps1 debe empezar con BOM UTF-8");
         Assert.Contains("SOLO LECTURA", File.ReadAllText(Path.Combine(Root(), "tools", "Diagnose-Install.ps1")));
-        foreach (var banned in new[] { "Set-ItemProperty", "New-ItemProperty", "Remove-Item", "Remove-ItemProperty", "New-Item", "Set-Content", "Start-Process", "Invoke-WebRequest", "Invoke-RestMethod", "Disable-", "Add-MpPreference", "Set-MpPreference" })
-            Assert.DoesNotContain(banned, File.ReadAllText(Path.Combine(Root(), "tools", "Diagnose-Install.ps1")));   // solo lectura: ni escribe, ni descarga, ni toca protecciones
+        foreach (var banned in new[] { "Set-ItemProperty", "New-ItemProperty", "Remove-Item", "Remove-ItemProperty", "New-Item", "Set-Content", "Invoke-WebRequest", "Invoke-RestMethod", "Disable-", "Add-MpPreference", "Set-MpPreference" })
+            Assert.DoesNotContain(banned, File.ReadAllText(Path.Combine(Root(), "tools", "Diagnose-Install.ps1")));   // solo lectura: ni escribe, ni descarga, ni toca protecciones (Start-Process solo lanza citool.exe -lp con tiempo límite, para no colgarse)
     }
 
     [Fact] public void The_signing_requirements_document_identifies_the_policy_and_rules_out_evasion()
