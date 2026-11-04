@@ -190,7 +190,7 @@ public sealed class BarPainter : IDisposable
     {
         var rr = new RoundedRectangle { Rect = new RawRectF(x, cy - 7.5f, x + 15, cy + 7.5f), RadiusX = 4.5f, RadiusY = 4.5f };
         Brush(Fg()); _ctx.DrawRoundedRectangle(rr, _solid, 1.3f);
-        using var l = _dw.CreateTextLayout("W", _logo, 15, 15); l.TextAlignment = TextAlignment.Center; l.ParagraphAlignment = ParagraphAlignment.Center;
+        using var l = _dw.CreateTextLayout("H", _logo, 15, 15); l.TextAlignment = TextAlignment.Center; l.ParagraphAlignment = ParagraphAlignment.Center;
         _ctx.DrawTextLayout(new Vector2(x, cy - 7.5f), l, _solid);
     }
 

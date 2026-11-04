@@ -75,7 +75,7 @@ public sealed class NotificationStore
         {
             case NotificationAccess.Unspecified: _status = NcStatus.NeedsPermission; _message = null; _items = []; break;
             case NotificationAccess.Denied: _status = NcStatus.Denied; _message = "Windows no permite que las apps lean tus notificaciones. Puedes cambiarlo en Configuración → Privacidad y seguridad → Notificaciones."; _items = []; StopWatch(); break;
-            case NotificationAccess.Unavailable: _status = NcStatus.Unavailable; _message = why ?? "El lector de notificaciones de Windows no está disponible para WinMac en este equipo."; _items = []; StopWatch(); break;
+            case NotificationAccess.Unavailable: _status = NcStatus.Unavailable; _message = why ?? "El lector de notificaciones de Windows no está disponible para Hatsu Desktop en este equipo."; _items = []; StopWatch(); break;
             default:
                 if (error is not null)
                 {

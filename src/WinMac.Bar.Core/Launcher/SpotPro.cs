@@ -26,7 +26,7 @@ public static partial class SpotPro
         ("Grabar la pantalla", "winmac:record", "grabar grabacion video record pantalla"),
         ("Detener la grabación", "winmac:record:stop", "detener parar grabacion stop"),
         ("Abrir Launchpad", "winmac:launchpad", "launchpad aplicaciones apps"),
-        ("Ajustes de WinMac", "winmac:settings", "ajustes winmac configuracion preferencias"),
+        ("Ajustes de Hatsu Desktop", "winmac:settings", "ajustes winmac configuracion preferencias"),
         ("Guardar espacio de trabajo", "winmac:ws:save", "guardar espacio trabajo ventanas distribucion workspace"),
         ("Ventanas lado a lado", "winmac:ws:side", "ventanas lado dividir mitad side"),
         ("Ventanas en cuadrícula", "winmac:ws:grid", "ventanas cuadricula mosaico grid organizar"),
@@ -56,7 +56,7 @@ public static partial class SpotPro
             int s = AppMatcher.Score(q, title);
             if (s is >= 0 and < SpotlightEngine.Weak) s = -1;
             if (s < 0 && f.Length >= 4 && kw.Split(' ').Any(k => k.StartsWith(f, StringComparison.Ordinal))) s = 320;
-            if (s >= 0) yield return (s, new SpotItem(SpotKind.Action, title, "Acción de WinMac", target));
+            if (s >= 0) yield return (s, new SpotItem(SpotKind.Action, title, "Acción de Hatsu Desktop", target));
         }
     }
 
@@ -143,7 +143,7 @@ public static partial class SpotPro
             case SpotKind.File:
                 lines.Add(it.Target);
                 keys = SpotlightEngine.IsExecutable(it.Target) ? "Intro mostrar en el Explorador (no se ejecuta)" : "Intro abrir · Ctrl+Intro mostrar en el Explorador"; break;
-            case SpotKind.Action: lines.Add("Acción de WinMac"); keys = "Intro ejecutar"; break;
+            case SpotKind.Action: lines.Add("Acción de Hatsu Desktop"); keys = "Intro ejecutar"; break;
             case SpotKind.Tool: lines.AddRange(it.Details ?? []); keys = it.Target.StartsWith("tool:ping", StringComparison.Ordinal) || it.Target.StartsWith("tool:dns", StringComparison.Ordinal) ? "Intro ejecutar o repetir · Ctrl+C copiar · Esc cancelar" : "Intro copiar"; break;
             case SpotKind.Command: lines.Add(it.Subtitle ?? ""); keys = "Intro"; break;
             case SpotKind.Clipboard:

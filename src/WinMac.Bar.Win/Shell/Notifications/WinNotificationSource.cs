@@ -42,7 +42,7 @@ public sealed class WinNotificationSource : INotificationSource, IDisposable
                 _ => (NotificationAccess.Unspecified, null),
             };
         }
-        catch (Exception e) { return (NotificationAccess.Unavailable, $"Windows no ofrece el lector de notificaciones a WinMac ({e.GetType().Name}, 0x{e.HResult:X8})."); }
+        catch (Exception e) { return (NotificationAccess.Unavailable, $"Windows no ofrece el lector de notificaciones a Hatsu Desktop ({e.GetType().Name}, 0x{e.HResult:X8})."); }
     }
 
     public async Task<NotificationAccess> RequestAccessAsync() => await Listener.RequestAccessAsync() switch

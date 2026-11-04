@@ -5,7 +5,7 @@ using WinMac.Extensions;
 //  · uptime: how long Windows has been running, refreshed every 10 seconds.
 var mode = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal)) ?? "pomodoro";
 var ext = WinMacExtension.Connect(args, mode == "uptime" ? "uptime" : "pomodoro", "1.0.0");
-if (ext is null) { Console.Error.WriteLine("Esta extensión la inicia WinMac."); return 2; }
+if (ext is null) { Console.Error.WriteLine("Esta extensión la inicia Hatsu Desktop."); return 2; }
 using var stop = new CancellationTokenSource();
 ext.ShutdownRequested += stop.Cancel;
 

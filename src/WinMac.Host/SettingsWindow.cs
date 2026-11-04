@@ -95,7 +95,7 @@ internal sealed class SettingsWindow : IDisposable
         const uint style = 0x00CA0000;   // WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX: tamaño fijo
         var r = new Native.RECT { Right = S(SettingsLayout.WinW), Bottom = S(SettingsLayout.WinH) }; Native.AdjustWindowRectExForDpi(ref r, style, false, 0, dpi);
         int sw = Native.GetSystemMetrics(0), sh = Native.GetSystemMetrics(1), ww = r.Right - r.Left, wh = r.Bottom - r.Top;
-        _hwnd = Native.CreateWindowEx(0, ClassName, "Ajustes de WinMac", style, Math.Max(0, (sw - ww) / 2), Math.Max(0, (sh - wh) / 2), ww, wh, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
+        _hwnd = Native.CreateWindowEx(0, ClassName, "Ajustes de Hatsu Desktop", style, Math.Max(0, (sw - ww) / 2), Math.Max(0, (sh - wh) / 2), ww, wh, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
         int dark = _dark ? 1 : 0; Native.DwmSetWindowAttribute(_hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, ref dark, 4);
         _dev = new D2DDevice(); _dev.SetDpi(_scale); _painter = new SettingsPainter(_dev, _dark); CreateSurface();

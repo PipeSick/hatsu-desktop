@@ -26,7 +26,7 @@ internal sealed class GlobalHotkey : IDisposable
             if (!Registered) { log($"[spotlight] el atajo {name} no está libre (error {err}); otro programa lo usa"); return; }
             while (GetMessage(out var m, IntPtr.Zero, 0, 0) > 0) if (m.message == WM_HOTKEY) pressed();
             UnregisterHotKey(IntPtr.Zero, 1);
-        }) { IsBackground = true, Name = "WinMac atajo " + name };
+        }) { IsBackground = true, Name = "Hatsu Desktop atajo " + name };
         _thread.Start(); ready.Wait(TimeSpan.FromSeconds(3));
         if (Registered) log($"[spotlight] atajo {name} registrado");
     }

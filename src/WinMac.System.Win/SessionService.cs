@@ -69,9 +69,9 @@ public sealed class SessionService : ISessionService
     {
         var h = Native.GetForegroundWindow(); if (h == IntPtr.Zero) return ServiceResult.Unavailable("No hay una app activa");
         Native.GetWindowThreadProcessId(h, out uint pid);
-        if (pid == (uint)Environment.ProcessId) return ServiceResult.Unavailable("La app activa es WinMac");
+        if (pid == (uint)Environment.ProcessId) return ServiceResult.Unavailable("La app activa es Hatsu Desktop");
         using var p = Process.GetProcessById((int)pid);
-        if (!ForceQuitGuard.IsAllowed(p.ProcessName)) return ServiceResult.Denied($"«{p.ProcessName}» es parte de Windows o de WinMac: no se cierra a la fuerza");
+        if (!ForceQuitGuard.IsAllowed(p.ProcessName)) return ServiceResult.Denied($"«{p.ProcessName}» es parte de Windows o de Hatsu Desktop: no se cierra a la fuerza");
         p.Kill(); return ServiceResult.Ok;   // solo el proceso de la ventana activa, no su árbol
     }, "Forzar salida");
 

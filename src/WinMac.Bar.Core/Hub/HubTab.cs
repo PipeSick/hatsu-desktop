@@ -10,7 +10,7 @@ public sealed record TabItem(string Id, string Glyph, string Label);
 /// </summary>
 public sealed record AppIdentity(string Name, string LogoKey)
 {
-    public static AppIdentity Current { get; } = new("WinMac", "planet");
+    public static AppIdentity Current { get; } = new("Hatsu Desktop", "planet");
 }
 
 public static class HubTabs

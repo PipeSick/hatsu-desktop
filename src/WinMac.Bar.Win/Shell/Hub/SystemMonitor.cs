@@ -79,7 +79,7 @@ internal sealed class SystemMonitor : ISystemMonitor, IDisposable
         try
         {
             if (_thermalQuery is null) { _thermalQuery = new PdhQuery(); _thermalCounter = _thermalQuery.Add(@"\Thermal Zone Information(*)\Temperature"); }
-            if (_thermalCounter is null) return (Reading<double>.Unavailable("Este equipo no expone zonas térmicas; leer la CPU exige un controlador con privilegios que WinMac no instala"), null);
+            if (_thermalCounter is null) return (Reading<double>.Unavailable("Este equipo no expone zonas térmicas; leer la CPU exige un controlador con privilegios que Hatsu Desktop no instala"), null);
             _thermalQuery.Collect();
             var temps = PdhQuery.Doubles(_thermalCounter.Value).Select(x => x.Value - 273.15).Where(c => c is > 0 and < 150).ToList();   // kelvin → °C; lo absurdo se descarta
             return temps.Count == 0 ? (Reading<double>.Unavailable("Windows no entrega la temperatura de la CPU a las apps normales (las zonas térmicas de este equipo no dan lecturas válidas); solo la leen programas con un controlador de hardware"), null) : (Reading<double>.Of(temps.Max()), "zona térmica ACPI (aproximada)");

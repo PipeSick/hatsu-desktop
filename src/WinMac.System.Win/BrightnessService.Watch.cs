@@ -29,7 +29,7 @@ public sealed partial class BrightnessService
 
         public void Start()
         {
-            _thread = new Thread(Run) { IsBackground = true, Name = "WinMac brillo (WMI)" };
+            _thread = new Thread(Run) { IsBackground = true, Name = "Hatsu Desktop brillo (WMI)" };
             _thread.SetApartmentState(ApartmentState.MTA);
             _thread.Start();
         }

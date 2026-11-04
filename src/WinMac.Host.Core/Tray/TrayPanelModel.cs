@@ -14,7 +14,7 @@ public static class TrayPanelModel
 
     public const double Width = 300, Pad = 8;
 
-    public static string Label(string id) => id switch { "bar" => "Barra superior", "dock" => "Dock", "notch" => "Isla", "connect" => "WinMac Connect", _ => id };
+    public static string Label(string id) => id switch { "bar" => "Barra superior", "dock" => "Dock", "notch" => "Isla", "connect" => "Hatsu Connect", _ => id };
 
     public static string StateText(ModuleState s) => s switch
     {
@@ -31,7 +31,7 @@ public static class TrayPanelModel
     public static IReadOnlyList<Item> Build(IReadOnlyDictionary<string, ModuleState> states, string version)
     {
         int problems = states.Count(k => k.Value is ModuleState.Failed or ModuleState.Stopped or ModuleState.Crashed);
-        var items = new List<Item> { new(Kind.Header, "WinMac " + version, problems == 0 ? "Todo en marcha" : problems == 1 ? "1 módulo necesita atención" : $"{problems} módulos necesitan atención") };
+        var items = new List<Item> { new(Kind.Header, "Hatsu Desktop " + version, problems == 0 ? "Todo en marcha" : problems == 1 ? "1 módulo necesita atención" : $"{problems} módulos necesitan atención") };
         foreach (var (id, st) in states)
         {
             (string? act, string? label) = st switch
@@ -45,9 +45,9 @@ public static class TrayPanelModel
         }
 
         items.Add(new(Kind.Separator, ""));
-        items.Add(new(Kind.Command, "Ajustes de WinMac…", Action: "settings"));
+        items.Add(new(Kind.Command, "Ajustes de Hatsu Desktop…", Action: "settings"));
         items.Add(new(Kind.Command, "Reiniciar los módulos", Action: "restart-all"));
-        items.Add(new(Kind.Command, "Salir de WinMac", "Cierra todo y devuelve el escritorio a Windows", Action: "quit", Danger: true));
+        items.Add(new(Kind.Command, "Salir de Hatsu Desktop", "Cierra todo y devuelve el escritorio a Windows", Action: "quit", Danger: true));
         return items;
     }
 

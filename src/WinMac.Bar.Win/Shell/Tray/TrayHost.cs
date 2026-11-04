@@ -36,7 +36,7 @@ public sealed class TrayHost : IDisposable
     public void Start()
     {
         if (_thread is not null) return;
-        _thread = new Thread(Loop) { IsBackground = true, Name = "WinMac bandeja" };
+        _thread = new Thread(Loop) { IsBackground = true, Name = "Hatsu Desktop bandeja" };
         _thread.SetApartmentState(ApartmentState.STA); _thread.Start();
         _ready.Wait(TimeSpan.FromSeconds(5));
     }
@@ -70,7 +70,7 @@ public sealed class TrayHost : IDisposable
         if (_explorer == IntPtr.Zero || !IsWindow(_explorer)) _explorer = FindExplorerTray();
         SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         bool primary = FindWindowW("Shell_TrayWnd", null) == _hwnd;
-        if (!primary && !_warnedNotPrimary) { _warnedNotPrimary = true; _log("[bandeja] Windows sigue encontrando la bandeja de Explorer primero: los iconos nuevos no llegarán a WinMac"); }
+        if (!primary && !_warnedNotPrimary) { _warnedNotPrimary = true; _log("[bandeja] Windows sigue encontrando la bandeja de Explorer primero: los iconos nuevos no llegarán a Hatsu Desktop"); }
         if (primary) _warnedNotPrimary = false;
         _primary = primary;
     }

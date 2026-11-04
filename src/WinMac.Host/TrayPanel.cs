@@ -43,7 +43,7 @@ internal sealed class TrayPanel : IDisposable
         int x = Math.Clamp(cursorX - w + (int)(24 * _scale), 8, Math.Max(8, sw - w - 8)), y = cursorY - h - (int)(12 * _scale); if (y < 8) y = Math.Min(cursorY + (int)(12 * _scale), sh - h - 8);
         var inst = Native.GetModuleHandle(null);
         if (!_registered) { var cls = new Native.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<Native.WNDCLASSEX>(), lpfnWndProc = StaticProc, hInstance = inst, lpszClassName = "WinMacTrayPanel", hCursor = Native.LoadCursorW(IntPtr.Zero, (IntPtr)32512) }; Native.RegisterClassEx(ref cls); _registered = true; }
-        _hwnd = Native.CreateWindowEx(Native.WS_EX_TOOLWINDOW | 0x8 /* TOPMOST */, "WinMacTrayPanel", "WinMac", Native.WS_POPUP, x, y, w, h, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
+        _hwnd = Native.CreateWindowEx(Native.WS_EX_TOOLWINDOW | 0x8 /* TOPMOST */, "WinMacTrayPanel", "Hatsu Desktop", Native.WS_POPUP, x, y, w, h, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("no se pudo crear el panel de la bandeja");
         _current = this;
         int round = 2; Native.DwmSetWindowAttribute(_hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE: ROUND */, ref round, 4);

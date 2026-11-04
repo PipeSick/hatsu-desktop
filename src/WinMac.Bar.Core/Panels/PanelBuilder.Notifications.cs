@@ -39,7 +39,7 @@ public static partial class PanelBuilder
         var st = nc.State; bool win = c.Cfg.NotifRemoveFromWindows;
         if (!c.Cfg.NotificationsFromWindows)
         {
-            w.Add(Empty("nc-off", "Notificaciones de tus apps", "WinMac puede mostrar aquí las notificaciones que Windows guarda en su centro, con tu permiso. Se leen solo en este equipo y no se guardan en disco."));
+            w.Add(Empty("nc-off", "Notificaciones de tus apps", "Hatsu Desktop puede mostrar aquí las notificaciones que Windows guarda en su centro, con tu permiso. Se leen solo en este equipo y no se guardan en disco."));
             w.Add(new Widget(WidgetKind.Button, "nc:enable", "Mostrar notificaciones de Windows", Glyph: "bell"));
             return;
         }
@@ -48,14 +48,14 @@ public static partial class PanelBuilder
         {
             case NcStatus.Off or NcStatus.Loading when st.Groups.Count == 0: w.Add(Empty("nc-loading", "Leyendo notificaciones…", "")); return;
             case NcStatus.NeedsPermission:
-                w.Add(Empty("nc-perm", "Permiso necesario", "Windows pide tu permiso para que WinMac lea las notificaciones de otras apps. Puedes retirarlo cuando quieras en Configuración.", "lock"));
+                w.Add(Empty("nc-perm", "Permiso necesario", "Windows pide tu permiso para que Hatsu Desktop lea las notificaciones de otras apps. Puedes retirarlo cuando quieras en Configuración.", "lock"));
                 w.Add(new Widget(WidgetKind.Button, "nc:request", "Permitir acceso…", Glyph: "lock")); return;
             case NcStatus.Requesting: w.Add(Empty("nc-asking", "Esperando a Windows…", "Responde al cuadro de permiso de Windows.", "lock")); return;
             case NcStatus.Denied:
-                w.Add(Empty("nc-denied", "Acceso denegado", st.Message ?? "Windows no permite que WinMac lea tus notificaciones.", "lock"));
+                w.Add(Empty("nc-denied", "Acceso denegado", st.Message ?? "Windows no permite que Hatsu Desktop lea tus notificaciones.", "lock"));
                 w.Add(new Widget(WidgetKind.Button, "open:ms-settings:privacy-notifications", "Abrir permisos de notificaciones…", Glyph: "gear")); return;
             case NcStatus.Unavailable:
-                w.Add(Empty("nc-unavailable", "No disponible en este equipo", st.Message ?? "El lector de notificaciones de Windows no está disponible para WinMac."));
+                w.Add(Empty("nc-unavailable", "No disponible en este equipo", st.Message ?? "El lector de notificaciones de Windows no está disponible para Hatsu Desktop."));
                 w.Add(new Widget(WidgetKind.Button, "notifications", "Abrir el centro de notificaciones de Windows", Glyph: "bell")); return;
             case NcStatus.Error when st.Groups.Count == 0:
                 w.Add(Empty("nc-error", "No se pudieron leer", st.Message ?? "Windows no respondió."));
@@ -160,7 +160,7 @@ public static partial class PanelBuilder
         var st = c.Hub?.Weather ?? WeatherState.NoCity; bool f = c.Cfg.WeatherFahrenheit;
         if (st.Status == WeatherStatus.NoCity)
         {
-            w.Add(new Widget(WidgetKind.Note, "wx-nocity", "Tiempo: elige una ciudad en los ajustes de WinMac."));
+            w.Add(new Widget(WidgetKind.Note, "wx-nocity", "Tiempo: elige una ciudad en los ajustes de Hatsu Desktop."));
             w.Add(new Widget(WidgetKind.Button, "hub:settings-weather", "Elegir ciudad…", Glyph: "gear")); return;
         }
 

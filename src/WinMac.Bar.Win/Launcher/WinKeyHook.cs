@@ -42,7 +42,7 @@ internal sealed class WinKeyHook : IDisposable
             if (_kb != IntPtr.Zero) UnhookWindowsHookEx(_kb);
             if (_mouse != IntPtr.Zero) UnhookWindowsHookEx(_mouse);
             _kb = _mouse = IntPtr.Zero; _running = false;
-        }) { IsBackground = true, Name = "WinMac tecla Windows" };
+        }) { IsBackground = true, Name = "Hatsu Desktop tecla Windows" };
         _thread.Start();
         ready.Wait(TimeSpan.FromSeconds(3));
         if (_running) _log("[launchpad] tecla Windows: gancho instalado (los atajos con Windows no se tocan)");

@@ -297,7 +297,7 @@ public sealed partial class BarHost : IPanelUi
     void IPanelUi.OpenSettings(string? section)
     {
         _popover?.Hide();
-        if (HostCommand is { } hc) hc("settings", section); else ShowInfo("Ajustes", "Los ajustes de WinMac se abren desde WinMac.exe (esta barra se ejecutó por separado).");
+        if (HostCommand is { } hc) hc("settings", section); else ShowInfo("Ajustes", "Los ajustes de Hatsu Desktop se abren desde WinMac.exe (esta barra se ejecutó por separado).");
     }
 
     /// <summary>«Salir» cierra WinMac COMPLETO por el cierre ordenado del host (que cierra Barra, Dock e Isla). Si la barra corre sola, no hay nada más que cerrar que ella misma.</summary>

@@ -56,7 +56,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     public void Create()
     {
         WndRouter.EnsureClass(ClassName);
-        Hwnd = BarNative.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, ClassName, "WinMac Barra superior", WS_POPUP, _monitor.Left, _monitor.Top, 100, 30, IntPtr.Zero, IntPtr.Zero, BarNative.GetModuleHandle(null), IntPtr.Zero);
+        Hwnd = BarNative.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, ClassName, "Hatsu Desktop Barra superior", WS_POPUP, _monitor.Left, _monitor.Top, 100, 30, IntPtr.Zero, IntPtr.Zero, BarNative.GetModuleHandle(null), IntPtr.Zero);
         if (Hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
         WndRouter.Register(Hwnd, this);
         _tooltip = new BarTooltip(Hwnd, _log);

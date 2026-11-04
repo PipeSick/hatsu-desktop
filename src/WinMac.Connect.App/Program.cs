@@ -29,7 +29,7 @@ internal static class Program
         using var single = new Mutex(true, "WinMac.Connect.SingleInstance", out bool first);
         if (!first) { Log("[connect] ya hay un módulo Connect en marcha"); return 0; }
         var link = ModuleHostLink.FromArgs(args, "connect", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
-        if (link is null) { Log("[connect] este módulo solo funciona dentro de WinMac (lo inicia WinMac.exe): actívalo en Ajustes › General"); return 2; }
+        if (link is null) { Log("[connect] este módulo solo funciona dentro de Hatsu Desktop (lo inicia WinMac.exe): actívalo en Ajustes › General"); return 2; }
 
         var quit = new TaskCompletionSource();
         link.ShutdownRequested += () => quit.TrySetResult();

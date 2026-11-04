@@ -28,7 +28,7 @@ public static class Win32Errors
         234 => "234 ERROR_MORE_DATA (la respuesta no cabe en el búfer)",
         1117 => "1117 ERROR_IO_DEVICE (error de E/S del dispositivo)",
         1167 => "1167 ERROR_DEVICE_NOT_CONNECTED",
-        _ => code.ToString(CultureInfo.InvariantCulture) + " (código sin descripción en WinMac: búscalo como «System Error Code»)",
+        _ => code.ToString(CultureInfo.InvariantCulture) + " (código sin descripción en Hatsu Desktop: búscalo como «System Error Code»)",
     };
 }
 

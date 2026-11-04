@@ -19,7 +19,7 @@ internal static class SecurityDiagnostics
     public static int Run(bool quiet)
     {
         string dir = AppContext.BaseDirectory.TrimEnd('\\'); var sb = new StringBuilder();
-        sb.AppendLine($"WinMac — diagnóstico de seguridad · {DateTime.Now:yyyy-MM-dd HH:mm} · Windows {Environment.OSVersion.Version}");
+        sb.AppendLine($"Hatsu Desktop — diagnóstico de seguridad · {DateTime.Now:yyyy-MM-dd HH:mm} · Windows {Environment.OSVersion.Version}");
         sb.AppendLine("Solo lectura: no se cambió ni desactivó nada.");
         sb.AppendLine($"Carpeta: {dir}");
         sb.AppendLine();
@@ -37,15 +37,15 @@ internal static class SecurityDiagnostics
         hits += Events(sb, "Antivirus (historial de protección)", "Microsoft-Windows-Windows Defender/Operational", "1116 or EventID=1117", dir);
         sb.AppendLine();
         sb.AppendLine(hits == 0
-            ? "No hay eventos recientes que nombren la carpeta de WinMac. Si un módulo no arrancó, mira host.log (el motivo con su código de Windows)."
-            : "Hay eventos que nombran archivos de WinMac: el archivo indicado es el que Windows bloqueó. No desactives la protección: comparte este informe.");
+            ? "No hay eventos recientes que nombren la carpeta de Hatsu Desktop. Si un módulo no arrancó, mira host.log (el motivo con su código de Windows)."
+            : "Hay eventos que nombran archivos de Hatsu Desktop: el archivo indicado es el que Windows bloqueó. No desactives la protección: comparte este informe.");
         sb.AppendLine("Por qué puede pasar: la beta no está firmada digitalmente; Smart App Control bloquea los ejecutables sin firma ni reputación, y cada beta tiene archivos nuevos (sin reputación).");
 
         string report = sb.ToString();
         string outFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "security-report.txt");
         try { Directory.CreateDirectory(Path.GetDirectoryName(outFile)!); File.WriteAllText(outFile, report); } catch (Exception) { outFile = "(no se pudo guardar)"; }
         try { Console.WriteLine(report); } catch (Exception) { }
-        if (!quiet) MessageBoxW(IntPtr.Zero, (hits == 0 ? "No se encontraron bloqueos recientes de archivos de WinMac." : $"Se encontraron {hits} evento(s) de seguridad sobre archivos de WinMac.") + "\n\nInforme: " + outFile, "WinMac — diagnóstico de seguridad", 0x40);
+        if (!quiet) MessageBoxW(IntPtr.Zero, (hits == 0 ? "No se encontraron bloqueos recientes de archivos de Hatsu Desktop." : $"Se encontraron {hits} evento(s) de seguridad sobre archivos de Hatsu Desktop.") + "\n\nInforme: " + outFile, "Hatsu Desktop — diagnóstico de seguridad", 0x40);
         return 0;
     }
 
@@ -79,7 +79,7 @@ internal static class SecurityDiagnostics
                 sb.AppendLine($"  {Field("Date")} · evento {Field("Event ID")} · {desc}"); n++;
                 if (n >= 20) break;
             }
-            if (n == 0) sb.AppendLine("  ninguno sobre WinMac en los últimos 14 días");
+            if (n == 0) sb.AppendLine("  ninguno sobre Hatsu Desktop en los últimos 14 días");
             return n;
         }
         catch (Exception e) { sb.AppendLine("  no disponible: " + e.GetType().Name); return 0; }

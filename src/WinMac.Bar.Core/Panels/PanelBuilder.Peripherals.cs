@@ -30,7 +30,7 @@ public static partial class PanelBuilder
         w.Add(new Widget(WidgetKind.Header, "periph-title", "Periféricos"));
         if (v is null || v.Devices.Count == 0)
         {
-            w.Add(new Widget(WidgetKind.Note, "periph-empty", v is { Busy: true } ? "Buscando periféricos…" : v is { HiddenCount: > 0 } ? "Todos los dispositivos están ocultos." : "No se encontró ningún periférico. WinMac solo muestra lo que Windows y el propio dispositivo informan (Bluetooth estándar y HID); los receptores 2,4 GHz y el software de cada fabricante no se consultan."));
+            w.Add(new Widget(WidgetKind.Note, "periph-empty", v is { Busy: true } ? "Buscando periféricos…" : v is { HiddenCount: > 0 } ? "Todos los dispositivos están ocultos." : "No se encontró ningún periférico. Hatsu Desktop solo muestra lo que Windows y el propio dispositivo informan (Bluetooth estándar y HID); los receptores 2,4 GHz y el software de cada fabricante no se consultan."));
         }
         else
         {

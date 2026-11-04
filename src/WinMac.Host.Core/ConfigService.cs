@@ -133,7 +133,7 @@ public sealed class HostController
         string? section = d.ValueKind == JsonValueKind.Object && d.TryGetProperty("section", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null;
         switch (cmd)
         {
-            case "quit": _log("[host] la Barra pidió cerrar WinMac"); QuitRequested?.Invoke(); break;
+            case "quit": _log("[host] la Barra pidió cerrar Hatsu Desktop"); QuitRequested?.Invoke(); break;
             case "settings": SettingsRequested?.Invoke(section is not null && SettingsSections.Contains(section) ? section : null); break;
         }
     }

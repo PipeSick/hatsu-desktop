@@ -7,6 +7,9 @@
     <AssemblyName>WinMac.Connect.App</AssemblyName>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- It9 (Hatsu Desktop): lo que el Administrador de tareas y las propiedades del archivo muestran. El nombre del archivo (WinMac*.exe) se conserva en esta fase por compatibilidad. -->
+    <AssemblyTitle>Hatsu Desktop — Connect</AssemblyTitle>
+    <ApplicationIcon>..\..\assets\brand\hatsu-provisional.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinMac.Connect.Core\WinMac.Connect.Core.csproj" />

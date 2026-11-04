@@ -26,7 +26,7 @@ public static class HotkeyAudit
             var dup = keys.FirstOrDefault(o => !ReferenceEquals(o, k) && string.Equals(o.Keys, k.Keys, StringComparison.OrdinalIgnoreCase));
             if (dup is not null) problem = $"también lo usa «{dup.Purpose}» ({dup.Module})";
             else if (Windows.FirstOrDefault(w => string.Equals(w.Keys, k.Keys, StringComparison.OrdinalIgnoreCase)) is { Keys: not null } w)
-                problem ??= $"coincide con «{w.Owner}» de Windows" + (k.Registered ? " (WinMac lo usa mientras está abierto)" : "");
+                problem ??= $"coincide con «{w.Owner}» de Windows" + (k.Registered ? " (Hatsu Desktop lo usa mientras está abierto)" : "");
             else if (!k.Registered) problem ??= "Windows no lo aceptó: otro programa ya lo tiene registrado (no se puede saber cuál)";
             result.Add(k with { Problem = problem });
         }

@@ -21,6 +21,18 @@ internal static class Autostart
         k.DeleteValue(name, throwOnMissingValue: false); return true;
     }
 
+    /// <summary>Hatsu Desktop: repara un inicio automático huérfano (apunta a una carpeta que ya no existe) sin tocar el de otra instalación viva. Ver <see cref="WinMac.Host.AutostartMigration"/>.</summary>
+    public static string? Heal(string currentExe, string name = DefaultName)
+    {
+        try
+        {
+            var plan = WinMac.Host.AutostartMigration.Plan(Current(name), currentExe, File.Exists);
+            if (plan is null) return null;
+            using var k = Registry.CurrentUser.CreateSubKey(RunKey, writable: true); k.SetValue(name, plan, RegistryValueKind.String); return plan;
+        }
+        catch (Exception) { return null; }
+    }
+
     public static string? Current(string name = DefaultName)
     {
         using var k = Registry.CurrentUser.OpenSubKey(RunKey); return k?.GetValue(name) as string;

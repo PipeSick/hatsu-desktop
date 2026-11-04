@@ -236,7 +236,7 @@ public sealed partial class BarHost : IDisposable
     {
         if (_hubHwnd != IntPtr.Zero) return;
         WndRouter.EnsureClass("WinMacBarHub");
-        var h = BarNative.CreateWindowEx(0, "WinMacBarHub", "WinMac Barra (servicio)", 0, 0, 0, 0, 0, new IntPtr(-3) /* HWND_MESSAGE */, IntPtr.Zero, BarNative.GetModuleHandle(null), IntPtr.Zero);
+        var h = BarNative.CreateWindowEx(0, "WinMacBarHub", "Hatsu Desktop Barra (servicio)", 0, 0, 0, 0, 0, new IntPtr(-3) /* HWND_MESSAGE */, IntPtr.Zero, BarNative.GetModuleHandle(null), IntPtr.Zero);
         if (h == IntPtr.Zero) throw new InvalidOperationException("No se pudo crear la ventana de servicio de la barra.");
         _hubTarget = new HubTarget(this); WndRouter.Register(h, _hubTarget); _hubHwnd = h;
     }

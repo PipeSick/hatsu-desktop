@@ -8,9 +8,20 @@ $ErrorActionPreference = 'Stop'; $fails = 0
 function Check([string]$n, [bool]$ok, [string]$d = '') { if ($ok) { Write-Host "PASS  $n $d" } else { Write-Host "FAIL  $n $d"; $script:fails++ } }
 $dir = Join-Path ([IO.Path]::GetTempPath()) ('winmac-zip-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 Expand-Archive -Path $Zip -DestinationPath $dir
-$root = Join-Path $dir 'WinMac'
-foreach ($f in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'WinMac.Connect.App.exe', 'NotchWin\NotchWin.App.exe', 'Uninstall-WinMac.ps1', 'Restore-Taskbar.ps1', 'VERSION.txt', 'LICENSE', 'SHA256SUMS.txt') {
+$root = Join-Path $dir 'HatsuDesktop'
+foreach ($f in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'WinMac.Connect.App.exe', 'NotchWin\NotchWin.App.exe', 'Uninstall-HatsuDesktop.ps1', 'Restore-Taskbar.ps1', 'VERSION.txt', 'LICENSE', 'SHA256SUMS.txt') {
   Check "contiene $f" (Test-Path (Join-Path $root $f))
+}
+# Hatsu Desktop: identidad pública en los metadatos de los ejecutables y icono incrustado (los NOMBRES de archivo se conservan por compatibilidad)
+foreach ($pair in @(@('WinMac.exe', 'Hatsu Desktop'), @('WinMac.Bar.App.exe', 'Hatsu Desktop — Barra superior'), @('WinMac.Dock.App.exe', 'Hatsu Desktop — Dock'), @('WinMac.Connect.App.exe', 'Hatsu Desktop — Connect'))) {
+  $vi = (Get-Item (Join-Path $root $pair[0])).VersionInfo
+  Check "metadatos de $($pair[0]): producto" ($vi.ProductName -eq 'Hatsu Desktop') $vi.ProductName
+  Check "metadatos de $($pair[0]): descripción" ($vi.FileDescription -eq $pair[1]) $vi.FileDescription
+}
+Add-Type -AssemblyName System.Drawing
+foreach ($e in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'WinMac.Connect.App.exe') {
+  $ico = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $root $e)); $bmp = $ico.ToBitmap(); $px = $bmp.GetPixel([int]($bmp.Width * 0.25), [int]($bmp.Height * 0.2))
+  Check "icono propio incrustado en $e (violeta, no el genérico)" ($px.A -gt 200 -and $px.B -gt $px.G + 40 -and $px.B -gt 150) "RGB $($px.R),$($px.G),$($px.B)"
 }
 # Autocontenido: el runtime de .NET viaja en el paquete (el usuario no instala nada)
 foreach ($f in 'hostfxr.dll', 'coreclr.dll') { Check "autocontenido: $f junto a WinMac.exe" (@(Get-ChildItem $root -Recurse -Filter $f).Count -gt 0) }

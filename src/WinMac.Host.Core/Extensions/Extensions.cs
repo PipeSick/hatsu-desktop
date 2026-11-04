@@ -31,7 +31,7 @@ public sealed partial record ExtensionManifest(string Id, string Name, string Ve
             if (string.IsNullOrWhiteSpace(name) || name.Length > 60) return (null, "nombre no válido");
             if (ver is null || !SemVer().IsMatch(ver)) return (null, "versión no válida (x.y.z)");
             int api = e.TryGetProperty("api", out var a) && a.TryGetInt32(out int ai) ? ai : 0;
-            if (api != ApiVersion) return (null, $"API {api} no compatible (esta versión de WinMac admite la {ApiVersion})");
+            if (api != ApiVersion) return (null, $"API {api} no compatible (esta versión de Hatsu Desktop admite la {ApiVersion})");
             if (entry is null || !entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || entry.Contains("..") || Path.IsPathRooted(entry)) return (null, "entrada no válida (un .exe dentro de su carpeta)");
             var full = Path.GetFullPath(Path.Combine(folder, entry));
             if (!full.StartsWith(Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return (null, "la entrada sale de su carpeta");

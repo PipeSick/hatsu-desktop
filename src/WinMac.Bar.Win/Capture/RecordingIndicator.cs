@@ -43,7 +43,7 @@ internal sealed class RecordingIndicator : IDisposable
         _s = (float)mon.Scale; int w = (int)(220 * _s), h = (int)(34 * _s);
         int x = mon.Bounds.Right - w - (int)(16 * _s), y = mon.Bounds.Y + (int)(44 * _s);
         Bounds = new CaptureRect(x, y, w, h);
-        _hwnd = InstanceWindows.Create(_cls, 32649 /* IDC_HAND */, _proc, WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "WinMac grabando", WS_POPUP, x, y, w, h);
+        _hwnd = InstanceWindows.Create(_cls, 32649 /* IDC_HAND */, _proc, WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "Hatsu Desktop grabando", WS_POPUP, x, y, w, h);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("No se pudo crear el indicador de grabación");
         if (!SetWindowDisplayAffinity(_hwnd, 0x11 /* WDA_EXCLUDEFROMCAPTURE */)) _log("[grabación] el indicador no se puede excluir de la captura en este Windows (aparecerá en el vídeo)");
         var rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, h, h); BarNative.SetWindowRgn(_hwnd, rgn, false);

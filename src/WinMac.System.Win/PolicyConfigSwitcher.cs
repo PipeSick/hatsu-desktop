@@ -10,7 +10,7 @@ namespace WinMac.SystemControl.Win;
 internal sealed class PolicyConfigSwitcher
 {
     private static readonly Guid ClsidPolicyConfigClient = new("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9");
-    private const string Unsupported = "Esta versión de Windows no permite cambiar la salida desde WinMac; usa Configuración de sonido";
+    private const string Unsupported = "Esta versión de Windows no permite cambiar la salida desde Hatsu Desktop; usa Configuración de sonido";
 
     private static IPolicyConfig? Create()
     {

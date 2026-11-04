@@ -1,4 +1,11 @@
-# WinMac (nombre provisional)
+# Hatsu Desktop
+
+> **Hatsu Desktop es la evolución de WinMac.** El proyecto se llamó «WinMac» (nombre provisional) hasta la iteración 8; el nombre público ahora es **Hatsu Desktop**. Por compatibilidad con instalaciones, configuraciones y datos existentes, en esta fase se conservan los **identificadores internos** antiguos (archivos `WinMac*.exe`, carpeta de datos `%APPDATA%\WinMac` y `%LOCALAPPDATA%\WinMac`, valor de inicio automático «WinMac», nombres de proceso y canales entre componentes). Detalle de la auditoría y de la estrategia de migración: [`docs/46-rebranding-hatsu-desktop.md`](docs/46-rebranding-hatsu-desktop.md). El repositorio y sus URLs **no** se han renombrado todavía.
+>
+> Identidad visual: [`assets/brand/`](assets/brand/README.md) (el icono actual es **provisional**, no un diseño aprobado).
+
+_(Los documentos históricos de `docs/` conservan el nombre «WinMac» tal como se escribieron.)_
+
 
 Experiencia de escritorio inspirada en macOS Tahoe para Windows 11. Proyecto open source bajo licencia **Apache-2.0** (ver [`LICENSE`](LICENSE), [`NOTICE`](NOTICE) y [`THIRD_PARTY.md`](THIRD_PARTY.md)).
 

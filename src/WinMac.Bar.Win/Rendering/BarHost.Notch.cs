@@ -105,7 +105,7 @@ public sealed partial class BarHost
             S("brillo 80", NotchFeed.Brightness(80, "Pantalla integrada")); await Task.Delay(3500).ConfigureAwait(false);
             var icon = new byte[32 * 32 * 4];
             for (int i = 0; i < icon.Length; i += 4) { icon[i] = 0xF5; icon[i + 1] = 0x84; icon[i + 2] = 0x0A; icon[i + 3] = 0xFF; }   // cuadrado azul opaco (BGRA)
-            var n = new AppNotification(1, "WinMac.Prueba", "WinMac", "Prueba de WinMac", "Notificación de muestra del CI", DateTimeOffset.Now);
+            var n = new AppNotification(1, "WinMac.Prueba", "Hatsu Desktop", "Prueba de Hatsu Desktop", "Notificación de muestra del CI", DateTimeOffset.Now);
             S("notificación", NotchFeed.Notification(n, icon)); await Task.Delay(1500).ConfigureAwait(false);
             S("volumen 30 durante la notificación", NotchFeed.Volume(30, false, "Altavoces de prueba"));
         }

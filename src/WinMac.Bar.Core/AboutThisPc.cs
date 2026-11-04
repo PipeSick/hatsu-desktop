@@ -91,7 +91,7 @@ public static class AboutFormatter
             Row("Memoria", ram is { } rb ? FormatRam(rb) : null),
             Row("Gráficos", gpu),
             Row("Windows", winLine),
-            Row("WinMac", Clean(r.WinMacVersion)),
+            Row("Hatsu Desktop", Clean(r.WinMacVersion)),
         };
         var more = new List<AboutRow>
         {

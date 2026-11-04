@@ -30,7 +30,7 @@ internal sealed class TaskbarHider
     {
         var lease = TaskbarLease.Load(_leasePath);
         if (!TaskbarPolicy.StaleOnStart(lease, IsWinMacAlive, Environment.ProcessId)) return;
-        _log("[barra de tareas] había quedado oculta por una sesión anterior de WinMac que no terminó bien: se restaura");
+        _log("[barra de tareas] había quedado oculta por una sesión anterior de Hatsu Desktop que no terminó bien: se restaura");
         Restore(lease!, _leasePath, _log); TaskbarLease.Delete(_leasePath);
     }
 
@@ -76,7 +76,7 @@ internal sealed class TaskbarHider
                 _hiddenByUs = true; Status = bars.Count == 1 ? "Oculta" : $"Oculta en {bars.Count} pantallas";
                 break;
             case TaskbarStep.Restore: RestoreNow(); break;
-            case TaskbarStep.GiveUp: GiveUp("el guardián la restauró porque WinMac no respondía; se volverá a ocultar en 2 minutos"); break;
+            case TaskbarStep.GiveUp: GiveUp("el guardián la restauró porque Hatsu Desktop no respondía; se volverá a ocultar en 2 minutos"); break;
         }
     }
 
@@ -157,7 +157,7 @@ internal sealed class TaskbarHider
         {
             _guard?.Dispose();
             _guard = Process.Start(new ProcessStartInfo(_exe) { ArgumentList = { "--taskbar-guard", Environment.ProcessId.ToString() }, UseShellExecute = false, CreateNoWindow = true });
-            _log("[barra de tareas] guardián iniciado (pid " + _guard?.Id + "): devuelve la barra si WinMac se cierra de golpe o deja de responder");
+            _log("[barra de tareas] guardián iniciado (pid " + _guard?.Id + "): devuelve la barra si Hatsu Desktop se cierra de golpe o deja de responder");
         }
         catch (Exception e) { _log("[barra de tareas] AVISO: no se pudo iniciar el guardián (" + e.Message + "); la barra se restaura al salir y en el próximo arranque, o con «WinMac.exe --restore-taskbar»"); }
     }
@@ -189,10 +189,10 @@ internal sealed class TaskbarHider
     {
         string path = TaskbarLease.DefaultPath; var lease = TaskbarLease.Load(path);
         Restore(lease ?? new TaskbarLease(0, false, DateTime.MinValue), path, GuardLog(path)); TaskbarLease.Delete(path);
-        string text = (lease is { KnowsOriginal: true } ? $"Barra de tareas restaurada («Ocultar automáticamente»: {(lease.OriginalAutoHide ? "activado" : "desactivado")}, como estaba)." : "Barra de tareas visible. WinMac no tenía registro del ajuste «Ocultar automáticamente»: no se cambió.")
-            + "\n\nSi aun así no aparece: reinicia el Explorador de Windows o cierra sesión. Para que WinMac no vuelva a ocultarla, desactiva «Ocultar barra de tareas de Windows» en Ajustes › Escritorio y Dock.";
+        string text = (lease is { KnowsOriginal: true } ? $"Barra de tareas restaurada («Ocultar automáticamente»: {(lease.OriginalAutoHide ? "activado" : "desactivado")}, como estaba)." : "Barra de tareas visible. Hatsu Desktop no tenía registro del ajuste «Ocultar automáticamente»: no se cambió.")
+            + "\n\nSi aun así no aparece: reinicia el Explorador de Windows o cierra sesión. Para que Hatsu Desktop no vuelva a ocultarla, desactiva «Ocultar barra de tareas de Windows» en Ajustes › Escritorio y Dock.";
         try { Console.WriteLine(text); } catch (Exception) { }
-        if (!quiet) MessageBoxW(IntPtr.Zero, text, "WinMac", 0x40 /* MB_ICONINFORMATION */);   // WinMac.exe no tiene consola: el aviso se ve igual al hacer doble clic en un acceso directo
+        if (!quiet) MessageBoxW(IntPtr.Zero, text, "Hatsu Desktop", 0x40 /* MB_ICONINFORMATION */);   // WinMac.exe no tiene consola: el aviso se ve igual al hacer doble clic en un acceso directo
         return 0;
     }
 

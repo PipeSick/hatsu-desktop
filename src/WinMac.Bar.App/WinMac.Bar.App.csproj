@@ -5,6 +5,9 @@
     <RootNamespace>WinMac.Bar.App</RootNamespace>
     <AssemblyName>WinMac.Bar.App</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- It9 (Hatsu Desktop): lo que el Administrador de tareas y las propiedades del archivo muestran. El nombre del archivo (WinMac*.exe) se conserva en esta fase por compatibilidad. -->
+    <AssemblyTitle>Hatsu Desktop — Barra superior</AssemblyTitle>
+    <ApplicationIcon>..\..\assets\brand\hatsu-provisional.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinMac.Bar.Win\WinMac.Bar.Win.csproj" />

@@ -206,7 +206,7 @@ public sealed class DockHost : IDisposable
         var cls = new WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = Native2.GetModuleHandle(null), lpszClassName = clsName, hCursor = Native2.LoadCursor(IntPtr.Zero, 32512) };
         Native2.RegisterClassEx(ref cls);
         int ox = _screen?.Left ?? 0, oy = _screen?.Top ?? 0;   // nace en SU monitor: así su DPI es el de ese monitor
-        _hwnd = Native2.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, clsName, "WinMac Dock", WS_POPUP, ox, oy, 100, 100, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
+        _hwnd = Native2.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, clsName, "Hatsu Desktop Dock", WS_POPUP, ox, oy, 100, 100, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
         _dev = new D2DDevice(); Diagnostics = _dev.Description;
         _scale = Native.GetDpiForWindow(_hwnd) / 96.0; _dev.SetDpi(_scale);

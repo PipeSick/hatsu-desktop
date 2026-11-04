@@ -72,7 +72,7 @@ public class AboutThisPcTests
     public void Windows_and_build_lines_use_the_real_numbers()
     {
         var v = AboutFormatter.Build(Raw()); Assert.Equal("Windows 11 Pro 25H2", v.Main.Single(r => r.Label == "Windows").Value); Assert.Equal("26300.9711", v.More.Single(r => r.Label == "Compilación de Windows").Value);
-        Assert.Equal("2.0.0", v.Main.Single(r => r.Label == "WinMac").Value);
+        Assert.Equal("2.0.0", v.Main.Single(r => r.Label == "Hatsu Desktop").Value);
     }
 
     [Theory]
@@ -88,7 +88,7 @@ public class AboutThisPcTests
         var empty = new AboutRaw(null, null, null, null, null, null, null, null, null, [], null, null, null, null, null, null, "2.0.0");
         var v = AboutFormatter.Build(empty);
         Assert.Equal("Este PC", v.Title);
-        Assert.All(v.Main.Where(r => r.Label != "WinMac"), r => { Assert.False(r.Available); Assert.Equal("No disponible", r.Value); });
+        Assert.All(v.Main.Where(r => r.Label != "Hatsu Desktop"), r => { Assert.False(r.Available); Assert.Equal("No disponible", r.Value); });
         Assert.All(v.More, r => Assert.False(r.Available));
     }
 

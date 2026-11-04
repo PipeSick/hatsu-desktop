@@ -42,8 +42,8 @@ internal static class HostApp
         using var mutex = new Mutex(true, MutexName, out bool first);
         if (!first)
         {   // Segunda instancia: no duplica nada, pero le pide al host vivo que reabra los módulos que estén cerrados o caídos.
-            try { using var ev = EventWaitHandle.OpenExisting(ReopenEventName); ev.Set(); log("[host] ya hay una instancia de WinMac: se le pidió reabrir los módulos cerrados; esta se cierra."); }
-            catch (Exception) { log("[host] ya hay una instancia de WinMac en ejecución: esta se cierra sin hacer nada."); }
+            try { using var ev = EventWaitHandle.OpenExisting(ReopenEventName); ev.Set(); log("[host] ya hay una instancia de Hatsu Desktop: se le pidió reabrir los módulos cerrados; esta se cierra."); }
+            catch (Exception) { log("[host] ya hay una instancia de Hatsu Desktop en ejecución: esta se cierra sin hacer nada."); }
             return 0;
         }
         using var quit = new EventWaitHandle(false, EventResetMode.ManualReset, QuitEventName);
@@ -80,6 +80,7 @@ internal static class HostApp
         controller.QuitRequested = () => uiActions.Enqueue(RequestQuit);
         Tray? tray = null; SettingsWindow? settings = null;
         string exePath = Environment.ProcessPath ?? "WinMac.exe";
+        if (Autostart.Heal(exePath) is { } healed) log("[host] el inicio automático apuntaba a una carpeta que ya no existe: ahora apunta a esta instalación.");
         var taskbar = new TaskbarHider(exePath, log);   // WM-034
         try { taskbar.RecoverStale(); } catch (Exception e) { log("[barra de tareas] no se pudo revisar la sesión anterior: " + e.Message); }
         config.Changed += (old, now) => { if (old.HideTaskbar && !now.HideTaskbar) uiActions.Enqueue(taskbar.RestoreNow); };   // al desactivar: al instante, en el hilo de interfaz
@@ -163,8 +164,8 @@ internal static class HostApp
     /// <summary>Pide al host en ejecución que se cierre normalmente.</summary>
     public static int SignalQuit()
     {
-        try { using var ev = EventWaitHandle.OpenExisting(QuitEventName); ev.Set(); Console.WriteLine("Señal de cierre enviada a WinMac."); return 0; }
-        catch (WaitHandleCannotBeOpenedException) { Console.WriteLine("WinMac no está en ejecución."); return 0; }
+        try { using var ev = EventWaitHandle.OpenExisting(QuitEventName); ev.Set(); Console.WriteLine("Señal de cierre enviada a Hatsu Desktop."); return 0; }
+        catch (WaitHandleCannotBeOpenedException) { Console.WriteLine("Hatsu Desktop no está en ejecución."); return 0; }
     }
 }
 

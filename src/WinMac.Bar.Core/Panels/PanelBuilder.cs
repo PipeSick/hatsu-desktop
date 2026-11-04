@@ -89,11 +89,11 @@ public static partial class PanelBuilder
             new("apple:Sleep", "moon", "Suspender"), new("apple:Restart", "restart", "Reiniciar"), new("apple:Shutdown", "onoff", "Apagar"),
             new("apple:LogOff", "logout", "Cerrar sesión"), new("apple:Lock", "lock", "Bloquear")])));
         w.Add(new Widget(WidgetKind.LinkRow, "apple:links", "", Data: new LinkRowData([
-            new("apple:winmac-settings", "Ajustes de WinMac", true),
+            new("apple:winmac-settings", "Ajustes de Hatsu Desktop", true),
             new("apple:" + SystemActionKind.About, "Acerca de este PC", true),
             new("apple:" + SystemActionKind.ForceQuit, "Forzar salida…", c.ForegroundApp is not null)])));
         Msg(w, c);
-        return new PanelModel(PanelKind.AppleMenu, "WinMac", w, AppleWidth, Card: (cardFrom, cardTo), Pad: 12, Spacing: 8);
+        return new PanelModel(PanelKind.AppleMenu, "Hatsu Desktop", w, AppleWidth, Card: (cardFrom, cardTo), Pad: 12, Spacing: 8);
     }
 
     public const double AppleWidth = 372;
@@ -112,8 +112,8 @@ public static partial class PanelBuilder
         var icons = c.Tray ?? [];
         // WM-023: WinMac only sees the icons apps register while it runs (or again when told «TaskbarCreated»); some apps never re-register and Windows does not
         // let a third party read Explorer's list without reading its memory. The last row opens Windows' own overflow, so no icon is out of reach.
-        var winTray = new Widget(WidgetKind.Row, "open:windows-tray", "Ver la bandeja de Windows", "Incluye las apps que no se registraron en WinMac", Glyph: "chevron");
-        if (icons.Count == 0) return new PanelModel(PanelKind.Tray, "Apps en segundo plano", [new Widget(WidgetKind.Note, "tray-none", "WinMac aún no ha recibido iconos de apps."), winTray], 260, Pad: 8, Spacing: 2);
+        var winTray = new Widget(WidgetKind.Row, "open:windows-tray", "Ver la bandeja de Windows", "Incluye las apps que no se registraron en Hatsu Desktop", Glyph: "chevron");
+        if (icons.Count == 0) return new PanelModel(PanelKind.Tray, "Apps en segundo plano", [new Widget(WidgetKind.Note, "tray-none", "Hatsu Desktop aún no ha recibido iconos de apps."), winTray], 260, Pad: 8, Spacing: 2);
         var cells = icons.Select(t => new TrayCellData(t.Key, TrayIconPrefix + t.Icon, string.IsNullOrWhiteSpace(t.Tip) ? "App sin nombre" : t.Tip.Split('\n', 2)[0].Trim())).ToList();
         int cols = Math.Min(TrayColumns, cells.Count);
         // WM-004: title like the mock-up, a bit more room per icon; the panel keeps WinMac's glass and the apps' own actions (click = open, right click = their menu)
@@ -131,7 +131,7 @@ public static partial class PanelBuilder
         if (cfg.CcDisplay) Tile(new Widget(WidgetKind.Tile, "open:display", "Pantallas", "Duplicar / extender", Glyph: "display"));
         if (cfg.CcPower) Tile(new Widget(WidgetKind.Tile, "open:battery", c.Battery.Present ? "Batería" : "Energía", c.Battery.Present ? $"{c.Battery.Percent}%" : (s.Power.Available ? PowerModeState.Label(s.Power.Mode) : "No disponible"), Enabled: true, Glyph: "power", On: c.Battery.Present && c.Battery.Charging));
         if (cfg.CcNotifications) Tile(cfg.NotificationCenter
-            ? new Widget(WidgetKind.Tile, "nc:open", "Notificaciones", "Centro de WinMac", Glyph: "bell")
+            ? new Widget(WidgetKind.Tile, "nc:open", "Notificaciones", "Centro de Hatsu Desktop", Glyph: "bell")
             : new Widget(WidgetKind.Tile, "notifications", "Notificaciones", "Abrir centro de Windows", Glyph: "bell"));
         if (col == 1) w.Add(new Widget(WidgetKind.Separator, "pad"));   // número impar de mosaicos: cierra la fila
         if (cfg.CcSound) w.Add(new Widget(WidgetKind.Slider, "volume", "Sonido", Value: s.Audio.Volume, Enabled: s.Audio.Available, Reason: s.Audio.Reason, Glyph: s.Audio.Muted ? "sound-muted" : "sound"));
@@ -225,7 +225,7 @@ public static partial class PanelBuilder
 
         w.Add(new Widget(WidgetKind.Header, "devices", "Dispositivos", Glyph: "section"));
         string outName = s.Outputs.FirstOrDefault(o => o.IsDefault)?.Name ?? (s.Available ? "Dispositivo predeterminado" : "No disponible");
-        w.Add(new Widget(WidgetKind.Select, "pick:out", "Salida", Enabled: s.Available && s.Outputs.Count > 1 && c.Sys.OutputSwitchOk, Reason: !c.Sys.OutputSwitchOk ? c.Sys.OutputSwitchReason ?? "Windows no deja cambiarla desde WinMac en este equipo" : s.Reason,
+        w.Add(new Widget(WidgetKind.Select, "pick:out", "Salida", Enabled: s.Available && s.Outputs.Count > 1 && c.Sys.OutputSwitchOk, Reason: !c.Sys.OutputSwitchOk ? c.Sys.OutputSwitchReason ?? "Windows no deja cambiarla desde Hatsu Desktop en este equipo" : s.Reason,
             Data: new SelectData("sound", "Salida", BusyOr(c, "pick:out", outName) ?? outName)));
         var mic = c.Sys.Mic;
         string micName = mic.Devices.FirstOrDefault(d => d.IsDefault)?.Name ?? (mic.Available ? "Micrófono predeterminado" : "Sin micrófono");
@@ -285,7 +285,7 @@ public static partial class PanelBuilder
             w.Add(new Widget(WidgetKind.Header, "outputs", "Salida", Glyph: "section"));
             bool canSwitch = c.Sys.OutputSwitchOk;
             foreach (var o in s.Outputs) w.Add(new Widget(WidgetKind.Row, "out:" + o.Id, o.Name, BusyOr(c, "out:" + o.Id, o.IsDefault ? "Predeterminada" : canSwitch ? "Toca para usar esta salida" : null), On: o.IsDefault, Enabled: canSwitch || o.IsDefault, Glyph: o.IsDefault ? "check" : null));
-            if (!canSwitch) w.Add(new Widget(WidgetKind.Note, "noswitch", c.Sys.OutputSwitchReason ?? "No se puede cambiar la salida desde WinMac en este equipo."));
+            if (!canSwitch) w.Add(new Widget(WidgetKind.Note, "noswitch", c.Sys.OutputSwitchReason ?? "No se puede cambiar la salida desde Hatsu Desktop en este equipo."));
             if (c.Sys.CanRestoreOutput) w.Add(new Widget(WidgetKind.Button, "audio-restore", "Volver a la salida anterior"));
         }
         Msg(w, c);
@@ -310,8 +310,8 @@ public static partial class PanelBuilder
         var w = new List<Widget>(); var p = c.Phone; var now = c.Now.ToUniversalTime();
         if (p is null)
         {
-            w.Add(new Widget(WidgetKind.Note, "phone-off", "WinMac Connect no está activo. Actívalo en Ajustes › WinMac Connect."));
-            w.Add(new Widget(WidgetKind.Button, "phone:settings", "Ajustes de WinMac Connect…", Glyph: "gear"));
+            w.Add(new Widget(WidgetKind.Note, "phone-off", "Hatsu Connect no está activo. Actívalo en Ajustes › Hatsu Connect."));
+            w.Add(new Widget(WidgetKind.Button, "phone:settings", "Ajustes de Hatsu Connect…", Glyph: "gear"));
             return new PanelModel(PanelKind.Phone, "iPhone", w);
         }
         bool connected = p.Status == WinMac.Connect.PhoneLinkStatus.Connected;
@@ -336,13 +336,13 @@ public static partial class PanelBuilder
         {
             WinMac.Connect.PhoneFeatureStatus.Active => c.PhoneNotifCount is > 0 and var n ? $"Recibidas ahora: {n}" : "Todavía no se ha recibido ninguna",
             WinMac.Connect.PhoneFeatureStatus.NotAuthorized => "En el iPhone: Ajustes › Bluetooth › (i) junto a este PC › «Compartir notificaciones del sistema»",
-            WinMac.Connect.PhoneFeatureStatus.Off => "Actívalas en Ajustes de WinMac Connect",
+            WinMac.Connect.PhoneFeatureStatus.Off => "Actívalas en Ajustes de Hatsu Connect",
             _ => connected ? "Esperando al iPhone" : "El iPhone no está conectado",
         };
         w.Add(new Widget(WidgetKind.PhoneNotifs, "phone-notifs", "Notificaciones", status, Data: new PhoneNotifData(status, detail, p.NotificationsStatus == WinMac.Connect.PhoneFeatureStatus.Active ? "good" : p.NotificationsStatus is WinMac.Connect.PhoneFeatureStatus.Starting or WinMac.Connect.PhoneFeatureStatus.NotAuthorized ? "warn" : "off")));
         if (!connected && p.LastSeenUtc is { } seen) w.Add(new Widget(WidgetKind.Note, "phone-seen", "Última conexión: " + WinMac.Connect.PhoneStatusText.Ago(seen, now)));
         if (!string.IsNullOrWhiteSpace(p.Message)) w.Add(new Widget(WidgetKind.Note, "phone-msg", p.Message!));
-        w.Add(new Widget(WidgetKind.Button, "phone:settings-btn", "Ajustes de WinMac Connect", Glyph: "gear"));
+        w.Add(new Widget(WidgetKind.Button, "phone:settings-btn", "Ajustes de Hatsu Connect", Glyph: "gear"));
         w.Add(new Widget(WidgetKind.Button, "open:ms-settings:bluetooth", "Bluetooth de Windows"));
         return new PanelModel(PanelKind.Phone, "iPhone", w);
     }
@@ -430,7 +430,7 @@ public static partial class PanelBuilder
         var sel = c.SelectedDay ?? today;
         var evs = CalendarGrid.EventsOn(c.Events, sel);
         w.Add(new Widget(WidgetKind.Header, "events", sel == today ? "Hoy" : sel.ToString("dd/MM/yyyy"), Glyph: "section"));
-        if (string.IsNullOrWhiteSpace(c.Cfg.CalendarIcsPath)) w.Add(new Widget(WidgetKind.Note, "noics", "Para ver eventos, indica un archivo .ics en Ajustes de WinMac."));
+        if (string.IsNullOrWhiteSpace(c.Cfg.CalendarIcsPath)) w.Add(new Widget(WidgetKind.Note, "noics", "Para ver eventos, indica un archivo .ics en Ajustes de Hatsu Desktop."));
         else if (evs.Count == 0) w.Add(new Widget(WidgetKind.Note, "noevents", "Sin eventos."));
         foreach (var e in evs.Take(5)) w.Add(new Widget(WidgetKind.Info, "ev:" + e.Title + e.Start.Ticks, e.Title, e.AllDay ? "Todo el día" : e.Start.ToString("HH:mm") + (e.End > e.Start ? "–" + e.End.ToString("HH:mm") : "")));
         Msg(w, c);

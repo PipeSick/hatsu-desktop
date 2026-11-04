@@ -44,7 +44,7 @@ public static class SettingsBuilder
         ("wifiDetails", "Detalle de Wi-Fi al tocar una red", b => b.WifiDetails), ("appMenus", "Menús de la app en la barra (avanzado)", b => b.AppMenus),
         ("ccWifi", "Wi-Fi", b => b.CcWifi), ("ccBluetooth", "Bluetooth", b => b.CcBluetooth), ("ccSound", "Sonido", b => b.CcSound), ("ccBrightness", "Brillo", b => b.CcBrightness),
         ("ccPower", "Energía", b => b.CcPower), ("ccAppearance", "Apariencia", b => b.CcAppearance), ("ccDisplay", "Pantallas", b => b.CcDisplay), ("ccNotifications", "Notificaciones", b => b.CcNotifications),
-        ("showHub", "Icono de WinMac (panel con pestañas)", b => b.ShowHub), ("showWeather", "Icono del Tiempo", b => b.ShowWeather), ("weatherFahrenheit", "Grados Fahrenheit", b => b.WeatherFahrenheit),
+        ("showHub", "Icono de Hatsu Desktop (panel con pestañas)", b => b.ShowHub), ("showWeather", "Icono del Tiempo", b => b.ShowWeather), ("weatherFahrenheit", "Grados Fahrenheit", b => b.WeatherFahrenheit),
         ("weatherAutoLocation", "Usar mi ubicación", b => b.WeatherAutoLocation),
         ("notificationCenter", "El reloj abre el Centro de Notificaciones", b => b.NotificationCenter), ("notificationsFromWindows", "Mostrar notificaciones de Windows", b => b.NotificationsFromWindows),
         ("notifRemoveFromWindows", "Borrar también en Windows", b => b.NotifRemoveFromWindows),
@@ -121,20 +121,20 @@ public static class SettingsBuilder
     {
         var cfg = input.Cfg; var n = cfg.Notch ?? new NotchSettings(); _bar = cfg.Bar ?? new BarConfig(); var bar = _bar;
         bool installed = !(input.States.TryGetValue("notch", out var ns) && ns == ModuleState.NotInstalled);
-        const string noNotch = "La Isla (NotchWin) no está instalada junto a WinMac.";
+        const string noNotch = "La Isla (NotchWin) no está instalada junto a Hatsu Desktop.";
         bool On(string m) => cfg.Modules.TryGetValue(m, out var mc) ? mc.Enabled : true;
 
         // WM-013/014: una sección por tema, en el orden en que se usan. Cada fila está en UN sitio; los textos se parten en líneas (sin «…»).
         var general = new SettingsPage("general", "General", "gear",
         [
             new("Módulos", [
-                new(RowKind.Toggle, "mod:bar", "Barra superior", "Reloj, indicadores y el panel de WinMac", On("bar")),
+                new(RowKind.Toggle, "mod:bar", "Barra superior", "Reloj, indicadores y el panel de Hatsu Desktop", On("bar")),
                 new(RowKind.Toggle, "mod:dock", "Dock", "Apps abiertas y ancladas, con vista previa de ventanas", On("dock")),
-                new(RowKind.Toggle, "mod:connect", "WinMac Connect", "Batería y notificaciones del iPhone (opcional)", On("connect")),
+                new(RowKind.Toggle, "mod:connect", "Hatsu Connect", "Batería y notificaciones del iPhone (opcional)", On("connect")),
                 new(RowKind.Toggle, "mod:notch", "Isla", "Música, actividades y más en la parte superior", installed && On("notch"), installed, installed ? null : noNotch),
             ], "Cada módulo es un proceso aparte: si uno falla, los demás siguen."),
             new("Sistema", [
-                new(RowKind.Toggle, "autostart", "Iniciar con Windows", "Abre WinMac al iniciar sesión", input.Autostart),
+                new(RowKind.Toggle, "autostart", "Iniciar con Windows", "Abre Hatsu Desktop al iniciar sesión", input.Autostart),
                 Bar(10, "Pide confirmación antes de reiniciar, apagar o cerrar la sesión"),
             ]),
         ]);
@@ -168,7 +168,7 @@ public static class SettingsBuilder
                 BarF("showCleanup", "Analiza primero y pide confirmación antes de borrar. Nunca limpia por sí sola ni en segundo plano; no toca documentos, descargas ni proyectos"),
                 BarF("cleanupIsland", "Análisis y limpieza como actividad de la Isla; no sustituye la música, las letras ni las notificaciones"),
             ]),
-            new("Panel de WinMac", [
+            new("Panel de Hatsu Desktop", [
                 Bar(21),
                 new(RowKind.Field, "hub.ms", "Leer sensores cada (ms)", "Solo mientras el panel está abierto", Text: bar.HubRefreshMs.ToString(), Placeholder: "1000"),
                 new(RowKind.Segmented, "hub.rate", "Unidad de red", Options: RateNames, Selected: Index(RateValues, bar.RateUnit.ToString())),
@@ -196,9 +196,9 @@ public static class SettingsBuilder
             new("Spotlight", [
                 new(RowKind.Segmented, "bar.spot", "Atajo", Options: SpotKeyNames, Selected: Index(SpotKeyValues, bar.SpotlightHotkey.ToString())),
                 Bar(30, "Recientes de Windows y el índice de Windows Search; no indexa nada por su cuenta"),
-            ], "Alt+Espacio sustituye al menú de ventana de Windows mientras WinMac está abierto."),
+            ], "Alt+Espacio sustituye al menú de ventana de Windows mientras Hatsu Desktop está abierto."),
             new("Herramientas", [
-                new(RowKind.Info, "bar.spotpro", "Acciones de WinMac, «ip», «red», «ping …» y «dns …» (solo con Intro), «ssh usuario@equipo», «> …» (nunca se ejecuta: abre la terminal o lo copia) y cálculos como «20% de 150»."),
+                new(RowKind.Info, "bar.spotpro", "Acciones de Hatsu Desktop, «ip», «red», «ping …» y «dns …» (solo con Intro), «ssh usuario@equipo», «> …» (nunca se ejecuta: abre la terminal o lo copia) y cálculos como «20% de 150»."),
                 new(RowKind.Info, "bar.scripts", "Scripts propios: %APPDATA%\\WinMac\\spotlight-scripts.json. Se ejecutan con doble Intro y tus permisos, nunca elevados."),
                 new(RowKind.Info, "bar.workspaces", "Espacios de trabajo: «Guardar espacio de trabajo», «Restaurar …», «Ventanas lado a lado» o «en cuadrícula». Ninguna app se abre sola."),
             ]),
@@ -211,7 +211,7 @@ public static class SettingsBuilder
             new("Centro de Notificaciones", [
                 Bar(25, "Desactivado, el reloj abre el calendario de antes"),
                 Bar(26, "Con el permiso de Windows. Solo en memoria: no se guarda en disco"),
-                Bar(27, "Desactivado, «×» y «Borrar» solo las ocultan en WinMac durante la sesión"),
+                Bar(27, "Desactivado, «×» y «Borrar» solo las ocultan en Hatsu Desktop durante la sesión"),
             ], "Se muestran todas las que Windows guarda en su centro (Win+N) y deja leer; las que una app no envía ahí no se pueden ver."),
             new("Widgets", wrows.Select((r, i) => new SettingsRow(RowKind.Toggle, "nc.w:" + r.Kind.ToString().ToLowerInvariant(), NcWidgetNames[r.Kind], null, r.On,
                 CanUp: r.On && i > 0, CanDown: r.On && i < enabledCount - 1)).ToList(), "La batería solo aparece en equipos con batería. El Tiempo usa la ubicación de «Clima y ciudades»."),
@@ -291,7 +291,7 @@ public static class SettingsBuilder
                 new(RowKind.Toggle, "dock.reserve", "Reservar espacio para el Dock", "Las ventanas maximizadas terminan encima del Dock y sus controles quedan visibles", d.ReserveSpace && !d.AutoHide, enabled && !d.AutoHide, !enabled ? off : d.AutoHide ? "Con ocultación automática el Dock no ocupa espacio" : null),
                 new(RowKind.Toggle, "dock.previews", "Vista previa de ventanas", "Al pasar el ratón sobre una app abierta", d.PreviewsEnabled, enabled, off),
                 new(RowKind.Toggle, "dock.minimize", "Clic en la app activa la minimiza", "Como en Windows; desactivado, como en macOS", d.ClickActiveMinimizes, enabled, off),
-            ], "Al salir de WinMac el espacio reservado se devuelve a Windows."),
+            ], "Al salir de Hatsu Desktop el espacio reservado se devuelve a Windows."),
             TaskbarGroup(input),
         ]);
     }
@@ -299,11 +299,11 @@ public static class SettingsBuilder
     /// <summary>WM-034: independiente del Dock (las cuatro combinaciones con «Ocultar automáticamente» del Dock son válidas).</summary>
     private static SettingsGroup TaskbarGroup(SettingsInput input)
     {
-        var rows = new List<SettingsRow> { new(RowKind.Toggle, "host.hidetaskbar", "Ocultar barra de tareas de Windows", "En todas las pantallas, mientras WinMac está abierto. Se restaura al desactivarlo y al salir", input.Cfg.HideTaskbar) };
+        var rows = new List<SettingsRow> { new(RowKind.Toggle, "host.hidetaskbar", "Ocultar barra de tareas de Windows", "En todas las pantallas, mientras Hatsu Desktop está abierto. Se restaura al desactivarlo y al salir", input.Cfg.HideTaskbar) };
         if (input.Cfg.HideTaskbar && input.TaskbarStatus.Length > 0) rows.Add(new(RowKind.Info, "host.taskbarstate", "Ahora: " + input.TaskbarStatus));
         return new SettingsGroup("Barra de tareas de Windows", rows,
             "No se cierra ni se modifica Explorer: se ocultan sus ventanas y se activa temporalmente su «Ocultar automáticamente» para que no reserve espacio; al restaurar vuelve tu ajuste. " +
-            "Si WinMac falla, un proceso guardián la devuelve. Si algo queda mal: ejecuta «WinMac.exe --restore-taskbar», reinicia el Explorador o cierra sesión.");
+            "Si Hatsu Desktop falla, un proceso guardián la devuelve. Si algo queda mal: ejecuta «WinMac.exe --restore-taskbar», reinicia el Explorador o cierra sesión.");
     }
 
     /// <summary>
@@ -313,10 +313,10 @@ public static class SettingsBuilder
     private static SettingsPage ConnectPage(SettingsInput input, bool on)
     {
         var c = input.Cfg.Connect ?? new WinMac.Connect.ConnectSettings(); var bar = input.Cfg.Bar ?? new BarConfig();
-        string? off = on ? null : "Activa WinMac Connect arriba";
-        return new("connect", "WinMac Connect", "phone",
+        string? off = on ? null : "Activa Hatsu Connect arriba";
+        return new("connect", "Hatsu Connect", "phone",
         [
-            new("WinMac Connect", [
+            new("Hatsu Connect", [
                 new(RowKind.Toggle, "connect.module", "Conectar con el iPhone", "Batería y notificaciones por Bluetooth. Sin app en el iPhone ni Phone Link", on),
             ], "Un módulo aparte, como la Barra y el Dock: si falla, lo demás sigue. Desactivado, no usa el Bluetooth ni consume nada."),
             new("iPhone", [
@@ -327,16 +327,16 @@ public static class SettingsBuilder
             new("Qué mostrar", [
                 new(RowKind.Toggle, "connect.battery", "Batería y estado de conexión", "El porcentaje real que da el iPhone; sin conexión no se muestra un porcentaje viejo", c.Battery, on, off),
                 Bar(35, "Solo aparece con datos reales del iPhone"),
-                new(RowKind.Toggle, "connect.notifs", "Notificaciones del iPhone", "En el Centro de Notificaciones de WinMac; las que ya tenías entran sin avisos", c.Notifications, on, off),
+                new(RowKind.Toggle, "connect.notifs", "Notificaciones del iPhone", "En el Centro de Notificaciones de Hatsu Desktop; las que ya tenías entran sin avisos", c.Notifications, on, off),
                 new(RowKind.Toggle, "connect.calls", "Avisos de llamadas", "Entrantes y perdidas. Contestar y rechazar desde el PC aún no está disponible", c.Calls, on && c.Notifications, on ? null : off),
                 new(RowKind.Toggle, "connect.island", "También en la Isla", "Pestaña Notificaciones de la Isla", c.Island, on && c.Notifications, on ? null : off),
                 new(RowKind.Toggle, "connect.alerts", "Aviso emergente para las nuevas", "En la Isla, como las de Windows", c.Alerts, on && c.Notifications && c.Island, on ? null : off),
             ]),
             new("Privacidad", [
                 new(RowKind.Segmented, "connect.content", "Contenido de las notificaciones", "Lo que no se elige ni siquiera se pide al iPhone", Options: ContentNames, Selected: (int)c.Content, Enabled: on && c.Notifications, Reason: on ? null : off),
-            ], "El contenido vive solo en memoria mientras WinMac está abierto: no se guarda en disco, no se registra y no sale del PC. Quitar el iPhone en Windows borra el vínculo."),
+            ], "El contenido vive solo en memoria mientras Hatsu Desktop está abierto: no se guarda en disco, no se registra y no sale del PC. Quitar el iPhone en Windows borra el vínculo."),
             new("Qué no hace (todavía)", [
-                new(RowKind.Info, "connect.m1", "Mensajes (SMS e iMessage): fase posterior. Ahora WinMac no lee, envía ni borra mensajes."),
+                new(RowKind.Info, "connect.m1", "Mensajes (SMS e iMessage): fase posterior. Ahora Hatsu Desktop no lee, envía ni borra mensajes."),
                 new(RowKind.Info, "connect.m2", "Hablar por el PC (micrófono y altavoces): Windows lo restringe a apps autorizadas por Microsoft; no se intenta."),
                 new(RowKind.Info, "connect.m3", "Estado de carga del iPhone: Bluetooth solo da el porcentaje. Portapapeles universal y Handoff: dependen de servicios privados de Apple."),
             ]),
@@ -387,8 +387,8 @@ public static class SettingsBuilder
         }
 
         if (rows.Count == 0) rows.Add(new(RowKind.Info, "ext.empty", "No hay extensiones instaladas."));
-        groups.Add(new("Instaladas", rows, "Cada extensión es un programa aparte: si falla, WinMac sigue funcionando. Solo puede hacer lo que indican sus permisos; se ejecuta con tus permisos de usuario (no es un entorno aislado para código desconocido: instala solo extensiones en las que confíes)."));
-        groups.Add(new("Instalar", [new(RowKind.Field, "ext.install", "Carpeta de la extensión", Enabled: available, Reason: available ? null : unavailable, Text: "", Placeholder: "C:\\…\\mi-extension (con extension.json)")], "Se copia a la carpeta de extensiones de WinMac y queda desactivada hasta que la actives."));
+        groups.Add(new("Instaladas", rows, "Cada extensión es un programa aparte: si falla, Hatsu Desktop sigue funcionando. Solo puede hacer lo que indican sus permisos; se ejecuta con tus permisos de usuario (no es un entorno aislado para código desconocido: instala solo extensiones en las que confíes)."));
+        groups.Add(new("Instalar", [new(RowKind.Field, "ext.install", "Carpeta de la extensión", Enabled: available, Reason: available ? null : unavailable, Text: "", Placeholder: "C:\\…\\mi-extension (con extension.json)")], "Se copia a la carpeta de extensiones de Hatsu Desktop y queda desactivada hasta que la actives."));
         return new SettingsPage("ext", "Extensiones", "puzzle", groups);
     }
 }

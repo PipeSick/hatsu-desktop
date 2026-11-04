@@ -211,7 +211,7 @@ internal static class Program
     /// <summary>Qué leen de verdad los monitores del panel en ESTE equipo (discos, memoria, temperaturas): para diagnosticar con datos reales, sin cambiar nada.</summary>
     private static void HubProbe()
     {
-        Log("Panel de WinMac (lecturas reales de este equipo):");
+        Log("Panel de Hatsu Desktop (lecturas reales de este equipo):");
         var (svc, owner) = WinMac.Bar.Win.Shell.Hub.HubServicesFactory.CreateReal();
         try
         {

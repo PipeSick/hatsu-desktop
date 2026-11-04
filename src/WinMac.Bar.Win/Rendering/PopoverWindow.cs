@@ -153,7 +153,7 @@ internal sealed class PopoverWindow : IDisposable
         {
             var cls = new BarNative.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<BarNative.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = BarNative.GetModuleHandle(null), lpszClassName = "WinMacPanel", hCursor = BarNative.LoadCursor(IntPtr.Zero, 32512) };
             BarNative.RegisterClassEx(ref cls);
-            _hwnd = BarNative.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, "WinMacPanel", "WinMac panel", WS_POPUP, 0, 0, 10, 10, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
+            _hwnd = BarNative.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, "WinMacPanel", "Hatsu Desktop panel", WS_POPUP, 0, 0, 10, 10, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
             if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("No se pudo crear la ventana del panel: " + Marshal.GetLastWin32Error());
             _dev = new D2DDevice(); _painter = new PanelPainter(_dev) { IconProvider = _icons };
         }

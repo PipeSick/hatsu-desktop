@@ -87,7 +87,7 @@ internal static class WindowArranger
         if (m.Show == WinShow.Maximized && IsZoomed(m.Handle)) ShowWindow(m.Handle, 9 /* RESTORE */);   // so it maximizes on the right monitor
         if (SetWindowPlacement(m.Handle, ref wp)) return null;
         int err = Marshal.GetLastWin32Error();
-        return err == 5 ? "la aplicación tiene más permisos que WinMac (no se puede mover)" : "Windows no lo permitió (" + err + ")";
+        return err == 5 ? "la aplicación tiene más permisos que Hatsu Desktop (no se puede mover)" : "Windows no lo permitió (" + err + ")";
     }
 
     private static string? ProcessName(IntPtr h)

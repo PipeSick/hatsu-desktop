@@ -45,7 +45,7 @@ internal sealed class CaptureOverlay : IDisposable
 
     public void Show()
     {
-        _hwnd = InstanceWindows.Create("WinMacCapture", 32515 /* IDC_CROSS */, _proc, WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, "WinMac captura", WS_POPUP, _screen.X, _screen.Y, _screen.W, _screen.H);
+        _hwnd = InstanceWindows.Create("WinMacCapture", 32515 /* IDC_CROSS */, _proc, WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, "Hatsu Desktop captura", WS_POPUP, _screen.X, _screen.Y, _screen.W, _screen.H);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("No se pudo crear la ventana de captura: " + Marshal.GetLastWin32Error());
         _dev = new D2DDevice(); _ctx = _dev.Context; _dev.SetDpi(1.0);   // 1 DIP = 1 physical px: the virtual screen can mix DPIs
         _b = _ctx.CreateSolidColorBrush(new Color4(1, 1, 1, 1));

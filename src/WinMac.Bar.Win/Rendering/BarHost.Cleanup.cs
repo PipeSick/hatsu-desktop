@@ -72,7 +72,7 @@ public sealed partial class BarHost
 
     private void RunClean(Action work)
     {
-        var t = new Thread(() => { try { work(); } catch (Exception e) { _log("[limpieza] " + e.GetType().Name + ": " + e.Message); } }) { IsBackground = true, Name = "WinMac Cleanup" };
+        var t = new Thread(() => { try { work(); } catch (Exception e) { _log("[limpieza] " + e.GetType().Name + ": " + e.Message); } }) { IsBackground = true, Name = "Hatsu Cleanup" };
         t.Start();
     }
 }

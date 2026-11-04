@@ -53,7 +53,7 @@ public class ConnectBarTests
         Assert.Equal("Todavía no se ha recibido ninguna", ((PhoneNotifData)N(0).Widgets.Single(w => w.Id == "phone-notifs").Data!).Detail);
         Assert.Equal("Recibidas ahora: 3", ((PhoneNotifData)N(3).Widgets.Single(w => w.Id == "phone-notifs").Data!).Detail);
         // acciones inferiores
-        Assert.Contains(on.Widgets, w => w.Id == "phone:settings-btn" && w.Text == "Ajustes de WinMac Connect"); Assert.Contains(on.Widgets, w => w.Text == "Bluetooth de Windows");
+        Assert.Contains(on.Widgets, w => w.Id == "phone:settings-btn" && w.Text == "Ajustes de Hatsu Connect"); Assert.Contains(on.Widgets, w => w.Text == "Bluetooth de Windows");
     }
 
     [Fact]

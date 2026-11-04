@@ -9,6 +9,21 @@ namespace WinMac.Host.App;
 internal sealed class Tray : IDisposable
 {
     private const uint WM_TRAY = Native.WM_APP + 1; private const int IDI_APPLICATION = 32512;
+
+    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern uint ExtractIconExW(string file, int index, IntPtr[]? large, IntPtr[]? small, uint count);
+
+    /// <summary>Hatsu Desktop: el icono de la bandeja es el del propio ejecutable (el recurso incrustado); si no se puede leer, el genérico de Windows de antes.</summary>
+    private static IntPtr OwnIcon()
+    {
+        try
+        {
+            var small = new IntPtr[1];
+            if (Environment.ProcessPath is { } exe && ExtractIconExW(exe, 0, null, small, 1) >= 1 && small[0] != IntPtr.Zero) return small[0];
+        }
+        catch (Exception) { /* sin icono propio: el genérico */ }
+        return Native.LoadIconW(IntPtr.Zero, (IntPtr)IDI_APPLICATION);
+    }
     private readonly Native.WndProc _proc; private readonly Func<IReadOnlyDictionary<string, ModuleState>> _states; private readonly Action _quit; private readonly Action<string> _open; private readonly Action _settings; private readonly Action<string> _log;
     private readonly bool _showIcon; private IntPtr _hwnd; private uint _taskbarCreated; private bool _added;
     public IntPtr Handle => _hwnd;
@@ -21,7 +36,7 @@ internal sealed class Tray : IDisposable
         _states = states; _quit = quit; _open = open; _settings = settings; _log = log; _showIcon = showIcon; _proc = WndProcImpl;
         var cls = new Native.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<Native.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = Native.GetModuleHandle(null), lpszClassName = "WinMacHost" };
         Native.RegisterClassEx(ref cls);
-        _hwnd = Native.CreateWindowEx(Native.WS_EX_TOOLWINDOW, "WinMacHost", "WinMac", Native.WS_POPUP, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
+        _hwnd = Native.CreateWindowEx(Native.WS_EX_TOOLWINDOW, "WinMacHost", "Hatsu Desktop", Native.WS_POPUP, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("no se pudo crear la ventana oculta del host: " + Marshal.GetLastWin32Error());
         _taskbarCreated = Native.RegisterWindowMessageW("TaskbarCreated");
         if (_showIcon) AddIcon();
@@ -37,7 +52,7 @@ internal sealed class Tray : IDisposable
     private Native.NOTIFYICONDATAW Data(uint flags) => new()
     {
         cbSize = (uint)Marshal.SizeOf<Native.NOTIFYICONDATAW>(), hWnd = _hwnd, uID = 1, uFlags = flags, uCallbackMessage = WM_TRAY,
-        hIcon = Native.LoadIconW(IntPtr.Zero, (IntPtr)IDI_APPLICATION), szTip = "WinMac", szInfo = "", szInfoTitle = "",
+        hIcon = OwnIcon(), szTip = "Hatsu Desktop", szInfo = "", szInfoTitle = "",
     };
 
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
@@ -51,7 +66,7 @@ internal sealed class Tray : IDisposable
         return Native.DefWindowProc(h, msg, w, l);
     }
 
-    private static string Label(string id) => id switch { "bar" => "Barra superior", "dock" => "Dock", "notch" => "Isla", "connect" => "WinMac Connect", _ => id };
+    private static string Label(string id) => id switch { "bar" => "Barra superior", "dock" => "Dock", "notch" => "Isla", "connect" => "Hatsu Connect", _ => id };
     private static string Text(ModuleState s) => s switch
     {
         ModuleState.Running => "en ejecución", ModuleState.Starting => "iniciando…", ModuleState.Stopping => "cerrando…", ModuleState.Stopped => "detenido", ModuleState.Crashed => "reiniciando…",
@@ -95,8 +110,8 @@ internal sealed class Tray : IDisposable
             if (reopen.Count > 0) Native.AppendMenuW(menu, 0x800 /* SEPARATOR */, UIntPtr.Zero, null);
             for (int i = 0; i < reopen.Count; i++) Native.AppendMenuW(menu, 0, (UIntPtr)(uint)(100 + i), $"{(states.First(k => k.Key == reopen[i]).Value == ModuleState.Disabled ? "Activar" : "Abrir")} {Label(reopen[i])}");
             Native.AppendMenuW(menu, 0x800 /* SEPARATOR */, UIntPtr.Zero, null);
-            Native.AppendMenuW(menu, 0, (UIntPtr)2, "Ajustes de WinMac…");
-            Native.AppendMenuW(menu, 0, (UIntPtr)1, "Salir de WinMac");
+            Native.AppendMenuW(menu, 0, (UIntPtr)2, "Ajustes de Hatsu Desktop…");
+            Native.AppendMenuW(menu, 0, (UIntPtr)1, "Salir de Hatsu Desktop");
             Native.GetCursorPos(out var p); Native.SetForegroundWindow(_hwnd);   // requisito documentado de TrackPopupMenu
             int cmd = Native.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x20 | 0x2 /* RETURNCMD|NONOTIFY|BOTTOMALIGN|RIGHTBUTTON */, p.X, p.Y, _hwnd, IntPtr.Zero);
             Native.PostMessage(_hwnd, Native.WM_NULL, IntPtr.Zero, IntPtr.Zero);

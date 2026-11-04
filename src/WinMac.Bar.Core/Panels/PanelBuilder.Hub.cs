@@ -244,7 +244,7 @@ public static partial class PanelBuilder
         var w = new List<Widget>(); var st = c.Hub?.Weather ?? WeatherState.NoCity; bool f = c.Cfg.WeatherFahrenheit, h24 = c.Hub?.Use24h ?? c.Cfg.Use24Hour;
         if (st.Status == WeatherStatus.NoCity)
         {
-            w.Add(new Widget(WidgetKind.Header, "title", "Tiempo")); w.Add(Note("nocity", "Elige una ciudad en los ajustes de WinMac para ver el tiempo."));
+            w.Add(new Widget(WidgetKind.Header, "title", "Tiempo")); w.Add(Note("nocity", "Elige una ciudad en los ajustes de Hatsu Desktop para ver el tiempo."));
             w.Add(new Widget(WidgetKind.Button, "hub:settings-weather", "Abrir ajustes del Tiempo", Glyph: "gear"));
         }
         else if (st.Snapshot is null)

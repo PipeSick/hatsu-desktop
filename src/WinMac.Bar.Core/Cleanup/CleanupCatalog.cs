@@ -20,9 +20,9 @@ public static class CleanupCatalog
             new("shader-cache", "Caché de sombreadores gráficos", "Sombreadores DirectX precompilados; se regeneran solos la próxima vez que una app los pida.", CleanupKind.Folder, R(J(local, "D3DSCache")), d1),
             new("crash-dumps", "Volcados de errores de apps", "Volcados de memoria de cierres inesperados con más de 7 días; solo sirven para diagnosticar.", CleanupKind.Folder, R(J(local, "CrashDumps")), d7),
             new("wer-reports", "Informes de errores de Windows", "Informes de error ya enviados o en cola con más de 7 días, del propio usuario.", CleanupKind.Folder, R(J(local, "Microsoft\\Windows\\WER\\ReportArchive"), J(local, "Microsoft\\Windows\\WER\\ReportQueue")), d7),
-            new("winmac-logs", "Registros antiguos de WinMac", "Registros (.log) de WinMac con más de 14 días. Los actuales no se tocan.", CleanupKind.Folder, R(J(local, "WinMac\\logs")), d14, [".log", ".txt"]),
+            new("winmac-logs", "Registros antiguos de Hatsu Desktop", "Registros (.log) de Hatsu Desktop con más de 14 días. Los actuales no se tocan.", CleanupKind.Folder, R(J(local, "WinMac\\logs")), d14, [".log", ".txt"]),
             new("recycle-bin", "Papelera de reciclaje", "Elementos que ya borraste. Vaciarla es definitivo: se pide una confirmación aparte.", CleanupKind.RecycleBin, [], TimeSpan.Zero),
-            new("setup-leftovers", "Restos de instalaciones y actualizaciones de Windows", "", CleanupKind.ReviewOnly, [], TimeSpan.Zero, WhyNotCleanable: "Requiere permisos de administrador (C:\\Windows\\Temp, SoftwareDistribution). WinMac no eleva privilegios: usa «Liberador de espacio en disco» de Windows."),
+            new("setup-leftovers", "Restos de instalaciones y actualizaciones de Windows", "", CleanupKind.ReviewOnly, [], TimeSpan.Zero, WhyNotCleanable: "Requiere permisos de administrador (C:\\Windows\\Temp, SoftwareDistribution). Hatsu Desktop no eleva privilegios: usa «Liberador de espacio en disco» de Windows."),
             new("orphans", "Restos de aplicaciones desinstaladas", "", CleanupKind.ReviewOnly, [], TimeSpan.Zero, WhyNotCleanable: "No se puede demostrar de forma fiable que una carpeta esté huérfana: borrarla por su nombre podría destruir datos de una app instalada. Revisión manual."),
         ];
     }

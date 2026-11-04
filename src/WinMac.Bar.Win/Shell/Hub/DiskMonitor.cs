@@ -100,7 +100,7 @@ internal sealed class DiskMonitor : IDiskMonitor, IDisposable
 
             if (map.Count == 0) why = "Windows no entrega temperatura, desgaste ni horas de este disco";
         }
-        catch (System.Management.ManagementException e) when (e.ErrorCode == System.Management.ManagementStatus.AccessDenied) { why = "Temperatura, desgaste y horas requieren abrir WinMac como administrador"; }
+        catch (System.Management.ManagementException e) when (e.ErrorCode == System.Management.ManagementStatus.AccessDenied) { why = "Temperatura, desgaste y horas requieren abrir Hatsu Desktop como administrador"; }
         catch (Exception e) { why = "No se pudieron leer temperatura, desgaste y horas (" + e.GetType().Name + ")"; }
         return (map, why);
     }

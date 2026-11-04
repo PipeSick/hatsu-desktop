@@ -179,7 +179,7 @@ jobs:
           # Desinstalación limpia en este runner: sin -RemoveFolder; comprueba que el inicio automático y los datos se quitan
           if (-not (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run')) { New-Item -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Force | Out-Null }   # algunos runners no traen la clave
           New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WinMac' -Value 'x' -Force | Out-Null
-          ./dist/WinMac/Uninstall-WinMac.ps1 -RemoveData
+          ./dist/WinMac/Uninstall-HatsuDesktop.ps1 -RemoveData
           $runLeft = [bool](Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WinMac' -ErrorAction SilentlyContinue)
           Write-Host "Tras desinstalar: inicio automático presente=$runLeft; datos presentes=$(Test-Path (Join-Path $env:APPDATA 'WinMac'))/$(Test-Path (Join-Path $env:LOCALAPPDATA 'WinMac'))"
           if ($first -ne $second) { throw 'El empaquetado no es reproducible' }
@@ -189,7 +189,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: winmac-paquete-${{ github.sha }}
+          name: hatsu-desktop-paquete-${{ github.sha }}
           path: paquete
           retention-days: 14
           if-no-files-found: warn

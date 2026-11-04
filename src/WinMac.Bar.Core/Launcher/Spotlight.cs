@@ -22,7 +22,7 @@ public sealed record SpotItem(SpotKind Kind, string Title, string? Subtitle, str
         SpotKind.App => "Aplicaciones",
         SpotKind.Setting => "Configuración",
         SpotKind.Folder or SpotKind.Path => "Carpetas y rutas",
-        SpotKind.Action => "WinMac",
+        SpotKind.Action => "Hatsu Desktop",
         SpotKind.Tool => "Herramientas",
         SpotKind.Command => "Terminal",
         SpotKind.Script => "Scripts",

@@ -157,7 +157,7 @@ public sealed class Supervisor
                 r.FirstLaunch.TrySetResult();
                 if (!LaunchDiagnostics.Retryable(launchError)) { r.Set(ModuleState.Failed); return; }   // sin ejecutable: no se reintenta; los demás siguen
                 var t0 = _clock.UtcNow; r.Crashes.Add(t0); r.Crashes.RemoveAll(t => t0 - t > _p.CrashWindow);
-                if (r.Crashes.Count >= _p.MaxCrashes) { Log($"[{r.Spec.Id}] {r.Crashes.Count} intentos fallidos en {_p.CrashWindow.TotalSeconds:0}s: no se reintenta (ábrelo desde la bandeja de WinMac)"); r.Set(ModuleState.Failed); return; }
+                if (r.Crashes.Count >= _p.MaxCrashes) { Log($"[{r.Spec.Id}] {r.Crashes.Count} intentos fallidos en {_p.CrashWindow.TotalSeconds:0}s: no se reintenta (ábrelo desde la bandeja de Hatsu Desktop)"); r.Set(ModuleState.Failed); return; }
                 var w0 = TimeSpan.FromMilliseconds(Math.Min(_p.BackoffMax.TotalMilliseconds, _p.BackoffStart.TotalMilliseconds * Math.Pow(2, step++)));
                 r.Set(ModuleState.Crashed); Log($"[{r.Spec.Id}] nuevo intento en {w0.TotalSeconds:0.##}s");
                 try { await _clock.Delay(w0, stop.Token).ConfigureAwait(false); } catch (OperationCanceledException) { return; }
