@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot; $root = Resolve-Path (Join-Path $here '..\..'); $dist = (Resolve-Path $DistDir).Path
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null; $out = (Resolve-Path $OutDir).Path
 $report = [Collections.Generic.List[string]]::new(); $fails = 0
-function Check([string]$name, [bool]$ok, [string]$detail = '') { $script:report.Add("| $(if ($ok) { 'OK' } else { 'FALLO' }) | $name | $detail |"); Write-Host ("{0}  {1} {2}" -f $(if ($ok) { 'PASS' } else { 'FAIL' }), $name, $detail); if (-not $ok) { $script:fails++ } }
+function Check([string]$name, $okv, [string]$detail = '') { $ok = [bool](@($okv) | Select-Object -Last 1); $script:report.Add("| $(if ($ok) { 'OK' } else { 'FALLO' }) | $name | $detail |"); Write-Host ("{0}  {1} {2}" -f $(if ($ok) { 'PASS' } else { 'FAIL' }), $name, $detail); if (-not $ok) { $script:fails++ } }
 $report.Add('| Resultado | Comprobación | Detalle |'); $report.Add('|---|---|---|')
 
 $installDir = Join-Path $env:LOCALAPPDATA 'Programs\Hatsu Desktop'; $exe = Join-Path $installDir 'HatsuDesktop.exe'
@@ -31,14 +31,14 @@ Check 'dos compilaciones de la misma versión dan el mismo ProductCode' ((Get-Co
 
 # ── estructura del MSI (tablas) sin instalar
 $wi = New-Object -ComObject WindowsInstaller.Installer
-function Prop($db, [string]$name) { $v = $db.OpenView("SELECT Value FROM Property WHERE Property='$name'"); $v.Execute(); $r = $v.Fetch(); if ($r) { $r.StringData(1) } }
+function Prop($db, [string]$name) { $v = $db.OpenView("SELECT Value FROM Property WHERE Property='$name'"); [void]$v.Execute(); $r = $v.Fetch(); if ($r) { [string]$r.StringData(1) } else { $null } }
 $db = $wi.OpenDatabase($msis['2.0.0'], 0)
 Check 'MSI: nombre del producto «Hatsu Desktop»' ((Prop $db 'ProductName') -eq 'Hatsu Desktop') (Prop $db 'ProductName')
 Check 'MSI: UpgradeCode estable' ((Prop $db 'UpgradeCode') -eq '{AE38CBF7-6543-463E-9067-50E88F162FA1}') (Prop $db 'UpgradeCode')
 Check 'MSI: versión 2.0.0' ((Prop $db 'ProductVersion') -eq '2.0.0')
 Check 'MSI: fabricante «Hatsu Desktop» (no WinMac)' ((Prop $db 'Manufacturer') -eq 'Hatsu Desktop')
 Check 'MSI: instalación por usuario (ALLUSERS ausente)' ($null -eq (Prop $db 'ALLUSERS') -or (Prop $db 'ALLUSERS') -eq '') (Prop $db 'ALLUSERS')
-$v = $db.OpenView("SELECT FileName FROM File"); $v.Execute(); $files = @(); while ($r = $v.Fetch()) { $files += ($r.StringData(1) -split '\|')[-1] }
+$v = $db.OpenView("SELECT FileName FROM File"); [void]$v.Execute(); $files = @(); while ($r = $v.Fetch()) { $files += ([string]$r.StringData(1) -split '\|')[-1] }
 foreach ($f in 'HatsuDesktop.exe', 'HatsuDesktop.Bar.exe', 'HatsuDesktop.Dock.exe', 'HatsuDesktop.Connect.exe', 'NotchWin.App.exe', 'HatsuDesktop.ico', 'Restore-Taskbar.ps1', 'Migrate-FromWinMac.ps1', 'LICENSE') { Check "MSI incluye $f" ($files -contains $f) }
 Check 'MSI no incluye ejecutables con el nombre antiguo' (-not ($files | Where-Object { $_ -in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'WinMac.Connect.App.exe' }))
 Check 'MSI no incluye el desinstalador del ZIP' (-not ($files -contains 'Uninstall-HatsuDesktop.ps1'))
