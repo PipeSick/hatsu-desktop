@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Windows.ApplicationModel.Calls;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Enumeration;
@@ -6,10 +5,11 @@ using Windows.Devices.Radios;
 using Windows.Foundation.Metadata;
 using Windows.Media.Devices;
 using Microsoft.Win32;
+using System.Diagnostics;
 
 namespace CallProbe;
 
-/// <summary>ETAPA 1 — Descubrimiento. Solo lee: no empareja, no registra, no abre canales, no toca llamadas.</summary>
+/// <summary>ETAPA 1 — Descubrimiento. Solo lee: no empareja, no registra, no abre canales, no toca llamadas. Cada llamada de Windows lleva tiempo máximo (la etapa 1 se colgó una vez sin él).</summary>
 internal static class Discovery
 {
     private static readonly Dictionary<Guid, string> Uuids = new()
@@ -20,7 +20,7 @@ internal static class Discovery
         [Guid.Parse("0000112f-0000-1000-8000-00805f9b34fb")] = "PBAP Phonebook Server", [Guid.Parse("00001130-0000-1000-8000-00805f9b34fb")] = "PBAP Phonebook Client",
     };
 
-    public static async Task RunAsync(string? nameFilter)
+    public static async Task RunAsync(string? nameFilter, bool lines)
     {
         Report.Title("ETAPA 1 — Descubrimiento (solo lectura)");
         Report.Item("Windows", Native.WindowsBuild());
@@ -29,87 +29,79 @@ internal static class Discovery
         Report.Item("Contrato CallsPhoneContract v5 (transporte, Windows 10 1903+)", ApiInformation.IsApiContractPresent("Windows.ApplicationModel.Calls.CallsPhoneContract", 5));
         Report.Item("Contrato CallsPhoneContract v6 (PhoneCall: contestar, colgar, audio)", ApiInformation.IsApiContractPresent("Windows.ApplicationModel.Calls.CallsPhoneContract", 6));
         Report.Item("Tipo PhoneCall presente", ApiInformation.IsTypePresent("Windows.ApplicationModel.Calls.PhoneCall"));
-        Report.Item("Phone Link en ejecución (puede disputar el transporte)", string.Join(", ", new[] { "PhoneExperienceHost", "YourPhone", "PhoneLink" }.Where(n => Process.GetProcessesByName(n).Length > 0).DefaultIfEmpty("no")));
+        Report.Item("Phone Link en ejecución (puede disputar el transporte)", Native.PhoneLinkRunning() ? "SÍ" : "no");
 
-        await AdapterAsync(); await PairedAsync(nameFilter); await TransportsAsync(); await AudioAsync(); RegistryAndServices();
+        await AdapterAsync(); await PairedAsync(nameFilter); await TransportsAsync(lines); await AudioAsync(); RegistryAndServices();
     }
 
     private static async Task AdapterAsync()
     {
         Report.Title("Adaptador Bluetooth");
-        try
-        {
-            var a = await BluetoothAdapter.GetDefaultAsync();
-            if (a is null) { Report.Line("  No hay adaptador Bluetooth utilizable por la API de Windows."); return; }
-            Report.Item("Classic (BR/EDR)", a.IsClassicSupported); Report.Item("Low Energy", a.IsLowEnergySupported); Report.Item("Rol central", a.IsCentralRoleSupported); Report.Item("Rol periférico", a.IsPeripheralRoleSupported);
-            Report.Item("LE Secure Connections", a.AreLowEnergySecureConnectionsSupported); Report.Item("Classic Secure Connections", a.AreClassicSecureConnectionsSupported);
-            foreach (var r in (await Radio.GetRadiosAsync()).Where(r => r.Kind == RadioKind.Bluetooth)) Report.Item("Radio " + r.Name, r.State);
-        }
-        catch (Exception e) { Report.Line("  Error: " + e.GetType().Name + ": " + e.Message); }
+        var a = (await Steps.Run("BluetoothAdapter.GetDefaultAsync", async () => await BluetoothAdapter.GetDefaultAsync())).Value;
+        if (a is null) { Report.Line("  No hay adaptador Bluetooth utilizable por la API de Windows."); return; }
+        Report.Item("Classic (BR/EDR)", a.IsClassicSupported); Report.Item("Low Energy", a.IsLowEnergySupported); Report.Item("Rol central", a.IsCentralRoleSupported); Report.Item("Rol periférico", a.IsPeripheralRoleSupported);
+        Report.Item("LE Secure Connections", a.AreLowEnergySecureConnectionsSupported); Report.Item("Classic Secure Connections", a.AreClassicSecureConnectionsSupported);
+        var radios = (await Steps.Run("Radio.GetRadiosAsync", async () => (await Radio.GetRadiosAsync()).ToList())).Value ?? [];
+        foreach (var r in radios.Where(r => r.Kind == RadioKind.Bluetooth)) Report.Item("Radio Bluetooth", r.State);
     }
 
     private static async Task PairedAsync(string? filter)
     {
         Report.Title("Dispositivos Bluetooth emparejados y sus servicios RFCOMM (SDP)");
-        try
+        var infos = (await Steps.Run("DeviceInformation.FindAllAsync(emparejados)", async () => (await DeviceInformation.FindAllAsync(BluetoothDevice.GetDeviceSelectorFromPairingState(true))).ToList())).Value ?? [];
+        foreach (var info in infos)
         {
-            foreach (var info in await DeviceInformation.FindAllAsync(BluetoothDevice.GetDeviceSelectorFromPairingState(true)))
-            {
-                if (filter is not null && !info.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
-                using var dev = await BluetoothDevice.FromIdAsync(info.Id); if (dev is null) continue;
-                Report.Line($"  · {Report.Mask(dev.Name)}  dirección {Report.Addr(dev.BluetoothAddress)}  conexión {dev.ConnectionStatus}  cifrado/autenticado {info.Pairing.ProtectionLevel}");
-                var svcs = await dev.GetRfcommServicesAsync(BluetoothCacheMode.Uncached);
-                if (svcs.Error != BluetoothError.Success) { Report.Line("      SDP: " + svcs.Error); continue; }
-                foreach (var s in svcs.Services) { Report.Line($"      servicio {(Uuids.TryGetValue(s.ServiceId.Uuid, out var n) ? n : s.ServiceId.Uuid.ToString())}"); s.Dispose(); }
-            }
+            if (filter is not null && !info.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
+            var dev = (await Steps.Run("BluetoothDevice.FromIdAsync", async () => await BluetoothDevice.FromIdAsync(info.Id))).Value; if (dev is null) continue;
+            Report.Line($"  · {Report.Mask(dev.Name)}  dirección {Report.Addr(dev.BluetoothAddress)}  conexión {dev.ConnectionStatus}");   // (el «nivel de protección» de DeviceInformation.Pairing es el solicitado, no el real: se omite para no confundir)
+            var svcs = (await Steps.Run("GetRfcommServicesAsync(sin caché)", async () => await dev.GetRfcommServicesAsync(BluetoothCacheMode.Uncached))).Value;
+            if (svcs is null) continue;
+            if (svcs.Error != BluetoothError.Success) { Report.Line("      SDP: " + svcs.Error); continue; }
+            foreach (var s in svcs.Services) { Report.Line($"      servicio {(Uuids.TryGetValue(s.ServiceId.Uuid, out var n) ? n : s.ServiceId.Uuid.ToString())}"); s.Dispose(); }
+            dev.Dispose();
         }
-        catch (Exception e) { Report.Line("  Error: " + e.GetType().Name + ": " + e.Message); }
     }
 
-    private static async Task TransportsAsync()
+    private static async Task TransportsAsync(bool lines)
     {
         Report.Title("Transportes de telefonía de Windows (PhoneLineTransportDevice)");
-        try
-        {
-            const string addr = "System.DeviceInterface.Bluetooth.DeviceAddress";
-            var all = await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(), [addr]);
-            Report.Item("Transportes encontrados (todos)", all.Count);
-            var bt = await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth), [addr]);
-            Report.Item("Transportes Bluetooth", bt.Count);
-            foreach (var d in bt) Report.Line($"  · «{Report.Mask(d.Name)}»  id …{d.Id[^Math.Min(10, d.Id.Length)..]}  dirección {d.Properties.GetValueOrDefault(addr)}");
-            Report.Line("  (Encontrarlos no requiere paquete: según Klangbruecke FINDINGS §2 enumerar y FromId funcionan sin identidad. El permiso se pide en la etapa 2.)");
-        }
-        catch (Exception e) { Report.Line("  Error: " + e.GetType().Name + ": " + e.Message); }
-        try
-        {
-            var store = await PhoneCallManager.RequestStoreAsync(); Report.Item("PhoneCallManager.RequestStoreAsync", "OK");
-            var done = new TaskCompletionSource(); var lines = new List<Guid>(); var w = store.RequestLineWatcher();
-            w.LineAdded += (_, a) => lines.Add(a.LineId); w.EnumerationCompleted += (_, _) => done.TrySetResult(); w.Stopped += (_, _) => done.TrySetResult(); w.Start();
-            await Task.WhenAny(done.Task, Task.Delay(5000)); w.Stop();
-            foreach (var id in lines) { var l = await PhoneLine.FromIdAsync(id); if (l is not null) Report.Line($"  · línea «{Report.Mask(l.DisplayName)}» transporte {l.Transport}, CanDial={l.CanDial}, red {l.NetworkState}"); }
-            if (lines.Count == 0) Report.Line("  Sin líneas (normal si ningún transporte está registrado y conectado).");
-        }
-        catch (Exception e) { Report.Item("PhoneCallManager.RequestStoreAsync", e.GetType().Name + ": " + e.Message); }
+        const string addr = "System.DeviceInterface.Bluetooth.DeviceAddress";
+        var all = (await Steps.Run("FindAllAsync(transportes, todos)", async () => (await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(), [addr])).Count)).Value; Report.Item("Transportes encontrados (todos)", all);
+        var bt = (await Steps.Run("FindAllAsync(transportes Bluetooth)", async () => (await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth), [addr])).ToList())).Value ?? [];
+        Report.Item("Transportes Bluetooth", bt.Count);
+        foreach (var d in bt) Report.Line($"  · «{Report.Mask(d.Name)}»  id {Report.Id(d.Id)}  dirección {Report.AddrText(d.Properties.GetValueOrDefault(addr))}");
+        Report.Line("  (Encontrarlos no requiere paquete: según Klangbruecke FINDINGS §2 enumerar y FromId funcionan sin identidad. El permiso se pide en la etapa 2.)");
+
+        var store = await Steps.Run("PhoneCallManager.RequestStoreAsync", async () => await PhoneCallManager.RequestStoreAsync()); 
+        Report.Item("PhoneCallManager.RequestStoreAsync", store.Ok ? "OK" : store.Status.ToString());
+        if (!lines) { Report.Line("  Las líneas telefónicas NO se enumeran por defecto: solo existen cuando el transporte está registrado, y el vigilante de líneas (PhoneLineWatcher) fue lo que dejó colgada la etapa 1 (ver informe). Usa --lines para probarlo con tiempo máximo."); return; }
+        if (!store.Ok || store.Value is null) return;
+        var found = new List<Guid>(); var done = new TaskCompletionSource();
+        var w = (await Steps.Run("PhoneCallStore.RequestLineWatcher", () => Task.FromResult(store.Value.RequestLineWatcher()), 8)).Value; if (w is null) return;
+        w.LineAdded += (_, a) => found.Add(a.LineId); w.EnumerationCompleted += (_, _) => done.TrySetResult(); w.Stopped += (_, _) => done.TrySetResult();
+        await Steps.Run("PhoneLineWatcher.Start", () => w.Start(), 8);
+        await Task.WhenAny(done.Task, Task.Delay(4000));
+        _ = Steps.Run("PhoneLineWatcher.Stop (sin esperar)", () => w.Stop(), 8);   // Stop() puede bloquearse si la enumeración no terminó: no se espera
+        foreach (var id in found.ToList()) { var l = (await Steps.Run("PhoneLine.FromIdAsync", async () => await PhoneLine.FromIdAsync(id), 8)).Value; if (l is not null) Report.Line($"  · línea «{Report.Mask(l.DisplayName)}» transporte {l.Transport}, CanDial={l.CanDial}, red {l.NetworkState}"); }
+        if (found.Count == 0) Report.Line("  Sin líneas (normal si ningún transporte está registrado y conectado).");
     }
 
     private static async Task AudioAsync()
     {
         Report.Title("Audio de Windows: dispositivos predeterminados y puntos «Hands-Free»");
-        foreach (var (label, role) in new[] { ("Reproducción (comunicaciones)", AudioDeviceRole.Communications), ("Reproducción (predeterminado)", AudioDeviceRole.Default) })
-            await DescribeAsync(label, MediaDevice.GetDefaultAudioRenderId(role));
-        foreach (var (label, role) in new[] { ("Captura (comunicaciones)", AudioDeviceRole.Communications), ("Captura (predeterminado)", AudioDeviceRole.Default) })
-            await DescribeAsync(label, MediaDevice.GetDefaultAudioCaptureId(role));
+        foreach (var (label, role) in new[] { ("Reproducción (comunicaciones)", AudioDeviceRole.Communications), ("Reproducción (predeterminado)", AudioDeviceRole.Default) }) await DescribeAsync(label, MediaDevice.GetDefaultAudioRenderId(role));
+        foreach (var (label, role) in new[] { ("Captura (comunicaciones)", AudioDeviceRole.Communications), ("Captura (predeterminado)", AudioDeviceRole.Default) }) await DescribeAsync(label, MediaDevice.GetDefaultAudioCaptureId(role));
         foreach (var cls in new[] { DeviceClass.AudioRender, DeviceClass.AudioCapture })
         {
-            try { foreach (var d in await DeviceInformation.FindAllAsync(cls)) if (d.Name.Contains("Hands-Free", StringComparison.OrdinalIgnoreCase) || d.Name.Contains("Headset", StringComparison.OrdinalIgnoreCase)) Report.Line($"  · {cls}: {Report.Mask(d.Name)} (habilitado={d.IsEnabled})"); }
-            catch (Exception e) { Report.Line("  Error: " + e.GetType().Name); }
+            var list = (await Steps.Run($"FindAllAsync({cls})", async () => (await DeviceInformation.FindAllAsync(cls)).ToList())).Value ?? [];
+            foreach (var d in list.Where(d => d.Name.Contains("Hands-Free", StringComparison.OrdinalIgnoreCase) || d.Name.Contains("Headset", StringComparison.OrdinalIgnoreCase))) Report.Line($"  · {cls}: {Report.Mask(d.Name)} (habilitado={d.IsEnabled})");
         }
     }
 
     private static async Task DescribeAsync(string label, string id)
     {
-        try { var d = string.IsNullOrEmpty(id) ? null : await DeviceInformation.CreateFromIdAsync(id); Report.Item(label, d is null ? "(ninguno)" : Report.Mask(d.Name)); }
-        catch (Exception e) { Report.Item(label, e.GetType().Name); }
+        var d = string.IsNullOrEmpty(id) ? null : (await Steps.Run("CreateFromIdAsync", async () => await DeviceInformation.CreateFromIdAsync(id), 8)).Value;
+        Report.Item(label, d is null ? "(ninguno)" : Report.Mask(d.Name));
     }
 
     private static void RegistryAndServices()

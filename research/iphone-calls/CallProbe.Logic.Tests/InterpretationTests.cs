@@ -85,3 +85,92 @@ public class ConfirmationGateTests
     [InlineData(null, false)]
     public void Only_the_exact_word_confirms(string? typed, bool ok) => Assert.Equal(ok, ConfirmationGate.IsConfirmed(typed, ConfirmationGate.Answer));
 }
+
+public class StepGuardTests
+{
+    [Fact]
+    public async Task A_step_that_never_returns_times_out_and_does_not_block_the_caller()
+    {
+        var log = new List<string>(); var started = DateTime.UtcNow;
+        var r = await StepGuard.RunAsync("PhoneLineWatcher.Stop", () => { Thread.Sleep(Timeout.Infinite); }, TimeSpan.FromMilliseconds(150), log.Add);   // como una llamada síncrona de WinRT colgada
+        Assert.Equal(StepStatus.TimedOut, r.Status); Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(3));
+        Assert.Equal("→ PhoneLineWatcher.Stop", log[0]); Assert.Contains("SIN RESPUESTA", log[1]);   // la línea de inicio identifica el paso aunque luego todo se cuelgue
+    }
+
+    [Fact]
+    public async Task Success_and_failure_are_reported_with_their_value_or_error()
+    {
+        var ok = await StepGuard.RunAsync("x", () => Task.FromResult(42), TimeSpan.FromSeconds(2)); Assert.True(ok.Ok); Assert.Equal(42, ok.Value);
+        var bad = await StepGuard.RunAsync<int>("y", () => throw new InvalidOperationException("boom"), TimeSpan.FromSeconds(2)); Assert.Equal(StepStatus.Failed, bad.Status); Assert.IsType<InvalidOperationException>(bad.Error); Assert.Contains("ERROR", bad.Describe());
+    }
+}
+
+public class Stage3Tests
+{
+    private static Stage3Snapshot Good() => new(true, "None", false, false, false, false, true, "Allowed", "a", "b");
+
+    [Fact] public void A_clean_system_may_proceed_and_warns_that_a_developer_package_only_proves_sideload() { var c = Stage3Preconditions.Evaluate(Good(), new()); Assert.True(c.CanProceed); Assert.Contains(c.Warnings, w => w.Contains("Store")); }
+
+    [Theory]
+    [InlineData("pkg")] [InlineData("denied")] [InlineData("call")] [InlineData("incoming")] [InlineData("phonelink")] [InlineData("registered")] [InlineData("unreadable")] [InlineData("disconnected")]
+    public void Every_risky_precondition_blocks_the_test(string what)
+    {
+        var s = what switch
+        {
+            "pkg" => Good() with { Packaged = false }, "denied" => Good() with { AccessStatus = "DeniedBySystem" }, "call" => Good() with { CallActive = true }, "incoming" => Good() with { CallIncoming = true },
+            "phonelink" => Good() with { PhoneLinkRunning = true }, "registered" => Good() with { IsRegistered = true }, "unreadable" => Good() with { IsRegistered = null }, _ => Good() with { ClassicConnected = false },
+        };
+        Assert.False(Stage3Preconditions.Evaluate(s, new()).CanProceed);
+    }
+
+    [Fact]
+    public void Explicit_overrides_unblock_only_what_they_name()
+    {
+        Assert.True(Stage3Preconditions.Evaluate(Good() with { PhoneLinkRunning = true }, new(AllowPhoneLink: true)).CanProceed);
+        Assert.True(Stage3Preconditions.Evaluate(Good() with { ClassicConnected = false }, new(AllowDisconnected: true)).CanProceed);
+        Assert.False(Stage3Preconditions.Evaluate(Good() with { CallActive = true, PhoneLinkRunning = true }, new(AllowPhoneLink: true, AllowDisconnected: true)).CanProceed);   // una llamada real nunca se pasa por alto
+        Assert.False(Stage3Preconditions.Evaluate(Good(), new(HoldSeconds: 600)).CanProceed);
+    }
+
+    [Fact] public void Register_that_throws_access_denied_is_reported_as_rejected_with_its_hresult() { var o = Stage3Interpreter.Interpret(new("UnauthorizedAccessException", unchecked((int)0x80070005), false, null, null, false, null, false)); Assert.Equal("REGISTRO RECHAZADO", o.Verdict); Assert.Contains("0x80070005", o.Meaning); Assert.False(o.MayAdvanceToCallObservation); }
+    [Fact] public void Register_without_error_but_not_registered_is_the_26300_pattern_and_never_advances() { var o = Stage3Interpreter.Interpret(new(null, null, false, null, null, false, null, false)); Assert.Equal("REGISTRO SIN EFECTO", o.Verdict); Assert.Contains("6041632", o.Meaning); Assert.Contains("Phone Link", o.Next); Assert.False(o.MayAdvanceToCallObservation); }
+    [Fact] public void Delayed_registration_says_scripts_must_wait() { var o = Stage3Interpreter.Interpret(new(null, null, true, TimeSpan.FromSeconds(3), null, true, true, false)); Assert.Equal("REGISTRADA (con retraso)", o.Verdict); Assert.Contains("asíncrono", o.Meaning); }
+    [Fact] public void Registered_with_a_line_proves_registration_only_and_may_advance_to_observation() { var o = Stage3Interpreter.Interpret(new(null, null, true, TimeSpan.Zero, true, true, true, false)); Assert.Equal("REGISTRADA Y CON LÍNEA", o.Verdict); Assert.Contains("NO demuestra contestar ni audio", o.Meaning); Assert.True(o.MayAdvanceToCallObservation); }
+    [Fact] public void Connect_false_after_registration_is_inconclusive_like_klangbruecke() { var o = Stage3Interpreter.Interpret(new(null, null, true, TimeSpan.Zero, false, true, true, false)); Assert.Equal("REGISTRADA, SIN CONEXIÓN HFP", o.Verdict); Assert.Contains("no es concluyente", o.Meaning); }
+    [Fact] public void A_timeout_never_claims_anything() { var o = Stage3Interpreter.Interpret(new(null, null, true, TimeSpan.Zero, true, true, true, TimedOut: true)); Assert.Equal("SIN RESPUESTA", o.Verdict); Assert.False(o.MayAdvanceToCallObservation); }
+
+    [Fact]
+    public void Advancing_to_real_calls_needs_all_four_conditions_each_named_when_missing()
+    {
+        var ok = new Stage3Outcome("REGISTRADA Y CON LÍNEA", "", "", true);
+        Assert.Empty(Stage3Interpreter.MissingToAdvance(ok, true, true, true));
+        Assert.Equal(4, Stage3Interpreter.MissingToAdvance(ok with { MayAdvanceToCallObservation = false }, false, false, false).Count);
+        Assert.Single(Stage3Interpreter.MissingToAdvance(ok, true, true, false)); Assert.Contains("autorización", Stage3Interpreter.MissingToAdvance(ok, true, true, false)[0]);
+    }
+
+    [Theory]
+    [InlineData(false, false, null, "none")] [InlineData(true, true, true, "clean")] [InlineData(false, false, true, "clean")]
+    public void Journal_clean_cases(bool reverted, bool attempted, bool? nowRegistered, string expected) => Assert.Equal(expected, JournalDecision.Evaluate(expected == "none" ? null : new("k", DateTime.UtcNow, attempted, reverted), nowRegistered));
+
+    [Fact]
+    public void A_crash_between_register_and_revert_is_detected_on_the_next_start()
+    {
+        var crashed = new JournalState("k", DateTime.UtcNow, RegisterAttempted: true, RevertedOk: false);
+        Assert.Equal("pending-revert", JournalDecision.Evaluate(crashed, isRegisteredNow: true)); Assert.Equal("stale", JournalDecision.Evaluate(crashed, false)); Assert.Equal("stale", JournalDecision.Evaluate(crashed, null));
+        Assert.NotEqual(JournalDecision.KeyOf("a"), JournalDecision.KeyOf("b")); Assert.Equal(12, JournalDecision.KeyOf("transporte-secreto").Length); Assert.DoesNotContain("secreto", JournalDecision.KeyOf("transporte-secreto"), StringComparison.OrdinalIgnoreCase);   // el diario guarda un hash, nunca el identificador
+    }
+}
+
+public class SnapshotComparerTests
+{
+    private static Stage3Snapshot S() => new(true, "None", false, false, false, false, true, "Allowed", "r", "c");
+
+    [Fact] public void Identical_states_have_no_differences() => Assert.Empty(SnapshotComparer.Differences(S(), S() with { AccessStatus = "(no consultado)" }));   // el estado de acceso no cuenta: no es un cambio del sistema
+
+    [Fact]
+    public void Every_side_effect_is_named()
+    {
+        var d = SnapshotComparer.Differences(S(), S() with { IsRegistered = true, ClassicConnected = false, CommRenderHash = "x", CommCaptureHash = "y", CallActive = true });
+        Assert.Equal(5, d.Count); Assert.Contains(d, x => x.StartsWith("IsRegistered()")); Assert.Contains(d, x => x.Contains("conexión Bluetooth")); Assert.Contains(d, x => x.Contains("salida de audio")); Assert.Contains(d, x => x.Contains("micrófono"));
+    }
+}

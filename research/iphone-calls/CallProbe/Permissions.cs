@@ -17,13 +17,13 @@ internal static class Permissions
         Report.Item("Identidad de paquete", packaged ? "SÍ — " + Native.PackageFullName() : "NO");
         string? sig = Native.SignatureKind(); Report.Item("Tipo de firma del paquete", sig ?? "(sin paquete)");
         Report.Item("Windows", Native.WindowsBuild());
-        try
-        {   // Se pasa un token vacío a propósito: solo se LEE el estado de la función; no puede desbloquear nada.
-            var r = LimitedAccessFeatures.TryUnlockFeature(FeatureId, "", ""); Report.Item("Estado de la función de acceso limitado " + FeatureId.Split('.').Last(), r.Status);
-        }
-        catch (Exception e) { Report.Item("Función de acceso limitado", e.GetType().Name + ": " + e.Message); }
+        // Token vacío a propósito: solo se LEE el estado de la función; no puede desbloquear nada.
+        var laf = await Steps.Run("LimitedAccessFeatures.TryUnlockFeature (token vacío, solo lectura)", () => Task.FromResult(LimitedAccessFeatures.TryUnlockFeature(FeatureId, "", "").Status.ToString()), 10);
+        Report.Item("Estado de la función de acceso limitado " + FeatureId.Split('.').Last(), laf.Ok ? laf.Value : laf.Describe());
 
-        var devs = await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth));
+        var found = await Steps.Run("DeviceInformation.FindAllAsync(transporte Bluetooth)", async () => (await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth))).ToList(), 20);
+        if (!found.Ok) { Report.Line("  " + found.Describe()); return; }
+        var devs = found.Value!;
         if (devs.Count == 0) { Report.Line("  Ningún transporte Bluetooth de telefonía. ¿El iPhone está emparejado y conectado como teléfono (HFP)?"); return; }
         foreach (var d in devs)
         {
@@ -33,7 +33,9 @@ internal static class Permissions
             {
                 var t = PhoneLineTransportDevice.FromId(d.Id); if (t is null) { Report.Line("      FromId devolvió null"); continue; }
                 Report.Item("    IsRegistered() antes", t.IsRegistered());
-                var status = await t.RequestAccessAsync(); Report.Item("    RequestAccessAsync()", status);
+                var acc = await Steps.Run("RequestAccessAsync (solo consulta)", () => t.RequestAccessAsync().AsTask(), 20);
+                if (!acc.Ok) { Report.Line("      " + acc.Describe()); continue; }
+                var status = acc.Value; Report.Item("    RequestAccessAsync()", status);
                 try { Report.Item("    AudioRoutingStatus", t.AudioRoutingStatus); } catch (Exception e) { Report.Item("    AudioRoutingStatus", e.GetType().Name); }
                 try { Report.Item("    InBandRingingEnabled", t.InBandRingingEnabled); } catch (Exception e) { Report.Item("    InBandRingingEnabled", e.GetType().Name); }
                 var i = AccessInterpreter.Interpret(packaged, status.ToString(), registeredAfterRegister: null, sig);

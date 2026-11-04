@@ -233,6 +233,88 @@ Antes de nada: cierra Phone Link y desvincula el iPhone de él; el iPhone, empar
 
 **PROMETEDOR, condicionado.** Existe una vía concreta, soportada por la propia Windows, sin controladores, sin Phone Link, sin tocar el iPhone y sin vulnerar protecciones: `PhoneLineTransportDevice` + `PhoneCall` desde un paquete con la capacidad declarada. La conclusión previa («BLOQUEADO») se apoyaba en un `DeniedBySystem` sin código ni registro, probablemente obtenido sin identidad de paquete, que además no prueba nada sobre contestar ni sobre audio. Pero **la evidencia de terceros sí respalda que Windows 11 deniega el registro a apps de carga lateral**, y nadie ha demostrado el caso *iPhone + Windows 11 + app abierta*. Por eso el resultado puede acabar en **PARCIAL** (solo ANCS) o depender de una distribución por la Store. Falta lo esencial: **demostrarlo con tu iPhone**. El plan de §8 lo hace en etapas, empezando por lecturas sin ningún riesgo.
 
+## 11. Resultados reales de CallProbe (etapas 1 y 2) y análisis de la etapa 3
+
+Datos anonimizados (sin direcciones, nombres de dispositivo ni rutas). Windows 11 build 10.0.26300.9711. Los registros originales NO están en el repositorio.
+
+### 11.1 Comparación sin paquete vs. con paquete (VERIFICADO EN HARDWARE)
+
+| Consulta (solo lectura) | Sin paquete | Con paquete (registro de desarrollo, `SignatureKind=None`) |
+|---|---|---|
+| Identidad de paquete | No | Sí (`WinMac.Research.CallProbe`) |
+| `RequestAccessAsync()` | **DeniedBySystem** | **Allowed** |
+| `IsRegistered()` antes de registrar | False | False |
+| `AudioRoutingStatus` | CanRouteToLocalDevice | CanRouteToLocalDevice |
+| `InBandRingingEnabled` | — | False |
+| `LimitedAccessFeatures` (token vacío) | Unavailable | Unavailable |
+
+Etapa 1 (sin paquete): Phone Link no estaba en ejecución; el adaptador soporta Classic, LE, central, peripheral y Secure Connections; el iPhone figuraba emparejado y *desconectado* en ese instante, pero su SDP lista HFP-AG, PBAP, MAP (+2 servicios Apple); existe 1 transporte Bluetooth de telefonía.
+
+Conclusiones (VERIFICADO): (a) `DeniedBySystem` sin paquete no es un veredicto sobre la app empaquetada; con identidad de paquete y la capacidad restringida declarada, el permiso pasa a Allowed incluso en esta build. (b) Allowed **no** prueba que el registro funcione: sigue sin existir evidencia de que `RegisterApp()` tenga efecto aquí. (c) El hilo MS Q&A 6041632 (REPORTADO POR TERCEROS, solo vía resumen de búsqueda) describe justo ese patrón en la build 26300: Allowed, `RegisterApp` sin error, `IsRegistered` sigue False.
+
+### 11.2 Bloqueo de la etapa 1 tras `PhoneCallManager.RequestStoreAsync: OK`
+
+- OBSERVADO: el último paso registrado fue `RequestStoreAsync` OK; después el proceso no avanzó.
+- Lo que sigue en el código original era el arranque de `PhoneLineWatcher` (`Start()`, esperar `EnumerationCompleted`, `Stop()`) y `RequestLineWatcher`. Esas llamadas son síncronas en WinRT y pueden no retornar si el servicio de telefonía no responde. HIPÓTESIS (no determinable con los logs): bloqueo en `Start/Stop` del watcher, o `Stop()` antes de `EnumerationCompleted`.
+- Corrección (en código, con pruebas lógicas): cada llamada de Windows corre con `StepGuard` (tiempo máximo, la llamada colgada se abandona), registra «→ paso» antes de ejecutarse (la última línea dice qué se colgó), el watcher solo se usa con `--lines` y `Stop` no se espera; el proceso termina con `Environment.Exit`. No se necesita cancelación «segura» de la llamada: WinRT no permite cancelarla, solo abandonarla y salir. Etapa 2 (`Permissions`) quedó con las mismas guardas.
+
+### 11.3 Etapa 3 — qué hace exactamente
+
+Solo `stage3 register` modifica algo. Orden: (1) localizar el transporte (aborta si hay más de uno); (2) comprobar el diario de recuperación (si quedó un registro sin revertir, bloquea); (3) instantánea de estado (registrado, llamada activa, Phone Link, Bluetooth clásico conectado, hash de dispositivos de comunicaciones, acceso); (4) precondiciones (bloquea o avisa; si bloquea, no cambia nada); (5) texto explicativo y confirmación escrita **REGISTRAR** (sin stdin interactivo cancela); (6) escribe el diario *antes* de actuar; (7) `RegisterApp()` con tiempo máximo 15 s; (8) sondea `IsRegistered()` 10 s; (9) si quedó registrado: lee líneas y `AudioRoutingStatus`; `ConnectAsync` solo con `--connect` y segunda confirmación **CONECTAR**; (10) espera 10 s (`--hold`); si apareciera una llamada real **no la toca**; (11) interpreta; (12) **revierte siempre** con `UnregisterApp()` salvo `--keep`; (13) segunda instantánea y diferencias. No contesta, rechaza ni marca llamadas; el código de contestar/colgar (etapa 5) existe pero no se ejecuta aquí.
+
+### 11.4 Las 8 preguntas
+
+1. **Qué hace la etapa 3**: ver 11.3. Una única operación de escritura: `RegisterApp()` (+ su `UnregisterApp()`).
+2. **Efectos de `RegisterApp()`** — DOCUMENTADO: registra la app como la que gestiona el transporte telefónico (Bluetooth) de ese dispositivo para el usuario, de modo que reciba las llamadas/estado de esa línea. HIPÓTESIS: el registro puede ser exclusivo por transporte (otra app registrada, p. ej. Phone Link, compite). NO verificado en este PC.
+3. **Interferencias posibles** — el riesgo es bajo pero no nulo y es HIPÓTESIS: (a) llamadas normales: si el registro tiene efecto, esta app (sin UI) podría pasar a ser la receptora de la línea mientras dura la prueba; por eso se exige no esperar llamadas y el tiempo es de ~30 s; (b) dispositivos de audio: no se cambian dispositivos ni volúmenes; se compara el hash de los dispositivos de comunicaciones antes/después; (c) emparejamiento: no se emparejan ni olvidan dispositivos; `ConnectAsync` (opcional) abre el enlace de telefonía, no el emparejamiento; (d) Phone Link: se bloquea la prueba si está en ejecución (sobrescribible con `--allow-phone-link`, no recomendado).
+4. **Verificar éxito**: `IsRegistered()` True dentro de 10 s tras `RegisterApp()` (el programa lo imprime); la segunda instantánea debe mostrar `IsRegistered` False tras revertir.
+5. **Revertir / fallo a mitad**: `UnregisterApp()` automático; si el proceso muere, el diario (`Documentos\CallProbe\stage3-journal.json`, escritura atómica) queda como «pending-revert» y **la siguiente ejecución rechaza registrar** hasta ejecutar `stage3 unregister` (que no pide confirmación si hay diario pendiente). `status` es solo lectura. Si `RegisterApp` fuese a persistir tras un cierre brusco, `unregister` lo deshace; el registro está ligado al paquete, y `Unregister-DevPackage.ps1` quita el paquete entero (HIPÓTESIS sobre la limpieza del estado interno de Windows; no verificada).
+6. **¿iPhone conectado?** Recomendado: sí, conectado por Bluetooth y desbloqueado, para que el transporte exista y se pueda leer línea/enrutado (el SDP ya muestra HFP-AG). Un iPhone no conectado por Bluetooth Classic **bloquea** la prueba (se omite solo con `--allow-disconnected`), porque un resultado False sin iPhone conectado no significaría nada. Además bloquean: sin identidad de paquete, acceso distinto de Allowed, llamada activa/entrante, `IsRegistered` ya True o ilegible, `--hold` fuera de 0–60. HIPÓTESIS: el registro podría requerirlo.
+7. **`RegisterApp()` sin error pero `IsRegistered()` False**: el llamado no lanzó excepción pero Windows no aceptó/persistió el registro. Posibles causas (todas HIPÓTESIS): restricción por tipo de firma/distribución (sideload vs Store) o por build 26300; capacidad restringida declarada pero no honrada para un paquete sin firma; registro retrasado (por eso el sondeo de 10 s). Resultado: se clasifica como «sin efecto», la vía nativa queda bloqueada en este PC con este empaquetado, y se pasa a la prueba de control (Thy Phone de Store) y a evaluar firma real, no a eludir la restricción.
+8. **LAF «Unavailable» con Allowed**: `RequestAccessAsync` (acceso al dispositivo) y `LimitedAccessFeatures` (desbloqueo de función con token del fabricante) son controles distintos. Allowed + Unavailable es compatible con: la función no requiere token para este flujo, o no está disponible a apps de terceros. No sabemos cuál. NO se infiere que Allowed garantice llamadas funcionales; la prueba es `IsRegistered()` y, después, una llamada real autorizada. No se forja ningún token (descartado, sección 4).
+
+### 11.5 Evaluación de riesgo de la etapa 3
+
+| Riesgo | Prob. | Impacto | Mitigación |
+|---|---|---|---|
+| Registro persiste tras fallo | Baja | Bajo | Diario + `unregister`; revertir siempre |
+| Interferir con una llamada entrante real | Baja | Medio | Prueba corta, sin llamadas esperadas, no se toca ninguna llamada |
+| Conflicto con Phone Link | Media si está abierto | Bajo | Bloqueo si está en ejecución |
+| Cambio de dispositivo de audio | Muy baja | Bajo | Comparación de hash antes/después |
+| Colgado de WinRT | Media (visto en etapa 1) | Bajo | `StepGuard` + salida forzada |
+| Daño al emparejamiento | Muy baja | Medio | No se emparejan/olvidan dispositivos |
+
+### 11.6 Resultados posibles de `stage3 register` e interpretación
+
+| Observación | Interpretación | ¿Avanzar? |
+|---|---|---|
+| `IsRegistered` True y línea disponible que puede marcar/gestionar | Vía nativa viable en este PC | Sí, con revertir verificado, instantáneas iguales y autorización explícita para una llamada real |
+| `IsRegistered` True, sin línea | Registro aceptado, línea aún no expuesta (¿iPhone no conectado como HF?) | Repetir con `--connect` (confirmación aparte) |
+| Sin error, `IsRegistered` False | Sin efecto (pregunta 7) | No; prueba de control Thy Phone y estudio de firma/Store |
+| Excepción (p. ej. acceso denegado) | Restricción dura | No |
+| Timeout de `RegisterApp` | Servicio de telefonía bloqueado | No; revertir, reiniciar sesión y revisar |
+| Instantáneas distintas tras revertir | Efecto secundario no deseado | No hasta entenderlo |
+
+Condiciones para pasar a prueba con llamada real (todas): registro con efecto verificado; reversión verificada; instantánea final igual a la inicial; autorización explícita y por escrito del usuario para esa llamada; Phone Link cerrado; llamada iniciada por el usuario desde otro teléfono.
+
+### 11.7 Procedimiento seguro propuesto (NO ejecutado)
+
+```powershell
+# 0) Una vez: registrar el paquete de desarrollo (sin certificados) — ya hecho en tu PC
+.\package\Register-DevPackage.ps1
+# 1) Solo lectura: estado actual
+.\package\Run-Probe.ps1 stage3 status
+# 2) Con el iPhone conectado y desbloqueado, Phone Link cerrado, sin llamadas esperadas:
+.\package\Run-Probe.ps1 stage3 register     # escribe REGISTRAR para continuar; revierte solo
+# 3) Solo si quedó algo pendiente:
+.\package\Run-Probe.ps1 stage3 unregister
+```
+Opciones: `--connect` (añade ConnectAsync, pide CONECTAR), `--keep` (no revertir; no recomendado), `--hold N`, `--allow-disconnected`, `--allow-phone-link`. Las etapas 4 y 5 no se ejecutan.
+
+### 11.8 Defectos de privacidad de CallProbe corregidos
+
+Dirección del transporte sin enmascarar, ruta de usuario en la línea de argumentos y etiqueta engañosa de protección de emparejamiento: corregidos en `Report.cs`/`Discovery.cs`. Aun así, revisa los informes antes de compartirlos.
+
 ## Apéndice A — Correcciones a `docs/39` y `docs/41`
 
 | Documento | Afirmación | Corrección |
