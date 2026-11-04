@@ -315,6 +315,138 @@ Opciones: `--connect` (añade ConnectAsync, pide CONECTAR), `--keep` (no reverti
 
 Dirección del transporte sin enmascarar, ruta de usuario en la línea de argumentos y etiqueta engañosa de protección de emparejamiento: corregidos en `Report.cs`/`Discovery.cs`. Aun así, revisa los informes antes de compartirlos.
 
+## 12. Iteración 2 — El bloqueo real de `RegisterApp()` (resultados en hardware + auditoría)
+
+Etiquetas: **[HW]** demostrado en el PC del usuario · **[SDK]** verificado en metadatos del SDK · **[DOC]** documentación oficial (solo la he podido leer por resúmenes de búsqueda: `learn.microsoft.com` está fuera de la red de esta sesión; **hay que permitir ese dominio** para contrastar el texto literal) · **[3P]** evidencia de terceros · **[HIP]** hipótesis · **[INF]** inferencia mía.
+
+### 12.1 Resultados reales (commit probado `2a62c15`, build 10.0.26300.9711, iPhone conectado por Classic, Phone Link cerrado, paquete firma `None`)
+
+| Ejecución | `RequestAccessAsync` | `RegisterApp()` | `IsRegistered()` a los 10 s | `AudioRoutingStatus` |
+|---|---|---|---|---|
+| Etapa 3, intento 1 | Allowed | sin excepción, 79 ms | **False** | CannotRouteToLocalDevice |
+| Etapa 3, intento 2 (iPhone desbloqueado) | Allowed | sin excepción, 56 ms | **False** | CannotRouteToLocalDevice |
+| `stage3 status` posterior | Allowed | — | False | — |
+
+Diario: `clean`; sin llamadas; sin Phone Link. [HW]
+
+**Demostrado [HW]:** la llamada retorna sin error y el registro efectivo no se materializa, con el iPhone bloqueado o desbloqueado. **No demostrado:** la causa. **Nota:** 56–79 ms es muy poco para un cambio de estado persistente en el servicio de telefonía; es compatible con un retorno anticipado sin efecto [INF], pero un tiempo corto no prueba nada por sí solo.
+
+### 12.2 Auditoría de las tres llamadas
+
+| Llamada | Qué es [SDK]/[DOC] | Qué NO garantiza |
+|---|---|---|
+| `RequestAccessAsync()` → `DeviceAccessStatus` | Consulta de permiso de acceso al dispositivo para el contexto actual | Que el registro vaya a funcionar. `Allowed` ≠ registrado |
+| `RegisterApp()` → `void` | Pide registrar la app (por usuario; [DOC] el registro persiste hasta `UnregisterApp` o hasta que se quite el dispositivo, y es necesario para ver la `PhoneLine` del transporte) | Cualquier señal de fracaso salvo excepción: al ser `void`, un no-op silencioso es indistinguible de un éxito sin `IsRegistered()` |
+| `IsRegistered()` → `bool` | Estado del registro de esta app para el usuario activo | — es el único criterio válido de éxito |
+
+Existen además `RegisterAppForUser`/`UnregisterAppForUser` [SDK, `evidence/sdk-10.0.26100.57-…`]. No se usan: requieren un `User` y serían otra escritura; no hay evidencia de que cambien el resultado [HIP].
+
+### 12.3 Evidencia de terceros por versión de Windows [3P]
+
+| Build | Reporte | Fuente |
+|---|---|---|
+| Win10 19045, MSIX firmado autofirmado | `RegisterApp` lanza `UnauthorizedAccess` sin `RequestAccessAsync` previo; con él, `IsRegistered=True`; LAF `Unavailable` y aun así funciona. **Probado con Android**, no con iPhone | Klangbruecke FINDINGS §12 |
+| Win10 21H2, LTSC 2021 | Funciona | MyPhone #26 |
+| Win11 22H2 (22621) | `DeniedBySystem` o `RegisterApp` no funcional / `UnauthorizedAccess` | MyPhone #26 |
+| Win11 23H2 | Sigue fallando (comentarios nov-2023 y ene-2024) | MyPhone #26 |
+| Win11 26200 (prueba de un tercero) | `DeniedBySystem` para apps instaladas por carga lateral | Klangbruecke §15.1 |
+| Win11 **26300**, app empaquetada | `Allowed`, `RegisterApp` sin error, `IsRegistered` False, `ConnectAsync` False. **Idéntico a nuestro caso.** Sin respuesta aceptada | Microsoft Q&A 6041632 (el resumen del buscador la describe a veces como «empaquetada» y a veces como «identidad dispersa»: no verificado) |
+| Win11 (oct-2024) | Con la clave `HKLM\…\Hfp\HandsFree\BypassRegistration=1` + desbloqueo LAF, `RequestAccess/RegisterApp/Connect` pasan; sin funcionalidad de llamadas aún | MyPhone #26 — **vía descartada** (cambia seguridad / falsifica token) |
+| Win11 (abr-2026) | Phone Link omite la comprobación LAF desde la build 22000 (`ShouldSkipLAFCheck`); «si otra app ya registró el dispositivo, desempareja antes o recibirás `DeniedBySystem`» | MyPhone #26 |
+| Cualquier | Thy Phone y CallCenter (Store) funcionan en Win11 según usuarios; ningún comentario compara Store vs carga lateral | MyPhone #26 |
+
+Conclusiones prudentes: (1) el síntoma exacto de este PC está reportado por un tercero en la misma build, sin solución conocida [3P]; (2) **nadie ha demostrado** registro funcional de una app propia en Win11 sin saltarse un control; (3) las pruebas con éxito en Win10 usaron Android; con iPhone solo hay afirmaciones de compatibilidad (MyPhone README) sin evidencia de llamadas controladas; (4) la aseveración «Store o firma comercial lo arreglan» **no tiene evidencia** a favor ni en contra.
+
+### 12.4 Auditoría de manifiesto, capacidades y registro
+
+| Aspecto | CallProbe | MyPhone | Sefirah | Klangbruecke |
+|---|---|---|---|---|
+| `phoneLineTransportManagement` (rescap) | sí | sí | sí | sí |
+| `runFullTrust` | sí | sí | sí | sí |
+| `phoneCall` (uap) | sí | no | sí | no |
+| `bluetooth` (DeviceCapability) | sí | no | sí | sí |
+| Extensión `phoneCallActivation` | no | no | sí | no |
+| `TargetDeviceFamily` mínimo | 19041 | 18362 | 19041 | 19041 |
+| **Firma / distribución** | **ninguna (registro suelto, modo desarrollador)** | firmada | firmada | firmada autofirmada |
+| Lanzamiento | **`Invoke-CommandInDesktopPackage`** | activación normal | activación normal | activación normal |
+
+Lectura: el conjunto de capacidades no es el factor diferenciador (cubre el de todas las referencias que funcionan en Win10). Las diferencias reales son tres [INF]:
+- **H1 — firma:** somos el único paquete sin firma. Las pruebas exitosas conocidas son de paquetes firmados. Efecto sobre capacidades restringidas en registro suelto: sin documentación localizada.
+- **H3 — activación:** nuestro proceso nace de `Invoke-CommandInDesktopPackage`, no del arranque normal del paquete. Tiene identidad (lo prueba el `Allowed`), pero podría no tener el contexto de activación que el servicio asocia al registro. Sin evidencia a favor ni en contra.
+- **H2 — build/Windows 11:** el síntoma coincide con el tercero en 26300 aunque su configuración sea distinta.
+`phoneCallActivation` es para la interfaz de llamadas de la app; no hay evidencia de que sea precondición del registro (una sugerencia en MyPhone #26 sin resultado reportado) [3P].
+
+### 12.5 Hipótesis ordenadas por evidencia (no por intuición)
+
+| # | Hipótesis | Evidencia a favor | Evidencia en contra | Estado | Prueba |
+|---|---|---|---|---|---|
+| A | En Win11 26300 Windows ignora/deniega el registro de apps de terceros por una restricción de plataforma (independiente de nuestro empaquetado) | Mismo síntoma de un tercero en 26300 [3P]; fallos en 22H2/23H2/26200 [3P]; Phone Link tiene vía propia [3P] | Ninguna directa | **La más respaldada**; no probada | Control con Thy Phone/Store (¿registra ahí?) — solo informativo |
+| B | El registro exige firma real/Store | Sólo lógica general | Klangbruecke y MyPhone funcionan **autofirmados** en Win10 [3P] | Sin evidencia en Win11 | H1: paquete firmado autofirmado |
+| C | El registro suelto (firma `None`) no honra la capacidad restringida | Somos el único sin firma | Sí obtenemos `Allowed` (la capacidad parece leída) [HW] | Plausible, barata de descartar | H1 |
+| D | Hace falta lanzar por activación normal | Diferencia de proceso real | `Allowed` ya demuestra identidad [HW] | Débil | H3 (`-Activate`) |
+| E | Otra app tiene registrado el transporte (Phone Link/Windows) | Aviso «desempareja antes» [3P] | Allowed (no `DeniedBySystem`) [HW]; Phone Link cerrado [HW] | Poco probable | `observe --lines` + Phone Link cerrado/abierto |
+| F | Se necesita `ConnectAsync` antes o a la vez | El tercero en 26300 también obtuvo `False` en `ConnectAsync` | No sabemos si lo probamos con `--connect` | Sin probar | `register --connect` (efecto adicional) |
+| G | Restricción específica de iPhone (Apple) | Un hilo (Q&A 5956795, 25H2) dice que los endpoints HFP del iPhone no se exponen [3P, sin respuesta]; Microsoft indica que Apple limita la integración [3P] | El síntoma ocurre antes de cualquier audio; y en 26300 el tercero no usaba necesariamente iPhone | No determinable | Repetir con un teléfono Android (control) — informativo |
+| H | `LimitedAccessFeatures` bloquea | `Unavailable` [HW] | Win10 funciona con `Unavailable` [3P]; descartado forjar token | No usable legítimamente | — |
+
+### 12.6 `AudioRoutingStatus`: qué sabemos
+
+- [SDK] El enum tiene dos valores, `CanRouteToLocalDevice` y `CannotRouteToLocalDevice`; existe el evento `AudioRoutingStatusChanged`. Según el orden de metadatos, `CanRouteToLocalDevice` sería el valor 0 (por defecto) [INF].
+- [DOC/INF] Describe si Windows permitiría enrutar el audio de una llamada al dispositivo local; es una propiedad del transporte, no una prueba de audio funcional.
+- [HW] Lecturas hasta ahora: etapa 2 (antes de registrar; estado del enlace no registrado en esa ejecución): `CanRoute…`; etapa 3 (iPhone conectado por Classic, 10 s tras `RegisterApp`): `CannotRoute…`.
+- **Las lecturas NO son comparables:** momento distinto, estado de enlace no registrado junto a la lectura, y en etapa 3 una sola lectura. El cambio podría deberse al enlace HFP/Classic, a que el transporte pasó de «sin sesión» a «con sesión», o a otra condición. Que `RegisterApp` no tuvo efecto [HW] hace **improbable** que el cambio dependa del registro, pero no está demostrado.
+- No demostrado: qué valor toma durante una llamada real, si `CannotRoute` en reposo es normal, y si el valor cambia al conectar/desconectar HFP.
+- Mejora: línea de tiempo con marcas de tiempo (antes / justo después / cada 500 ms) con `IsRegistered`, `AudioRoutingStatus`, enlace Classic, llamadas, más suscripción a `AudioRoutingStatusChanged`, y un analizador que clasifica el cambio (constante / con la conexión / tras RegisterApp / sin explicación) y advierte que sin registro no demuestra nada. No cambia la ruta de audio ni fuerza conexiones.
+
+### 12.7 Mejoras de diagnóstico (solo lectura, con pruebas)
+
+| Mejora | Por qué |
+|---|---|
+| `stage3 observe --seconds N [--interval MS] [--lines]` | Línea de tiempo comparable; separa enlace, registro y audio |
+| Eventos `AudioRoutingStatusChanged`/`InBandRingingEnabledChanged` con marca de tiempo | Instante exacto de cada cambio |
+| Presencia de API (`ApiInformation`): contratos `CallsPhoneContract` v1–v8, `PhoneCall`, `AudioRoutingStatus`, `RegisterAppForUser` | Descarta que la build no implemente algo |
+| Propiedades del transporte (`PhoneLineTransportDevice.Connected` —no documentada—, `Present`, `InterfaceEnabled`, `Connected`) | Estado del transporte según Windows; sin valores sensibles |
+| Líneas visibles sin registrar (`--lines`) | La documentación dice que el registro es necesario para verlas: se comprueba |
+| Errores con HRESULT por paso, `n/d` ≠ False | Sin falsos negativos |
+| `-Activate` (H3) con archivo de órdenes que solo admite etapas 1–3 | Probar activación normal sin instalar nada |
+| Scripts H1 (`Install/Uninstall-SignedDevPackage.ps1`) | Preparados, **no ejecutados**: tocan el almacén de confianza |
+
+Pruebas automatizadas: **60/60** correctas (`dotnet test CallProbe.Logic.Tests`); compilación de `CallProbe` sin errores. Nuevas: análisis de línea de tiempo (7), política del archivo de órdenes (8).
+
+### 12.8 Alternativas si la API de Windows resulta inutilizable
+
+Requisitos: sin app en iOS, sin Phone Link, sin drivers propios, libre, control de llamadas desde WinMac, audio bidireccional por micrófono/auriculares del PC.
+
+| Alternativa | Señalización HFP | Audio SCO bidireccional | Veredicto |
+|---|---|---|---|
+| RFCOMM propio (`Windows.Devices.Bluetooth.Rfcomm`) | **Viable en teoría [INF]**: abrir canal HFP del iPhone y hablar AT (ATA, AT+CHUP, +CLIP). Conflicto: Windows ya mantiene el HFP del PC; no hay evidencia de que la API deje conectar a un servicio ya atendido por el controlador | **No**: SCO/eSCO lo gestiona el controlador del perfil en el kernel (`BthHFEnum`, modo kernel [3P]); no existe API pública de modo usuario para abrir SCO [sin documentación localizada] | No viable por audio |
+| Windows `PhoneLine` (esta investigación) | Bloqueado hoy | Sí (lo enruta Windows) | Bloqueado por `RegisterApp` |
+| Controlador propio / WinUSB+BTstack | — | — | Descartado por el requisito |
+| ANCS (notificaciones del iPhone por BLE) | Avisos y acciones de llamada **no demostrados** en este equipo | No | Solo señalización; no cumple audio |
+| Phone Link | Funciona (Microsoft) | Funciona | Excluido por requisito |
+| Raspberry/ESP32 como puente HFP | Viable técnicamente [3P] | Sí | Requiere hardware extra y rompe «sin dependencias» |
+
+**Ninguna alternativa cumple a la vez señalización y audio bidireccional sin driver: no se presenta ninguna como viable.** Ruta demostrable pendiente: que `PhoneLineTransportDevice` registre.
+
+### 12.9 Próxima prueba mínima recomendada
+
+1. **Prueba P1 (solo lectura, sin riesgo, no requiere autorización especial):** observación de 90 s con el iPhone conectado y luego, durante la observación, el usuario apaga y enciende Bluetooth del iPhone (acción propia del usuario) para correlacionar `AudioRoutingStatus` con el enlace. Responde 12.6. Comando:
+   ```powershell
+   .\package\Run-Probe.ps1 stage3 observe -ExtraArgs '--seconds 90 --lines'
+   ```
+   Resultado esperado: línea de tiempo y veredicto del analizador; `Líneas Bluetooth visibles` = 0 confirmaría que sin registro no hay línea.
+2. **Prueba P2 (H3, activación normal; bajo riesgo; ejecuta el mismo `RegisterApp` ya conocido y se revierte solo, así que requiere tu autorización explícita):**
+   ```powershell
+   .\package\Run-Probe.ps1 stage3 register -Activate
+   ```
+   Se escribe `REGISTRAR` en la consola que se abre. Esperado: `IsRegistered` True → H3 confirmada; False → H3 descartada.
+3. **Prueba P3 (H1, firmada; modifica el almacén de confianza; solo si P2 falla; requiere autorización explícita y administrador):** quitar el paquete suelto, `Install-SignedDevPackage.ps1 -BuildDir <publish>`, repetir `stage3 register`, y revertir con `Uninstall-SignedDevPackage.ps1`. Riesgo: el certificado autofirmado queda de confianza hasta desinstalar.
+
+**Criterios:**
+- **Continuar** si en P2 o P3 `IsRegistered()==True` **y** aparece una línea telefónica accesible (`PhoneLine` del transporte). Siguiente paso: prueba con llamada real autorizada (sección 11.6).
+- **Detener la vía nativa** si P2 y P3 dan `IsRegistered()==False` con `Allowed`, iPhone conectado y revertido limpio: el bloqueo es de plataforma (hipótesis A). Entonces solo quedaría un control informativo (Thy Phone/otro teléfono) y documentar que, con los requisitos actuales, la función no es viable en esta compilación. No se pasa a bypass, token ni driver.
+- Si P1 muestra que `AudioRoutingStatus` cambia con el enlace, se documenta como diagnóstico (no desbloquea nada).
+
 ## Apéndice A — Correcciones a `docs/39` y `docs/41`
 
 | Documento | Afirmación | Corrección |

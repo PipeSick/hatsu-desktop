@@ -35,6 +35,7 @@ internal static class Program
 
     private static async Task<int> RunAsync(string[] args)
     {
+        args = CommandFile.Resolve(args);
         string? Opt(string name) { int i = Array.IndexOf(args, name); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
         Report.ShowNumbers = args.Contains("--show-numbers");
         Report.Open(Opt("--out") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CallProbe", $"probe-{DateTime.Now:yyyyMMdd-HHmmss}.txt"));
@@ -50,6 +51,7 @@ internal static class Program
             case ("stage3", "status"): return await Calls.StatusAsync(device);
             case ("stage3", "register"): return await Calls.RegisterAsync(device, opt);
             case ("stage3", "unregister"): return await Calls.UnregisterAsync(device);
+            case ("stage3", "observe"): return await Observer.ObserveAsync(device, int.TryParse(Opt("--seconds"), out int os) ? Math.Clamp(os, 1, 600) : 60, int.TryParse(Opt("--interval"), out int oi) ? Math.Max(250, oi) : 1000, args.Contains("--lines"));
             case ("stage3", "monitor"): await Calls.MonitorAsync(int.TryParse(Opt("--seconds"), out int s) ? s : 120); return 0;
             case ("stage4", "audio"): await Discovery.RunAsync(device, lines: false); return 0;   // la parte de audio de la etapa 1 sirve para comparar antes/durante la llamada
             case ("stage5", "guided"): await Calls.GuidedCallTestAsync(); return 0;

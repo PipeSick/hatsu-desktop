@@ -20,7 +20,7 @@ internal static class Calls
     private const string AddrKey = "System.DeviceInterface.Bluetooth.DeviceAddress";
 
     // ───────────────────────────── utilidades
-    private static async Task<Transport?> FindTransportAsync(string? nameFilter)
+    internal static async Task<Transport?> FindTransportAsync(string? nameFilter)
     {
         var devs = (await Steps.Run("FindAllAsync(transportes Bluetooth)", async () => (await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth), [AddrKey])).ToList())).Value ?? [];
         var m = devs.Where(x => nameFilter is null || x.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -40,7 +40,7 @@ internal static class Calls
 
     private static async Task<bool?> ReadRegisteredAsync(Transport t) { var r = await StepGuard.RunAsync("IsRegistered()", () => Task.FromResult(t.Device.IsRegistered()), TimeSpan.FromSeconds(5)); return r.Ok ? r.Value : null; }
 
-    private static async Task<bool?> ClassicConnectedAsync(ulong address)
+    internal static async Task<bool?> ClassicConnectedAsync(ulong address)
     {
         if (address == 0) return null;
         var r = await Steps.Run("BluetoothDevice.FromBluetoothAddressAsync", async () => { using var d = await BluetoothDevice.FromBluetoothAddressAsync(address); return d?.ConnectionStatus == BluetoothConnectionStatus.Connected; }, 10);
@@ -63,7 +63,7 @@ internal static class Calls
         Report.Item("    audio de comunicaciones (resumen)", $"salida {s.CommRenderHash} · entrada {s.CommCaptureHash}");
     }
 
-    private static async Task<List<PhoneLine>> BluetoothLinesAsync()
+    internal static async Task<List<PhoneLine>> BluetoothLinesAsync()
     {
         var store = (await Steps.Run("PhoneCallManager.RequestStoreAsync", async () => await PhoneCallManager.RequestStoreAsync(), 10)).Value; if (store is null) return [];
         var w = (await Steps.Run("PhoneCallStore.RequestLineWatcher", () => Task.FromResult(store.RequestLineWatcher()), 8)).Value; if (w is null) return [];
@@ -102,15 +102,23 @@ internal static class Calls
         journal = journal with { RegisterAttempted = true }; Journal.Save(journal);   // se anota ANTES de registrar: si el proceso muere ahora, el siguiente arranque lo sabe
 
         bool registeredByUs = false, revertOk = true; Stage3Outcome? outcome = null;
+        var clock = Stopwatch.StartNew(); var rec = new List<TimelineSample>(); Action unsub = () => { };
         try
         {
+            Observer.PrintApiPresence(); await Observer.PrintTransportPropertiesAsync(t);
+            Report.Title("Línea de tiempo (solo lectura entre pasos)");
+            unsub = Observer.Subscribe(t, clock);
+            rec.Add(await Observer.SampleAsync(t, "antes de RegisterApp", clock));
+            double registerAt = clock.Elapsed.TotalSeconds;
             var reg = await Steps.Run("RegisterApp()", () => t.Device.RegisterApp(), 15);
+            rec.Add(await Observer.SampleAsync(t, "justo después de RegisterApp", clock));
             string? threw = reg.Error?.GetType().Name; int? hr = reg.Error?.HResult; bool timedOut = reg.Status == StepStatus.TimedOut;
             if (reg.Status == StepStatus.Failed) Report.Item("RegisterApp() lanzó", $"{threw} 0x{hr:X8}");
 
-            var (isReg, within) = await WaitRegisteredAsync(t, wanted: true, seconds: 10); registeredByUs = isReg;
+            var (isReg, within) = await WaitRegisteredAsync(t, wanted: true, seconds: 10, onPoll: async () => rec.Add(await Observer.SampleAsync(t, "espera", clock))); registeredByUs = isReg;
             Report.Item("IsRegistered() tras RegisterApp()", isReg ? $"True (a los {within!.Value.TotalSeconds:0.0} s)" : "False (tras esperar 10 s)");
-            try { Report.Item("AudioRoutingStatus", t.Device.AudioRoutingStatus); } catch (Exception e) { Report.Item("AudioRoutingStatus", e.GetType().Name); }
+            Observer.PrintSummary(rec, registerAt);
+            Report.Line("  Nota: RegisterApp() devolvió sin excepción" + (isReg ? "." : $" en {reg.Elapsed.TotalMilliseconds:0} ms y IsRegistered() no pasó a True: Windows no materializó el registro (causa NO determinada)."));
 
             bool linePresent = false; bool? canDial = null; bool? connect = null;
             if (isReg)
@@ -126,6 +134,7 @@ internal static class Calls
         }
         finally
         {
+            unsub();
             if (!opt.Keep) revertOk = await RevertAsync(t, journal, onlyIfRegistered: true);
             else Report.Line("  --keep: el registro SE QUEDA puesto. Revierte con: stage3 unregister");
         }
@@ -142,11 +151,12 @@ internal static class Calls
         return revertOk ? 0 : 4;
     }
 
-    private static async Task<(bool Reached, TimeSpan? Within)> WaitRegisteredAsync(Transport t, bool wanted, int seconds)
+    private static async Task<(bool Reached, TimeSpan? Within)> WaitRegisteredAsync(Transport t, bool wanted, int seconds, Func<Task>? onPoll = null)
     {
         var sw = Stopwatch.StartNew();
         while (true)
         {
+            if (onPoll is not null) await onPoll();
             var r = await ReadRegisteredAsync(t); if (r == wanted) return (wanted ? true : false, sw.Elapsed);
             if (sw.Elapsed > TimeSpan.FromSeconds(seconds) || Steps.Cancel.IsCancellationRequested) return (!wanted, null);
             await Steps.DelayAsync(500);
@@ -194,6 +204,10 @@ internal static class Calls
         Report.Title("Estado del registro (solo lectura)");
         var t = await FindTransportAsync(nameFilter); if (t is null) return 3;
         var s = await SnapshotAsync(t, queryAccess: true); Print(s, "Estado"); var j = Journal.Load();
+        Observer.PrintApiPresence(); await Observer.PrintTransportPropertiesAsync(t);
+        var clk = Stopwatch.StartNew(); Report.Title("Muestras instantáneas (3 lecturas, 1 s)"); var smp = new List<TimelineSample>();
+        for (int i = 0; i < 3; i++) { smp.Add(await Observer.SampleAsync(t, "status", clk)); await Steps.DelayAsync(1000); }
+        Observer.PrintSummary(smp, null);
         Report.Item("Diario", j is null ? "(sin diario)" : $"{JournalDecision.Evaluate(j, s.IsRegistered)} (inicio {j.StartedUtc:u})");
         return 0;
     }

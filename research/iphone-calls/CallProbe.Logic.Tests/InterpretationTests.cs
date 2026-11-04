@@ -173,4 +173,55 @@ public class SnapshotComparerTests
         var d = SnapshotComparer.Differences(S(), S() with { IsRegistered = true, ClassicConnected = false, CommRenderHash = "x", CommCaptureHash = "y", CallActive = true });
         Assert.Equal(5, d.Count); Assert.Contains(d, x => x.StartsWith("IsRegistered()")); Assert.Contains(d, x => x.Contains("conexión Bluetooth")); Assert.Contains(d, x => x.Contains("salida de audio")); Assert.Contains(d, x => x.Contains("micrófono"));
     }
+
+public class TimelineTests
+{
+    private static TimelineSample S(double t, bool? reg, string? audio, bool? conn = true, string label = "x") => new(t, label, reg, audio, conn, 0, false, false);
+
+    [Fact] public void Empty_audio_is_NoData() => Assert.Equal(AudioFinding.NoData, TimelineAnalyzer.Summarize([S(0, false, null)], null).Audio);
+
+    [Fact] public void Constant_value_is_reported_as_constant_and_warns_about_unregistered()
+    {
+        var r = TimelineAnalyzer.Summarize([S(0, false, "Cannot"), S(1, false, "Cannot"), S(2, false, "Cannot")], 0);
+        Assert.Equal(AudioFinding.Constant, r.Audio); Assert.Contains(r.Limits, l => l.Contains("NO registrado"));
+    }
+
+    [Fact] public void Change_with_connection_is_attributed_to_the_link()
+    {
+        var r = TimelineAnalyzer.Summarize([S(0, false, "Can", conn: false), S(1, false, "Cannot", conn: true)], null);
+        Assert.Equal(AudioFinding.ChangedWithConnection, r.Audio);
+    }
+
+    [Fact] public void Change_after_register_without_registration_is_only_temporal_correlation()
+    {
+        var r = TimelineAnalyzer.Summarize([S(0, false, "Can"), S(0.2, false, "Can"), S(0.5, false, "Cannot")], 0.1);
+        Assert.Equal(AudioFinding.ChangedAfterRegister, r.Audio); Assert.Contains("sin causa demostrada", r.AudioReading);
+    }
+
+    [Fact] public void Change_without_anything_else_is_unexplained()
+        => Assert.Equal(AudioFinding.ChangedUnexplained, TimelineAnalyzer.Summarize([S(0, false, "Can"), S(5, false, "Cannot")], null).Audio);
+
+    [Fact] public void Changes_list_includes_registration_flip()
+    {
+        var r = TimelineAnalyzer.Summarize([S(0, false, "Can"), S(1, true, "Can")], 0);
+        Assert.Contains(r.Changes, c => c.Contains("IsRegistered") && c.Contains("False → True"));
+    }
+
+    [Fact] public void Unreadable_values_are_not_treated_as_false()
+    {
+        var r = TimelineAnalyzer.Summarize([S(0, null, "Can"), S(1, false, "Can")], null);
+        Assert.Contains(r.Changes, c => c.Contains("n/d → False"));
+    }
+}
+
+public class CommandPolicyTests
+{
+    [Theory]
+    [InlineData("stage3 status", 2)] [InlineData("STAGE3 observe --seconds 30", 4)] [InlineData("stage1", 1)]
+    public void Allowed_stages_pass(string line, int n) => Assert.Equal(n, CommandPolicy.Parse(line).Length);
+
+    [Theory]
+    [InlineData("stage5 answer")] [InlineData("stage4 audio")] [InlineData("")] [InlineData(null)] [InlineData("cmd /c del x")]
+    public void Real_call_stages_and_junk_are_rejected(string? line) => Assert.Empty(CommandPolicy.Parse(line));
+}
 }
