@@ -51,21 +51,24 @@ public sealed partial class PanelPainter
         if (string.IsNullOrEmpty(text)) return 0; using var l = _dw.CreateTextLayout(text, fmt, 4000, 40); return l.Metrics.WidthIncludingTrailingWhitespace;
     }
 
-    private ID2D1Bitmap? IconFor(string? exePath)
+    /// <param name="adapt">It7: iconos de la bandeja (hechos para una barra oscura): si son casi monocromos y no se verían en este tema, se adaptan (ver <see cref="WinMac.Bar.Tray.IconAdapt"/>). Cada tema tiene su copia en la caché.</param>
+    private ID2D1Bitmap? IconFor(string? exePath, bool adapt = false)
     {
         if (string.IsNullOrEmpty(exePath) || IconProvider is null) return null;
-        if (_icons.TryGetValue(exePath, out var hit)) return hit;
+        string cacheKey = adapt ? exePath + (Dark ? "|d" : "|l") : exePath;
+        if (_icons.TryGetValue(cacheKey, out var hit)) return hit;
         ID2D1Bitmap? bmp = null;
         try
         {
             var px = IconProvider(exePath);
+            if (adapt && px is { Length: 32 * 32 * 4 }) px = WinMac.Bar.Tray.IconAdapt.Adapt(px, Dark) ?? px;
             int side = px is { Length: 64 * 64 * 4 } ? 64 : 32;   // WM-029: the account picture comes at 64×64
             if (px is { Length: 32 * 32 * 4 } or { Length: 64 * 64 * 4 })
                 unsafe { fixed (byte* p = px) bmp = _ctx.CreateBitmap(new SizeI(side, side), (IntPtr)p, (uint)(side * 4), new BitmapProperties1(new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96, 96)); }
         }
         catch (Exception) { bmp = null; }
         if (_icons.Count > 64) { foreach (var b in _icons.Values) b?.Dispose(); _icons.Clear(); }
-        _icons[exePath] = bmp; return bmp;
+        _icons[cacheKey] = bmp; return bmp;
     }
 
     private void DrawHubWidget(WidgetFrame f, bool hover)

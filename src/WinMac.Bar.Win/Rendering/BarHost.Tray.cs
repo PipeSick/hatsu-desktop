@@ -41,6 +41,7 @@ public sealed partial class BarHost
 
     private void StopTray()
     {
+        EndTrayMenuWatch(hide: false);
         var t = _trayHost; _trayHost = null; t?.Dispose();
         if (_trayStore.Count > 0) { _trayStore.RemoveDead(_ => false); SetStateAll(); }
     }
@@ -69,11 +70,37 @@ public sealed partial class BarHost
         bool right = e.Id.StartsWith("rclick:", StringComparison.Ordinal); string id = right ? e.Id[7..] : e.Id;
         if (!id.StartsWith("trayitem:", StringComparison.Ordinal) || _trayStore.Get(id[9..]) is not { } icon) return;
         var src = _popSource; int x = _anchorX, y = src is null ? 0 : src.Top + src.Height;
-        _popover?.Hide();
         IntPtr hwnd = (IntPtr)icon.Hwnd;
-        if (!BarNative.IsWindow(hwnd)) { _trayStore.RemoveDead(h => h != icon.Hwnd); SetStateAll(); return; }
+        if (!BarNative.IsWindow(hwnd)) { _popover?.Hide(); _trayStore.RemoveDead(h => h != icon.Hwnd); SetStateAll(); return; }
         BarNative.GetWindowThreadProcessId(hwnd, out uint pid); AllowSetForegroundWindow(pid);
+        // Clic derecho: el panel sigue visible (y con el foco) mientras la app muestra su menú; se cierra cuando el menú se cierra (ver TrayMenuWatch). Clic izquierdo: se cierra como siempre.
+        if (right && _popover is { IsOpen: true }) BeginTrayMenuWatch(); else _popover?.Hide();
         foreach (var (w, l) in TrayClick.Messages(icon, right ? TrayButton.Right : TrayButton.Left, x, y)) BarNative.PostMessage(hwnd, icon.CallbackMessage, w, l);
+    }
+
+    private TrayMenuWatch? _trayWatch; private System.Threading.Timer? _trayWatchTimer; private long _trayWatchStart;
+
+    private void BeginTrayMenuWatch()
+    {
+        EndTrayMenuWatch(hide: false);
+        if (_popover is null) return;
+        _popover.KeepOpen = true; _trayWatch = new TrayMenuWatch(); _trayWatchStart = Environment.TickCount64;
+        _trayWatchTimer = new System.Threading.Timer(_ => { bool vis; try { vis = TrayMenuProbe.AnyMenuVisible(); } catch (Exception) { vis = false; } Post(() => StepTrayMenuWatch(vis)); }, null, 80, 80);
+    }
+
+    private void StepTrayMenuWatch(bool menuVisible)
+    {
+        if (_trayWatch is null) return;
+        if (_popover is not { IsOpen: true }) { EndTrayMenuWatch(hide: false); return; }   // el panel se cerró por otro lado (otro icono de la barra, Esc…)
+        if (_trayWatch.Step((int)(Environment.TickCount64 - _trayWatchStart), menuVisible) == TrayMenuPhase.Finished) EndTrayMenuWatch(hide: true);
+    }
+
+    private void EndTrayMenuWatch(bool hide)
+    {
+        bool was = _trayWatch is not null; _trayWatchTimer?.Dispose(); _trayWatchTimer = null; _trayWatch = null;
+        if (!was) return;
+        if (_popover is not null) _popover.KeepOpen = false;
+        if (hide) _popover?.Hide();
     }
 
     /// <summary>Iconos del desplegable: el HICON de la app a 32×32 BGRA (el que pide el dibujo de los paneles).</summary>

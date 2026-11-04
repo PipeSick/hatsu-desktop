@@ -366,7 +366,7 @@ public sealed partial class PanelPainter : IDisposable
                     double cx0 = x + c % g.Columns * cs, cy0 = y + c / g.Columns * cs;
                     if (HoverPoint is { } hp && hp.X >= cx0 && hp.X < cx0 + cs && hp.Y >= cy0 && hp.Y < cy0 + cs) FillRR(cx0 + 2, cy0 + 2, cx0 + cs - 2, cy0 + cs - 2, 7, Fill(0.16f));   // casilla bajo el ratón
                     if (c == TrayFocus) { Brush(Accent); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(cx0 + 2, cy0 + 2, cx0 + cs - 2, cy0 + cs - 2), RadiusX = 7, RadiusY = 7 }, _solid, 1.6f); }   // keyboard focus
-                    if (IconFor(g.Cells[c].IconKey) is { } bmp) _ctx.DrawBitmap(bmp, R(cx0 + cs / 2 - 10, cy0 + cs / 2 - 10, cx0 + cs / 2 + 10, cy0 + cs / 2 + 10), 1f, BitmapInterpolationMode.Linear, null);
+                    if (IconFor(g.Cells[c].IconKey, adapt: true) is { } bmp) _ctx.DrawBitmap(bmp, R(cx0 + cs / 2 - 10, cy0 + cs / 2 - 10, cx0 + cs / 2 + 10, cy0 + cs / 2 + 10), 1f, BitmapInterpolationMode.Linear, null);
                     else FillCircle(cx0 + cs / 2, cy0 + cs / 2, 3, Fg(0.5f));   // icono ilegible: un punto discreto
                 }
                 break;

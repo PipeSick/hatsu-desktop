@@ -122,4 +122,55 @@ public class BarItemsTests
         Assert.Equal("TaskManager,Hub", c.Release(1190, out _));
     }
     [Fact] public void Cancel_drag_discards() { var c = Ctl(); c.PressAt(CenterOf(c, "Hub")); c.DragTo(CenterOf(c, "Hub") + 40); c.CancelDrag(); Assert.False(c.Dragging); }
+
+    // ── It7: iconos de la bandeja legibles en tema claro
+    private static byte[] Icon(Func<int, (byte R, byte G, byte B, byte A)> px)
+    {
+        var b = new byte[32 * 32 * 4];
+        for (int i = 0; i < 32 * 32; i++) { var (r, g, bl, a) = px(i); b[i * 4] = (byte)(bl * a / 255); b[i * 4 + 1] = (byte)(g * a / 255); b[i * 4 + 2] = (byte)(r * a / 255); b[i * 4 + 3] = a; }
+        return b;
+    }
+    [Fact] public void White_mono_icon_is_darkened_on_light_panel_keeping_alpha()
+    {
+        var white = Icon(i => i % 3 == 0 ? ((byte)255, (byte)255, (byte)255, (byte)255) : ((byte)0, (byte)0, (byte)0, (byte)0));
+        var o = Tray.IconAdapt.Adapt(white, darkTheme: false)!; Assert.NotNull(o);
+        Assert.Equal(255, o[3]); Assert.True(o[0] < 60 && o[1] < 60 && o[2] < 60); Assert.Equal(0, o[4 + 3]);   // opaco → casi negro; transparente sigue transparente
+        Assert.Null(Tray.IconAdapt.Adapt(white, darkTheme: true));   // sobre el tema oscuro ya se ve: intacto
+    }
+    [Fact] public void Black_mono_icon_is_lightened_on_dark_panel()
+    {
+        var black = Icon(i => ((byte)0, (byte)0, (byte)0, (byte)255));
+        var o = Tray.IconAdapt.Adapt(black, darkTheme: true)!; Assert.True(o[0] > 190); Assert.Null(Tray.IconAdapt.Adapt(black, darkTheme: false));
+    }
+    [Fact] public void Colored_icon_is_never_recolored()
+    {
+        var blue = Icon(i => ((byte)20, (byte)120, (byte)230, (byte)255));
+        Assert.Null(Tray.IconAdapt.Adapt(blue, false)); Assert.Null(Tray.IconAdapt.Adapt(blue, true));
+    }
+    [Fact] public void Mixed_icon_keeps_its_colored_pixels()
+    {
+        // 70 % blanco + 30 % rojo: se adapta, pero el rojo queda igual
+        var mixed = Icon(i => i % 10 < 7 ? ((byte)255, (byte)255, (byte)255, (byte)255) : ((byte)230, (byte)30, (byte)30, (byte)255));
+        var o = Tray.IconAdapt.Adapt(mixed, false)!; int redPx = 7; Assert.Equal(230, o[redPx * 4 + 2]); Assert.True(o[2] < 60);
+    }
+    [Fact] public void Mostly_colored_icon_with_few_white_pixels_is_untouched()
+    {
+        var logo = Icon(i => i % 10 == 0 ? ((byte)255, (byte)255, (byte)255, (byte)255) : ((byte)200, (byte)40, (byte)40, (byte)255));
+        Assert.Null(Tray.IconAdapt.Adapt(logo, false));
+    }
+    [Fact] public void Empty_or_transparent_icon_is_untouched() { Assert.Null(Tray.IconAdapt.Adapt(new byte[32 * 32 * 4], false)); Assert.Null(Tray.IconAdapt.Adapt([], true)); }
+
+    // ── It7: menú contextual de la bandeja
+    [Fact] public void Tray_panel_stays_while_the_menu_is_open_and_closes_after()
+    {
+        var w = new Tray.TrayMenuWatch();
+        Assert.Equal(Tray.TrayMenuPhase.Waiting, w.Step(80, false)); Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(200, true));
+        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(5000, true)); Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(5100, false));   // salto entre submenús: margen
+        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(5200, true));
+        Assert.Equal(Tray.TrayMenuPhase.MenuOpen, w.Step(6000, false)); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(6300, false));
+    }
+    [Fact] public void Tray_panel_closes_when_the_app_shows_no_menu()
+    { var w = new Tray.TrayMenuWatch(); Assert.Equal(Tray.TrayMenuPhase.Waiting, w.Step(1000, false)); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(1500, false)); }
+    [Fact] public void Tray_watch_has_an_upper_bound()
+    { var w = new Tray.TrayMenuWatch(); w.Step(100, true); Assert.Equal(Tray.TrayMenuPhase.Finished, w.Step(Tray.TrayMenuWatch.MaxOpenMs, true)); }
 }
