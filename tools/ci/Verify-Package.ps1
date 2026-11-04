@@ -21,7 +21,7 @@ foreach ($pair in @(@('HatsuDesktop.exe', 'Hatsu Desktop'), @('HatsuDesktop.Bar.
 Add-Type -AssemblyName System.Drawing
 foreach ($e in 'HatsuDesktop.exe', 'HatsuDesktop.Bar.exe', 'HatsuDesktop.Dock.exe', 'HatsuDesktop.Connect.exe') {
   $ico = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $root $e)); $bmp = $ico.ToBitmap(); $px = $bmp.GetPixel([int]($bmp.Width * 0.25), [int]($bmp.Height * 0.2))
-  Check "icono propio incrustado en $e (violeta, no el genérico)" ($px.A -gt 200 -and $px.B -gt $px.G + 40 -and $px.B -gt 150) "RGB $($px.R),$($px.G),$($px.B)"
+  Check "icono propio incrustado en $e (tono violeta Flux, no el genérico gris)" ($px.A -gt 200 -and $px.B -gt $px.G + 40 -and $px.B -gt $px.R + 30 -and $px.B -gt 90) "RGB $($px.R),$($px.G),$($px.B)"
 }
 # Fase 2: ya no viajan los ejecutables con el nombre antiguo (evita lanzar por error una versión vieja)
 foreach ($f in 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe', 'WinMac.Connect.App.exe') { Check "sin el ejecutable antiguo $f" (-not (Test-Path (Join-Path $root $f))) }
