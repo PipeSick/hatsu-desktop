@@ -9,7 +9,7 @@ on:
       ref:
         description: 'Commit (SHA completo) del que se leen las políticas y el generador'
         required: true
-        default: 'de51f4be1ee22086f983fcd87c09537f3ce48d84'
+        default: '0f38101dfd28f4985fdabbc170f5013bee878d67'
       desplegar:
         description: 'Desplegar en GitHub Pages (false = solo construir y verificar, sin publicar)'
         type: boolean
@@ -74,6 +74,8 @@ jobs:
     steps:
       - name: Esperar y comprobar contenido de ambas URLs
         run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"; repo="${GITHUB_REPOSITORY#*/}"; base="https://${owner}.github.io/${repo}"   # la ruta de Pages es el nombre del repositorio
+          echo "Base de Pages: $base"
           check() { # url, frase obligatoria
             for i in $(seq 1 18); do
               code=$(curl -sS -o body.html -w '%{http_code}' -L "$1" || true)
@@ -82,5 +84,5 @@ jobs:
             done
             echo "::error::$1 no devolvió 200 con el contenido esperado"; return 1
           }
-          check "https://pipesick.github.io/win11-macos/privacy/" "Política de privacidad de Hatsu Desktop"
-          check "https://pipesick.github.io/win11-macos/privacy/en/" "Hatsu Desktop Privacy Policy"
+          check "$base/privacy/" "Política de privacidad de Hatsu Desktop"
+          check "$base/privacy/en/" "Hatsu Desktop Privacy Policy"
