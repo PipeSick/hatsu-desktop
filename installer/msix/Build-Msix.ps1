@@ -36,7 +36,7 @@ $virt = if ($Variant -eq 'Unvirtualized') { "    <desktop6:RegistryWriteVirtuali
 # Esquema: primero las Capability (generales/restringidas), después las DeviceCapability.
 $caps = $(if ($Variant -eq 'Unvirtualized') { "    <rescap:Capability Name=`"unvirtualizedResources`" />`n" } else { '' }) + '    <DeviceCapability Name="bluetooth" />' + "`n" + '    <DeviceCapability Name="location" />' + "`n" + '    <DeviceCapability Name="webcam" />'
 $m = (Get-Content (Join-Path $PSScriptRoot 'AppxManifest.xml.in') -Raw -Encoding UTF8).Replace('@@IDENTITY_NAME@@', $id.identityName).Replace('@@PUBLISHER@@', $id.publisher).Replace('@@PUBLISHER_DISPLAY@@', $id.publisherDisplayName).Replace('@@VERSION@@', $msixVersion).Replace('@@VIRTUALIZATION@@', $virt).Replace('@@CAPABILITIES@@', $caps)
-if ($m -match '@@') { throw 'Quedan marcadores @@ sin sustituir en el manifiesto.' }
+if ($m -match '@@[A-Z_]+@@') { throw 'Quedan marcadores @@ sin sustituir en el manifiesto.' }
 [IO.File]::WriteAllText((Join-Path $stage 'AppxManifest.xml'), $m, (New-Object System.Text.UTF8Encoding($false)))
 $suffix = if ($Variant -eq 'Default') { 'store-unsigned' } else { "experimento-$Variant-unsigned" }
 $pkg = Join-Path $OutDir "HatsuDesktop-$msixVersion-$suffix.msix"; if (Test-Path $pkg) { Remove-Item $pkg }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Hatsu Desktop · manifiesto MSIX EXPERIMENTAL (Fase 3.2). Plantilla: Build-Msix.ps1 sustituye @@...@@.
+<!-- Hatsu Desktop · manifiesto MSIX EXPERIMENTAL (Fase 3.2). Plantilla: Build-Msix.ps1 sustituye los marcadores entre dobles arrobas.
      Identity Name/Publisher: los ASIGNA Partner Center; se leen de store-identity.json (Build-Msix.ps1 los sustituye y comprueba).
      Aplicación de plena confianza (runFullTrust): proceso Win32 normal, no AppContainer. -->
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
