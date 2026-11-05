@@ -144,4 +144,16 @@ public class InstallerTests
         foreach (var d in new[] { es, en }) { Assert.DoesNotContain("VERIFICAR", d); Assert.DoesNotContain("VERIFY", d); Assert.Contains("Hatsu Notch", d); Assert.Contains("DPAPI", d); }
         Assert.DoesNotContain("telemetría", es.Replace("ni telemetría", "").Replace("sin telemetría", "").Replace("telemetría, ni analítica", ""), StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact] public void The_approved_privacy_manifest_matches_the_policy_files_so_Pages_publishes_exactly_what_was_approved()
+    {
+        var lines = File.ReadAllLines(Path.Combine(Root(), "docs", "privacy", "APPROVED.sha256")).Where(l => l.Trim().Length > 0 && !l.StartsWith('#')).ToList();
+        Assert.Equal(2, lines.Count);
+        foreach (var l in lines)
+        {
+            var parts = l.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(Root(), parts[1])))).ToLowerInvariant();
+            Assert.Equal(parts[0], actual);   // si editas una política, vuelve a revisarla y regenera este manifiesto a propósito
+        }
+    }
 }
