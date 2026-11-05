@@ -130,4 +130,18 @@ public class InstallerTests
         Assert.Empty(WinMac.Host.LaunchArguments.Effective([], false));   // MSI/zip/Start: ni se toca
         Assert.Equal(["--diagnose"], WinMac.Host.LaunchArguments.Effective(["--diagnose"], false));
     }
+
+    [Fact] public void The_privacy_policy_names_every_network_host_in_the_code_in_both_languages_and_has_no_open_verification_marks()
+    {
+        var srcDir = Path.Combine(Root(), "src");
+        var hosts = Directory.EnumerateFiles(srcDir, "*.cs", SearchOption.AllDirectories).Where(f => !f.Contains("Tests") && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .SelectMany(f => System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f), "https?://([a-zA-Z0-9.-]+\\.[a-z]{2,})").Select(m => m.Groups[1].Value))
+            .Where(h => !h.EndsWith("microsoft.com") && !h.EndsWith("w3.org") && !h.EndsWith("github.com") && !h.Contains("example") && !h.EndsWith("schemas.microsoft.com")).Distinct().ToList();
+        var es = File.ReadAllText(Path.Combine(Root(), "docs", "privacy", "POLITICA-DE-PRIVACIDAD.md")); var en = File.ReadAllText(Path.Combine(Root(), "docs", "privacy", "PRIVACY-POLICY.en.md"));
+        Assert.NotEmpty(hosts);
+        foreach (var h in hosts) { Assert.Contains(h, es); Assert.Contains(h, en); }
+        foreach (var h in new[] { "music.163.com", "lrclib.net" }) { Assert.Contains(h, es); Assert.Contains(h, en); }   // letras de Hatsu Notch (código incluido en el paquete, no en este árbol)
+        foreach (var d in new[] { es, en }) { Assert.DoesNotContain("VERIFICAR", d); Assert.DoesNotContain("VERIFY", d); Assert.Contains("Hatsu Notch", d); Assert.Contains("DPAPI", d); }
+        Assert.DoesNotContain("telemetría", es.Replace("ni telemetría", "").Replace("sin telemetría", "").Replace("telemetría, ni analítica", ""), StringComparison.OrdinalIgnoreCase);
+    }
 }

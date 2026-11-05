@@ -17,9 +17,15 @@ Capacidades declaradas (porque el código las usa): `runFullTrust` (restringida)
 ### Resultado medido en CI [MEDIDO] — run 41940742204, commit `b1912fa`
 Paquete con la identidad oficial, instalado en el runner (certificado de prueba efímero con asunto = Publisher oficial): se instala; la ruta instalada es `PipeSick.HatsuDesktop_2.0.1.0_x64__83tr6qzbbarj8` (la PFN coincide con Partner Center); el host corre con identidad de paquete; Barra y Dock llegan a `Running` desde la carpeta del paquete; `--quit` cierra todo; el inicio automático (`StartupTask`) se activa y desactiva; se desinstala limpio. El MSI sigue pasando su prueba (≈2 min) y la de AppBar. El artefacto sin firmar (`msix-store-sin-firmar-b1912fa…`, 171 MB) se generó y se subió. Nota: las primeras filas del informe (capacidades, PFN exacta) no las vi una a una en el log; no apareció ningún error en el paso. Para verlas, descarga el artefacto `msix-informe-<commit>`.
 
-## 2. Distribución limitada: ¿se puede probar antes de ser público? [MS/SEGUNDA MANO]
-Partner Center ofrece **audiencia privada** («Private audience»): el producto solo lo ven/instalan los grupos de clientes que definas (por cuentas Microsoft) y las reseñas no se publican. Condiciones halladas: hay que elegirla **antes del primer envío** (una vez público ya no se puede volver a privado) y el grupo se define en Partner Center. Los *vuelos de paquetes* (package flights) son otro mecanismo, para versiones posteriores. **Importante:** incluso con audiencia privada el envío **pasa la certificación completa** (hasta ~3 días hábiles). No encontré (en este entorno) la documentación de MSIX/aplicaciones específica de «ocultar de la búsqueda con enlace directo»; si tu panel ofrece esa opción, también sirve. **Verifica en Partner Center → Precios y disponibilidad → Visibilidad.**
-→ Recomendación: **primer envío con audiencia privada = solo tu cuenta Microsoft.**
+## 2. Audiencia privada para una app MSIX [MS/SEGUNDA MANO — no pude abrir learn.microsoft.com ni tu Partner Center]
+Según la página de Microsoft «Choose visibility options for MSIX app» (leída en resultados de búsqueda), el apartado **Precios y disponibilidad → Visibilidad** de una app MSIX permite **Audiencia privada**:
+- Hay que indicar al menos un **grupo de clientes** con cuentas Microsoft personales (no cuentas de trabajo/escuela). Quien no esté en el grupo no ve la ficha ni puede descargar.
+- Con audiencia privada **no se puede programar fecha de lanzamiento**; el paso a público es una decisión posterior.
+- **Si un envío se hace público, ya no se puede volver a privado** en envíos posteriores → elegirla desde el primer envío.
+- Sigue pasando **la certificación completa**; las reseñas del periodo privado no se publican.
+- Tras publicarse en privado, los testers entran con un **enlace directo a la ficha** (con sesión de Microsoft) o buscando en la Store.
+**Lo que no puedo confirmar:** que tu cuenta nueva muestre esa opción (la ves al crear el envío). Hay un reporte de la comunidad de testers que ven «Producto no encontrado» tras publicar en privado; si pasa, revisa el grupo y espera unos minutos tras «publicado».
+→ **Comprobación previa sin riesgo:** en Partner Center abre el envío → *Precios y disponibilidad* → ¿aparece «Audiencia privada»? Si no aparece, **no envíes nada** y avísame.
 
 ## 3. Campos y materiales para Partner Center (tú los completas)
 **Producto Hatsu Desktop (ID 9NJ0XLP6NXVJ)**
@@ -31,7 +37,7 @@ Partner Center ofrece **audiencia privada** («Private audience»): el producto 
 6. **Notas para certificación** (texto abajo).
 
 **Justificación de `runFullTrust`** (campo de Partner Center, en inglés porque lo lee el revisor):
-> Hatsu Desktop is a Win32 desktop shell enhancement (menu bar, dock and notch-style activity island) written in .NET. It is an existing, unpackaged Win32/.NET application packaged with MSIX; it cannot run inside AppContainer because it hosts top-level windows, registers an application desktop toolbar (SHAppBarMessage) to reserve screen space, enumerates other apps' windows, and launches its own helper processes (Bar, Dock, Notch, Connect). It needs full trust to work as designed. It does not install services or drivers, does not elevate, does not modify system files, and everything it changes (for example hiding the Windows taskbar when the user chooses to) is reverted on exit.
+> Hatsu Desktop is a Win32 desktop shell enhancement (menu bar, dock and the Hatsu Notch activity island) written in .NET. It is an existing, unpackaged Win32/.NET application packaged with MSIX; it cannot run inside AppContainer because it hosts top-level windows, registers an application desktop toolbar (SHAppBarMessage) to reserve screen space, enumerates other apps' windows, and launches its own helper processes (Bar, Dock, Notch, Connect). It needs full trust to work as designed. It does not install services or drivers, does not elevate, does not modify system files, and everything it changes (for example hiding the Windows taskbar when the user chooses to) is reverted on exit.
 
 **Capacidades sensibles** (por si las pregunta): `userNotificationListener` = Centro de notificaciones de Hatsu (solo con permiso del usuario); `location` = clima por ubicación (opcional); `webcam` = espejo de la Isla (vista previa, sin grabar); `bluetooth` = módulo opcional Connect con el iPhone.
 
@@ -40,8 +46,15 @@ Partner Center ofrece **audiencia privada** («Private audience»): el producto 
 
 **Riesgo de certificación [SIN VERIFICAR]:** el revisor podría objetar ocultar la barra de tareas, el gancho de teclado (tecla Windows) o la vigilancia del portapapeles. Se mitiga con las notas y la política; si rechazan, el motivo llega en el informe y se ajusta (p. ej. desactivar por defecto una función en la versión Store).
 
-## 4. URL de la política de privacidad
-Debe ser una URL pública estable. Opciones (decides tú): (a) el archivo del repositorio público (`https://github.com/PipeSick/win11-macos/blob/<rama>/docs/privacy/POLITICA-DE-PRIVACIDAD.md`; hoy no hay `main` y no cambio ramas predeterminadas); (b) GitHub Pages (más limpio; requiere activarlo, acción tuya). Antes de publicarla hay que resolver los **[VERIFICAR]** del borrador y añadir un contacto.
+## 4. URL de la política de privacidad (GitHub Pages)
+**URL propuesta:** `https://pipesick.github.io/win11-macos/privacy/` (español) y `https://pipesick.github.io/win11-macos/privacy/en/` (inglés). Es pública, sin inicio de sesión y estable mientras el repositorio mantenga su nombre (no lo renombro). Alternativa más permanente: un repositorio `PipeSick/pipesick.github.io` (URL `https://pipesick.github.io/hatsu-desktop/privacy/`), si prefieres no depender del nombre del repo.
+**Estado: preparado e inerte, NO publicado.** `tools/site/build_site.py` genera el sitio a partir de `docs/privacy/*.md`; `.github/workflows/pages.yml` solo corre a mano (`workflow_dispatch`). Para publicar, tras aprobar el contenido final:
+1. GitHub → repositorio → *Settings → Pages → Build and deployment → Source: **GitHub Actions***.
+2. *Actions → pages-politica-de-privacidad → Run workflow* (rama `feat/hatsu-phase3-installer-onboarding` o la que decidas; en repos con reglas de entorno, aprueba `github-pages` si lo pide).
+3. Abrir la URL y comprobarla sin sesión iniciada. Pegarla en Partner Center → Propiedades → Política de privacidad.
+Si la rama de entorno `github-pages` solo permite la rama predeterminada, habrá que permitir esta rama en *Settings → Environments → github-pages* (no cambio la rama predeterminada).
+
+**Nombre visible del componente:** en la ficha y en la política la isla se llama **Hatsu Notch**. Los nombres internos `NotchWin`/`WinMac` siguen en carpetas de datos, procesos y menús de la interfaz (hoy algunos textos del programa aún dicen «Isla (NotchWin)»; cambiarlos es un cambio de código aparte que no hice).
 
 ## 5. Qué puedo automatizar y qué haces tú
 | Paso | Quién |

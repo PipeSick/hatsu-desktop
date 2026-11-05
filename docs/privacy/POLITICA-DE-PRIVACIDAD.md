@@ -1,47 +1,59 @@
 # Política de privacidad de Hatsu Desktop
 
-> **BORRADOR para revisión del propietario. No está publicado.** Cada afirmación de abajo está respaldada por el código del repositorio (referencias entre corchetes); lo que no pude verificar está marcado **[VERIFICAR]** y debe resolverse o quitarse antes de publicar.
-> Última actualización: *(fecha de publicación)* · Editor: PipeSick · Contacto: *(correo o página de incidencias de GitHub que elijas)*
+**Última actualización:** 5 de noviembre de 2026 · **Editor:** PipeSick · **Contacto:** https://github.com/PipeSick/win11-macos/issues
 
-Hatsu Desktop es software libre (Apache-2.0) que añade una barra de menús, un Dock y una «Isla» a Windows 11. **No tiene cuentas, no tiene servidores propios y no incluye telemetría, analítica ni informes de fallos automáticos.** Lo que sigue explica qué lee Hatsu de tu PC, qué guarda y qué sale a Internet.
+Hatsu Desktop es software libre (licencia Apache-2.0) que añade a Windows 11 una barra de menús, un Dock y una «isla» de actividad (**Hatsu Notch**), además de un módulo opcional para el iPhone (**Connect**). Esta política explica qué lee Hatsu Desktop de tu equipo, qué guarda y qué sale a Internet. Cada afirmación se comprobó contra el código fuente publicado en https://github.com/PipeSick/win11-macos (y el código de Hatsu Notch incluido en el paquete).
 
-## 1. Lo que NO hace
-- No envía telemetría, estadísticas de uso ni informes de errores a nadie. El editor no recibe ningún dato tuyo.
-- No usa publicidad ni compartes datos con terceros para fines comerciales.
-- No graba audio, ni vídeo, ni pantalla, ni pulsaciones de teclado (ver §3).
+## 1. En resumen
+- **No hay cuentas, ni servidores del editor, ni telemetría, ni analítica, ni informes de fallos automáticos, ni publicidad.** El editor no recibe ningún dato tuyo. No encontré en el código ninguna comprobación de actualizaciones propia: las actualizaciones las gestiona Microsoft Store.
+- Casi todo se procesa y se guarda **en tu equipo**. Lo único que sale a Internet está en la sección 4, y casi todo solo ocurre si activas la función correspondiente o pulsas un botón.
+- Hatsu Desktop **no graba audio, vídeo, pantalla ni lo que escribes**.
 
-## 2. Datos que se guardan en tu PC
-- **Ajustes** (tema, módulos activos, ciudad elegida, tamaño del Dock, etc.) en archivos de configuración locales de tu perfil de usuario (`%APPDATA%\WinMac`; empaquetado, el mismo contenido dentro del almacén privado de la aplicación). Son datos tuyos: puedes borrarlos desinstalando la aplicación o eliminando esa carpeta.
-- **Registros técnicos** (`%LOCALAPPDATA%\WinMac\logs`): estados y errores del programa para diagnóstico. Se quedan en tu PC; el informe de diagnóstico (`--diagnose`) se genera solo cuando tú lo pides y **no se envía a ningún sitio**.
-- **Historial del portapapeles de la Isla:** por defecto solo vive en memoria mientras la Isla está en marcha [NotchWin `ClipboardWatcher`: «Nothing is written to disk»]. Hatsu ofrece un ajuste para conservarlo y límites/exclusiones (omitir contraseñas y aplicaciones concretas, por defecto activado) **[VERIFICAR: qué hace exactamente «conservar historial» en la versión empaquetada antes de publicar esta frase]**. Hay un botón para borrarlo.
-- **Notificaciones de tu iPhone** (módulo opcional «Connect», desactivado por defecto): el contenido se mantiene solo en memoria, nada en disco ni en los registros; tú eliges si mostrar el contenido completo, solo el título o solo la aplicación [docs/40].
+## 2. Datos que se guardan en tu equipo
+Dentro del paquete de Microsoft Store, las carpetas de datos de usuario de la aplicación son privadas del paquete y se eliminan al desinstalarla. Por compatibilidad conservamos temporalmente los nombres internos `WinMac` y `NotchWin` en estas carpetas.
 
-## 3. Funciones sensibles y por qué las usan
-Todas son visibles en la interfaz y se pueden desactivar. Ninguna envía lo que ve a Internet salvo lo indicado en §4.
-- **Gancho de teclado de bajo nivel y atajos globales** (`WH_KEYBOARD_LL`, `RegisterHotKey`): solo para detectar la tecla Windows pulsada sola (abrir el lanzador) y tus atajos. Dejan pasar todas las teclas, no guardan ni registran lo que escribes, y se pueden apagar en Ajustes. Mueren con el proceso [`WinKeyHook.cs`].
-- **Portapapeles:** la Isla observa lo que copias para mostrarte un historial (texto e imágenes pequeñas). Solo se usa dentro de tu PC.
-- **Notificaciones de Windows de otras apps** (API pública `UserNotificationListener`): se muestran en el Centro de notificaciones de Hatsu solo si concedes el permiso; puedes denegarlo en Configuración de Windows [`WinNotificationSource.cs`].
-- **Ubicación** (API de Windows): solo si activas el clima por ubicación y lo permites en Windows; se usa para elegir tu ciudad [`WinLocation.cs`].
-- **Cámara:** solo para el espejo de la Isla (vista previa en vivo cuando abres esa pestaña). No se graba ni se guarda; se libera al salir de la pestaña [NotchWin `CameraPreviewService`].
-- **Bluetooth:** para leer la batería y las notificaciones de tu iPhone en el módulo opcional Connect, con la API pública de Windows.
-- **Lista de ventanas y procesos, carpetas de Descargas y Capturas de pantalla:** el Dock y la Isla leen nombres de ventanas/archivos para mostrarlos; no se transmiten.
-- **Limpieza (Cleanup):** si usas este módulo, analiza categorías conocidas (archivos temporales, etc.) para proponerte qué limpiar; solo elimina lo que tú confirmas. No transmite nada. **[VERIFICAR contra docs/44 §3 la lista exacta de categorías y si va a la Papelera]**
-- **Ocultar la barra de tareas de Windows:** si lo activas, Hatsu la oculta mientras funciona y la restaura al salir.
-- **Inicio automático:** solo si tú lo activas (o lo permites en Configuración › Aplicaciones › Inicio).
+| Qué | Dónde (nombre interno) | Contenido |
+|---|---|---|
+| Ajustes | `%APPDATA%\WinMac`, `%LOCALAPPDATA%\NotchWin\settings.json` | Tus preferencias (tema, módulos activos, ciudad elegida, tamaño del Dock, secciones de la isla, etc.) |
+| Registros técnicos | `%LOCALAPPDATA%\WinMac\logs`, `%LOCALAPPDATA%\NotchWin\crash.log` | Estados y códigos de error y, en `crash.log`, el texto técnico de los errores no controlados; pueden incluir rutas de archivos y nombres de módulos o aplicaciones. Los registros de Connect solo contienen códigos de error, no contenido de notificaciones. Se quedan en tu equipo; solo salen de él si tú los adjuntas a una incidencia |
+| Registro de letras | `%LOCALAPPDATA%\NotchWin\lyrics.log` | Estado de la búsqueda de letras, nombre del reproductor y duración (no título ni artista). Se borra al superar 64 KB. Solo existe si activas las letras |
+| Historial de uso de agentes de IA (ver §3) | `%LOCALAPPDATA%\NotchWin\usage-history.json` | Gasto estimado por día (cifras) |
+| Historial del portapapeles (opcional) | `%LOCALAPPDATA%\NotchWin\clipboard.dat` | **Solo si activas «conservar historial»** (desactivado por defecto): entradas fijadas y recientes, **cifradas para tu usuario de Windows (DPAPI)**. Las entradas que parecen secretos y las de aplicaciones excluidas no se guardan. Desactivar la opción borra el archivo |
 
-## 4. Conexiones a Internet (solo estas)
+## 3. Funciones que acceden a datos sensibles
+Cada una se puede desactivar en Ajustes. Ninguna envía a Internet lo que lee, salvo lo indicado en la sección 4.
+- **Teclado y ratón (ganchos de bajo nivel, `WH_KEYBOARD_LL` y `WH_MOUSE_LL`).** Sirven únicamente para detectar si pulsas la tecla Windows **sola** (para abrir el lanzador de Hatsu en lugar del menú Inicio) y si un clic de ratón interrumpe esa pulsación. El gancho examina cada tecla solo para esa decisión; no guarda, registra ni transmite lo que escribes, deja pasar todas las teclas y se puede desactivar. Se detiene al cerrar la aplicación. Además, Hatsu registra atajos globales (`RegisterHotKey`) para abrir el buscador y otras acciones.
+- **Portapapeles (Hatsu Notch).** Mientras la isla está en marcha, observa lo que copias (texto e imágenes de hasta 8 MB) para mostrarte un historial en memoria, con límite configurable (50 por defecto). Por defecto **no se escribe en disco**. Omite contenido que parece secreto (claves privadas, tokens conocidos, contraseñas) y copias hechas desde gestores de contraseñas (KeePass, 1Password, Bitwarden, etc.; lista editable). Hay un botón para borrar el historial. La detección de secretos es una heurística y puede fallar: no copies datos extremadamente sensibles si no quieres que aparezcan en el historial.
+- **Cámara (Hatsu Notch).** Está **desactivada por defecto**. Si activas la sección «Cámara» y abres su pestaña, muestra una vista previa en vivo en modo compartido de solo lectura. Hatsu Desktop **no graba ni guarda imágenes** y libera la cámara al salir de la pestaña. Windows pedirá permiso.
+- **Letras sincronizadas (Hatsu Notch).** Desactivadas por defecto. Ver sección 4.
+- **Agentes de IA (Hatsu Notch).** La sección «Agentes» viene activada en la configuración por defecto: si tienes instalados Claude Code, Codex, GitHub Copilot CLI u OpenCode, **lee en tu equipo** los archivos de sesión que esas herramientas guardan en tu carpeta de usuario (`.claude`, `.codex`, `.copilot`, `.local/share/opencode`) para calcular uso y coste estimado. Si el archivo de configuración local de Claude Code (`.claude.json`) los incluye, muestra el correo y el plan de esa cuenta; el código no lee credenciales ni tokens. No usa la red. Puedes ocultar la sección o desactivar el módulo en Ajustes.
+- **Notificaciones de Windows de otras aplicaciones.** Con la API pública `UserNotificationListener`, solo después de que concedas el permiso en Windows; se muestran en el Centro de notificaciones de Hatsu. Puedes denegarlo o revocarlo en Configuración de Windows.
+- **Ubicación.** Solo si pides el clima por ubicación y Windows te lo permite; se usa para elegir tu ciudad.
+- **iPhone (Connect, módulo opcional, desactivado por defecto).** Usa Bluetooth con APIs públicas de Windows para leer la batería y las notificaciones del iPhone. El contenido de las notificaciones se mantiene en memoria y no se escribe en disco ni en los registros (los registros solo guardan códigos de error); tú eliges mostrar el contenido completo, solo el título o solo la aplicación.
+- **Música y multimedia.** Lee la sesión multimedia que Windows expone (título, artista y reproductor) para mostrarla y controlarla.
+- **Ventanas, aplicaciones y archivos locales.** El Dock y la barra enumeran ventanas y aplicaciones abiertas; el buscador (Spotlight) consulta aplicaciones, archivos recientes y el índice de Windows Search; la isla observa las carpetas Descargas y Capturas de pantalla para mostrar el progreso de descargas y tus capturas; la barra muestra lecturas locales del sistema (CPU, memoria, red, discos, temperaturas). Nada de esto se transmite.
+- **Estantería (Hatsu Notch).** Lista los archivos que arrastras; la lista es local.
+- **Limpieza (Cleanup, opcional).** Analiza categorías conocidas (temporales del usuario, cachés de Windows, volcados y informes de errores, registros antiguos) y **solo elimina lo que confirmas**. Los archivos eliminados **no pasan por la Papelera** (borrado definitivo). Vaciar la Papelera es una acción aparte, con segunda confirmación, nunca marcada por defecto.
+- **Barra de tareas de Windows.** Si lo activas, Hatsu la oculta mientras funciona y la restaura al salir.
+- **Inicio automático.** Solo si lo activas; puedes cambiarlo también en Configuración › Aplicaciones › Inicio.
+
+## 4. Comunicaciones de red
 | Destino | Cuándo | Qué se envía |
 |---|---|---|
-| `api.open-meteo.com` y `geocoding-api.open-meteo.com` (Open-Meteo) | Si usas el clima | Coordenadas o el nombre de la ciudad que buscas |
-| `speed.cloudflare.com` (Cloudflare) | Solo cuando pulsas el test de velocidad | Tráfico de prueba de velocidad (tu IP es visible para Cloudflare como en cualquier conexión) |
-| `music.163.com` (NetEase) | Solo si activas las letras sincronizadas | Título y artista de la canción en reproducción para buscar la letra |
+| `api.open-meteo.com`, `geocoding-api.open-meteo.com` (Open-Meteo) | Al usar el clima o buscar una ciudad | Coordenadas o el texto de la ciudad que buscas |
+| `speed.cloudflare.com` (Cloudflare) | Solo cuando pulsas el test de velocidad | Tráfico de medición; tu dirección IP es visible para el servicio como en cualquier conexión |
+| `music.163.com` (NetEase Cloud Music) | Solo si activas las letras sincronizadas | Título y artista de la canción que suena (y se usa la duración localmente para elegir el resultado) |
+| `lrclib.net` (LRCLIB) | Solo si activas las letras y NetEase no devuelve resultado | Título y artista de la canción que suena; el programa se identifica con su nombre y versión (User-Agent) |
 
-Esos servicios aplican sus propias políticas de privacidad. Hatsu no usa ningún otro servidor. No hay comprobación de actualizaciones propia (las actualizaciones las gestiona Microsoft Store).
+Esos servicios tienen sus propias políticas. Con **Connect**, todo el tráfico es Bluetooth local con tu iPhone. No encontré ninguna otra conexión de red en el código. Como todo cliente de red, esos servicios pueden ver tu dirección IP.
 
-## 5. Menores, retención y tus derechos
-- Hatsu no recopila datos personales en servidores del editor, por lo que no hay nada que el editor pueda acceder, corregir o borrar por ti: tus datos están en tu PC y los controlas tú.
+## 5. Permisos que declara el paquete
+`runFullTrust` (aplicación de escritorio de Windows), notificaciones de otras aplicaciones, ubicación, Bluetooth y cámara. Cada uno se usa solo para la función descrita arriba y Windows puede pedirte permiso o permitirte revocarlo.
+
+## 6. Menores, conservación y tus derechos
+- El editor no recopila datos personales; no puede acceder a tus datos, corregirlos ni borrarlos porque no los tiene. Tú los controlas.
 - No está dirigido específicamente a menores.
-- Para borrar todo: desinstala Hatsu Desktop y elimina `%APPDATA%\WinMac` y `%LOCALAPPDATA%\WinMac` si existen.
+- **Para borrar todo:** desinstala Hatsu Desktop desde Configuración › Aplicaciones (se elimina el almacén de datos del paquete). Si usaste una versión anterior fuera de la Store, elimina además `%APPDATA%\WinMac`, `%LOCALAPPDATA%\WinMac` y `%LOCALAPPDATA%\NotchWin`.
 
-## 6. Cambios y contacto
-Si esta política cambia, se actualizará aquí con la nueva fecha. Contacto: *(correo / URL de incidencias)*.
+## 7. Cambios
+Si esta política cambia, se publicará aquí con una nueva fecha de actualización.
