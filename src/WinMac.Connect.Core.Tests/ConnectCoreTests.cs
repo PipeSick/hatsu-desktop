@@ -324,3 +324,32 @@ public class PhoneCapabilitiesTests
         Assert.True(c.CanShowIncomingCallNotice); Assert.True(c.CanReadBattery);
     }
 }
+
+public class CallRoutePlannerTests
+{
+    private static CallProbeReport R(bool access = false, bool audio = false) => new(true, true, 1, access, access ? "Allowed" : "DeniedBySystem", 2, audio);
+
+    [Fact] public void Current_real_state_offers_no_buttons() =>
+        Assert.False(CallRoutePlanner.Evaluate(R(), CallControlRoute.PhoneLineTransport, controlVerifiedOnDevice: false).AnyButton);
+
+    [Fact] public void Answer_without_verified_pc_audio_is_never_offered_even_if_control_works()
+    {
+        var c = CallRoutePlanner.Evaluate(R(audio: false), CallControlRoute.AncsAction, controlVerifiedOnDevice: true);
+        Assert.False(c.AnyButton); Assert.Equal(ControlSupport.Unavailable, c.Answer);
+        Assert.Contains("audio", CallRoutePlanner.Why(R(audio: false), CallControlRoute.AncsAction, true));
+    }
+
+    [Fact] public void Audio_alone_without_control_is_not_enough()
+    {
+        Assert.False(CallRoutePlanner.Evaluate(R(audio: true), CallControlRoute.None, true).AnyButton);
+        Assert.False(CallRoutePlanner.Evaluate(R(audio: true), CallControlRoute.AncsAction, controlVerifiedOnDevice: false).AnyButton);
+    }
+
+    [Fact] public void PhoneLine_route_needs_granted_access()
+    {
+        Assert.False(CallRoutePlanner.Evaluate(R(access: false, audio: true), CallControlRoute.PhoneLineTransport, true).AnyButton);
+        Assert.Contains("DeniedBySystem", CallRoutePlanner.Why(R(access: false, audio: true), CallControlRoute.PhoneLineTransport, true));
+        var ok = CallRoutePlanner.Evaluate(R(access: true, audio: true), CallControlRoute.PhoneLineTransport, true);
+        Assert.True(ok.AnyButton); Assert.Equal(ControlSupport.Verified, ok.PcAudio); Assert.Equal(ControlSupport.Unavailable, ok.Dial);   // marcar: fuera de alcance
+    }
+}

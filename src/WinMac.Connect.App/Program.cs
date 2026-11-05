@@ -26,6 +26,12 @@ internal static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        if (args.Contains("--probe-calls"))   // diagnóstico de solo lectura (docs/57): escribe el informe junto al registro y termina; no necesita el host
+        {
+            var (_, text) = await CallProbe.RunAsync();
+            try { var f = Path.Combine(Path.GetDirectoryName(LogPath)!, "connect-probe-calls.txt"); Directory.CreateDirectory(Path.GetDirectoryName(f)!); File.WriteAllText(f, text); Log("[connect] sondeo de telefonía escrito en " + f); } catch (Exception) { }
+            return 0;
+        }
         using var single = new Mutex(true, "WinMac.Connect.SingleInstance", out bool first);
         if (!first) { Log("[connect] ya hay un módulo Connect en marcha"); return 0; }
         var link = ModuleHostLink.FromArgs(args, "connect", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");

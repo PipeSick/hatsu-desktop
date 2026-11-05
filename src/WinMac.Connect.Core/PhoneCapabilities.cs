@@ -33,7 +33,7 @@ public sealed record PhoneCapabilities(
 }
 
 /// <summary>Estado de verificación de un control de llamadas.</summary>
-public enum ControlSupport { Unavailable, ExperimentalReadOnly }
+public enum ControlSupport { Unavailable, ExperimentalReadOnly, Verified }
 
 /// <summary>
 /// Controles de llamada que Hatsu ofrece HOY. Regla: <b>ninguno</b> hasta que exista un mecanismo verificado con un iPhone real (docs/56).
@@ -44,5 +44,5 @@ public sealed record CallControlCapabilities(ControlSupport Answer, ControlSuppo
     /// <summary>Contestar/rechazar/colgar/marcar/audio: sin mecanismo. Estado «activa»: observador de solo lectura del sistema, sin validar con iPhone.</summary>
     public static readonly CallControlCapabilities Today = new(ControlSupport.Unavailable, ControlSupport.Unavailable, ControlSupport.Unavailable,
         ControlSupport.Unavailable, ControlSupport.Unavailable, ControlSupport.ExperimentalReadOnly);
-    public bool AnyButton => Answer != ControlSupport.Unavailable || Reject != ControlSupport.Unavailable || Hangup != ControlSupport.Unavailable || Dial != ControlSupport.Unavailable;
+    public bool AnyButton => Answer == ControlSupport.Verified || Reject == ControlSupport.Verified || Hangup == ControlSupport.Verified;   // solo «Verified»: nunca por estar «experimental»
 }
