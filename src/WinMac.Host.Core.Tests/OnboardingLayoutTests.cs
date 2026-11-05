@@ -19,7 +19,7 @@ public class OnboardingLayoutTests
         return c;
     }
     private static ApplyResult Ok() => new([new("config", "Guardar la configuración", ApplyOutcome.Ok), new("mod:bar", "Barra superior", ApplyOutcome.Ok, "En ejecución"), new("mod:connect", "Hatsu Connect", ApplyOutcome.Ok, "Desactivado: no se inicia", Inactive: true)], OnboardingStatus.Completed, false);
-    private static ApplyResult Warn(int items = 5) => new(Enumerable.Range(0, items - 1).Select(i => new ApplyItem("mod:" + i, "Módulo " + i, ApplyOutcome.Ok, "En ejecución")).Append(new ApplyItem("mod:notch", "Dynamic Island", ApplyOutcome.Warning, "No se pudo iniciar", "estado del supervisor: Failed")).ToList(), OnboardingStatus.InProgress, false);
+    private static ApplyResult Warn(int items = 5) => new(Enumerable.Range(0, items - 1).Select(i => new ApplyItem("mod:" + i, "Módulo " + i, ApplyOutcome.Ok, "En ejecución")).Append(new ApplyItem("mod:notch", "Hatsu Notch", ApplyOutcome.Warning, "No se pudo iniciar", "estado del supervisor: Failed")).ToList(), OnboardingStatus.InProgress, false);
     private static ApplyResult Failed() => new([new("autostart", "Inicio automático", ApplyOutcome.Failed, "directiva de grupo"), new("rollback", "Restaurar el estado anterior", ApplyOutcome.Ok, "No se dejó nada a medias.")], OnboardingStatus.NotStarted, true);
 
     public static IEnumerable<object[]> Scenarios()
@@ -82,7 +82,7 @@ public class OnboardingLayoutTests
         Assert.True(b["a.n1"].Y >= b["theme:0"].Bottom + 2, "la nota del tema debe empezar bajo el control del tema");
         Assert.True(b["a.l2"].Y >= b["a.n1"].Bottom + 8, "«Tamaño del Dock» debe empezar bajo la nota con un respiro");
         var order = new[] { "a.l1", "theme:0", "a.n1", "a.l2", "size:0", "a.l3", "align:0", "a.l4", "bg:0" }; for (int i = 1; i < order.Length; i++) Assert.True(b[order[i]].Y >= b[order[i - 1]].Bottom - 0.01, $"{order[i]} debe ir debajo de {order[i - 1]}");
-        Assert.Equal(OnboardingLayout.ThemeNote, "Se aplica al Dock. La Barra superior y la Isla siguen siempre el tema de Windows.");
+        Assert.Equal(OnboardingLayout.ThemeNote, "Se aplica al Dock. La Barra superior y Hatsu Notch siguen siempre el tema de Windows.");
         Assert.True(b["a.n1"].H >= TextFit.Height(OnboardingLayout.ThemeNote, 420, OnboardingLayout.FontSmall, OnboardingLayout.LineSmall) - 0.01, "la nota reserva el alto real de su texto");
     }
 

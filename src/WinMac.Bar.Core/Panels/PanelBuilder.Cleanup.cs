@@ -17,6 +17,7 @@ public static partial class PanelBuilder
         if (phase == CleanupPhase.Idle)
         {
             w.Add(new Widget(WidgetKind.Note, "clean-intro", "Analiza primero y no borra nada hasta que lo confirmes. Solo trata archivos temporales y cachés que se recrean solos; nunca tus documentos, fotos, descargas ni proyectos."));
+            w.Add(new Widget(WidgetKind.Note, "clean-permanent", CleanupText.PermanentDeletion));
             w.Add(new Widget(WidgetKind.Button, CleanScan, "Analizar", Glyph: "sparkles"));
         }
         else if (v is not null)

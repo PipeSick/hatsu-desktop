@@ -262,4 +262,11 @@ public class CleanupTests
         Assert.Contains(PanelBuilder.CleanTogglePrefix + "user-temp", ids); Assert.DoesNotContain(PanelBuilder.CleanTogglePrefix + "orphans", ids);
     }
     [Fact] public void Size_text_is_spanish_and_readable() { Assert.Equal("1,5 MB", CleanupText.Size(1_572_864)); Assert.Equal("2,5 GB", CleanupText.Size(2_684_354_560)); Assert.Equal("12 KB", CleanupText.Size(12_288)); }
+
+    [Fact] public void The_idle_panel_warns_that_files_are_deleted_permanently_and_do_not_go_to_the_Recycle_Bin()
+    {
+        var m = PanelBuilder.CleanupPanel(PanelContext.Initial(new BarConfig(), Now));
+        var note = m.Widgets.Single(w => w.Id == "clean-permanent").Text;
+        Assert.Contains("definitiva", note); Assert.Contains("no pasan por la Papelera", note); Assert.Equal(CleanupText.PermanentDeletion, note);
+    }
 }

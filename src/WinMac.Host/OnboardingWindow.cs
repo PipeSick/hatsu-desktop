@@ -138,7 +138,7 @@ internal sealed class OnboardingWindow : IDisposable
                 for (int i = 0; i < 4; i++) ctl.Click("next");
                 // ESCENARIO DE PRUEBA: un fallo inventado de la Isla para ver la pantalla de incidencias. No es un fallo del paquete real (la Isla arranca bajo el host en Test-Notch).
                 ctl.ShowResult(new ApplyResult([new("config", "Guardar la configuración", ApplyOutcome.Ok), new("mod:bar", "Barra superior", ApplyOutcome.Ok, "En ejecución"), new("mod:dock", "Dock", ApplyOutcome.Ok, "En ejecución"),
-                    new("mod:notch", "Dynamic Island", ApplyOutcome.Warning, "No se pudo iniciar", "estado del supervisor: Failed"), new("mod:connect", "Hatsu Connect", ApplyOutcome.Ok, "Desactivado: no se inicia", Inactive: true)], OnboardingStatus.InProgress, false)); break;
+                    new("mod:notch", "Hatsu Notch", ApplyOutcome.Warning, "No se pudo iniciar", "estado del supervisor: Failed"), new("mod:connect", "Hatsu Connect", ApplyOutcome.Ok, "Desactivado: no se inicia", Inactive: true)], OnboardingStatus.InProgress, false)); break;
         }
         if (variant == "details" && step == OnboardingStep.Result) ctl.Click("details");
         int pw = (int)Math.Ceiling(OnboardingController.WinW * scale), ph = (int)Math.Ceiling(OnboardingController.WinH * scale);

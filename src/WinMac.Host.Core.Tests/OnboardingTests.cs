@@ -200,7 +200,7 @@ public class OnboardingApplierTests
     {
         var (p, a) = Fresh(); p.MissingModules.Add("notch"); var r = await a.ApplyAsync(OnboardingChoices.Safe);
         Assert.Contains(r.Items, i => i.Id == "mod:notch" && i.Detail!.Contains("No está incluido")); Assert.Equal(OnboardingStatus.InProgress, r.Status);
-        Assert.Null(a.AcceptWarnings(r)); Assert.Equal(OnboardingStatus.Completed, p.Config.Onboarding!.Status); Assert.Contains(p.Config.Onboarding.Warnings!, w => w.Contains("Dynamic Island"));
+        Assert.Null(a.AcceptWarnings(r)); Assert.Equal(OnboardingStatus.Completed, p.Config.Onboarding!.Status); Assert.Contains(p.Config.Onboarding.Warnings!, w => w.Contains("Hatsu Notch"));
     }
 
     [Fact] public async Task Skipping_applies_only_safe_defaults_and_is_recorded_as_skipped()

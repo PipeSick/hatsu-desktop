@@ -14,7 +14,7 @@ public class TrayPanelTests
         Assert.Equal("1 módulo necesita atención", items[0].Sub);
         var mods = items.Where(i => i.Kind == TrayPanelModel.Kind.Module).ToList();
         Assert.Equal(["restart:bar", "open:dock", "enable:notch"], mods.Select(m => m.Action));
-        Assert.Equal(["Barra superior", "Dock", "Isla"], mods.Select(m => m.Text));
+        Assert.Equal(["Barra superior", "Dock", "Hatsu Notch"], mods.Select(m => m.Text));
         Assert.Equal("red", TrayPanelModel.StateColor(ModuleState.Failed)); Assert.Equal("green", TrayPanelModel.StateColor(ModuleState.Running));
         Assert.Equal(["restart:bar", "open:dock", "enable:notch", "settings", "restart-all", "quit"], TrayPanelModel.Focusable(items));
         Assert.True(items.Single(i => i.Action == "quit").Danger);

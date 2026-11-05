@@ -42,7 +42,7 @@ public class FailureClassificationTests
         var st = new Dictionary<string, ModuleState> { ["dock"] = ModuleState.Failed, ["bar"] = ModuleState.Running, ["notch"] = ModuleState.Disabled };
         var items = TrayPanelModel.Build(st, "2.0", new Dictionary<string, ModuleFailure> { ["dock"] = new(FailureKind.PolicyBlocked, "x") });
         Assert.Equal("No se pudo iniciar · Bloqueado por una directiva de Windows", items.Single(i => i.Text == "Dock").Sub); Assert.Equal("En ejecución", items.Single(i => i.Text == "Barra superior").Sub);
-        Assert.Equal("Desactivado", items.Single(i => i.Text == "Isla").Sub);
+        Assert.Equal("Desactivado", items.Single(i => i.Text == "Hatsu Notch").Sub);
     }
 
     [Fact] public void Settings_lists_failed_modules_with_retry_and_never_lists_disabled_ones()
@@ -142,7 +142,7 @@ public class DiagnosticsTests
     [Fact] public void The_report_says_which_component_is_not_running_and_why_without_blaming_a_specific_protection()
     {
         var r = InstallDiagnostics.Build(Input(new HostConfig(), ["[dock] no se pudo lanzar: una directiva de Control de aplicaciones bloqueó el archivo (Smart App Control o WDAC) [error 4551]", "[dock] Failed", "[bar] Running"]));
-        Assert.Contains("Dock: elegido=sí · NO está en ejecución", r); Assert.Contains("[error 4551]", r); Assert.Contains("Barra superior: elegido=sí · en ejecución", r); Assert.Contains("Dynamic Island: elegido=sí · en ejecución", r);
+        Assert.Contains("Dock: elegido=sí · NO está en ejecución", r); Assert.Contains("[error 4551]", r); Assert.Contains("Barra superior: elegido=sí · en ejecución", r); Assert.Contains("Hatsu Notch: elegido=sí · en ejecución", r);
         Assert.Contains("Hatsu Connect: elegido=no · desactivado por ti (no es un fallo)", r); Assert.Contains("instalación MSI por usuario", r);
     }
 

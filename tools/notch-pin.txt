@@ -1,2 +1,2 @@
-# Commit de PipeSick/notch-win (rama feat/winmac-iteration-8, basada en b486220: solo añade una prueba de contrato) que el CI de WinMac compila para validar la integración. Actualizar al publicar cambios de NotchWin.
-80bd29a4b8aa1280fb2d79db741594d3eeaf42ed
+# Commit de PipeSick/notch-win (rama feat/hatsu-notch-rebrand, sobre feat/winmac-iteration-8 = 80bd29a: nombre visible «Hatsu Notch» y agentes de IA desactivados de fábrica; nombres internos, rutas y protocolo sin cambios) que el CI de WinMac compila para validar la integración. Actualizar al publicar cambios de NotchWin.
+89dc14f9bf38ff350272d7c991f41f1095c1dcaa

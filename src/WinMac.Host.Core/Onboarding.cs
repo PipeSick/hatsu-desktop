@@ -68,14 +68,14 @@ public static class OnboardingRules
 
     public static string Name(string id) => id switch
     {
-        ComponentDock => "Dock", ComponentBar => "Barra superior", ComponentNotch => "Dynamic Island", ComponentConnect => "Hatsu Connect", ComponentPeripherals => "Hatsu Peripherals", ComponentCleanup => "Hatsu Cleanup", _ => id,
+        ComponentDock => "Dock", ComponentBar => "Barra superior", ComponentNotch => "Hatsu Notch", ComponentConnect => "Hatsu Connect", ComponentPeripherals => "Hatsu Peripherals", ComponentCleanup => "Hatsu Cleanup", _ => id,
     };
 
     public static string Description(string id) => id switch
     {
         ComponentDock => "Barra de aplicaciones inspirada en macOS, con vista previa de ventanas.",
         ComponentBar => "Controles del sistema, menús, reloj y bandeja.",
-        ComponentNotch => "Música, controles multimedia, letras sincronizadas y otras funciones de NotchWin.",
+        ComponentNotch => "Música, controles multimedia, letras sincronizadas y otras funciones de Hatsu Notch.",
         ComponentConnect => "Batería y notificaciones del iPhone (herramientas de conectividad actuales).",
         ComponentPeripherals => "Batería de ratón, teclado y auriculares compatibles, con avisos opcionales.",
         ComponentCleanup => "Limpieza conservadora: analiza primero y pide confirmación; nunca limpia por sí sola.",
@@ -90,7 +90,7 @@ public static class OnboardingRules
     public static string? Requirement(string id) => id switch
     {
         ComponentPeripherals => "Necesita la Barra superior (ahí vive su icono).",
-        ComponentCleanup => "Necesita la Barra superior (ahí vive su icono). El progreso se muestra en la Isla si está activada.",
+        ComponentCleanup => "Necesita la Barra superior (ahí vive su icono). El progreso se muestra en Hatsu Notch si está activado.",
         ComponentConnect => "El indicador del iPhone aparece en la Barra superior.",
         _ => null,
     };
@@ -154,7 +154,7 @@ public static class OnboardingRules
         string Onoff(bool b) => b ? "Activado" : "Desactivado";
         var l = new List<(string, string)>
         {
-            ("Dock", Onoff(c.Dock)), ("Barra superior", Onoff(c.Bar)), ("Dynamic Island", Onoff(c.Notch)), ("Hatsu Connect", Onoff(c.Connect)), ("Hatsu Peripherals", Onoff(c.Peripherals)), ("Hatsu Cleanup", Onoff(c.Cleanup)),
+            ("Dock", Onoff(c.Dock)), ("Barra superior", Onoff(c.Bar)), ("Hatsu Notch", Onoff(c.Notch)), ("Hatsu Connect", Onoff(c.Connect)), ("Hatsu Peripherals", Onoff(c.Peripherals)), ("Hatsu Cleanup", Onoff(c.Cleanup)),
             ("Tema del Dock", ThemeNames[(int)c.Theme]),
         };
         if (c.Dock) l.Add(("Tamaño y posición del Dock", $"{(c.DockSize >= 0 ? DockSettings.Presets[c.DockSize].Name : "tamaño actual")} · {AlignmentNames[(int)c.DockAlignment]}"));

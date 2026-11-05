@@ -54,6 +54,20 @@ public sealed record NotchSettings
             .Where(a => a.Length is > 0 and <= 64 && a.All(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_' or ' '))
             .Distinct(StringComparer.OrdinalIgnoreCase).Take(64).ToList();
 
+    /// <summary>
+    /// Versión Store (MSIX): en instalaciones NUEVAS el módulo de agentes de IA (lee archivos de sesión de otras herramientas en tu carpeta de usuario) empieza DESACTIVADO,
+    /// pero sigue completo y se activa a mano en Ajustes. Lo fija el host al arrancar con identidad de paquete. NUNCA toca lo ya guardado: solo sustituye al valor de fábrica
+    /// cuando no hay ajustes de la Isla (ni propios ni importados de NotchWin); fuera de la Store el valor de fábrica no cambia.
+    /// </summary>
+    public static bool AgentsOffByDefault { get; set; }
+
+    /// <summary>Valor de fábrica de los ajustes cuando no hay ninguno guardado (ver <see cref="AgentsOffByDefault"/>).</summary>
+    public static NotchSettings Factory => FactoryFor(AgentsOffByDefault);
+
+    public static NotchSettings FactoryFor(bool agentsOff) => agentsOff
+        ? new NotchSettings { AgentsEnabled = false, Sections = DefaultSections().Select(s => s.Id == "agents" ? s with { Enabled = false } : s).ToList() }
+        : new NotchSettings();
+
     public static IReadOnlyList<NotchSection> DefaultSections() => SectionIds.Select(id => new NotchSection(id, id != CameraId)).ToList();
 
     /// <summary>Conserva el orden y el estado guardados, descarta ids desconocidos o repetidos y añade al final los que falten (con su valor por defecto).</summary>

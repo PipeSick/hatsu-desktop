@@ -66,7 +66,7 @@ public static class InstallDiagnostics
         var c = d.Config; var log = ParseLog(d.HostLogTail);
         H("Componentes elegidos y su estado");
         sb.AppendLine(d.ConfigFileExists ? "Configuración: winmac.json existe" : "Configuración: winmac.json NO existe (instalación nueva o aún sin guardar)");
-        foreach (var (id, name) in new[] { ("dock", "Dock"), ("bar", "Barra superior"), ("notch", "Dynamic Island"), ("connect", "Hatsu Connect") })
+        foreach (var (id, name) in new[] { ("dock", "Dock"), ("bar", "Barra superior"), ("notch", "Hatsu Notch"), ("connect", "Hatsu Connect") })
         {
             bool on = c.Modules.TryGetValue(id, out var m) ? m.Enabled : true; log.TryGetValue(id, out var l);
             string exe = id == "notch" ? "NotchWin.App" : id == "bar" ? "HatsuDesktop.Bar" : id == "dock" ? "HatsuDesktop.Dock" : "HatsuDesktop.Connect";

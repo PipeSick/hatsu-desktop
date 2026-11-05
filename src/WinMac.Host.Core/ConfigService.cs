@@ -16,7 +16,7 @@ public sealed class ConfigService
     /// <summary>Error del último guardado en disco (null = se guardó bien). Lo usa el asistente para no dar por aplicado lo que solo vive en memoria.</summary>
     public string? LastSaveError { get { lock (_l) return _lastSaveError; } }
     private string? _lastSaveError;
-    public NotchSettings Notch => Current.Notch ?? new NotchSettings();
+    public NotchSettings Notch => Current.Notch ?? NotchSettings.Factory;
     public bool IsEnabled(string module) => Current.Modules.TryGetValue(module, out var m) ? m.Enabled : true;
     /// <summary>Se dispara tras cada cambio efectivo (anterior, nuevo), fuera del cerrojo.</summary>
     public event Action<HostConfig, HostConfig>? Changed;
@@ -37,7 +37,7 @@ public sealed class ConfigService
 
     public bool UpdateNotch(Func<NotchSettings, NotchSettings> change) => Update(c =>
     {
-        var cur = c.Notch ?? new NotchSettings(); var n = change(cur).Sanitize();
+        var cur = c.Notch ?? NotchSettings.Factory; var n = change(cur).Sanitize();
         return SameNotch(cur, n) && c.Notch is not null ? c : c with { Notch = n };
     });
     /// <summary>Comparación por valor (los records comparan la lista de pestañas por referencia).</summary>
@@ -143,7 +143,7 @@ public sealed class HostController
 
     private void OnChanged(HostConfig old, HostConfig @new)
     {
-        if (!ConfigService.SameNotch(old.Notch ?? new NotchSettings(), @new.Notch ?? new NotchSettings()) || old.Notch is null != @new.Notch is null) _bus.Publish(NotchSettings.Topic, (@new.Notch ?? new NotchSettings()).ToWire());
+        if (!ConfigService.SameNotch(old.Notch ?? NotchSettings.Factory, @new.Notch ?? NotchSettings.Factory) || old.Notch is null != @new.Notch is null) _bus.Publish(NotchSettings.Topic, (@new.Notch ?? NotchSettings.Factory).ToWire());
         if ((old.Bar ?? new BarConfig()) != (@new.Bar ?? new BarConfig()) || old.Bar is null != @new.Bar is null) _bus.Publish(BarTopic, BarWire(@new.Bar ?? new BarConfig()));
         if ((old.Connect ?? new()) != (@new.Connect ?? new())) _bus.Publish(WinMac.Connect.ConnectTopics.Config, ConnectWire(@new.Connect ?? new()));
         if (old.Modules.TryGetValue("connect", out var oc) && oc.Enabled && @new.Modules.TryGetValue("connect", out var nc2) && !nc2.Enabled) ConnectOff();

@@ -14,7 +14,7 @@ public static class TrayPanelModel
 
     public const double Width = 300, Pad = 8;
 
-    public static string Label(string id) => id switch { "bar" => "Barra superior", "dock" => "Dock", "notch" => "Isla", "connect" => "Hatsu Connect", _ => id };
+    public static string Label(string id) => id switch { "bar" => "Barra superior", "dock" => "Dock", "notch" => "Hatsu Notch", "connect" => "Hatsu Connect", _ => id };
 
     public static string StateText(ModuleState s) => s switch
     {

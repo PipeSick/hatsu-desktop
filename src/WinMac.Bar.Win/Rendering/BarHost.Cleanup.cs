@@ -58,7 +58,7 @@ public sealed partial class BarHost
             if (s.Phase != CleanupPhase.Ready || s.SelectedBytes <= 0) return;
             var picked = s.Rows().Where(r => r.Checked && r.Selectable).ToList();
             string list = string.Join("\n", picked.Select(r => $"• {r.Category.Title}: {CleanupText.Size(r.Bytes)}"));
-            if (!Confirm("¿Limpiar lo seleccionado?", $"Se eliminarán estos archivos (revisados otra vez justo antes de borrar):\n{list}\n\nLo que esté en uso o haya cambiado se omitirá.", "Limpiar", danger: true, ConfirmIcon.Trash)) return;
+            if (!Confirm("¿Limpiar lo seleccionado?", $"Se eliminarán estos archivos (revisados otra vez justo antes de borrar):\n{list}\n\n{CleanupText.PermanentDeletion}\nLo que esté en uso o haya cambiado se omitirá.", "Limpiar", danger: true, ConfirmIcon.Trash)) return;
             s.Confirm();
             if (s.RecycleBinSelected)
             {

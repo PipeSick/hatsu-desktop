@@ -21,6 +21,7 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        WinMac.Host.NotchSettings.AgentsOffByDefault = PackageIdentity.IsPackaged;   // Store: agentes de IA desactivados en instalaciones nuevas (activables a mano)
         args = WinMac.Host.LaunchArguments.Effective(args, PackageIdentity.IsStartupTaskActivation());   // MSIX: la StartupTask llega sin argumentos → segundo plano
         try { Native.SetErrorMode(0x0001 | 0x8000); } catch (Exception) { }   // sin cuadros modales del sistema ante un ejecutable no válido o un archivo ausente (bloquearían el arranque de módulos y, con él, la bandeja y el asistente)
         try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch (Exception) { }

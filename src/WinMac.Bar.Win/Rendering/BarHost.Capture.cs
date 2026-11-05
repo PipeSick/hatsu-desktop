@@ -121,7 +121,7 @@ public sealed partial class BarHost
     {
         if (_hkReportAgain != default && DateTime.UtcNow > _hkReportAgain) { _hkReportAgain = default; ReportHotkeys(); }   // once more when the link to the host is surely up
         RecordTick();
-        if (_editRequest is { } req) { _editRequest = null; OpenEditor(req, "Isla"); }
+        if (_editRequest is { } req) { _editRequest = null; OpenEditor(req, "Hatsu Notch"); }
         if (_editEvent?.WaitOne(0) == true)
             try { var p = File.ReadAllText(EditRequestFile).Trim(); File.Delete(EditRequestFile); OpenEditor(p, "orden externa"); } catch (Exception e) { _log("[editor] petición ilegible: " + e.Message); }
         foreach (var (m, ev) in _captureEvents)

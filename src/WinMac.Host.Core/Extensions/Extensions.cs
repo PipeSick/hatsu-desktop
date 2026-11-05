@@ -48,7 +48,7 @@ public sealed partial record ExtensionManifest(string Id, string Name, string Ve
     }
 
     public static string Describe(ExtPermission p) => p == ExtPermission.None ? "sin permisos" :
-        string.Join(", ", new[] { (ExtPermission.Activity, "mostrar actividades en la Isla"), (ExtPermission.Notify, "mostrar avisos en la Isla") }.Where(x => p.HasFlag(x.Item1)).Select(x => x.Item2));
+        string.Join(", ", new[] { (ExtPermission.Activity, "mostrar actividades en Hatsu Notch"), (ExtPermission.Notify, "mostrar avisos en Hatsu Notch") }.Where(x => p.HasFlag(x.Item1)).Select(x => x.Item2));
 }
 
 /// <summary>

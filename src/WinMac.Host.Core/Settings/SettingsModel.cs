@@ -67,7 +67,7 @@ public static class SettingsBuilder
         ("showPeripherals", "Icono de Periféricos en la barra", b => b.ShowPeripherals),
         ("peripheralAlerts", "Avisar cuando la batería de un periférico esté baja", b => b.PeripheralAlerts),
         ("showCleanup", "Icono de Limpieza en la barra", b => b.ShowCleanup),
-        ("cleanupIsland", "Mostrar el progreso de la limpieza en la Isla", b => b.CleanupIsland),
+        ("cleanupIsland", "Mostrar el progreso de la limpieza en Hatsu Notch", b => b.CleanupIsland),
     ];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];
@@ -136,9 +136,9 @@ public static class SettingsBuilder
 
     public static IReadOnlyList<SettingsPage> Build(SettingsInput input)
     {
-        var cfg = input.Cfg; var n = cfg.Notch ?? new NotchSettings(); _bar = cfg.Bar ?? new BarConfig(); var bar = _bar;
+        var cfg = input.Cfg; var n = cfg.Notch ?? NotchSettings.Factory; _bar = cfg.Bar ?? new BarConfig(); var bar = _bar;
         bool installed = !(input.States.TryGetValue("notch", out var ns) && ns == ModuleState.NotInstalled);
-        const string noNotch = "La Isla (NotchWin) no está instalada junto a Hatsu Desktop.";
+        const string noNotch = "Hatsu Notch no está instalado junto a Hatsu Desktop.";
         bool On(string m) => cfg.Modules.TryGetValue(m, out var mc) ? mc.Enabled : true;
 
         // WM-013/014: una sección por tema, en el orden en que se usan. Cada fila está en UN sitio; los textos se parten en líneas (sin «…»).
@@ -148,7 +148,7 @@ public static class SettingsBuilder
                 new(RowKind.Toggle, "mod:bar", "Barra superior", "Reloj, indicadores y el panel de Hatsu Desktop", On("bar")),
                 new(RowKind.Toggle, "mod:dock", "Dock", "Apps abiertas y ancladas, con vista previa de ventanas", On("dock")),
                 new(RowKind.Toggle, "mod:connect", "Hatsu Connect", "Batería y notificaciones del iPhone (opcional)", On("connect")),
-                new(RowKind.Toggle, "mod:notch", "Isla", "Música, actividades y más en la parte superior", installed && On("notch"), installed, installed ? null : noNotch),
+                new(RowKind.Toggle, "mod:notch", "Hatsu Notch", "Música, actividades y más en la parte superior", installed && On("notch"), installed, installed ? null : noNotch),
             ], "Cada módulo es un proceso aparte: si uno falla, los demás siguen."),
             .. ProblemGroups(input),
             new("Sistema", [
@@ -181,13 +181,13 @@ public static class SettingsBuilder
             new("Centro de control", [Bar(13), Bar(14), Bar(15), Bar(16), Bar(17), Bar(18), Bar(19), Bar(20)], "Qué controles aparecen en el panel de la Barra."),
             new("Periféricos", [
                 BarF("showPeripherals", "Batería de ratón, teclado y auriculares que Windows y el propio dispositivo informan (Bluetooth estándar y HID). Apagado: no se lee nada y no queda nada en memoria"),
-                BarF("peripheralAlerts", "Una sola vez por dispositivo al bajar del umbral; vuelve a avisar solo tras cargarlo. Sale por las notificaciones de la Isla"),
+                BarF("peripheralAlerts", "Una sola vez por dispositivo al bajar del umbral; vuelve a avisar solo tras cargarlo. Sale por las notificaciones de Hatsu Notch"),
                 new(RowKind.Field, "periph.thr", "Umbral de batería baja (%)", "Entre 5 y 50", Text: bar.PeripheralAlertThreshold.ToString(), Placeholder: "20"),
                 new(RowKind.Button, "periph.unhide", "Mostrar los dispositivos ocultos"),
             ], "Los receptores 2,4 GHz y el software de cada fabricante (Armoury Crate, Synapse…) no se consultan: sin interfaz documentada no se inventa nada."),
             new("Limpieza", [
                 BarF("showCleanup", "Analiza primero y pide confirmación antes de borrar. Nunca limpia por sí sola ni en segundo plano; no toca documentos, descargas ni proyectos"),
-                BarF("cleanupIsland", "Análisis y limpieza como actividad de la Isla; no sustituye la música, las letras ni las notificaciones"),
+                BarF("cleanupIsland", "Análisis y limpieza como actividad de Hatsu Notch; no sustituye la música, las letras ni las notificaciones"),
             ]),
             new("Panel de Hatsu Desktop", [
                 Bar(21),
@@ -206,7 +206,7 @@ public static class SettingsBuilder
                 Bar(32),
                 Bar(33, "Unos segundos en la esquina; un clic abre la vista previa con acciones"),
                 new(RowKind.Field, "bar.capdir", "Carpeta", Text: bar.CaptureFolder ?? "", Placeholder: "Imágenes\\Capturas de pantalla"),
-            ], "Si otro programa ya usa un atajo, Windows lo rechaza y se indica en «Atajos de teclado». Las capturas aparecen en la galería de la Isla."),
+            ], "Si otro programa ya usa un atajo, Windows lo rechaza y se indica en «Atajos de teclado». Las capturas aparecen en la galería de Hatsu Notch."),
             new("Grabación de pantalla", [
                 new(RowKind.Info, "bar.rec", "Solo vídeo (nunca el micrófono ni el sonido), siempre con indicador visible y solo cuando tú la inicias. Se guarda en Vídeos\\Screen Recordings."),
             ]),
@@ -284,8 +284,8 @@ public static class SettingsBuilder
             new(RowKind.Field, "notch.poll", "Actualizar cada (s)", Enabled: installed, Reason: why, Text: n.PollIntervalSeconds.ToString(), Placeholder: "30"),
         ]));
         notch.Add(new("Pestañas", rows, "Activa, oculta y ordena las pestañas del notch."));
-        notch.Add(new(null, [new(RowKind.Button, "notch.local", "Rutas y datos de la Isla…", Enabled: installed, Reason: why)]));
-        var notchPage = new SettingsPage("notch", "Isla", "island", notch);
+        notch.Add(new(null, [new(RowKind.Button, "notch.local", "Rutas y datos de Hatsu Notch…", Enabled: installed, Reason: why)]));
+        var notchPage = new SettingsPage("notch", "Hatsu Notch", "island", notch);
 
         var connectPage = ConnectPage(input, On("connect"));
         _bar = null;
@@ -350,8 +350,8 @@ public static class SettingsBuilder
                 Bar(35, "Solo aparece con datos reales del iPhone"),
                 new(RowKind.Toggle, "connect.notifs", "Notificaciones del iPhone", "En el Centro de Notificaciones de Hatsu Desktop; las que ya tenías entran sin avisos", c.Notifications, on, off),
                 new(RowKind.Toggle, "connect.calls", "Avisos de llamadas", "Entrantes y perdidas. Contestar y rechazar desde el PC aún no está disponible", c.Calls, on && c.Notifications, on ? null : off),
-                new(RowKind.Toggle, "connect.island", "También en la Isla", "Pestaña Notificaciones de la Isla", c.Island, on && c.Notifications, on ? null : off),
-                new(RowKind.Toggle, "connect.alerts", "Aviso emergente para las nuevas", "En la Isla, como las de Windows", c.Alerts, on && c.Notifications && c.Island, on ? null : off),
+                new(RowKind.Toggle, "connect.island", "También en Hatsu Notch", "Pestaña Notificaciones de Hatsu Notch", c.Island, on && c.Notifications, on ? null : off),
+                new(RowKind.Toggle, "connect.alerts", "Aviso emergente para las nuevas", "En Hatsu Notch, como las de Windows", c.Alerts, on && c.Notifications && c.Island, on ? null : off),
             ]),
             new("Privacidad", [
                 new(RowKind.Segmented, "connect.content", "Contenido de las notificaciones", "Lo que no se elige ni siquiera se pide al iPhone", Options: ContentNames, Selected: (int)c.Content, Enabled: on && c.Notifications, Reason: on ? null : off),

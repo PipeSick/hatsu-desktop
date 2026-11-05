@@ -178,8 +178,8 @@ public static class OnboardingLayout
     public const string WelcomeBody = "Hatsu Desktop personaliza Windows con herramientas opcionales. Tú eliges cuáles usar y puedes cambiarlo después en Ajustes. Hasta que confirmes, no se modifica nada en tu equipo.";
     public const string MigrationBody = "Encontramos tu configuración anterior y la conservamos tal cual: tus módulos, tu inicio automático y tus ajustes siguen como estaban. Puedes seguir así o revisar qué componentes quieres usar. No se cambia nada hasta que lo confirmes.";
     public const string MigrationNote = "Puedes abrir el asistente cuando quieras en Ajustes › General › «Abrir el asistente de configuración».";
-    public const string WelcomeSkipNote = "Omitir activa los componentes predeterminados (Dock, Barra superior y Dynamic Island). No cambia el inicio automático ni oculta la barra de tareas.";
-    public const string ThemeNote = "Se aplica al Dock. La Barra superior y la Isla siguen siempre el tema de Windows.";
+    public const string WelcomeSkipNote = "Omitir activa los componentes predeterminados (Dock, Barra superior y Hatsu Notch). No cambia el inicio automático ni oculta la barra de tareas.";
+    public const string ThemeNote = "Se aplica al Dock. La Barra superior y Hatsu Notch siguen siempre el tema de Windows.";
     public const string AppearanceDockOff = "El Dock está desactivado: sus opciones no se aplican.";
     public const string AppearanceBarOff = "La Barra superior está desactivada: su fondo no se aplica.";
     public const string AutostartTitle = "Iniciar Hatsu Desktop al iniciar sesión en Windows";

@@ -8,6 +8,9 @@ public sealed record CleanupRow(CleanupCategory Category, long Bytes, int Files,
 
 public static class CleanupText
 {
+    /// <summary>Aviso fijo (panel y diálogo de confirmación): Cleanup elimina con borrado normal de archivos, NO envía a la Papelera de reciclaje.</summary>
+    public const string PermanentDeletion = "Los archivos se eliminan de forma definitiva: no pasan por la Papelera de reciclaje y no se podrán recuperar.";
+
     public static string Size(long b) => b switch
     {
         < 1024 => b + " B",
