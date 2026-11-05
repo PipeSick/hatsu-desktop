@@ -1,8 +1,8 @@
 # Política de privacidad de Hatsu Desktop
 
-**Última actualización:** 5 de noviembre de 2026 · **Editor:** PipeSick · **Contacto:** https://github.com/PipeSick/win11-macos/issues
+**Última actualización:** 5 de noviembre de 2026 · **Editor:** PipeSick · **Contacto:** https://github.com/PipeSick/hatsu-desktop/issues
 
-Hatsu Desktop es software libre (licencia Apache-2.0) que añade a Windows 11 una barra de menús, un Dock y una «isla» de actividad (**Hatsu Notch**), además de un módulo opcional para el iPhone (**Connect**). Esta política explica qué lee Hatsu Desktop de tu equipo, qué guarda y qué sale a Internet. Cada afirmación se comprobó contra el código fuente publicado en https://github.com/PipeSick/win11-macos (y el código de Hatsu Notch incluido en el paquete).
+Hatsu Desktop es software libre (licencia Apache-2.0) que añade a Windows 11 una barra de menús, un Dock y una «isla» de actividad (**Hatsu Notch**), además de un módulo opcional para el iPhone (**Connect**). Esta política explica qué lee Hatsu Desktop de tu equipo, qué guarda y qué sale a Internet. Cada afirmación se comprobó contra el código fuente publicado en https://github.com/PipeSick/hatsu-desktop (y el código de Hatsu Notch incluido en el paquete).
 
 ## 1. En resumen
 - **No hay cuentas, ni servidores del editor, ni telemetría, ni analítica, ni informes de fallos automáticos, ni publicidad.** El editor no recibe ningún dato tuyo. No encontré en el código ninguna comprobación de actualizaciones propia: las actualizaciones las gestiona Microsoft Store.

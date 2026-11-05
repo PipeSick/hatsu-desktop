@@ -1,2 +1,2 @@
-# Commit de PipeSick/notch-win (rama feat/hatsu-notch-rebrand, sobre feat/winmac-iteration-8 = 80bd29a: nombre visible «Hatsu Notch» y agentes de IA desactivados de fábrica; nombres internos, rutas y protocolo sin cambios) que el CI de WinMac compila para validar la integración. Actualizar al publicar cambios de NotchWin.
-89dc14f9bf38ff350272d7c991f41f1095c1dcaa
+# Commit de PipeSick/notch-win (rama chore/submodule-url-hatsu-desktop = feat/hatsu-notch-rebrand (89dc14f) + URL del submódulo hatsu-desktop; sobre feat/winmac-iteration-8 = 80bd29a: nombre visible «Hatsu Notch» y agentes de IA desactivados de fábrica; nombres internos, rutas y protocolo sin cambios) que el CI de WinMac compila para validar la integración. Actualizar al publicar cambios de NotchWin.
+42d61c907900d305740621d82e1caf6f3867562e

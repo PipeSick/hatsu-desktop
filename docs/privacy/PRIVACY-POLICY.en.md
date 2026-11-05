@@ -1,8 +1,8 @@
 # Hatsu Desktop Privacy Policy
 
-**Last updated:** November 5, 2026 · **Publisher:** PipeSick · **Contact:** https://github.com/PipeSick/win11-macos/issues
+**Last updated:** November 5, 2026 · **Publisher:** PipeSick · **Contact:** https://github.com/PipeSick/hatsu-desktop/issues
 
-Hatsu Desktop is free software (Apache-2.0) that adds a menu bar, a Dock and an activity "island" (**Hatsu Notch**) to Windows 11, plus an optional iPhone module (**Connect**). This policy explains what Hatsu Desktop reads from your device, what it stores, and what goes over the Internet. Every statement was checked against the source code published at https://github.com/PipeSick/win11-macos (and the Hatsu Notch code shipped in the package).
+Hatsu Desktop is free software (Apache-2.0) that adds a menu bar, a Dock and an activity "island" (**Hatsu Notch**) to Windows 11, plus an optional iPhone module (**Connect**). This policy explains what Hatsu Desktop reads from your device, what it stores, and what goes over the Internet. Every statement was checked against the source code published at https://github.com/PipeSick/hatsu-desktop (and the Hatsu Notch code shipped in the package).
 
 ## 1. Summary
 - **No accounts, no publisher-run servers, no telemetry, no analytics, no automatic crash reports, no advertising.** The publisher receives none of your data. I found no update-check code in the app; updates are handled by Microsoft Store.
