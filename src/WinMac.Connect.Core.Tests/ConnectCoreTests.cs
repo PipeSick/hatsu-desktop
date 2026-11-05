@@ -214,3 +214,31 @@ public class CallTrackerTests
         Assert.False(pre.OnEvent(E(AncsEventId.Added, 5, AncsCategory.MissedCall, AncsFlags.PreExisting), 1));   // perdidas antiguas no cambian nada
     }
 }
+
+public class PhoneCapabilitiesTests
+{
+    [Fact] public void Sig_uuid_uses_bluetooth_base() =>
+        Assert.Equal(new Guid("0000111f-0000-1000-8000-00805f9b34fb"), WinMac.Connect.PhoneCapabilities.Sig(0x111F));
+
+    [Fact] public void Not_enumerated_is_unknown_not_absent()
+    {
+        var c = WinMac.Connect.PhoneCapabilities.From([], servicesEnumerated: false);
+        Assert.Equal(WinMac.Connect.CapabilityState.Unknown, c.HandsFreeAg);
+        Assert.False(c.CallControlRouteAdvertised);
+    }
+
+    [Fact] public void Android_like_set_has_hfp_pbap_but_no_ancs()
+    {
+        var c = WinMac.Connect.PhoneCapabilities.From([WinMac.Connect.PhoneCapabilities.Sig(0x111F), WinMac.Connect.PhoneCapabilities.Sig(0x112F)], true);
+        Assert.True(c.CallControlRouteAdvertised);
+        Assert.False(c.CanShowIncomingCallNotice);
+        Assert.Equal(WinMac.Connect.CapabilityState.Absent, c.Ancs);
+        Assert.Equal(WinMac.Connect.CapabilityState.Absent, c.BatteryGatt);
+    }
+
+    [Fact] public void Iphone_like_set_has_ancs_and_battery()
+    {
+        var c = WinMac.Connect.PhoneCapabilities.From([WinMac.Connect.PhoneCapabilities.AncsService, WinMac.Connect.PhoneCapabilities.Sig(0x180F)], true);
+        Assert.True(c.CanShowIncomingCallNotice); Assert.True(c.CanReadBattery);
+    }
+}
