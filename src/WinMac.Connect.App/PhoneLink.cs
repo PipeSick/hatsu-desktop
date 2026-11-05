@@ -74,7 +74,7 @@ internal sealed class PhoneLink : IAsyncDisposable, IAncsCallActions
     /// <summary>La Isla/Barra pide una orden de llamada (contestar, rechazar, colgar, silenciar). Solo se ejecuta si el sistema puede de verdad (se comprueba al ejecutar).</summary>
     public void Command(string cmd) => Post(async () =>
     {
-        var c = cmd switch { "answer" => (CallCommand?)CallCommand.Answer, "reject" => CallCommand.Reject, "hangup" => CallCommand.Hangup, "mute" => CallCommand.ToggleMute, _ => null };
+        var c = cmd switch { "answer" => (CallCommand?)CallCommand.Answer, "reject" => CallCommand.Reject, "hangup" => CallCommand.Hangup, "mute" => CallCommand.ToggleMute, "route" => CallCommand.RouteToPc, _ => null };
         if (c is null) return;
         var r = await _coord.ExecuteAsync(c.Value);
         _log($"[connect] orden de llamada «{cmd}»: {r.Outcome}{(r.Notice is null ? "" : " — " + r.Notice)}");

@@ -20,6 +20,8 @@ public sealed record CallState(CallPhase Phase, string? Caller, uint Uid, long S
     public bool CanReject { get; init; }
     public bool CanHangup { get; init; }
     public bool CanMute { get; init; }
+    /// <summary>Llamada activa cuyo audio sigue en el teléfono: se puede pasar al PC.</summary>
+    public bool CanRoute { get; init; }
     /// <summary>El audio de la llamada está en el PC (altavoces/micrófono de Windows) según el sistema.</summary>
     public bool AudioOnPc { get; init; }
     public bool Muted { get; init; }
@@ -102,7 +104,7 @@ public sealed class CallTracker(Func<DateTimeOffset>? now = null)
             if (State.ProviderCallId is null && State.Phase != CallPhase.Active) return false;   // lo de ANCS sigue su curso
             return State.Phase switch
             {
-                CallPhase.Active => Set(State with { Phase = CallPhase.Ended, Since = t, CanAnswer = false, CanReject = false, CanHangup = false, CanMute = false, AudioOnPc = false }),
+                CallPhase.Active => Set(State with { Phase = CallPhase.Ended, Since = t, CanAnswer = false, CanReject = false, CanHangup = false, CanMute = false, CanRoute = false, AudioOnPc = false }),
                 CallPhase.Ringing => CloseNeutral(t),   // desapareció mientras sonaba: no se sabe si contestada, rechazada o perdida
                 _ => false,
             };
@@ -121,7 +123,7 @@ public sealed class CallTracker(Func<DateTimeOffset>? now = null)
                 _removedAt = null; _closedAt = null;
                 return Set(new CallState(CallPhase.Active, c.Name ?? (State.Phase == CallPhase.Ringing ? State.Caller : null), State.Uid, State.Session, c.Started ?? t) { ProviderCallId = c.Id, Device = device, AudioOnPc = c.AudioOnPc, Muted = c.Muted });
             default:   // Ended / Lost
-                return State.ProviderCallId == c.Id && State.Phase is CallPhase.Ringing or CallPhase.Active ? (State.Phase == CallPhase.Active ? Set(State with { Phase = CallPhase.Ended, Since = t, CanAnswer = false, CanReject = false, CanHangup = false, CanMute = false, AudioOnPc = false }) : CloseNeutral(t)) : false;
+                return State.ProviderCallId == c.Id && State.Phase is CallPhase.Ringing or CallPhase.Active ? (State.Phase == CallPhase.Active ? Set(State with { Phase = CallPhase.Ended, Since = t, CanAnswer = false, CanReject = false, CanHangup = false, CanMute = false, CanRoute = false, AudioOnPc = false }) : CloseNeutral(t)) : false;
         }
     }
 

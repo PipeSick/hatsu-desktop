@@ -83,7 +83,7 @@ public static class NotchFeed
         // Solo en «active» (llamada confirmada por el sistema): inicio en ms Unix para que la Isla pinte la duración.
         since = c.Phase == WinMac.Connect.CallPhase.Active ? c.Since.ToUnixTimeMilliseconds() : (long?)null,
         // Controles que HOY funcionan para esta llamada (los calcula Connect según lo que Windows permite). La Isla no dibuja ningún botón que venga en false.
-        controls = new { answer = c.CanAnswer, reject = c.CanReject, hangup = c.CanHangup, mute = c.CanMute },
+        controls = new { answer = c.CanAnswer, reject = c.CanReject, hangup = c.CanHangup, mute = c.CanMute, route = c.CanRoute },
         audioOnPc = c.AudioOnPc,
         muted = c.Muted,
         notice = c.Notice,

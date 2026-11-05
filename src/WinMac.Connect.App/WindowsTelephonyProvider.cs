@@ -1,5 +1,6 @@
 using Windows.ApplicationModel.Calls;
 using Windows.Devices.Enumeration;
+using Windows.Foundation.Metadata;
 
 namespace WinMac.Connect.App;
 
@@ -10,14 +11,17 @@ namespace WinMac.Connect.App;
 /// <item><c>PhoneLine</c> con transporte Bluetooth → <c>GetAllActivePhoneCallsAsync</c> → <c>PhoneCall</c> (estado, contacto).</item>
 /// <item><c>PhoneCall.AcceptIncomingAsync / RejectIncomingAsync / EndAsync / MuteAsync</c> y <c>ChangeAudioDeviceAsync(LocalDevice)</c>: el audio pasa a los dispositivos de audio del PC elegidos en Windows. Hatsu NO transporta audio.</item>
 /// </list>
-/// Solo se consideran líneas Bluetooth (nunca Teams ni otras apps de VoIP). Si Windows no concede el registro (hace falta la capacidad restringida <c>phoneLineTransportManagement</c> aprobada por Microsoft),
-/// el estado es «No disponible» con la causa y no se ofrece ningún botón. Al apagar la función o cerrar el módulo se DESHACE el registro.
+/// Secuencia contrastada con Klangbruecke y MyPhone (docs/61; solo como referencia técnica, sin copiar código): RequestAccessAsync SIEMPRE antes de RegisterApp; se RELEE IsRegistered() porque RegisterApp puede volver sin
+/// hacer nada; el booleano de ConnectAsync no es fiable y no se evalúa; las líneas solo aparecen con la app registrada y se filtran por <c>TransportDeviceId</c> == <c>DeviceId</c> del transporte registrado (no basta «Bluetooth»);
+/// el registro se vigila (se pierde al volver a emparejar o si otra app toma el rol) y la conexión HFP se reintenta con límite. Las llamadas del sistema son del contrato 6 (Windows 11).
+/// Si Windows no concede el registro (hace falta la capacidad restringida <c>phoneLineTransportManagement</c> aprobada por Microsoft) el estado es «No disponible» con la causa y no hay botones. Al apagar o cerrar se DESHACE el registro.
 /// </summary>
 internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDisposable
 {
     private readonly Func<ProviderCall?, Task> _onCall; private readonly Action<string> _log; private readonly Action _statusChanged;
     private readonly CancellationTokenSource _cts = new(); private readonly Task _loop;
-    private readonly Dictionary<string, PhoneCall> _calls = new(); private readonly List<PhoneLineTransportDevice> _registeredByUs = [];
+    private readonly Dictionary<string, PhoneCall> _calls = new(); private readonly List<PhoneLineTransportDevice> _transports = [];   // registrados y accesibles
+    private DateTime _lastLine = DateTime.UtcNow, _lastConnect = DateTime.UtcNow, _lastReconcile = DateTime.UtcNow;
     private volatile ProviderStatus _status = new(ProviderState.Unavailable, "Iniciando…"); private string _lastSnapshot = "~"; private DateTime _nextSetup = DateTime.MinValue;
     private PhoneLineWatcher? _watcher; private readonly List<Guid> _lineIds = [];
 
@@ -41,7 +45,7 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
             try
             {
                 if (DateTime.UtcNow >= _nextSetup && !await SetupAsync()) _nextSetup = DateTime.UtcNow.AddSeconds(30);
-                if (_status.Ready) delay = await PollAsync() ? 400 : 1500;   // mientras hay una llamada se mira más seguido
+                if (_status.Ready) { await ReconcileAsync(); if (_status.Ready) delay = await PollAsync() ? 400 : 1500; }   // mientras hay una llamada se mira más seguido
             }
             catch (OperationCanceledException) { break; }
             catch (Exception e) { _log("[connect] telefonía del sistema: " + e.GetType().Name + " 0x" + e.HResult.ToString("X8")); _nextSetup = DateTime.UtcNow.AddSeconds(15); }
@@ -54,24 +58,33 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
     {
         try
         {
+            if (!ApiInformation.IsApiContractPresent("Windows.ApplicationModel.Calls.CallsPhoneContract", RegistrationPlanner.RequiredCallsContract))
+            { SetStatus(ProviderState.Unavailable, "Esta versión de Windows no permite controlar llamadas de teléfono (requiere Windows 11)"); _nextSetup = DateTime.UtcNow.AddHours(1); return false; }
             var devs = await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth));
             if (devs.Count == 0) { SetStatus(ProviderState.Unavailable, "Windows no lista ningún teléfono Bluetooth con manos libres (HFP): empareja el teléfono"); return false; }
-            bool any = false; string? denied = null;
+            ProviderStatus? last = null; var ready = new List<PhoneLineTransportDevice>();
             foreach (var d in devs.Take(4))
             {
-                var t = PhoneLineTransportDevice.FromId(d.Id);
-                var access = await t.RequestAccessAsync();
-                if (access != DeviceAccessStatus.Allowed) { denied = "Windows no concedió el acceso al teléfono (" + access + ")"; continue; }
-                try
+                var t = PhoneLineTransportDevice.FromId(d.Id);   // se asigna antes de cualquier espera: un cierre a mitad aún puede deshacer el registro
+                var acc = await t.RequestAccessAsync();          // SIEMPRE antes de RegisterApp
+                var access = acc == DeviceAccessStatus.Allowed ? AccessResult.Allowed : acc == DeviceAccessStatus.DeniedByUser ? AccessResult.DeniedByUser : acc == DeviceAccessStatus.DeniedBySystem ? AccessResult.DeniedBySystem : AccessResult.Other;
+                bool before = Registered(t) ?? false; var reg = RegisterResult.NotNeeded;
+                if (access == AccessResult.Allowed && !before)
                 {
-                    if (!t.IsRegistered()) { t.RegisterApp(); lock (_registeredByUs) _registeredByUs.Add(t); _log("[connect] registrado como cliente del transporte telefónico"); }
+                    _log("[connect] registrando Hatsu como cliente del transporte telefónico…");   // antes de la llamada: si el proceso muriera dentro, este es el único rastro
+                    try { t.RegisterApp(); reg = RegisterResult.Returned; _log("[connect] RegisterApp volvió"); }
+                    catch (Exception e) when (e is UnauthorizedAccessException || e.HResult == unchecked((int)0x80070005)) { reg = RegisterResult.Unauthorized; }
+                    catch (Exception e) { reg = RegisterResult.Threw; _log("[connect] RegisterApp: 0x" + e.HResult.ToString("X8")); }
                 }
-                catch (Exception e) when (e is UnauthorizedAccessException || e.HResult == unchecked((int)0x80070005))
-                { denied = "Windows negó el registro de Hatsu como cliente de telefonía: hace falta la capacidad phoneLineTransportManagement aprobada por Microsoft (docs/60)"; continue; }
-                try { await t.ConnectAsync(); } catch (Exception e) { _log("[connect] ConnectAsync: 0x" + e.HResult.ToString("X8")); }   // si Windows ya lo tiene conectado, no pasa nada
-                any = true;
+                bool after = Registered(t) ?? false;   // se RELEE: RegisterApp puede volver sin hacer nada
+                var st = RegistrationPlanner.Evaluate(access, before, reg, after); last = st;
+                _log($"[connect] transporte: acceso={acc}, registrado antes={before}, después={after} → {st.State}");
+                if (!st.Ready) continue;
+                try { var ok = await t.ConnectAsync(); _log("[connect] ConnectAsync devolvió " + ok + " (no se evalúa: no es fiable)"); _lastConnect = DateTime.UtcNow; } catch (Exception e) { _log("[connect] ConnectAsync: 0x" + e.HResult.ToString("X8")); }
+                ready.Add(t);
             }
-            if (!any) { SetStatus(ProviderState.Unavailable, denied ?? "Sin acceso al transporte telefónico"); return false; }
+            lock (_transports) { _transports.Clear(); _transports.AddRange(ready); }
+            if (ready.Count == 0) { SetStatus(last?.State ?? ProviderState.Unavailable, last?.Reason ?? "Sin acceso al transporte telefónico"); return false; }
             await StartWatcherAsync();
             SetStatus(ProviderState.Ready, "Windows gestiona la llamada del teléfono; el audio puede pasar al PC");
             return true;
@@ -80,6 +93,30 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
         {
             SetStatus(ProviderState.Unavailable, e is UnauthorizedAccessException || e.HResult == unchecked((int)0x80070005) ? "Acceso denegado por Windows a la telefonía" : "Telefonía de Windows no disponible (0x" + e.HResult.ToString("X8") + ")");
             return false;
+        }
+    }
+
+    private static bool? Registered(PhoneLineTransportDevice t) { try { return t.IsRegistered(); } catch (Exception) { return null; } }
+
+    /// <summary>Cada 30 s: ¿sigue registrada la app? (se pierde al volver a emparejar el teléfono o si otra app toma el rol) y ¿hay que reintentar la conexión HFP?</summary>
+    private async Task ReconcileAsync()
+    {
+        if (DateTime.UtcNow - _lastReconcile < TimeSpan.FromSeconds(30)) return;
+        _lastReconcile = DateTime.UtcNow;
+        PhoneLineTransportDevice[] ts; lock (_transports) ts = _transports.ToArray();
+        foreach (var t in ts)
+        {
+            if (RegistrationPlanner.NeedsReregister(_status.Ready, Registered(t)))
+            {
+                _log("[connect] el registro de telefonía se perdió (¿nuevo emparejamiento u otra app?): se vuelve a registrar");
+                try { _watcher?.Stop(); } catch (Exception) { } _watcher = null; lock (_lineIds) _lineIds.Clear();
+                lock (_transports) _transports.Clear(); SetStatus(ProviderState.Unavailable, "Registro perdido: volviendo a registrar…"); _nextSetup = DateTime.MinValue; return;
+            }
+        }
+        if (RegistrationPlanner.ShouldReconnect(_status.Ready, DateTime.UtcNow - _lastLine, DateTime.UtcNow - _lastConnect))
+        {
+            _lastConnect = DateTime.UtcNow;
+            foreach (var t in ts) { try { var ok = await t.ConnectAsync(); _log("[connect] reconexión HFP pedida (ConnectAsync " + ok + ")"); } catch (Exception e) { _log("[connect] reconexión HFP: 0x" + e.HResult.ToString("X8")); } }
         }
     }
 
@@ -103,6 +140,8 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
             PhoneLine line;
             try { line = await PhoneLine.FromIdAsync(id); } catch (Exception) { continue; }
             if (line.Transport != PhoneLineTransport.Bluetooth) continue;   // NUNCA Teams, SIM ni otras apps
+            if (!OwnsTransport(line.TransportDeviceId)) continue;           // solo líneas de los transportes que ESTA app registró (no basta «Bluetooth»)
+            _lastLine = DateTime.UtcNow;
             try
             {
                 var res = await line.GetAllActivePhoneCallsAsync();
@@ -138,6 +177,12 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
     }
     private bool _emptyOnce;
 
+    private bool OwnsTransport(string? lineTransportId)
+    {
+        if (string.IsNullOrEmpty(lineTransportId)) return false;
+        lock (_transports) return _transports.Any(t => { try { return string.Equals(t.DeviceId, lineTransportId, StringComparison.OrdinalIgnoreCase); } catch (Exception) { return false; } });
+    }
+
     private PhoneCall? Find(string id) { lock (_calls) return _calls.TryGetValue(id, out var c) ? c : null; }
 
     public async Task<bool> AnswerAsync(string id, CancellationToken ct) => Find(id) is { } c && await c.AcceptIncomingAsync() == PhoneCallOperationStatus.Succeeded;
@@ -150,8 +195,11 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
     {
         _cts.Cancel(); try { await _loop; } catch (Exception) { }
         try { _watcher?.Stop(); } catch (Exception) { }
-        PhoneLineTransportDevice[] mine; lock (_registeredByUs) mine = _registeredByUs.ToArray();
-        foreach (var t in mine) { try { t.UnregisterApp(); _log("[connect] registro del transporte telefónico deshecho"); } catch (Exception e) { _log("[connect] no se pudo deshacer el registro: 0x" + e.HResult.ToString("X8")); } }
+        PhoneLineTransportDevice[] mine; lock (_transports) mine = _transports.ToArray();
+        foreach (var t in mine)
+        {   // solo si sigue registrada: un UnregisterApp de más no hace daño, pero un registro que se queda impide el siguiente RegisterApp
+            try { if (Registered(t) == true) { t.UnregisterApp(); _log("[connect] registro del transporte telefónico deshecho"); } } catch (Exception e) { _log("[connect] no se pudo deshacer el registro: 0x" + e.HResult.ToString("X8")); }
+        }
         _cts.Dispose();
     }
 }

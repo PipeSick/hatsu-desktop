@@ -1,6 +1,6 @@
 namespace WinMac.Connect;
 
-public enum CallCommand { Answer, Reject, Hangup, ToggleMute }
+public enum CallCommand { Answer, Reject, Hangup, ToggleMute, RouteToPc }
 public enum CommandOutcome { Done, Unavailable, Failed }
 public sealed record CommandResult(CommandOutcome Outcome, string? Notice = null);
 
@@ -46,6 +46,7 @@ public static class CallControlPlanner
             CanReject = s.Phase == CallPhase.Ringing && (viaSystem || (s.ProviderCallId is null && ancsCanReject)),
             CanHangup = s.Phase == CallPhase.Active && viaSystem,
             CanMute = s.Phase == CallPhase.Active && viaSystem && s.AudioOnPc,
+            CanRoute = s.Phase == CallPhase.Active && viaSystem && !s.AudioOnPc,   // contestada en el teléfono (o el audio no pasó): «pasar al PC»
         };
     }
 }
@@ -119,6 +120,10 @@ public sealed class CallCoordinator
                 case CallCommand.ToggleMute:
                     if (!st.CanMute || prov is null) return new(CommandOutcome.Unavailable);
                     return await Guard(prov.SetMuteAsync(st.ProviderCallId!, !st.Muted, ct), ct) ? new(CommandOutcome.Done) : new(CommandOutcome.Failed, "No se pudo cambiar el silencio");
+                case CallCommand.RouteToPc:
+                    if (!st.CanRoute || prov is null) return new(CommandOutcome.Unavailable, "No hay una llamada activa cuyo audio mover al PC");
+                    if (!await Guard(prov.RouteAudioToPcAsync(st.ProviderCallId!, ct), ct)) { Note(st.ProviderCallId!, "Windows no pudo pasar el audio al PC: sigue en el teléfono"); return new(CommandOutcome.Failed, _notice); }
+                    return new(CommandOutcome.Done);
                 default: return new(CommandOutcome.Unavailable);
             }
         }

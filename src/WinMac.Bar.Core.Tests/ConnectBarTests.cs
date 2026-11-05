@@ -144,10 +144,10 @@ public class ConnectBarTests
 
     [Fact] public void Call_controls_audio_notice_and_device_travel_to_the_island_exactly_as_connect_computed_them()
     {
-        var c = new CallState(CallPhase.Active, "Fernando", 0, 1, DateTimeOffset.FromUnixTimeSeconds(1_700_000_000)) { Device = "Android", ProviderCallId = "c1", CanHangup = true, CanMute = true, AudioOnPc = true, Notice = "ok" };
+        var c = new CallState(CallPhase.Active, "Fernando", 0, 1, DateTimeOffset.FromUnixTimeSeconds(1_700_000_000)) { Device = "Android", ProviderCallId = "c1", CanHangup = true, CanMute = true, CanRoute = true, AudioOnPc = true, Notice = "ok" };
         var j = System.Text.Json.JsonSerializer.SerializeToElement(NotchFeed.Call(c));
         Assert.Equal("active", j.GetProperty("state").GetString()); Assert.Equal("Android", j.GetProperty("device").GetString()); Assert.Equal(1_700_000_000_000, j.GetProperty("since").GetInt64());
-        Assert.True(j.GetProperty("controls").GetProperty("hangup").GetBoolean()); Assert.False(j.GetProperty("controls").GetProperty("answer").GetBoolean()); Assert.True(j.GetProperty("audioOnPc").GetBoolean()); Assert.Equal("ok", j.GetProperty("notice").GetString());
+        Assert.True(j.GetProperty("controls").GetProperty("hangup").GetBoolean()); Assert.True(j.GetProperty("controls").GetProperty("route").GetBoolean()); Assert.False(j.GetProperty("controls").GetProperty("answer").GetBoolean()); Assert.True(j.GetProperty("audioOnPc").GetBoolean()); Assert.Equal("ok", j.GetProperty("notice").GetString());
         var r = System.Text.Json.JsonSerializer.SerializeToElement(NotchFeed.Call(new CallState(CallPhase.Ringing, "X", 0, 1, DateTimeOffset.Now) { CanAnswer = true, CanReject = true }));
         Assert.True(r.GetProperty("controls").GetProperty("answer").GetBoolean()); Assert.True(r.GetProperty("controls").GetProperty("reject").GetBoolean());
     }

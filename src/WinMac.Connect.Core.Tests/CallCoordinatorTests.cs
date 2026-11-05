@@ -130,3 +130,64 @@ public class CallCoordinatorTests
         _c.Reset(); _tr.Reset(); Assert.Equal(CallPhase.None, _c.Present().Phase); Assert.Null(_c.Present().Notice);
     }
 }
+
+public class RegistrationPlannerTests
+{
+    [Fact] public void Happy_path_is_ready_only_if_is_registered_is_true_afterwards()
+    {
+        Assert.True(RegistrationPlanner.Evaluate(AccessResult.Allowed, false, RegisterResult.Returned, true).Ready);
+        var silent = RegistrationPlanner.Evaluate(AccessResult.Allowed, false, RegisterResult.Returned, false);   // «RegisterApp puede volver sin hacer nada»
+        Assert.False(silent.Ready); Assert.Contains("no tuvo efecto", silent.Reason);
+    }
+
+    [Fact] public void Unauthorized_register_names_the_restricted_capability()
+    {
+        var s = RegistrationPlanner.Evaluate(AccessResult.Allowed, false, RegisterResult.Unauthorized, false);
+        Assert.Equal(ProviderState.Unavailable, s.State); Assert.Contains("phoneLineTransportManagement", s.Reason);
+    }
+
+    [Fact] public void Denied_access_blames_another_app_first_and_the_capability_second()
+    {
+        var s = RegistrationPlanner.Evaluate(AccessResult.DeniedBySystem, false, RegisterResult.NotNeeded, false);
+        Assert.False(s.Ready); Assert.Contains("Enlace Móvil", s.Reason); Assert.Contains("phoneLineTransportManagement", s.Reason);
+        Assert.Contains("Privacidad", RegistrationPlanner.Evaluate(AccessResult.DeniedByUser, false, RegisterResult.NotNeeded, false).Reason);
+    }
+
+    [Fact] public void An_existing_registration_is_reused_and_a_lost_one_triggers_reregistration()
+    {
+        Assert.True(RegistrationPlanner.Evaluate(AccessResult.Allowed, true, RegisterResult.NotNeeded, true).Ready);
+        Assert.True(RegistrationPlanner.NeedsReregister(true, false)); Assert.False(RegistrationPlanner.NeedsReregister(true, true));
+        Assert.False(RegistrationPlanner.NeedsReregister(true, null));   // lectura fallida: no se actúa a ciegas
+        Assert.False(RegistrationPlanner.NeedsReregister(false, false));
+    }
+
+    [Fact] public void Reconnect_waits_for_a_quiet_period_and_is_rate_limited()
+    {
+        Assert.False(RegistrationPlanner.ShouldReconnect(true, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(5)));
+        Assert.False(RegistrationPlanner.ShouldReconnect(true, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(10)));
+        Assert.True(RegistrationPlanner.ShouldReconnect(true, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2)));
+        Assert.False(RegistrationPlanner.ShouldReconnect(false, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2)));
+    }
+}
+
+public class CallRoutingCommandTests
+{
+    [Fact] public async Task A_call_answered_on_the_phone_can_be_moved_to_the_pc_and_then_muted()
+    {
+        var t = new DateTimeOffset(2026, 11, 5, 20, 0, 0, TimeSpan.Zero); var tr = new CallTracker(() => t); var p = new FakeProvider(); var c = new CallCoordinator(tr, () => p, () => null);
+        await c.OnProviderCallAsync(new("c1", ProviderCallStatus.Talking, "Ana", null, AudioOnPc: false), "iPhone");
+        var s = c.Present(); Assert.True(s.CanRoute); Assert.False(s.CanMute); Assert.True(s.CanHangup);   // sin audio en el PC no hay silenciar
+        Assert.Equal(CommandOutcome.Done, (await c.ExecuteAsync(CallCommand.RouteToPc)).Outcome); Assert.Contains("route:c1", p.Calls);
+        await c.OnProviderCallAsync(new("c1", ProviderCallStatus.Talking, "Ana", null, AudioOnPc: true), "iPhone");
+        s = c.Present(); Assert.False(s.CanRoute); Assert.True(s.CanMute);
+        Assert.Equal(CommandOutcome.Unavailable, (await c.ExecuteAsync(CallCommand.RouteToPc)).Outcome);
+    }
+
+    [Fact] public async Task A_failed_route_tells_the_user_and_offers_no_false_audio()
+    {
+        var t = new DateTimeOffset(2026, 11, 5, 20, 0, 0, TimeSpan.Zero); var tr = new CallTracker(() => t); var p = new FakeProvider { Route = false }; var c = new CallCoordinator(tr, () => p, () => null);
+        await c.OnProviderCallAsync(new("c1", ProviderCallStatus.Talking, "Ana"), "iPhone");
+        var r = await c.ExecuteAsync(CallCommand.RouteToPc); Assert.Equal(CommandOutcome.Failed, r.Outcome);
+        var s = c.Present(); Assert.False(s.AudioOnPc); Assert.Contains("sigue en el teléfono", s.Notice);
+    }
+}
