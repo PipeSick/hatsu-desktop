@@ -40,6 +40,7 @@ internal static class Program
             item => link.Event(ConnectTopics.Alert, item),
             Log);
         phone.PublishCall = c => link.Publish(ConnectTopics.Call, c);
+        phone.StartSystemCallObserver();   // EXPERIMENTAL, solo lectura (docs/56)
         link.HealthCheck = () => true;   // el trabajo con Bluetooth va en su propio bucle: un iPhone que no responde no es un módulo colgado
         link.Subscribe(ConnectTopics.Config, d => phone.ApplySettings(ConnectSettings.Parse(d)));
         link.Start();

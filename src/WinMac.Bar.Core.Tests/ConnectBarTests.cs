@@ -134,6 +134,10 @@ public class ConnectBarTests
         Assert.Equal("ringing", J(CallPhase.Ringing, "Mamá").GetProperty("state").GetString()); Assert.Equal("Mamá", J(CallPhase.Ringing, "Mamá").GetProperty("caller").GetString());
         Assert.Equal("missed", J(CallPhase.Missed, null).GetProperty("state").GetString());
         Assert.Equal("none", J(CallPhase.None, null).GetProperty("state").GetString());
+        Assert.Equal("active", J(CallPhase.Active, "Mamá").GetProperty("state").GetString());
+        Assert.True(J(CallPhase.Active, "Mamá").GetProperty("since").GetInt64() > 0); Assert.Equal(JsonValueKind.Null, J(CallPhase.Ringing, "Mamá").GetProperty("since").ValueKind);
+        Assert.False(J(CallPhase.Ringing, "Mamá").GetProperty("controls").GetProperty("answer").GetBoolean());   // sin mecanismo verificado: ningún botón
+        Assert.Equal("iPhone", J(CallPhase.Ringing, "Mamá").GetProperty("device").GetString());
         var round = ConnectWire.ParseCall(JsonSerializer.SerializeToElement(new CallState(CallPhase.Ringing, "Mamá", 326, 1, DateTimeOffset.Now), ConnectSettings.Wire))!;
         Assert.Equal(CallPhase.Ringing, round.Phase); Assert.Equal("Mamá", round.Caller);
     }

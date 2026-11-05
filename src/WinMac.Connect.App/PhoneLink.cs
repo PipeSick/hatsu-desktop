@@ -59,6 +59,19 @@ internal sealed class PhoneLink : IAsyncDisposable
 
     private void ResetCall() { if (_call.Reset()) CallChanged(); }
 
+    private SystemCallObserver? _sysCalls;
+    /// <summary>Observador EXPERIMENTAL de la telefonía del sistema (docs/56). Se registra siempre; solo alimenta la Isla con HATSU_CONNECT_SYSTEM_CALLS=1.</summary>
+    public void StartSystemCallObserver()
+    {
+        _sysCalls = new SystemCallObserver(active => Post(() =>
+        {
+            if (_call.OnTelephony(active)) { _log("[connect] llamada (fuente: sistema): " + _call.State.Phase); CallChanged(); }
+            else _log("[connect] telefonía del sistema ignorada: sin correlación con una llamada de este iPhone");
+            return Task.CompletedTask;
+        }), _log);
+        _sysCalls.Start();
+    }
+
     public void ApplySettings(ConnectSettings c) => Post(async () =>
     {
         var old = _cfg; _cfg = c; bool first = !_configured; _configured = true;
@@ -349,6 +362,7 @@ internal sealed class PhoneLink : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _sysCalls?.Dispose();
         await _watchdog.DisposeAsync();
         var done = new TaskCompletionSource(); Post(async () => { try { await TeardownAsync(forgetDevice: true); } finally { done.TrySetResult(); } });
         await Task.WhenAny(done.Task, Task.Delay(3000));

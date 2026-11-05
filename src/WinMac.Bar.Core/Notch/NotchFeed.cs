@@ -71,14 +71,19 @@ public static class NotchFeed
         SnapshotKey(windows) + "|" + string.Join(",", phone.Select(i => i.Key + ":" + i.At + ":" + (i.Title?.Length ?? 0) + ":" + (i.Body?.Length ?? 0)));
 
     /// <summary>
-    /// WM-038: estado de la llamada del iPhone para la Isla: <c>{ kind: "call", state: "ringing"|"missed"|"ended"|"none", caller }</c>. La Isla la mantiene mientras suena
+    /// WM-038: estado de la llamada del iPhone para la Isla: <c>{ kind: "call", state: "ringing"|"missed"|"active"|"ended"|"none", caller, device, since?, controls }</c>. La Isla la mantiene mientras suena
     /// (no caduca como una notificación) y la quita al terminar. Sin quién llama (privacidad o aún sin datos): un texto genérico.
     /// </summary>
     public static object Call(WinMac.Connect.CallState c) => new
     {
         kind = "call",
-        state = c.Phase switch { WinMac.Connect.CallPhase.Ringing => "ringing", WinMac.Connect.CallPhase.Missed => "missed", WinMac.Connect.CallPhase.Ended => "ended", _ => "none" },
+        state = c.Phase switch { WinMac.Connect.CallPhase.Ringing => "ringing", WinMac.Connect.CallPhase.Missed => "missed", WinMac.Connect.CallPhase.Ended => "ended", WinMac.Connect.CallPhase.Active => "active", _ => "none" },
         caller = c.Caller,
+        device = "iPhone",
+        // Solo en «active» (fuente de telefonía fiable): inicio en ms Unix para que la Isla pinte la duración.
+        since = c.Phase == WinMac.Connect.CallPhase.Active ? c.Since.ToUnixTimeMilliseconds() : (long?)null,
+        // Controles disponibles HOY: ninguno (contestar/rechazar/colgar no tienen mecanismo verificado; docs/56). La Isla no debe dibujar botones sin esto en true.
+        controls = new { answer = false, reject = false, hangup = false },
     };
 
     /// <summary>Aviso emergente de una notificación nueva del iPhone (sin «Abrir»: no se puede abrir una app del iPhone desde el PC).</summary>

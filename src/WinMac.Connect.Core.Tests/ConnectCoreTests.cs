@@ -196,14 +196,89 @@ public class CallTrackerTests
         var c = T(); c.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1);
         c.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1);
         _t = _t.AddSeconds(1); Assert.False(c.Tick());   // se espera por si llega una perdida
-        _t = _t + CallTracker.MissedGrace; Assert.True(c.Tick()); Assert.Equal(CallPhase.Ended, c.State.Phase);
+        _t = _t + CallTracker.MissedGrace; Assert.True(c.Tick());
+        Assert.Equal(CallPhase.None, c.State.Phase);   // cierre NEUTRO: nunca «terminada» (contestada = sigue activa en el iPhone; evidencia real)
+        Assert.NotEqual(CallPhase.Ended, c.State.Phase);
+    }
+
+    [Fact]
+    public void Answered_call_never_passes_through_Ended()
+    {
+        var c = T(); c.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1); c.OnCaller(9, 1, "Fernando Noc");
+        c.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1);
+        var seen = new List<CallPhase>();
+        for (int i = 0; i < 40; i++) { _t = _t.AddSeconds(0.5); c.Tick(); seen.Add(c.State.Phase); }
+        Assert.DoesNotContain(CallPhase.Ended, seen);
+        Assert.Equal(CallPhase.None, c.State.Phase);
+    }
+
+    [Fact]
+    public void Duplicate_added_keeps_the_caller_and_old_events_do_not_touch_a_later_call()
+    {
+        var c = T(); c.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1); c.OnCaller(9, 1, "Mamá");
+        Assert.False(c.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1)); Assert.Equal("Mamá", c.State.Caller);   // duplicado
+        c.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1); _t = _t + CallTracker.MissedGrace; c.Tick();
+        c.OnEvent(E(AncsEventId.Added, 12, AncsCategory.IncomingCall), 1); c.OnCaller(12, 1, "Fernando");
+        Assert.False(c.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1));   // Removed atrasado de la llamada anterior (fuera de orden)
+        Assert.False(c.OnCaller(9, 1, "Mamá")); Assert.Equal(CallPhase.Ringing, c.State.Phase); Assert.Equal("Fernando", c.State.Caller);
+        _t = _t.AddSeconds(30); c.Tick(); Assert.Equal(CallPhase.Ringing, c.State.Phase);
+    }
+
+    [Fact]
+    public void Modified_event_does_not_change_the_phase()
+    {
+        var c = T(); c.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1);
+        Assert.False(c.OnEvent(E(AncsEventId.Modified, 9, AncsCategory.IncomingCall), 1)); Assert.Equal(CallPhase.Ringing, c.State.Phase);
+    }
+
+    [Fact]
+    public void Missed_arriving_just_after_the_neutral_close_is_still_named_but_only_once_and_not_for_other_sessions()
+    {
+        var c = T(); c.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1); c.OnCaller(9, 1, "Mamá");
+        c.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1); _t = _t + CallTracker.MissedGrace; c.Tick();
+        _t = _t.AddSeconds(3);
+        Assert.True(c.OnEvent(E(AncsEventId.Added, 10, AncsCategory.MissedCall), 1)); Assert.Equal(CallPhase.Missed, c.State.Phase); Assert.Equal("Mamá", c.State.Caller);
+        var d = T(); d.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1); d.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1); _t = _t + CallTracker.MissedGrace; d.Tick();
+        _t = _t + CallTracker.LateMissed + TimeSpan.FromSeconds(1);
+        Assert.False(d.OnEvent(E(AncsEventId.Added, 10, AncsCategory.MissedCall), 1));   // demasiado tarde: no se asocia
+        var e = T(); e.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1); e.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1); _t = _t + CallTracker.MissedGrace; e.Tick();
+        Assert.False(e.OnEvent(E(AncsEventId.Added, 10, AncsCategory.MissedCall), 2));   // otra sesión
+    }
+
+    [Fact]
+    public void Trusted_telephony_marks_active_with_caller_and_duration_and_only_then_ended()
+    {
+        var c = T(); c.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1); c.OnCaller(9, 1, "Fernando Noc");
+        c.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1);   // contestada: ANCS la retira
+        Assert.True(c.OnTelephony(true)); Assert.Equal(CallPhase.Active, c.State.Phase); Assert.Equal("Fernando Noc", c.State.Caller);
+        _t = _t.AddSeconds(125); c.Tick(); Assert.Equal(CallPhase.Active, c.State.Phase);   // la caducidad de timbre no la toca
+        Assert.Equal(TimeSpan.FromSeconds(125), c.ActiveDuration); Assert.False(c.NeedsTicks);
+        Assert.False(c.OnEvent(E(AncsEventId.Added, 20, AncsCategory.IncomingCall), 1)); Assert.Equal(CallPhase.Active, c.State.Phase);   // un aviso ANCS no sustituye la confirmada
+        Assert.True(c.OnTelephony(false)); Assert.Equal(CallPhase.Ended, c.State.Phase);
+        _t = _t + CallTracker.EndedShow; c.Tick(); Assert.Equal(CallPhase.None, c.State.Phase);
+    }
+
+    [Fact]
+    public void Telephony_inactive_without_an_active_call_says_nothing_and_reset_drops_active()
+    {
+        var c = T(); Assert.False(c.OnTelephony(false)); Assert.Equal(CallPhase.None, c.State.Phase);
+        Assert.False(c.OnTelephony(true)); Assert.Equal(CallPhase.None, c.State.Phase);   // sin correlación (p. ej. una llamada de Teams): no es del iPhone
+        c.OnEvent(E(AncsEventId.Added, 1, AncsCategory.IncomingCall), 1); c.OnTelephony(true); Assert.True(c.Reset()); Assert.Equal(CallPhase.None, c.State.Phase); Assert.Null(c.ActiveDuration);   // desconexión BT: nada fijado
+    }
+
+    [Fact]
+    public void Reconnect_clears_everything_including_the_late_missed_window()
+    {
+        var c = T(); c.OnEvent(E(AncsEventId.Added, 9, AncsCategory.IncomingCall), 1);
+        c.OnEvent(E(AncsEventId.Removed, 9, AncsCategory.IncomingCall), 1); _t = _t + CallTracker.MissedGrace; c.Tick();
+        c.Reset(); Assert.False(c.OnEvent(E(AncsEventId.Added, 10, AncsCategory.MissedCall), 1)); Assert.False(c.NeedsTicks);
     }
 
     [Fact]
     public void Wm038_safety_timeout_and_disconnection_never_leave_a_phantom_call()
     {
         var c = T(); c.OnEvent(E(AncsEventId.Added, 1, AncsCategory.IncomingCall), 1);
-        _t = _t + CallTracker.RingTimeout; Assert.True(c.Tick()); Assert.Equal(CallPhase.Ended, c.State.Phase);   // sin noticias: se reconcilia
+        _t = _t + CallTracker.RingTimeout; Assert.True(c.Tick()); Assert.Equal(CallPhase.None, c.State.Phase);   // sin noticias: cierre neutro, no se afirma nada
         var d = T(); d.OnEvent(E(AncsEventId.Added, 1, AncsCategory.IncomingCall), 1);
         Assert.True(d.Reset()); Assert.Equal(CallPhase.None, d.State.Phase);   // se perdió el Bluetooth
         var other = T(); other.OnEvent(E(AncsEventId.Added, 1, AncsCategory.IncomingCall), 1);
@@ -217,6 +292,13 @@ public class CallTrackerTests
 
 public class PhoneCapabilitiesTests
 {
+    [Fact] public void No_call_buttons_without_a_verified_mechanism()
+    {
+        var t = WinMac.Connect.CallControlCapabilities.Today;
+        Assert.False(t.AnyButton); Assert.Equal(WinMac.Connect.ControlSupport.Unavailable, t.PcAudio);
+        Assert.Equal(WinMac.Connect.ControlSupport.ExperimentalReadOnly, t.ActiveState);
+    }
+
     [Fact] public void Sig_uuid_uses_bluetooth_base() =>
         Assert.Equal(new Guid("0000111f-0000-1000-8000-00805f9b34fb"), WinMac.Connect.PhoneCapabilities.Sig(0x111F));
 

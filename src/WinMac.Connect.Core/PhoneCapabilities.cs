@@ -31,3 +31,18 @@ public sealed record PhoneCapabilities(
     public bool CanReadBattery => BatteryGatt == CapabilityState.Advertised;
     public bool CallControlRouteAdvertised => HandsFreeAg == CapabilityState.Advertised;
 }
+
+/// <summary>Estado de verificación de un control de llamadas.</summary>
+public enum ControlSupport { Unavailable, ExperimentalReadOnly }
+
+/// <summary>
+/// Controles de llamada que Hatsu ofrece HOY. Regla: <b>ninguno</b> hasta que exista un mecanismo verificado con un iPhone real (docs/56).
+/// La Isla/Barra solo dibuja un botón si su valor es distinto de <see cref="ControlSupport.Unavailable"/> y el mecanismo existe de verdad.
+/// </summary>
+public sealed record CallControlCapabilities(ControlSupport Answer, ControlSupport Reject, ControlSupport Hangup, ControlSupport Dial, ControlSupport PcAudio, ControlSupport ActiveState)
+{
+    /// <summary>Contestar/rechazar/colgar/marcar/audio: sin mecanismo. Estado «activa»: observador de solo lectura del sistema, sin validar con iPhone.</summary>
+    public static readonly CallControlCapabilities Today = new(ControlSupport.Unavailable, ControlSupport.Unavailable, ControlSupport.Unavailable,
+        ControlSupport.Unavailable, ControlSupport.Unavailable, ControlSupport.ExperimentalReadOnly);
+    public bool AnyButton => Answer != ControlSupport.Unavailable || Reject != ControlSupport.Unavailable || Hangup != ControlSupport.Unavailable || Dial != ControlSupport.Unavailable;
+}
