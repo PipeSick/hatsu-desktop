@@ -34,8 +34,18 @@ Etiquetas: **OBSERVADO** (CI o código), **CONOCIMIENTO** (sobre Partner Center/
 3. *Notes for certification* (si lo pide): app de escritorio de plena confianza (`runFullTrust`) igual que la versión publicada; el cambio es un diagnóstico local de Bluetooth y llamadas, sin envío de datos; sin capacidades restringidas nuevas.
 4. Enviar el vuelo a certificación (un envío del vuelo **no** toca la publicación estable).
 
-## 6. Artefacto y hash
-Se rellenan al terminar el CI del commit de la beta (sección «Resultado»).
+## 6. Artefacto y hash (OBSERVADO: CI del commit `59b018d`, run 42063125438, todos los jobs en success; paso MSIX leído en el log, sin ninguna línea FALLO)
+| Dato | Valor |
+|---|---|
+| Archivo para Partner Center | `HatsuDesktop-2.0.2.0-store-unsigned.msix` (171,6 MB) |
+| SHA-256 | `c9cdc47564db88ed2adc9299caa06d8bc107247e5c979f73ed7f42bff9c86f4d` |
+| Artefacto de GitHub Actions | `msix-store-sin-firmar-59b018db756be2edc1f207c233ff9661dcdbf468` (contiene el `.msix` y su `.sha256`; id 13433291551; caduca a los 14 días) |
+| Ejecución | https://github.com/PipeSick/hatsu-desktop/actions/runs/42063125438 |
+| Identidad dentro del paquete | `PipeSick.HatsuDesktop` · `CN=ACC0FCB8-4D92-4E20-9731-7254D5E43289` · `PipeSick` · v2.0.2.0 · x64 · MinVersion 10.0.19041.0 |
+| PFN al instalar (runner, certificado de prueba) | `PipeSick.HatsuDesktop_83tr6qzbbarj8` |
+Descarga: Actions › esa ejecución › Artifacts (los artefactos no se pudieron bajar desde la sesión de desarrollo; el hash sale del log). Tras descargar: `Get-FileHash .\HatsuDesktop-2.0.2.0-store-unsigned.msix -Algorithm SHA256` debe dar el valor de arriba. Si el artefacto caduca, se reconstruye desde el commit `59b018d`.
+
+Diagnóstico dentro del paquete instalado en el runner (sin Bluetooth ni teléfono, solo prueba de que corre): termina, escribe el informe con resumen y sin filtrar datos. Resultado real: `PhoneCallManager` Disponible; líneas telefónicas «Error de ejecución — COMException 0x800706D9» (el runner no tiene el servicio de telefonía: esto es exactamente lo que el informe debe poder mostrar); transporte, audio Hands-Free y dispositivos «No comprobado»; control de llamadas «No compatible».
 
 ## 7. Instalar la beta firmada (probador)
 1. Tu cuenta Microsoft debe figurar en el grupo del vuelo.
