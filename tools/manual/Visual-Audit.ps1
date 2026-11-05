@@ -186,7 +186,7 @@ $null = WaitFor { (NotchW) -ge 290 } 6; Start-Sleep -Milliseconds 1500
 IslaShot '23-isla-compacta-descarga' 'Isla compacta con una descarga en curso (archivo .crdownload real en Descargas)'
 $newShot = Join-Path $shotsDir 'captura-de-prueba-nueva.png'; TestPng $newShot 0 'Captura de prueba nueva'
 if (WaitFor { LogHas $pillLog 'pill Capture' } 8) { Start-Sleep -Milliseconds 500; IslaShot '24-isla-captura-guardada' 'Captura guardada: miniatura en la Isla (archivo nuevo en la carpeta de capturas)' } else { Note '- **24-isla-captura-guardada**: NO capturada' }
-Set-Clipboard -Value 'Texto de prueba del portapapeles (CI)'; Start-Sleep -Milliseconds 400; Set-Clipboard -Value 'https://github.com/PipeSick/win11-macos'
+Set-Clipboard -Value 'Texto de prueba del portapapeles (CI)'; Start-Sleep -Milliseconds 400; Set-Clipboard -Value 'https://github.com/PipeSick/hatsu-desktop'
 Start-Sleep -Milliseconds 2600
 Expand
 $null = ClickTab 'activity'   # la Isla recuerda la última pestaña: se vuelve a «En curso»

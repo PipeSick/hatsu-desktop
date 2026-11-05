@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Verifica ANTES de desplegar que el sitio generado contiene exactamente la política aprobada. Sin red. Uso: verify_site.py <sitio> [--repo <raíz>]. Sale con 1 si algo falla."""
-import hashlib, pathlib, re, sys
+import hashlib, os, pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 fails = []
@@ -35,12 +35,14 @@ def main(site, repo):
         check(len(heads) >= 7, f"[{k}] el Markdown tiene ≥7 secciones", str(len(heads)))
         missing = [h for h in heads if re.sub(r"[*`]", "", h) not in re.sub(r"<[^>]+>", "", html[k])]
         check(not missing, f"[{k}] todas las secciones llegaron al HTML", ", ".join(missing))
-        for must in ("api.open-meteo.com", "geocoding-api.open-meteo.com", "speed.cloudflare.com", "music.163.com", "lrclib.net", "Hatsu Notch", "DPAPI", "github.com/PipeSick/win11-macos/issues"):
+        for must in ("api.open-meteo.com", "geocoding-api.open-meteo.com", "speed.cloudflare.com", "music.163.com", "lrclib.net", "Hatsu Notch", "DPAPI"):
             check(must in html[k], f"[{k}] contiene «{must}»")
+        # contacto: GitHub Issues del proyecto. Acepta el nombre anterior (win11-macos) y el definitivo (hatsu-desktop): GitHub redirige tras renombrar
+        check(re.search(r"github\.com/PipeSick/(?:win11-macos|hatsu-desktop)/issues", html[k]) is not None, f"[{k}] contiene el contacto de GitHub Issues")
         check("<table>" in html[k] and html[k].count("<tr>") >= 10, f"[{k}] las tablas se generaron", f"{html[k].count('<tr>')} filas")
         check(not re.search(r"VERIFICAR|VERIFY|TODO|FIXME|\*\(", html[k]), f"[{k}] sin marcas de borrador")
         check(f'<html lang="{k}">' in html[k], f"[{k}] atributo lang correcto")
-        check(not re.search(r'(?:href|src)="/', html[k]), f"[{k}] sin enlaces absolutos a la raíz (romperían bajo /win11-macos/)")
+        check(not re.search(r'(?:href|src)="/', html[k]), f"[{k}] sin enlaces absolutos a la raíz (romperían bajo /<repositorio>/)")
     check("desactivado por defecto" in html["es"] and "off by default" in html["en"], "agentes de IA: desactivado por defecto en ambas")
     check("definitiv" in html["es"] and "permanent" in html["en"].lower(), "Cleanup: borrado definitivo declarado en ambas")
     # 4) enlaces entre idiomas y de la raíz resuelven a archivos existentes dentro del sitio
@@ -48,7 +50,8 @@ def main(site, repo):
         t = (base.parent / href); return (t / "index.html").is_file() if href.endswith("/") else t.is_file()
     check(resolves(pages["es"], "en/"), "enlace es → en/ resuelve"); check(resolves(pages["en"], "../"), "enlace en → ../ resuelve")
     check('href="privacy/"' in (site / "index.html").read_text(encoding="utf-8"), "index raíz apunta a privacy/")
-    print("\nURLs que resultarán (tras desplegar): https://pipesick.github.io/win11-macos/privacy/  ·  https://pipesick.github.io/win11-macos/privacy/en/")
+    repo_name = os.environ.get("GITHUB_REPOSITORY", "PipeSick/hatsu-desktop").split("/")[1]; owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "PipeSick").lower()
+    print(f"\nURLs que resultarán (tras desplegar): https://{owner}.github.io/{repo_name}/privacy/  ·  https://{owner}.github.io/{repo_name}/privacy/en/")
     if fails: print(f"\n{len(fails)} comprobaciones fallaron"); sys.exit(1)
     print("\nTodo correcto.")
 

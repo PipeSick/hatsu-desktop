@@ -10,8 +10,8 @@ GitHub solo lista en Actions los flujos con `workflow_dispatch` si el archivo ex
 2. **Ensayo sin publicar (opcional, recomendado):** *Actions → pages-politica-de-privacidad → Run workflow* · Branch: `claude/vibrant-keller-7tyi6u` · `ref`: dejar el valor por defecto · `desplegar`: **desmarcado** → *Run workflow*. Al terminar, abre el artefacto `sitio-previsualizacion` para ver el HTML exacto.
 3. **Publicar:** el mismo *Run workflow*, esta vez con `desplegar` **marcado**. Si GitHub pide aprobar el entorno `github-pages`, aprueba.
 4. **Comprobar:** el job «Comprobar las URLs publicadas» reintenta hasta 3 minutos y falla si alguna URL no responde 200 con el texto esperado. Después abre tú mismo, sin sesión iniciada:
-   - https://pipesick.github.io/win11-macos/privacy/
-   - https://pipesick.github.io/win11-macos/privacy/en/
+   - https://pipesick.github.io/hatsu-desktop/privacy/
+   - https://pipesick.github.io/hatsu-desktop/privacy/en/
 5. Pega la primera URL en Partner Center → Propiedades → Política de privacidad.
 
 ## Qué verifica el flujo antes de desplegar (falla y NO despliega)

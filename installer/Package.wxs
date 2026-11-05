@@ -20,7 +20,7 @@
 
     <Icon Id="HatsuDesktop.ico" SourceFile="$(var.IconFile)" />
     <Property Id="ARPPRODUCTICON" Value="HatsuDesktop.ico" />
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/PipeSick/win11-macos" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/PipeSick/hatsu-desktop" />
     <Property Id="ARPNOMODIFY" Value="1" />
 
     <!-- Por usuario: carpeta estándar de programas del usuario. -->

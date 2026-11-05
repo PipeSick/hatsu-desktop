@@ -53,4 +53,16 @@ public class Phase32Tests
         var dialog = File.ReadAllText(Path.Combine(root, "src", "WinMac.Bar.Win", "Rendering", "BarHost.Cleanup.cs")); Assert.Contains("CleanupText.PermanentDeletion", dialog);
         foreach (var f in new[] { "POLITICA-DE-PRIVACIDAD.md", "PRIVACY-POLICY.en.md" }) Assert.Contains("Papelera", File.ReadAllText(Path.Combine(root, "docs", "privacy", f)).Replace("Recycle Bin", "Papelera"));
     }
+
+    [Fact] public void Live_files_do_not_reference_the_old_repository_name_except_the_allowed_compatibility_spots()
+    {
+        string root = AppContext.BaseDirectory; while (!File.Exists(Path.Combine(root, "installer", "Package.wxs"))) root = Path.GetDirectoryName(root) ?? throw new InvalidOperationException("raíz no encontrada");
+        var allowed = new[] { "tools/site/verify_site.py" };   // acepta ambos nombres en el contacto de las políticas (GitHub redirige tras renombrar)
+        var live = new[] { ".github", "installer", "tools" }.SelectMany(d => Directory.EnumerateFiles(Path.Combine(root, d), "*.*", SearchOption.AllDirectories))
+            .Concat(Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories).Where(f => !f.Contains("Tests") && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .Where(f => !allowed.Any(a => f.Replace('\\', '/').EndsWith(a))).ToList();
+        var hits = live.Where(f => { try { return File.ReadAllText(f).Contains("win11-macos"); } catch (Exception) { return false; } }).Select(f => Path.GetRelativePath(root, f)).ToList();
+        Assert.Empty(hits);
+    }
 }
