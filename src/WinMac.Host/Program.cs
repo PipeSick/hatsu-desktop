@@ -28,7 +28,7 @@ internal static class Program
         string exe = Environment.ProcessPath ?? "HatsuDesktop.exe", name = HostOptions.Arg(args, "--autostart-name", Autostart.DefaultName);
         try
         {
-            if (args.Contains("--package-info")) { Console.WriteLine(PackageIdentity.FullName is { } pf ? "package=" + pf : "package=none"); return 0; }
+            if (args.Contains("--package-info")) { Console.WriteLine((PackageIdentity.FullName is { } pf ? "package=" + pf : "package=none") + " agentsDefault=" + (WinMac.Host.NotchSettings.Factory.AgentsEnabled ? "on" : "off")); return 0; }
             if (args.Contains("--install-autostart")) { Autostart.Install(exe, name); Console.WriteLine($"Inicio automático activado ({name} → {Autostart.Current(name)})."); return 0; }
             if (args.Contains("--remove-autostart")) { Console.WriteLine(Autostart.Remove(name) ? "Inicio automático desactivado." : "El inicio automático no estaba activado."); return 0; }
             if (args.Contains("--adopt-autostart"))   // adopción EXPLÍCITA: el inicio automático pasa a esta instalación (solo si ya estaba activado; nunca lo crea)

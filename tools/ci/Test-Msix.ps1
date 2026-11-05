@@ -40,6 +40,15 @@ InPkg 'cmd.exe' ('/c ""{0}\HatsuDesktop.exe" --package-info > "{1}""' -f $loc, $
 $okId = WaitFor { (Test-Path $idf) -and ((Get-Content $idf -Raw) -match 'package=') } 20
 Check 'HatsuDesktop.exe se ejecuta CON identidad de paquete (--package-info)' ($okId -and (Get-Content $idf -Raw) -match "package=$IdentityName") ($(if (Test-Path $idf) { (Get-Content $idf -Raw).Trim() } else { 'sin salida' }))
 
+# los cambios de esta versión están DENTRO del paquete instalado (no es el artefacto anterior)
+Check 'agentes de IA: valor de fábrica DESACTIVADO con identidad de paquete (--package-info)' ((Test-Path $idf) -and ((Get-Content $idf -Raw) -match 'agentsDefault=off')) ($(if (Test-Path $idf) { (Get-Content $idf -Raw).Trim() } else { '' }))
+$nvi = (Get-Item (Join-Path $loc 'NotchWin\NotchWin.App.exe')).VersionInfo
+Check 'Hatsu Notch: el ejecutable instalado se describe como «Hatsu Notch»' ($nvi.FileDescription -eq 'Hatsu Notch' -and $nvi.ProductName -eq 'Hatsu Notch') "$($nvi.FileDescription) | $($nvi.ProductName)"
+function HasText([string]$file, [string]$text) { $b = [IO.File]::ReadAllBytes((Join-Path $loc $file)); $u = [Text.Encoding]::Unicode.GetString($b); $u.Contains($text) -or [Text.Encoding]::ASCII.GetString($b).Contains($text) }
+Check 'rebranding: los textos visibles del host dicen «Hatsu Notch» (WinMac.Host.Core.dll)' (HasText 'WinMac.Host.Core.dll' 'Hatsu Notch no está instalado') ''
+Check 'Cleanup: el aviso de borrado definitivo está en el paquete (WinMac.Bar.Core.dll)' (HasText 'WinMac.Bar.Core.dll' 'no pasan por la Papelera de reciclaje y no se podrán recuperar') ''
+Check 'el binario instalado es el compilado en este CI (hash de HatsuDesktop.dll igual al de dist)' ((Get-FileHash (Join-Path $loc 'HatsuDesktop.dll')).Hash -eq (Get-FileHash (Join-Path (Resolve-Path 'dist/WinMac').Path 'HatsuDesktop.dll')).Hash) ''
+
 # virtualización: ¿lo que escribe un proceso del paquete en HKCU y AppData lo ve el sistema?
 $probe = Join-Path $out 'probe.ps1'; $pout = Join-Path $out "probe-$Label.txt"; Remove-Item $pout -ErrorAction SilentlyContinue
 @'
