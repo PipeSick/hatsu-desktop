@@ -152,7 +152,8 @@ public class InstallerTests
         foreach (var l in lines)
         {
             var parts = l.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(Root(), parts[1])))).ToLowerInvariant();
+            var bytes = File.ReadAllBytes(Path.Combine(Root(), parts[1])); var lf = System.Text.Encoding.UTF8.GetBytes(System.Text.Encoding.UTF8.GetString(bytes).Replace("\r\n", "\n"));   // un checkout con CRLF (Windows) no debe cambiar el hash
+            var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(lf)).ToLowerInvariant();
             Assert.Equal(parts[0], actual);   // si editas una política, vuelve a revisarla y regenera este manifiesto a propósito
         }
     }

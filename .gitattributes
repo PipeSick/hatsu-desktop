@@ -1,0 +1,4 @@
+
+# Politicas de privacidad aprobadas por hash: bytes identicos en cualquier sistema (Pages las construye en Linux)
+docs/privacy/*.md text eol=lf
+docs/privacy/APPROVED.sha256 text eol=lf
