@@ -11,7 +11,7 @@
     <Product>Hatsu Desktop</Product>
     <Company>Hatsu Desktop</Company>
     <Copyright>Copyright 2026 WinMac contributors — Hatsu Desktop (antes WinMac), Apache-2.0</Copyright>
-    <Description>Hatsu Desktop (antes WinMac): experiencia de escritorio inspirada en macOS para Windows.</Description>
+    <Description>Hatsu Desktop: experiencia de escritorio inspirada en macOS para Windows.</Description>
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 </Project>

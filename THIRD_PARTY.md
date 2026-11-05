@@ -1,8 +1,8 @@
 # Componentes de terceros
 
-WinMac se distribuye bajo **Apache-2.0** (ver `LICENSE`). Este archivo lista lo que se **distribuye con el producto**, lo que solo se usa para **compilar o probar**, y lo **previsto**. Las licencias se verificaron en los `.nuspec` de los paquetes restaurados (versión indicada); revisar de nuevo al actualizar cada dependencia.
+Hatsu Desktop (antes WinMac) se distribuye bajo **Apache-2.0** (ver `LICENSE`). Este archivo lista lo que se **distribuye con el producto**, lo que solo se usa para **compilar o probar**, y lo **previsto**. Las licencias se verificaron en los `.nuspec` de los paquetes restaurados (versión indicada); revisar de nuevo al actualizar cada dependencia.
 
-## Se distribuye con WinMac (Dock y barra superior)
+## Se distribuye con Hatsu Desktop (Dock y barra superior)
 | Componente | Versión | Licencia | Uso |
 |---|---|---|---|
 | Vortice.Direct2D1, Vortice.Direct3D11, Vortice.DirectComposition, Vortice.DXGI | 3.8.3 | MIT | Bindings .NET de DirectX (render) |
