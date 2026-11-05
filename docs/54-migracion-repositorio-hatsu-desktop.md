@@ -2,6 +2,9 @@
 
 **Estado:** preparado en la rama `feat/hatsu-repo-rename-prep` (sin fusionar). **El repositorio NO se ha renombrado.** Este informe es previo a tu autorización. Nada se envió a la Store, no hay releases, Smart App Control intacto, identidad MSIX sin cambios (`PipeSick.HatsuDesktop`, PFN `…_83tr6qzbbarj8`).
 
+## 0. Hallazgo importante (verificado en Actions)
+La ejecución #2 del flujo de Pages (run 41960723875, 03:18 UTC, lanzada por ti con `desplegar` marcado) **sí desplegó**, y su job «Comprobar las URLs publicadas» terminó en éxito (HTTP 200 con el texto esperado). Es decir: la política **ya está publicada en la ruta antigua** `https://pipesick.github.io/win11-macos/privacy/` (y `/en/`). Desde este entorno no puedo abrir esas URLs (red restringida): la evidencia es el job de GitHub, no una apertura mía. **Al renombrar, esa ruta dejará de existir (Pages no redirige) y habrá que volver a ejecutar el flujo con `desplegar`** para publicar bajo `/hatsu-desktop/`. Mientras no uses la URL antigua en Partner Center, no hay daño.
+
 ## 1. Referencias antiguas encontradas
 | Qué | Dónde | Cantidad |
 |---|---|---|
