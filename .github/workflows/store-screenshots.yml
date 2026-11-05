@@ -29,6 +29,9 @@ jobs:
         run: ./tools/Build-Local.ps1 -NotchPath C:\nw
       - name: Capturar
         shell: pwsh
+        env:
+          HATSU_SETTINGS_X: '82'   # «Ajustes de Hatsu Desktop» en el menú de Hatsu (medido en la captura de diagnóstico 05)
+          HATSU_SETTINGS_Y: '664'
         run: ./tools/store-capture/Capture-Store.ps1 -DistDir dist/WinMac -OutDir capturas-store
       - name: Subir capturas e informe
         if: always()

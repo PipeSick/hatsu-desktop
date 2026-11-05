@@ -13,6 +13,13 @@ public static class Cs {
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, int dx, int dy, uint d, IntPtr e);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindowEx(IntPtr p, IntPtr a, string c, string t);
+  public static IntPtr FindClass(string c) { return FindWindow(c, null); }   // PowerShell convierte $null en "" y FindWindow(…, "") no encuentra nada
+  public static IntPtr DesktopView() {
+    IntPtr prog = FindWindow("Progman", null); IntPtr v = FindWindowEx(prog, IntPtr.Zero, "SHELLDLL_DefView", null); if (v != IntPtr.Zero) return v;
+    IntPtr w = IntPtr.Zero; while ((w = FindWindowEx(IntPtr.Zero, w, "WorkerW", null)) != IntPtr.Zero) { v = FindWindowEx(w, IntPtr.Zero, "SHELLDLL_DefView", null); if (v != IntPtr.Zero) return v; }
+    return IntPtr.Zero;
+  }
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RC r);
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint f);
@@ -112,13 +119,13 @@ a.play().catch(e => { document.title = 'ERROR ' + e });
 "@ | Set-Content (Join-Path $d 'demo.html') -Encoding UTF8
 $chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
 $page = 'file:///' + ((Join-Path $d 'demo.html') -replace '\\', '/')
-$cp = Start-Process $chrome -ArgumentList @("--user-data-dir=`"$(Join-Path $d 'chrome')`"", '--no-first-run', '--no-default-browser-check', '--autoplay-policy=no-user-gesture-required', '--allow-file-access-from-files', '--window-position=20,80', '--window-size=640,300', $page) -PassThru
-Start-Sleep -Seconds 6
+$cp = Start-Process $chrome -ArgumentList @("--user-data-dir=`"$(Join-Path $d 'chrome')`"", '--no-first-run', '--no-default-browser-check', '--autoplay-policy=no-user-gesture-required', '--allow-file-access-from-files', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-background-timer-throttling', '--disable-features=CalculateNativeWinOcclusion', '--window-position=20,80', '--window-size=640,300', $page) -PassThru
+Start-Sleep -Seconds 12
 Note ''; Note '## Medios'; Note "Chrome (pid $($cp.Id)) reproduciendo el tono: ventana principal «$([Cs]::TitleOf([Cs]::MainWindowOf($cp.Id, $null)))»"
 
 # Entorno del runner: se minimizan las ventanas ajenas (consola del agente del runner, Chrome) y se ocultan los iconos del escritorio (como «Ver › Mostrar iconos del escritorio»)
 (New-Object -ComObject Shell.Application).MinimizeAll(); Start-Sleep -Seconds 1
-$prog = [Cs]::FindWindow('Progman', $null); [Cs]::PostMessage($prog, 0x111, [IntPtr]0x7402, [IntPtr]::Zero) | Out-Null; Start-Sleep -Seconds 1
+$dv = [Cs]::DesktopView(); Note "Vista del escritorio: $dv"; if ($dv -ne [IntPtr]::Zero) { [Cs]::PostMessage($dv, 0x111, [IntPtr]0x7402, [IntPtr]::Zero) | Out-Null }; Start-Sleep -Seconds 1
 # ── 4. Aplicaciones reales abiertas (para Dock y menú global)
 $apps = @()
 $apps += Start-Process explorer.exe -ArgumentList 'C:\Windows\Web' -PassThru
@@ -141,7 +148,7 @@ Note "- Barra, ventanas: $((Get-Process HatsuDesktop.Bar -ErrorAction SilentlyCo
 # (cubre la marca de agua «Test Mode / Windows Server» que pinta el sistema del runner sobre el fondo)
 $W = $sc.Width; $H = $sc.Height
 function Place([IntPtr]$h, [int]$x, [int]$y, [int]$w, [int]$hh) { if ($h -ne [IntPtr]::Zero) { [Cs]::ShowWindow($h, 9) | Out-Null; Start-Sleep -Milliseconds 300; [Cs]::SetWindowPos($h, [IntPtr]::Zero, $x, $y, $w, $hh, 0x44) | Out-Null } }
-$hNote = [Cs]::FindWindow('Notepad', $null); $hCalc = [Cs]::FindWindow('ApplicationFrameWindow', 'Calculator'); $hExp = [Cs]::FindWindow('CabinetWClass', $null)
+$hNote = [Cs]::FindClass('Notepad'); $hCalc = [Cs]::FindWindow('ApplicationFrameWindow', 'Calculator'); $hExp = [Cs]::FindClass('CabinetWClass')
 Note ''; Note "## Ventanas de las aplicaciones: Bloc de notas=$hNote · Calculadora=$hCalc · Explorador=$hExp"
 for ($k = 0; $k -lt 2; $k++) {
   Place $hExp ([int]($W * 0.50)) 80 ([int]($W * 0.47)) ($H - 80 - 85)
