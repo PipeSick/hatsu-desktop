@@ -14,7 +14,8 @@ public static class Cs {
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, int dx, int dy, uint d, IntPtr e);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindowEx(IntPtr p, IntPtr a, string c, string t);
-  public static IntPtr FindClass(string c) { return FindWindow(c, null); }   // PowerShell convierte $null en "" y FindWindow(…, "") no encuentra nada
+  public static IntPtr FindClass(string c) { return FindWindow(c, null); }
+  public static IntPtr FindTitle(string t) { return FindWindow(null, t); }   // PowerShell convierte $null en "" y FindWindow(…, "") no encuentra nada
   public static IntPtr DesktopView() {
     IntPtr prog = FindWindow("Progman", null); IntPtr v = FindWindowEx(prog, IntPtr.Zero, "SHELLDLL_DefView", null); if (v != IntPtr.Zero) return v;
     IntPtr w = IntPtr.Zero; while ((w = FindWindowEx(IntPtr.Zero, w, "WorkerW", null)) != IntPtr.Zero) { v = FindWindowEx(w, IntPtr.Zero, "SHELLDLL_DefView", null); if (v != IntPtr.Zero) return v; }
@@ -96,7 +97,7 @@ Note "Fondo de pantalla de Windows: $wp → $([Cs]::Wallpaper($wp))"; Start-Slee
 # ── 2. Limpieza y configuración AISLADA (carpeta temporal; no toca %APPDATA%)
 Get-Process -Name 'HatsuDesktop', 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'HatsuDesktop.Connect', 'NotchWin.App', 'notepad', 'calc', 'CalculatorApp', 'chrome' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 $d = Join-Path ([IO.Path]::GetTempPath()) ('hatsu-store-' + [Guid]::NewGuid().ToString('N').Substring(0, 6)); New-Item -ItemType Directory -Force -Path $d | Out-Null
-$cfg = @{ version = 3; hideTaskbar = $true; modules = @{ bar = @{ enabled = $true; args = @('--no-config') }; dock = @{ enabled = $true; args = @('--no-config') }; notch = @{ enabled = $true }; connect = @{ enabled = $false } }; onboarding = @{ status = 'Completed' } }
+$cfg = @{ version = 3; hideTaskbar = $true; modules = @{ bar = @{ enabled = $true; args = @('--no-config') }; dock = @{ enabled = $true; args = @('--no-config') }; notch = @{ enabled = $true }; connect = @{ enabled = $false } }; onboarding = @{ status = 'Completed' }; bar = @{ appMenus = $true } }
 $cfg | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
 Note ''; Note "Configuración aislada: $d\winmac.json (módulos: Barra, Dock y Hatsu Notch activados; barra de tareas de Windows oculta —función real de Hatsu—; Connect desactivado: no hay iPhone)"
 
@@ -148,12 +149,12 @@ Note "- Barra, ventanas: $((Get-Process HatsuDesktop.Bar -ErrorAction SilentlyCo
 # (cubre la marca de agua «Test Mode / Windows Server» que pinta el sistema del runner sobre el fondo)
 $W = $sc.Width; $H = $sc.Height
 function Place([IntPtr]$h, [int]$x, [int]$y, [int]$w, [int]$hh) { if ($h -ne [IntPtr]::Zero) { [Cs]::ShowWindow($h, 9) | Out-Null; Start-Sleep -Milliseconds 300; [Cs]::SetWindowPos($h, [IntPtr]::Zero, $x, $y, $w, $hh, 0x44) | Out-Null } }
-$hNote = [Cs]::FindClass('Notepad'); $hCalc = [Cs]::FindWindow('ApplicationFrameWindow', 'Calculator'); $hExp = [Cs]::FindClass('CabinetWClass')
+$hNote = [Cs]::FindClass('Notepad'); $hCalc = [Cs]::FindTitle('Calculator'); $hExp = [Cs]::FindClass('CabinetWClass')
 Note ''; Note "## Ventanas de las aplicaciones: Bloc de notas=$hNote · Calculadora=$hCalc · Explorador=$hExp"
 for ($k = 0; $k -lt 2; $k++) {
-  Place $hExp ([int]($W * 0.50)) 80 ([int]($W * 0.47)) ($H - 80 - 85)
-  Place $hNote 50 80 ([int]($W * 0.52)) ([int]($H * 0.62))
-  Place $hCalc 90 ([int]($H * 0.40)) 330 ([int]($H * 0.50))
+  Place $hExp 852 70 1070 ($H - 70 - 80)
+  Place $hNote 40 70 800 600
+  Place $hCalc 70 ([int]($H * 0.52)) 340 430
   Start-Sleep -Milliseconds 700
 }
 foreach ($pair in @(@('Explorador', $hExp), @('Bloc de notas', $hNote), @('Calculadora', $hCalc))) { if ($pair[1] -ne [IntPtr]::Zero) { $r = New-Object Cs+RC; [Cs]::GetWindowRect($pair[1], [ref]$r) | Out-Null; Note "- $($pair[0]): $($r.L),$($r.T) $($r.R - $r.L)x$($r.B - $r.T)" } }
