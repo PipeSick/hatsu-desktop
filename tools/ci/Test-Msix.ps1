@@ -49,6 +49,15 @@ Check 'rebranding: los textos visibles del host dicen «Hatsu Notch» (WinMac.Ho
 Check 'Cleanup: el aviso de borrado definitivo está en el paquete (WinMac.Bar.Core.dll)' (HasText 'WinMac.Bar.Core.dll' 'no pasan por la Papelera de reciclaje y no se podrán recuperar') ''
 Check 'el binario instalado es el compilado en este CI (hash de HatsuDesktop.dll igual al de dist)' ((Get-FileHash (Join-Path $loc 'HatsuDesktop.dll')).Hash -eq (Get-FileHash (Join-Path (Resolve-Path 'dist/WinMac').Path 'HatsuDesktop.dll')).Hash) ''
 
+# plataforma: Windows 11 x64 (manifiesto y cabeceras PE)
+Check 'manifiesto: Identity x64 y Windows.Desktop MinVersion 10.0.19041.0 (Windows 11 incluido) y versión de 4 cifras terminada en 0' (($mf.Package.Identity.ProcessorArchitecture -eq 'x64') -and ($mf.Package.Dependencies.TargetDeviceFamily.MinVersion -eq '10.0.19041.0') -and ($mf.Package.Identity.Version -match '^\d+\.\d+\.\d+\.0$')) "$($mf.Package.Identity.ProcessorArchitecture) | $($mf.Package.Dependencies.TargetDeviceFamily.MinVersion) | v$($mf.Package.Identity.Version)"
+function PeMachine([string]$file) { $b = [IO.File]::ReadAllBytes((Join-Path $loc $file)); $pe = [BitConverter]::ToInt32($b, 0x3C); '{0:X4}' -f [BitConverter]::ToUInt16($b, $pe + 4) }
+foreach ($f in 'HatsuDesktop.exe', 'HatsuDesktop.Bar.exe', 'HatsuDesktop.Dock.exe', 'HatsuDesktop.Connect.exe', 'NotchWin\NotchWin.App.exe') { Check "x64 (cabecera PE 8664): $f" ((PeMachine $f) -eq '8664') (PeMachine $f) }
+# Hatsu Notch: letras sincronizadas e IPC presentes en el paquete
+Check 'Hatsu Notch conserva las letras sincronizadas (NetEase y LRCLIB dentro de NotchWin.Core.dll)' ((HasText 'NotchWin\NotchWin.Core.dll' 'music.163.com') -and (HasText 'NotchWin\NotchWin.Core.dll' 'lrclib.net')) ''
+Check 'IPC: WinMac.Ipc.dll presente junto al host y al módulo, y el tópico config.notch en ambos lados' ((Test-Path (Join-Path $loc 'WinMac.Ipc.dll')) -and (Test-Path (Join-Path $loc 'NotchWin\WinMac.Ipc.dll')) -and (HasText 'WinMac.Host.Core.dll' 'config.notch') -and (HasText 'NotchWin\NotchWin.Core.dll' 'config.notch')) ''
+Info 'IPC: hashes de WinMac.Ipc.dll (host | módulo)' ("$((Get-FileHash (Join-Path $loc 'WinMac.Ipc.dll')).Hash.Substring(0,12)) | $((Get-FileHash (Join-Path $loc 'NotchWin\WinMac.Ipc.dll')).Hash.Substring(0,12))")
+
 # virtualización: ¿lo que escribe un proceso del paquete en HKCU y AppData lo ve el sistema?
 $probe = Join-Path $out 'probe.ps1'; $pout = Join-Path $out "probe-$Label.txt"; Remove-Item $pout -ErrorAction SilentlyContinue
 @'
