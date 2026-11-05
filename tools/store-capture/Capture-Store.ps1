@@ -116,6 +116,9 @@ $cp = Start-Process $chrome -ArgumentList @("--user-data-dir=`"$(Join-Path $d 'c
 Start-Sleep -Seconds 6
 Note ''; Note '## Medios'; Note "Chrome (pid $($cp.Id)) reproduciendo el tono: ventana principal «$([Cs]::TitleOf([Cs]::MainWindowOf($cp.Id, $null)))»"
 
+# Entorno del runner: se minimizan las ventanas ajenas (consola del agente del runner, Chrome) y se ocultan los iconos del escritorio (como «Ver › Mostrar iconos del escritorio»)
+(New-Object -ComObject Shell.Application).MinimizeAll(); Start-Sleep -Seconds 1
+$prog = [Cs]::FindWindow('Progman', $null); [Cs]::PostMessage($prog, 0x111, [IntPtr]0x7402, [IntPtr]::Zero) | Out-Null; Start-Sleep -Seconds 1
 # ── 4. Aplicaciones reales abiertas (para Dock y menú global)
 $apps = @()
 $apps += Start-Process explorer.exe -ArgumentList 'C:\Windows\Web' -PassThru
@@ -134,16 +137,22 @@ Note "- Hatsu Notch, ventanas: $((Get-Process NotchWin.App -ErrorAction Silently
 Note "- Dock, ventanas: $((Get-Process HatsuDesktop.Dock -ErrorAction SilentlyContinue | ForEach-Object { [Cs]::WindowsOf($_.Id) }) -join ' ')"
 Note "- Barra, ventanas: $((Get-Process HatsuDesktop.Bar -ErrorAction SilentlyContinue | ForEach-Object { [Cs]::WindowsOf($_.Id) }) -join ' ')"
 
-# Disposición de las ventanas de las aplicaciones (ajuste del ESCENARIO, no de Hatsu): zona libre entre la Barra (arriba) y el Dock (abajo)
-$W = $sc.Width; $H = $sc.Height; $top = 60; $bottom = $H - 130; $hh = $bottom - $top - 20
-foreach ($a in $apps) { $a.Refresh() }
-$slots = @(@([int]($W * 0.04), $top + 10, [int]($W * 0.42), $hh), @([int]($W * 0.50), $top + 10, [int]($W * 0.30), [int]($hh * 0.55)), @([int]($W * 0.62), $top + [int]($hh * 0.30), [int]($W * 0.30), [int]($hh * 0.62)))
-$cw = [Cs]::MainWindowOf($cp.Id, $null); if ($cw -ne [IntPtr]::Zero) { [Cs]::ShowWindow($cw, 6) | Out-Null }   # Chrome minimizado: solo aporta la sesión multimedia
-$np = Get-Process notepad -ErrorAction SilentlyContinue | Select-Object -First 1; if ($np) { $h = [Cs]::MainWindowOf($np.Id, $null); if ($h -ne [IntPtr]::Zero) { [Cs]::SetWindowPos($h, [IntPtr]::Zero, $slots[1][0], $slots[1][1], $slots[1][2], $slots[1][3], 0x40) | Out-Null } }
-$cc = Get-Process CalculatorApp, calc, Calculator -ErrorAction SilentlyContinue | Select-Object -First 1; if ($cc) { $h = [Cs]::MainWindowOf($cc.Id, $null); if ($h -ne [IntPtr]::Zero) { [Cs]::SetWindowPos($h, [IntPtr]::Zero, $slots[2][0], $slots[2][1], $slots[2][2], $slots[2][3], 0x40) | Out-Null } }
-$ex = [Cs]::FindWindow('CabinetWClass', $null); if ($ex -ne [IntPtr]::Zero) { [Cs]::SetWindowPos($ex, [IntPtr]::Zero, $slots[0][0], $slots[0][1], $slots[0][2], $slots[0][3], 0x40) | Out-Null }
-if ($np) { $h = [Cs]::MainWindowOf($np.Id, $null); if ($h -ne [IntPtr]::Zero) { [Cs]::SetForegroundWindow($h) | Out-Null } }
+# Disposición de las ventanas (ajuste del ESCENARIO, no de Hatsu): Bloc de notas a la izquierda, Calculadora encima, Explorador a la derecha hasta cerca del borde inferior
+# (cubre la marca de agua «Test Mode / Windows Server» que pinta el sistema del runner sobre el fondo)
+$W = $sc.Width; $H = $sc.Height
+function Place([IntPtr]$h, [int]$x, [int]$y, [int]$w, [int]$hh) { if ($h -ne [IntPtr]::Zero) { [Cs]::ShowWindow($h, 9) | Out-Null; Start-Sleep -Milliseconds 300; [Cs]::SetWindowPos($h, [IntPtr]::Zero, $x, $y, $w, $hh, 0x44) | Out-Null } }
+$hNote = [Cs]::FindWindow('Notepad', $null); $hCalc = [Cs]::FindWindow('ApplicationFrameWindow', 'Calculator'); $hExp = [Cs]::FindWindow('CabinetWClass', $null)
+Note ''; Note "## Ventanas de las aplicaciones: Bloc de notas=$hNote · Calculadora=$hCalc · Explorador=$hExp"
+for ($k = 0; $k -lt 2; $k++) {
+  Place $hExp ([int]($W * 0.50)) 80 ([int]($W * 0.47)) ($H - 80 - 85)
+  Place $hNote 50 80 ([int]($W * 0.52)) ([int]($H * 0.62))
+  Place $hCalc 90 ([int]($H * 0.40)) 330 ([int]($H * 0.50))
+  Start-Sleep -Milliseconds 700
+}
+foreach ($pair in @(@('Explorador', $hExp), @('Bloc de notas', $hNote), @('Calculadora', $hCalc))) { if ($pair[1] -ne [IntPtr]::Zero) { $r = New-Object Cs+RC; [Cs]::GetWindowRect($pair[1], [ref]$r) | Out-Null; Note "- $($pair[0]): $($r.L),$($r.T) $($r.R - $r.L)x$($r.B - $r.T)" } }
+# Foco real en el Bloc de notas (clic de ratón en su área de texto) para que la Barra muestre su menú global
 $cx = $sc.X + [int]($W / 2)
+if ($hNote -ne [IntPtr]::Zero) { $r = New-Object Cs+RC; [Cs]::GetWindowRect($hNote, [ref]$r) | Out-Null; [Cs]::Click([int](($r.L + $r.R) / 2), [int]($r.T + ($r.B - $r.T) * 0.5)) }
 [Cs]::SetCursorPos($sc.X + 40, $sc.Y + [int]($H * 0.5)) | Out-Null; Start-Sleep -Seconds 3
 
 function Shot([string]$name, [string]$what) {
@@ -163,19 +172,23 @@ Note "- Hatsu Notch tras el clic: $((Get-Process NotchWin.App -ErrorAction Silen
 Shot '02-hatsu-notch-expandido' 'Hatsu Notch expandido con la reproducción multimedia real (tono generado, sesión de Chrome)'
 [Cs]::Glide($sc.X + 40, $sc.Y + [int]($H * 0.5), 25); Start-Sleep -Milliseconds 1500
 Shot '02b-hatsu-notch-contraido' 'Hatsu Notch contraído (reproduciendo)'
-# Captura 3 — Dock con el ratón sobre sus iconos (ampliación real)
-$dockY = $sc.Bottom - 40
-[Cs]::Glide($cx, $dockY, 20); Start-Sleep -Milliseconds 400; [Cs]::Glide($cx + 60, $dockY, 12); Start-Sleep -Milliseconds 900
-Shot '03-dock' 'Dock con el ratón sobre los iconos (reposo/ampliación según el código real)'
-[Cs]::Glide($sc.X + 40, $sc.Y + [int]($H * 0.5), 20); Start-Sleep -Milliseconds 900
+# Captura 3 — Dock con el ratón sobre un icono (ampliación y vista previa reales del código)
+$dockY = $sc.Bottom - 50
+[Cs]::Glide($cx, $dockY, 20); Start-Sleep -Milliseconds 300; [Cs]::Glide(690, $dockY, 15); Start-Sleep -Milliseconds 1500
+Shot '03-dock' 'Dock con el ratón sobre el icono del Explorador (ampliación y vista previa de ventana)'
+[Cs]::Glide($sc.X + 40, $sc.Y + [int]($H * 0.5), 25); Start-Sleep -Milliseconds 1200
 Shot '03b-dock-reposo' 'Dock en reposo'
-# Captura 4 — Ajustes REAL: equivale a pulsar el icono de la bandeja (mensaje del propio icono a la ventana real del host)
-$tray = [Cs]::FindWindow('WinMacHost', $null); Note "- Ventana de la bandeja del host: $tray"
-if ($tray -ne [IntPtr]::Zero) { [Cs]::PostMessage($tray, 0x8001, [IntPtr]::Zero, [IntPtr]0x202) | Out-Null }
-$sw = $null; $ok = WaitFor { $script:sw = [Cs]::FindWindow('WinMacSettings2', $null); $script:sw -ne [IntPtr]::Zero -and [Cs]::IsWindowVisible($script:sw) } 10
-Note "- Ventana de Ajustes visible: $ok"
-if ($ok) { [Cs]::SetForegroundWindow($sw) | Out-Null; Start-Sleep -Milliseconds 1500 }
-Shot '04-ajustes' 'Ajustes de Hatsu Desktop (ventana real)'
+# Captura 4 — Ajustes REAL: menú de Hatsu de la Barra (clic real en el logotipo) → «Ajustes de Hatsu Desktop»
+[Cs]::Click(27, 14); Start-Sleep -Milliseconds 1500
+Shot '05-diag-menu-hatsu' 'diagnóstico: menú de Hatsu de la Barra abierto con un clic real en el logotipo'
+$mx = [int]$env:HATSU_SETTINGS_X; $my = [int]$env:HATSU_SETTINGS_Y
+if ($mx -gt 0 -and $my -gt 0) {
+  [Cs]::Click($mx, $my); $sw = [IntPtr]::Zero
+  $ok = WaitFor { $script:sw = [Cs]::FindWindow('WinMacSettings2', $null); $script:sw -ne [IntPtr]::Zero -and [Cs]::IsWindowVisible($script:sw) } 10
+  Note "- Ventana de Ajustes visible: $ok"
+  if ($ok) { Start-Sleep -Milliseconds 1500; $r = New-Object Cs+RC; [Cs]::GetWindowRect($sw, [ref]$r) | Out-Null; Note "  posición: $($r.L),$($r.T) $($r.R - $r.L)x$($r.B - $r.T)" }
+  Shot '04-ajustes' 'Ajustes de Hatsu Desktop (ventana real)'
+}
 
 # Diagnóstico final
 Note ''; Note '## Registro del host (últimas líneas)'
