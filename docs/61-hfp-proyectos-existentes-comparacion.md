@@ -77,3 +77,10 @@ Fuente de lectura: raw.githubusercontent.com y páginas de GitHub (learn.microso
 | Audio bidireccional | **NO verificado** |
 | Android | misma ruta HFP; sin ANCS; **PEND.** |
 | Ventana de llamada propia de Windows | puede aparecer junto a la píldora de Hatsu cuando la app tiene el rol (NOTAS de Klangbruecke) — comportamiento a validar |
+
+## 8. Paquete candidato y CI (OBSERVADO: run 42095875323, commit `a9e8bb0`, pin NotchWin `e98863c`, todos los jobs en success; log del paso MSIX leído, sin FALLO)
+| Paquete | Archivo | SHA-256 | Artefacto |
+|---|---|---|---|
+| **Llamadas completas (candidato; requiere aprobación de Microsoft)** | `HatsuDesktop-2.0.3.0-beta-callcontrol-unsigned.msix` (172 MB) | `78282e7e512e8bf0ca3f407f2881813a945d99dd31903ff6f259c4e930389ed9` | `msix-llamadas-sin-firmar-a9e8bb0622f37b94d5812a14c889da1ac0f967e9` |
+| Equivalente a Stable (sin `phoneCall` ni restringida) | `HatsuDesktop-2.0.3.0-store-unsigned.msix` | `599ba3b14f7d368fda60111c415840770fe45b4d0b3daeacb82683dfd4910048` | `msix-store-sin-firmar-a9e8bb0622f37b94d5812a14c889da1ac0f967e9` |
+Capacidades del candidato (verificadas en el manifiesto del `.msix`): `runFullTrust`, `phoneLineTransportManagement` (restringida), `phoneCall`, `userNotificationListener`, `bluetooth`, `location`, `webcam`. Identidad `PipeSick.HatsuDesktop` · `CN=ACC0FCB8-4D92-4E20-9731-7254D5E43289` · v2.0.3.0 · x64. La licencia de Hatsu es Apache-2.0 (compatible con MIT; no se incorporó código ajeno). Los artefactos caducan a los 14 días.
