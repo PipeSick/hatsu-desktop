@@ -19,6 +19,9 @@ public sealed record SettingsRow(RowKind Kind, string Id, string Title, string? 
 public sealed record SettingsGroup(string? Header, IReadOnlyList<SettingsRow> Rows, string? Footer = null);
 public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOnlyList<SettingsGroup> Groups);
 
+/// <summary>Vista del diagnóstico de llamadas (Ajustes › Hatsu Connect): lo da el host; puro para probar la página sin Windows.</summary>
+public sealed record ConnectDiagView(string Status = "Sin ejecutar", IReadOnlyList<string>? Summary = null, bool Running = false, bool HasReport = false, bool Observing = false, string ObserveStatus = "Detenida");
+
 /// <param name="WeatherStatus">Texto de estado de la búsqueda de ciudad (qué se eligió, cómo pedir otra).</param>
 public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, ModuleState> States, bool Autostart, string WeatherStatus = "")
 {
@@ -34,6 +37,8 @@ public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, M
     public string TaskbarStatus { get; init; } = "";
     /// <summary>Fase 3.1: causa conocida de cada módulo que no arrancó (vacío si todo va bien). Un módulo DESACTIVADO por el usuario no aparece aquí.</summary>
     public IReadOnlyDictionary<string, ModuleFailure> ModuleFailures { get; init; } = new Dictionary<string, ModuleFailure>();
+    /// <summary>Diagnóstico de Bluetooth y llamadas (solo lectura). Null: sin servicio (p. ej. pruebas): la página muestra un estado vacío.</summary>
+    public ConnectDiagView ConnectDiag { get; init; } = new();
 }
 
 /// <summary>Construye las páginas de Ajustes a partir de la configuración vigente. Puro: se prueba sin Windows.</summary>
@@ -356,12 +361,36 @@ public static class SettingsBuilder
             new("Privacidad", [
                 new(RowKind.Segmented, "connect.content", "Contenido de las notificaciones", "Lo que no se elige ni siquiera se pide al iPhone", Options: ContentNames, Selected: (int)c.Content, Enabled: on && c.Notifications, Reason: on ? null : off),
             ], "El contenido vive solo en memoria mientras Hatsu Desktop está abierto: no se guarda en disco, no se registra y no sale del PC. Quitar el iPhone en Windows borra el vínculo."),
+            DiagnosticsGroup(input.ConnectDiag),
             new("Qué no hace (todavía)", [
                 new(RowKind.Info, "connect.m1", "Mensajes (SMS e iMessage): fase posterior. Ahora Hatsu Desktop no lee, envía ni borra mensajes."),
                 new(RowKind.Info, "connect.m2", "Hablar por el PC (micrófono y altavoces): Windows lo restringe a apps autorizadas por Microsoft; no se intenta."),
                 new(RowKind.Info, "connect.m3", "Estado de carga del iPhone: Bluetooth solo da el porcentaje. Portapapeles universal y Handoff: dependen de servicios privados de Apple."),
             ]),
         ]);
+    }
+
+    /// <summary>
+    /// Diagnóstico avanzado para validar Bluetooth y llamadas con un teléfono real desde la versión de la Store (docs/58). SOLO LECTURA: no contesta, no cuelga, no marca, no conecta
+    /// ni desconecta Bluetooth. No hay botones de contestar/rechazar: no existe un mecanismo con audio del PC verificado.
+    /// </summary>
+    private static SettingsGroup DiagnosticsGroup(ConnectDiagView d)
+    {
+        var rows = new List<SettingsRow>
+        {
+            new(RowKind.Button, "connect.diag.run", d.Running ? "Ejecutando el diagnóstico…" : "Ejecutar diagnóstico de Bluetooth y llamadas", "Solo lectura. No cambia conexiones ni contesta llamadas", Enabled: !d.Running),
+            new(RowKind.Info, "connect.diag.status", "Estado: " + d.Status),
+        };
+        int i = 0;
+        foreach (var l in d.Summary ?? []) rows.Add(new(RowKind.Info, "connect.diag.sum:" + i++, l));
+        rows.Add(new(RowKind.Button, "connect.diag.open", "Abrir el informe completo", Enabled: d.HasReport && !d.Running, Reason: d.HasReport ? null : "Ejecuta el diagnóstico primero"));
+        rows.Add(new(RowKind.Button, "connect.diag.copy", "Copiar el informe al portapapeles", Enabled: d.HasReport && !d.Running, Reason: d.HasReport ? null : "Ejecuta el diagnóstico primero"));
+        rows.Add(new(RowKind.Button, "connect.diag.save", "Guardar una copia…", Enabled: d.HasReport && !d.Running, Reason: d.HasReport ? null : "Ejecuta el diagnóstico primero"));
+        rows.Add(new(RowKind.Toggle, "connect.diag.observe", "Observar llamadas del sistema (temporal)", "Solo lectura: registra lo que Windows informa durante una llamada real. Se apaga solo a los 15 min. Estado: " + d.ObserveStatus, d.Observing));
+        rows.Add(new(RowKind.Info, "connect.diag.ios", "Prueba con iPhone: 1) comprueba que está conectado por Bluetooth; 2) ejecuta el diagnóstico; 3) activa «Observar»; 4) recibe una llamada y comprueba el nombre; 5) contesta en el teléfono: NO debe aparecer «Llamada finalizada»; 6) cuelga, desactiva «Observar» y vuelve a ejecutar/copiar el informe."));
+        rows.Add(new(RowKind.Info, "connect.diag.android", "Prueba con Android: 1) empareja el teléfono por Bluetooth en Windows; 2) ejecuta el diagnóstico y revisa servicios (HFP, PBAP, MAP) y transportes telefónicos; 3) activa «Observar», haz una llamada real y mira qué informa Windows. Android no usa ANCS: en Android no se mostrará el aviso de llamada de Hatsu."));
+        return new SettingsGroup("Diagnóstico de llamadas (avanzado)", rows,
+            "El informe se queda en este PC: sin notificaciones, mensajes, audio, historial ni números completos; direcciones Bluetooth y rutas anonimizadas. Nada se envía a ningún servidor. Contestar y hablar desde el PC sigue sin estar disponible (docs/57).");
     }
 
     public static readonly string[] ContentNames = ["Completo", "Solo título", "Solo la app"];

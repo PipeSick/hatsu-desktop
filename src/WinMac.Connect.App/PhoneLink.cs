@@ -59,18 +59,25 @@ internal sealed class PhoneLink : IAsyncDisposable
 
     private void ResetCall() { if (_call.Reset()) CallChanged(); }
 
-    private SystemCallObserver? _sysCalls;
-    /// <summary>Observador EXPERIMENTAL de la telefonía del sistema (docs/56). Se registra siempre; solo alimenta la Isla con HATSU_CONNECT_SYSTEM_CALLS=1.</summary>
-    public void StartSystemCallObserver()
+    private SystemCallObserver? _sysCalls; private Timer? _obsStop;
+    /// <summary>Observador EXPERIMENTAL de la telefonía del sistema (docs/57-58), SOLO LECTURA. Se enciende a petición (Ajustes › Diagnóstico) y se apaga solo a los
+    /// <see cref="SystemCallObserver.MaxMinutes"/> min, al desactivarlo, al cerrar el módulo o al reiniciarse (no queda guardado en ningún sitio).</summary>
+    public void SetObservation(bool on) => Post(() =>
     {
+        _obsStop?.Dispose(); _obsStop = null;
+        _sysCalls?.Dispose(); _sysCalls = null;   // siempre se parte de cero: nada de observadores duplicados
+        if (!on) { _log("[connect] observación de telefonía del sistema detenida"); return Task.CompletedTask; }
         _sysCalls = new SystemCallObserver(active => Post(() =>
         {
             if (_call.OnTelephony(active)) { _log("[connect] llamada (fuente: sistema): " + _call.State.Phase); CallChanged(); }
-            else _log("[connect] telefonía del sistema ignorada: sin correlación con una llamada de este iPhone");
+            else _log("[connect] telefonía del sistema ignorada: sin correlación con una llamada de este iPhone");   // p. ej. Teams: nunca se atribuye al iPhone
             return Task.CompletedTask;
         }), _log);
+        SystemCallObserver.TemporaryFeed = true;
         _sysCalls.Start();
-    }
+        _obsStop = new Timer(_ => SetObservation(false), null, TimeSpan.FromMinutes(SystemCallObserver.MaxMinutes), Timeout.InfiniteTimeSpan);
+        return Task.CompletedTask;
+    });
 
     public void ApplySettings(ConnectSettings c) => Post(async () =>
     {
@@ -362,7 +369,7 @@ internal sealed class PhoneLink : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _sysCalls?.Dispose();
+        _obsStop?.Dispose(); _sysCalls?.Dispose();
         await _watchdog.DisposeAsync();
         var done = new TaskCompletionSource(); Post(async () => { try { await TeardownAsync(forgetDevice: true); } finally { done.TrySetResult(); } });
         await Task.WhenAny(done.Task, Task.Delay(3000));

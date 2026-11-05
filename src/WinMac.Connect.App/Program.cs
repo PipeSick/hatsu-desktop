@@ -26,11 +26,17 @@ internal static class Program
 
     public static async Task<int> Main(string[] args)
     {
-        if (args.Contains("--probe-calls"))   // diagnóstico de solo lectura (docs/57): escribe el informe junto al registro y termina; no necesita el host
+        if (args.Contains("--probe-calls"))   // diagnóstico de solo lectura (docs/57-58): lo lanza Ajustes o se ejecuta a mano; escribe el informe y termina. No necesita el host
         {
-            var (_, text) = await CallProbe.RunAsync();
-            try { var f = Path.Combine(Path.GetDirectoryName(LogPath)!, "connect-probe-calls.txt"); Directory.CreateDirectory(Path.GetDirectoryName(f)!); File.WriteAllText(f, text); Log("[connect] sondeo de telefonía escrito en " + f); } catch (Exception) { }
-            return 0;
+            int oi = Array.IndexOf(args, "--out"); string outFile = oi >= 0 && oi + 1 < args.Length ? args[oi + 1] : Path.Combine(Path.GetDirectoryName(LogPath)!, "connect-probe-calls.txt");
+            try
+            {
+                var (_, text) = await CallProbe.RunAsync(LogPath);
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outFile))!); File.WriteAllText(outFile, text);
+                Log("[connect] diagnóstico de telefonía escrito");
+                return 0;
+            }
+            catch (Exception e) { Log("[connect] diagnóstico de telefonía falló: " + e.GetType().Name); try { File.WriteAllText(outFile, "== Diagnóstico ==\nRESUMEN|Diagnóstico: Error de ejecución — " + e.GetType().Name + " 0x" + e.HResult.ToString("X8") + "\n"); } catch (Exception) { } return 1; }
         }
         using var single = new Mutex(true, "WinMac.Connect.SingleInstance", out bool first);
         if (!first) { Log("[connect] ya hay un módulo Connect en marcha"); return 0; }
@@ -46,7 +52,8 @@ internal static class Program
             item => link.Event(ConnectTopics.Alert, item),
             Log);
         phone.PublishCall = c => link.Publish(ConnectTopics.Call, c);
-        phone.StartSystemCallObserver();   // EXPERIMENTAL, solo lectura (docs/56)
+        if (Environment.GetEnvironmentVariable("HATSU_CONNECT_SYSTEM_CALLS") == "1") phone.SetObservation(true);   // avanzado; el interruptor de Ajustes es lo normal
+        link.Subscribe(ConnectTopics.Diag, d => { if (d is { ValueKind: System.Text.Json.JsonValueKind.Object } o && o.TryGetProperty("observe", out var v) && v.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False) phone.SetObservation(v.GetBoolean()); });
         link.HealthCheck = () => true;   // el trabajo con Bluetooth va en su propio bucle: un iPhone que no responde no es un módulo colgado
         link.Subscribe(ConnectTopics.Config, d => phone.ApplySettings(ConnectSettings.Parse(d)));
         link.Start();

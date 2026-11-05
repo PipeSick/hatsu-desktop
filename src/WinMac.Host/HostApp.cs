@@ -154,7 +154,7 @@ internal static class HostApp
             };
             w.Show();
         }
-        Tray? tray = null; SettingsWindow? settings = null;
+        Tray? tray = null; SettingsWindow? settings = null; ConnectDiagnosticsService? connectDiag = null;
         if (Autostart.Heal(exePath) is { } healed) log("[host] el inicio automático apuntaba a una carpeta que ya no existe: ahora apunta a esta instalación.");
         var taskbar = new TaskbarHider(exePath, log);   // WM-034
         try { taskbar.RecoverStale(); } catch (Exception e) { log("[barra de tareas] no se pudo revisar la sesión anterior: " + e.Message); }
@@ -165,6 +165,7 @@ internal static class HostApp
             settings.RunOnboarding = () => uiActions.Enqueue(() => OpenWizard(OnboardingMode.Rerun));
             settings.ModuleFailures = () => sup.Failures;
             settings.RetryModule = id => { bool ok = sup.Restart(id); log(ok ? $"[host] reintento manual de {id} pedido desde Ajustes" : $"[host] reintento de {id}: nada que reintentar ahora"); return ok; };
+            settings.ConnectDiag = connectDiag = new ConnectDiagnosticsService(AppContext.BaseDirectory.TrimEnd('\\'), log, (t, d) => bus.Emit(t, d), settings.Refresh);   // docs/58
             settings.RunDiagnostics = () => _ = Task.Run(() => { try { var f = InstallDiagnose.Run(o, null, open: true, print: false); log("[host] informe de diagnóstico: " + (f ?? "no se pudo guardar")); } catch (Exception e) { log("[host] informe de diagnóstico falló: " + e.Message); } });
             var win = settings; controller.SettingsRequested = section => uiActions.Enqueue(() => win.Show(section));
             tray = new Tray(() => sup.States, RequestQuit, id => { if (sup.States.TryGetValue(id, out var st) && st == ModuleState.Disabled) config.SetModuleEnabled(id, true); else sup.Restart(id); }, settings.Show, log, showIcon: !o.NoTray);
@@ -223,6 +224,7 @@ internal static class HostApp
         try { taskbar.RestoreNow(); } catch (Exception e) { log("[barra de tareas] no se pudo restaurar al salir: " + e.Message + " (el guardián o «HatsuDesktop.exe --restore-taskbar» la devuelven)"); }   // lo primero: la barra vuelve al instante
         tray?.RemoveIcon();
         try { startTask.Wait(TimeSpan.FromSeconds(20)); } catch (Exception) { }   // no se cierra a mitad de un arranque (y no se espera para siempre a un lanzamiento bloqueado)
+        try { connectDiag?.Shutdown(); } catch (Exception) { }
         sup.StopAllAsync().GetAwaiter().GetResult();
         log("[host] módulos cerrados: " + string.Join(", ", sup.States.Select(kv => $"{kv.Key}={kv.Value}")));
         try { extHost.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); } catch (Exception) { }

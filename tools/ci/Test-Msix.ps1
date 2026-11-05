@@ -40,6 +40,18 @@ InPkg 'cmd.exe' ('/c ""{0}\HatsuDesktop.exe" --package-info > "{1}""' -f $loc, $
 $okId = WaitFor { (Test-Path $idf) -and ((Get-Content $idf -Raw) -match 'package=') } 20
 Check 'HatsuDesktop.exe se ejecuta CON identidad de paquete (--package-info)' ($okId -and (Get-Content $idf -Raw) -match "package=$IdentityName") ($(if (Test-Path $idf) { (Get-Content $idf -Raw).Trim() } else { 'sin salida' }))
 
+# diagnóstico de Bluetooth y llamadas (Ajustes › Hatsu Connect): se ejecuta DESDE el paquete instalado, escribe un informe y no se cuelga.
+# El runner NO tiene Bluetooth ni teléfono: aquí solo se prueba que el diagnóstico corre con identidad de paquete, termina, escribe en una ruta escribible, trae el resumen y no filtra datos.
+$pf = Join-Path $out "bt-diagnostico-$Label.txt"; Remove-Item $pf -ErrorAction SilentlyContinue
+InPkg 'cmd.exe' ('/c start "" /wait "{0}\HatsuDesktop.Connect.exe" --probe-calls --out "{1}"' -f $loc, $pf) | Out-Null
+$okPr = WaitFor { (Test-Path $pf) -and ((Get-Content $pf -Raw) -match 'RESUMEN\|') } 60
+Check 'diagnóstico de llamadas (--probe-calls) desde el paquete instalado: termina y escribe el informe con resumen' $okPr ($(if ($okPr) { ((Get-Content $pf | Where-Object { $_ -like 'RESUMEN|*' }) -join ' / ') } else { 'sin informe' }))
+if ($okPr) {
+  $pt = Get-Content $pf -Raw
+  Check 'el informe del diagnóstico no contiene el nombre de usuario, la ruta del perfil ni direcciones Bluetooth completas' (($pt -notmatch [regex]::Escape($env:USERNAME)) -and ($pt -notmatch [regex]::Escape($env:USERPROFILE)) -and ($pt -notmatch '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}')) ''
+  Check 'el informe distingue los estados (Detectado/Disponible/Acceso denegado/No compatible/No comprobado/Error de ejecución) y no declara incompatibilidad por ausencia' (($pt -match 'Leyenda:') -and ($pt -match 'NO prueba que el tel')) ''
+}
+
 # los cambios de esta versión están DENTRO del paquete instalado (no es el artefacto anterior)
 Check 'agentes de IA: valor de fábrica DESACTIVADO con identidad de paquete (--package-info)' ((Test-Path $idf) -and ((Get-Content $idf -Raw) -match 'agentsDefault=off')) ($(if (Test-Path $idf) { (Get-Content $idf -Raw).Trim() } else { '' }))
 $nvi = (Get-Item (Join-Path $loc 'NotchWin\NotchWin.App.exe')).VersionInfo

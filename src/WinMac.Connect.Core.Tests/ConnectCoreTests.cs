@@ -353,3 +353,35 @@ public class CallRoutePlannerTests
         Assert.True(ok.AnyButton); Assert.Equal(ControlSupport.Verified, ok.PcAudio); Assert.Equal(ControlSupport.Unavailable, ok.Dial);   // marcar: fuera de alcance
     }
 }
+
+public class CallDiagnosticsTests
+{
+    [Fact] public void Redacts_mac_addresses_keeping_only_the_last_byte()
+    {
+        var r = DiagRedactor.Redact("Dispositivo AA:BB:CC:DD:EE:0f y bb-cc-dd-ee-ff-01; id 112233445566");
+        Assert.DoesNotContain("AA:BB", r); Assert.DoesNotContain("bb-cc", r); Assert.DoesNotContain("1122334455", r);
+        Assert.Contains("**:**:**:**:**:0F", r); Assert.Contains("**:**:**:**:**:01", r);
+    }
+
+    [Fact] public void Redacts_phone_numbers_and_profile_paths_but_not_short_numbers()
+    {
+        var r = DiagRedactor.Redact(@"Llamada de +56 9 1234 5678 en C:\Users\felipe\AppData código 0x8000 v2.0.1 HRESULT 80070005", @"C:\Users\felipe", "felipe");
+        Assert.DoesNotContain("1234 5678", r); Assert.DoesNotContain("felipe", r); Assert.Contains("%USERPROFILE%", r); Assert.Contains("78", r);
+        Assert.Contains("0x8000", r); Assert.Contains("v2.0.1", r);
+    }
+
+    [Fact] public void Report_has_summary_on_top_and_distinguishes_all_states()
+    {
+        var f = new[]
+        {
+            new DiagFinding("Servicios HFP", DiagState.Detected, "1 teléfono"), new DiagFinding("Observador", DiagState.Available, ""),
+            new DiagFinding("Transporte telefónico", DiagState.AccessDenied, "DeniedBySystem"), new DiagFinding("Audio manos libres", DiagState.NotChecked, ""),
+            new DiagFinding("Línea", DiagState.Error, "COMException"), new DiagFinding("Dial", DiagState.NotSupported, "fuera de alcance"),
+        };
+        var t = DiagReport.Compose("Prueba", ["Windows 11"], f, ["detalle"]);
+        var sum = DiagReport.SummaryOf(t);
+        Assert.Equal(6, sum.Count); Assert.Contains("Acceso denegado — DeniedBySystem", sum[2]); Assert.Contains("No comprobado", sum[3]); Assert.Contains("Error de ejecución", sum[4]);
+        Assert.True(t.IndexOf("RESUMEN|", StringComparison.Ordinal) < t.IndexOf("detalle", StringComparison.Ordinal));
+        Assert.Contains("NO prueba que el teléfono sea incompatible", t);   // la ausencia de un transporte no se interpreta como incompatibilidad
+    }
+}

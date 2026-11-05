@@ -58,6 +58,13 @@ internal sealed class SettingsWindow : IDisposable
     /// <summary>Fase 3.1: causa de los módulos que no arrancaron, reintento por módulo e informe de diagnóstico (los pone el host).</summary>
     public Func<IReadOnlyDictionary<string, ModuleFailure>>? ModuleFailures { get; set; }
     public Func<string, bool>? RetryModule { get => _actions.RetryModule; set { _actions.RetryModule = id => { bool ok = value?.Invoke(id) ?? false; _ = Task.Delay(1200).ContinueWith(_ => Refresh()); return ok; }; } }
+    /// <summary>Diagnóstico de Bluetooth y llamadas (Ajustes › Hatsu Connect): lo pone el host.</summary>
+    public ConnectDiagnosticsService? ConnectDiag
+    {
+        get => _connectDiag;
+        set { _connectDiag = value; _actions.DiagRun = value is null ? null : value.Run; _actions.DiagOpen = value is null ? null : value.Open; _actions.DiagCopy = value is null ? null : value.Copy; _actions.DiagSave = value is null ? null : value.Save; _actions.DiagObserve = value is null ? null : value.Observe; }
+    }
+    private ConnectDiagnosticsService? _connectDiag;
     public Action? RunDiagnostics { get => _actions.RunDiagnostics; set => _actions.RunDiagnostics = value; }
     public Action? ClearClipboard { get => _actions.ClearClipboard; set => _actions.ClearClipboard = value; }
     /// <summary>WM-034: estado real de la ocultación de la barra de tareas para la página Escritorio y Dock.</summary>
@@ -180,7 +187,7 @@ internal sealed class SettingsWindow : IDisposable
     {
         IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension, string)>? exts = null;
         try { exts = ExtensionList?.Invoke(); } catch (Exception e) { _log("[extensiones] lista no disponible: " + e.Message); }
-        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { ModuleFailures = ModuleFailures?.Invoke() ?? new Dictionary<string, ModuleFailure>(), AutostartForeignPath = Autostart.ForeignPath(_exe), Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "" }));
+        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { ModuleFailures = ModuleFailures?.Invoke() ?? new Dictionary<string, ModuleFailure>(), AutostartForeignPath = Autostart.ForeignPath(_exe), Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "", ConnectDiag = _connectDiag?.View() ?? new() }));
         PositionEdit();
     }
 

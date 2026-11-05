@@ -11,7 +11,10 @@ namespace WinMac.Connect.App;
 /// </summary>
 internal sealed class SystemCallObserver : IDisposable
 {
-    public static bool FeedEnabled => Environment.GetEnvironmentVariable("HATSU_CONNECT_SYSTEM_CALLS") == "1";
+    /// <summary>Alimenta la Isla solo si el usuario lo pidió: variable de entorno (avanzado) o el interruptor TEMPORAL de Ajustes › Diagnóstico (se apaga solo, ver <see cref="MaxMinutes"/>).</summary>
+    public static bool FeedEnabled => Environment.GetEnvironmentVariable("HATSU_CONNECT_SYSTEM_CALLS") == "1" || TemporaryFeed;
+    public static volatile bool TemporaryFeed;
+    public const int MaxMinutes = 15;
     private readonly Action<bool> _onActive; private readonly Action<string> _log; private bool _started; private bool _last;
 
     public SystemCallObserver(Action<bool> onActive, Action<string> log) { _onActive = onActive; _log = log; }
@@ -40,5 +43,5 @@ internal sealed class SystemCallObserver : IDisposable
         catch (Exception ex) { _log("[connect] telefonía del sistema: " + ex.GetType().Name); }
     }
 
-    public void Dispose() { if (_started) { try { PhoneCallManager.CallStateChanged -= OnChanged; } catch { } _started = false; } }
+    public void Dispose() { TemporaryFeed = false; if (_started) { try { PhoneCallManager.CallStateChanged -= OnChanged; } catch { } _started = false; } }
 }

@@ -42,6 +42,13 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
         return true;
     }
 
+    /// <summary>Diagnóstico de Bluetooth y llamadas (solo lectura), lo da el host. Observar: interruptor TEMPORAL del observador de telefonía del sistema.</summary>
+    public Action? DiagRun { get; set; }
+    public Action? DiagOpen { get; set; }
+    public Action? DiagCopy { get; set; }
+    public Action? DiagSave { get; set; }
+    public Action<bool>? DiagObserve { get; set; }
+
     /// <summary>Abre una URI o una app (WinMac Connect). La da el host; null = no hace nada.</summary>
     public Action<string>? OpenUri { get; set; }
 
@@ -155,6 +162,11 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("connect.alerts", "toggle"): return cfg.UpdateConnect(c => c with { Alerts = e.On }) || true;
             case ("connect.content", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.ContentNames.Length: return cfg.UpdateConnect(c => c with { Content = (WinMac.Connect.ContentLevel)e.Index }) || true;
             case ("connect.device", "text"): { var t = (e.Text ?? "").Trim(); return cfg.UpdateConnect(c => c with { DeviceName = t.Length == 0 ? null : t }) || true; }
+            case ("connect.diag.run", _): if (DiagRun is null) return false; DiagRun(); return true;
+            case ("connect.diag.open", _): if (DiagOpen is null) return false; DiagOpen(); return true;
+            case ("connect.diag.copy", _): if (DiagCopy is null) return false; DiagCopy(); return true;
+            case ("connect.diag.save", _): if (DiagSave is null) return false; DiagSave(); return true;
+            case ("connect.diag.observe", "toggle"): if (DiagObserve is null) return false; DiagObserve(e.On); return true;
             case ("connect.bt", "button"): if (OpenUri is null) return false; OpenUri("ms-settings:bluetooth"); return true;
         }
 
