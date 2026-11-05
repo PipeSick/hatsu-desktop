@@ -62,6 +62,7 @@ internal static class Program
             Log);
         phone.PublishCall = c => link.Publish(ConnectTopics.Call, c);
         if (Environment.GetEnvironmentVariable("HATSU_CONNECT_SYSTEM_CALLS") == "1") phone.SetObservation(true);   // avanzado; el interruptor de Ajustes es lo normal
+        link.Subscribe(ConnectTopics.CallCmd, d => { if (d is { ValueKind: System.Text.Json.JsonValueKind.Object } o && o.TryGetProperty("cmd", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String) phone.Command(v.GetString() ?? ""); });   // docs/60: órdenes de la Isla
         link.Subscribe(ConnectTopics.Diag, d => { if (d is { ValueKind: System.Text.Json.JsonValueKind.Object } o && o.TryGetProperty("observe", out var v) && v.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False) phone.SetObservation(v.GetBoolean()); });
         link.HealthCheck = () => true;   // el trabajo con Bluetooth va en su propio bucle: un iPhone que no responde no es un módulo colgado
         link.Subscribe(ConnectTopics.Config, d => phone.ApplySettings(ConnectSettings.Parse(d)));

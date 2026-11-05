@@ -358,13 +358,17 @@ public static class SettingsBuilder
                 new(RowKind.Toggle, "connect.island", "También en Hatsu Notch", "Pestaña Notificaciones de Hatsu Notch", c.Island, on && c.Notifications, on ? null : off),
                 new(RowKind.Toggle, "connect.alerts", "Aviso emergente para las nuevas", "En Hatsu Notch, como las de Windows", c.Alerts, on && c.Notifications && c.Island, on ? null : off),
             ]),
+            new("Llamadas completas desde el PC", [
+                new(RowKind.Toggle, "connect.callcontrol", "Contestar, rechazar y colgar desde Hatsu Notch, con el audio en el PC", "Windows lleva la llamada del teléfono (iPhone o Android) a tus altavoces y micrófono. Registra a Hatsu como cliente de telefonía mientras esté activo", c.CallControl, on && c.Calls, on ? null : off),
+                new(RowKind.Info, "connect.callcontrol.why", "Necesita el teléfono emparejado en Windows (manos libres/HFP) y que Windows conceda a Hatsu la telefonía Bluetooth: es una capacidad restringida que aprueba Microsoft. Si Windows no la concede, no se muestra ningún botón de contestar y Hatsu sigue avisando de las llamadas como siempre. Al apagarlo, Hatsu deshace su registro."),
+            ], "Si usas Enlace Móvil (Phone Link) con el mismo teléfono, desactiva esta opción o cierra Enlace Móvil: los dos quieren gestionar la misma llamada."),
             new("Privacidad", [
                 new(RowKind.Segmented, "connect.content", "Contenido de las notificaciones", "Lo que no se elige ni siquiera se pide al iPhone", Options: ContentNames, Selected: (int)c.Content, Enabled: on && c.Notifications, Reason: on ? null : off),
             ], "El contenido vive solo en memoria mientras Hatsu Desktop está abierto: no se guarda en disco, no se registra y no sale del PC. Quitar el iPhone en Windows borra el vínculo."),
             DiagnosticsGroup(input.ConnectDiag),
             new("Qué no hace (todavía)", [
                 new(RowKind.Info, "connect.m1", "Mensajes (SMS e iMessage): fase posterior. Ahora Hatsu Desktop no lee, envía ni borra mensajes."),
-                new(RowKind.Info, "connect.m2", "Hablar por el PC (micrófono y altavoces): Windows lo restringe a apps autorizadas por Microsoft; no se intenta."),
+                new(RowKind.Info, "connect.m2", "Hablar por el PC (micrófono y altavoces): solo con «Llamadas completas desde el PC» y si Windows concede a Hatsu la telefonía Bluetooth (aprobación de Microsoft)."),
                 new(RowKind.Info, "connect.m3", "Estado de carga del iPhone: Bluetooth solo da el porcentaje. Portapapeles universal y Handoff: dependen de servicios privados de Apple."),
             ]),
         ]);

@@ -1,11 +1,31 @@
 namespace WinMac.Connect;
 
 /// <summary>Fase de la llamada del iPhone tal como la deja ver ANCS (solo avisos: WinMac no controla la llamada).</summary>
+/// <summary>Estado de una llamada según el sistema de telefonía de Windows.</summary>
+public enum ProviderCallStatus { Incoming, Talking, Held, Ended }
+/// <param name="Name">Nombre de contacto o, si no hay, el número (es lo que el usuario debe ver; los diagnósticos lo enmascaran, la interfaz no).</param>
+public sealed record ProviderCall(string Id, ProviderCallStatus Status, string? Name, DateTimeOffset? Started = null, bool AudioOnPc = false, bool Muted = false);
+
 public enum CallPhase { None, Ringing, Missed, Ended, Active }   // Active/Ended solo con una fuente de telefonía fiable (nunca desde ANCS)
 
 /// <param name="Caller">Nombre o número que da el iPhone (título de la notificación de llamada); null si aún no llegó o por privacidad.</param>
 public sealed record CallState(CallPhase Phase, string? Caller, uint Uid, long Session, DateTimeOffset Since)
 {
+    /// <summary>Teléfono de origen para la Isla («iPhone», «Android», «Teléfono»).</summary>
+    public string Device { get; init; } = "iPhone";
+    /// <summary>Id de la llamada en el proveedor de telefonía de Windows (null si solo la conoce ANCS).</summary>
+    public string? ProviderCallId { get; init; }
+    /// <summary>Controles que HOY funcionan para ESTA llamada (los calcula <see cref="CallControlPlanner"/>); false = la Isla no dibuja el botón.</summary>
+    public bool CanAnswer { get; init; }
+    public bool CanReject { get; init; }
+    public bool CanHangup { get; init; }
+    public bool CanMute { get; init; }
+    /// <summary>El audio de la llamada está en el PC (altavoces/micrófono de Windows) según el sistema.</summary>
+    public bool AudioOnPc { get; init; }
+    public bool Muted { get; init; }
+    /// <summary>Aviso corto y honesto para el usuario (p. ej. «El audio no pasó al PC: sigue en el teléfono»); null si nada que decir.</summary>
+    public string? Notice { get; init; }
+
     public static readonly CallState Idle = new(CallPhase.None, null, 0, 0, DateTimeOffset.MinValue);
 }
 
@@ -68,6 +88,41 @@ public sealed class CallTracker(Func<DateTimeOffset>? now = null)
             return Set(new CallState(CallPhase.Active, State.Phase == CallPhase.Ringing ? State.Caller : (_closedAt is { } ca && t - ca <= LateMissed ? _closedCaller : null), State.Phase == CallPhase.Ringing ? State.Uid : uid, State.Session, t));
         }
         return State.Phase == CallPhase.Active && Set(State with { Phase = CallPhase.Ended, Since = t });
+    }
+
+    /// <summary>
+    /// Llamada de una línea Bluetooth del sistema (HFP de Windows). Fuente fiable: cubre iPhone y Android y es la única que sabe si se contestó. Solo se le pasan llamadas de líneas
+    /// con transporte Bluetooth (nunca Teams ni otras apps). Si ANCS ya anunció esta llamada (iPhone), se une a ella y conserva el nombre.
+    /// </summary>
+    public bool OnProviderCall(ProviderCall? c, string device)
+    {
+        var t = _now();
+        if (c is null)
+        {
+            if (State.ProviderCallId is null && State.Phase != CallPhase.Active) return false;   // lo de ANCS sigue su curso
+            return State.Phase switch
+            {
+                CallPhase.Active => Set(State with { Phase = CallPhase.Ended, Since = t, CanAnswer = false, CanReject = false, CanHangup = false, CanMute = false, AudioOnPc = false }),
+                CallPhase.Ringing => CloseNeutral(t),   // desapareció mientras sonaba: no se sabe si contestada, rechazada o perdida
+                _ => false,
+            };
+        }
+
+        switch (c.Status)
+        {
+            case ProviderCallStatus.Incoming:
+                if (State.Phase == CallPhase.Active && State.ProviderCallId != c.Id) return false;   // llamada en espera: no se pisa la activa
+                if (State.Phase == CallPhase.Ringing)
+                    return Set(State with { ProviderCallId = c.Id, Device = device, Caller = c.Name ?? State.Caller });   // se une a la que ANCS ya anunció
+                _removedAt = null; _closedAt = null;
+                return Set(new CallState(CallPhase.Ringing, c.Name, 0, State.Session, t) { ProviderCallId = c.Id, Device = device });
+            case ProviderCallStatus.Talking or ProviderCallStatus.Held:
+                if (State.Phase == CallPhase.Active && State.ProviderCallId == c.Id) return Set(State with { Caller = State.Caller ?? c.Name, AudioOnPc = c.AudioOnPc, Muted = c.Muted });
+                _removedAt = null; _closedAt = null;
+                return Set(new CallState(CallPhase.Active, c.Name ?? (State.Phase == CallPhase.Ringing ? State.Caller : null), State.Uid, State.Session, c.Started ?? t) { ProviderCallId = c.Id, Device = device, AudioOnPc = c.AudioOnPc, Muted = c.Muted });
+            default:   // Ended / Lost
+                return State.ProviderCallId == c.Id && State.Phase is CallPhase.Ringing or CallPhase.Active ? (State.Phase == CallPhase.Active ? Set(State with { Phase = CallPhase.Ended, Since = t, CanAnswer = false, CanReject = false, CanHangup = false, CanMute = false, AudioOnPc = false }) : CloseNeutral(t)) : false;
+        }
     }
 
     /// <summary>Duración de una llamada activa confirmada; null si no lo está.</summary>

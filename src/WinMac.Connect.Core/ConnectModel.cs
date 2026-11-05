@@ -17,6 +17,8 @@ public sealed record ConnectSettings
     public bool Alerts { get; init; } = true;
     /// <summary>Avisos de llamadas entrantes y perdidas.</summary>
     public bool Calls { get; init; } = true;
+    /// <summary>Contestar, rechazar y colgar desde el PC con el audio en el PC (HFP de Windows). APAGADO por defecto: registra Hatsu como cliente de telefonía de Windows mientras esté activo (docs/60).</summary>
+    public bool CallControl { get; init; }
 
     public ConnectSettings Sanitize() => this with
     {
@@ -100,7 +102,7 @@ public static class PhoneStatusText
 /// <summary>Tópicos del canal con el host. Estado y lista son retenidos (llegan al conectar); los avisos son eventos.</summary>
 public static class ConnectTopics
 {
-    public const string Config = "config.connect", State = "connect.state", Notifications = "connect.notifications", Alert = "connect.alert", Call = "connect.call", Diag = "connect.diag";   // Diag: orden puntual del host (Ajustes › Diagnóstico): {observe:bool}; nunca se guarda
+    public const string Config = "config.connect", State = "connect.state", Notifications = "connect.notifications", Alert = "connect.alert", Call = "connect.call", Diag = "connect.diag", CallCmd = "connect.callcmd";   // CallCmd: orden de llamada de la Isla/Barra: {cmd:"answer"|"reject"|"hangup"|"mute"}   // Diag: orden puntual del host (Ajustes › Diagnóstico): {observe:bool}; nunca se guarda
 }
 
 /// <summary>Formato de la lista y de los avisos (módulo → barra). El contenido solo viaja por el canal local con el host; nunca a disco ni a registros.</summary>

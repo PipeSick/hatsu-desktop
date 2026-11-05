@@ -13,7 +13,7 @@ namespace WinMac.Connect.App;
 /// <para>Recursos: sin sondeo. Una comprobación barata cada 30 s y los avisos de Windows (conexión, servicios cambiados, valores notificados).</para>
 /// <para>Privacidad: el contenido de las notificaciones solo vive en memoria y solo sale por el canal local con el host; nunca va a disco ni a los registros.</para>
 /// </summary>
-internal sealed class PhoneLink : IAsyncDisposable
+internal sealed class PhoneLink : IAsyncDisposable, IAncsCallActions
 {
     private static readonly Guid BatteryService = Guid.Parse("0000180f-0000-1000-8000-00805f9b34fb"), BatteryLevel = Guid.Parse("00002a19-0000-1000-8000-00805f9b34fb");
     private const ushort AppearancePhoneCategory = 1;   // Bluetooth «Generic Phone» (0x0040 >> 6). El iPhone de la prueba real anuncia 0x0040
@@ -21,6 +21,7 @@ internal sealed class PhoneLink : IAsyncDisposable
     private readonly Channel<Func<Task>> _q = Channel.CreateUnbounded<Func<Task>>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Action<PhoneState> _publishState; private readonly Action<object> _publishList, _alert; private readonly Action<string> _log;
     private readonly CallTracker _call = new(); private Action<CallState>? _publishCall; private bool _callTicking;   // WM-038
+    private readonly CallCoordinator _coord; private WindowsTelephonyProvider? _telephony; private bool _ringNegative; private uint _ringUid;   // docs/60: llamadas completas
     private readonly PhoneNotificationBook _book = new(); private readonly AncsDataAssembler _asm = new(); private readonly Backoff _backoff = new();
     private readonly CancellationTokenSource _stop = new(); private readonly Task _loop; private readonly Timer _watchdog;
 
@@ -34,6 +35,7 @@ internal sealed class PhoneLink : IAsyncDisposable
     public PhoneLink(Action<PhoneState> publishState, Action<object> publishList, Action<object> alert, Action<string> log)
     {
         _publishState = publishState; _publishList = publishList; _alert = alert; _log = log;
+        _coord = new CallCoordinator(_call, () => _telephony, () => this);
         _loop = Task.Run(RunAsync);
         _watchdog = new Timer(_ => Post(CheckAsync), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
@@ -45,7 +47,7 @@ internal sealed class PhoneLink : IAsyncDisposable
 
     private void CallChanged()
     {
-        try { _publishCall?.Invoke(_call.State); } catch (Exception e) { _log("[connect] llamada: " + e.GetType().Name); }
+        try { _publishCall?.Invoke(_coord.Present()); } catch (Exception e) { _log("[connect] llamada: " + e.GetType().Name); }
         if (_call.NeedsTicks && !_callTicking) { _callTicking = true; _ = Task.Delay(1000).ContinueWith(_ => Post(TickCallAsync)); }
     }
 
@@ -57,7 +59,42 @@ internal sealed class PhoneLink : IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    private void ResetCall() { if (_call.Reset()) CallChanged(); }
+    private void ResetCall() { _coord.Reset(); _ringNegative = false; if (_call.Reset()) CallChanged(); }
+
+    // ── llamadas completas (docs/60) ──
+    /// <summary>ANCS solo sirve para rechazar (no necesita audio): «Perform Notification Action» con la acción negativa, si el iPhone la anunció para ESTA llamada.</summary>
+    public bool CanReject(uint uid) => _cp is not null && _ringNegative && uid != 0 && uid == _ringUid;
+    public async Task<bool> RejectAsync(uint uid, CancellationToken ct)
+    {
+        if (!CanReject(uid) || _cp is null) return false;
+        try { var w = new DataWriter(); w.WriteBytes(Ancs.PerformAction(uid, positive: false)); var r = await _cp.WriteValueWithResultAsync(w.DetachBuffer(), GattWriteOption.WriteWithResponse); _log("[connect] rechazo por ANCS: " + r.Status); return r.Status == GattCommunicationStatus.Success; }
+        catch (Exception e) { _log("[connect] rechazo por ANCS: 0x" + e.HResult.ToString("X8")); return false; }
+    }
+
+    /// <summary>La Isla/Barra pide una orden de llamada (contestar, rechazar, colgar, silenciar). Solo se ejecuta si el sistema puede de verdad (se comprueba al ejecutar).</summary>
+    public void Command(string cmd) => Post(async () =>
+    {
+        var c = cmd switch { "answer" => (CallCommand?)CallCommand.Answer, "reject" => CallCommand.Reject, "hangup" => CallCommand.Hangup, "mute" => CallCommand.ToggleMute, _ => null };
+        if (c is null) return;
+        var r = await _coord.ExecuteAsync(c.Value);
+        _log($"[connect] orden de llamada «{cmd}»: {r.Outcome}{(r.Notice is null ? "" : " — " + r.Notice)}");
+        CallChanged();
+    });
+
+    private async Task SetTelephonyAsync(bool on)
+    {
+        if (on && _telephony is null)
+        {
+            _telephony = new WindowsTelephonyProvider(
+                c => { Post(async () => { var dev = _state.Status == PhoneLinkStatus.Connected ? "iPhone" : "Teléfono"; if (await _coord.OnProviderCallAsync(c, dev)) { _log("[connect] llamada (sistema): " + _call.State.Phase); CallChanged(); } }); return Task.CompletedTask; },   // todo el estado se toca en el hilo lógico único
+                _log, () => Post(() => { CallChanged(); return Task.CompletedTask; }));
+            _log("[connect] control de llamadas desde el PC activado");
+        }
+        else if (!on && _telephony is not null)
+        {
+            var t = _telephony; _telephony = null; await t.DisposeAsync(); ResetCall(); _log("[connect] control de llamadas desde el PC desactivado (registro deshecho)");
+        }
+    }
 
     private SystemCallObserver? _sysCalls; private Timer? _obsStop;
     /// <summary>Observador EXPERIMENTAL de la telefonía del sistema (docs/57-58), SOLO LECTURA. Se enciende a petición (Ajustes › Diagnóstico) y se apaga solo a los
@@ -82,12 +119,14 @@ internal sealed class PhoneLink : IAsyncDisposable
     public void ApplySettings(ConnectSettings c) => Post(async () =>
     {
         var old = _cfg; _cfg = c; bool first = !_configured; _configured = true;
+        if (first && c.CallControl) await SetTelephonyAsync(true);
         if (!first && old.DeviceName != c.DeviceName) { _log("[connect] cambió el iPhone elegido"); await TeardownAsync(forgetDevice: true); }
         else
         {
             if (old.Notifications && !c.Notifications || old.Content != c.Content && _ns is not null) await StopAncsAsync(clear: !c.Notifications);   // nueva privacidad: se vuelve a pedir todo con lo que toca
             if (old.Battery && !c.Battery) await StopBatteryAsync();
             if (old.Calls != c.Calls) MarkListDirty();
+            if (old.CallControl != c.CallControl) await SetTelephonyAsync(c.CallControl);
         }
         _nextAttempt = DateTime.MinValue; await CheckAsync();
     });
@@ -263,6 +302,7 @@ internal sealed class PhoneLink : IAsyncDisposable
     {
         if (AncsEvent.Parse(b) is not { } e) return;
         if (!_cfg.Calls && e.Category is AncsCategory.IncomingCall or AncsCategory.MissedCall) return;
+        if (e.Category == AncsCategory.IncomingCall && e.Event == AncsEventId.Added) { _ringUid = e.Uid; _ringNegative = e.Flags.HasFlag(AncsFlags.NegativeAction); }
         if (_call.OnEvent(e, _book.Session)) { _log("[connect] llamada: " + _call.State.Phase); CallChanged(); }
         if (_book.Apply(e) is { } uid && _cp is not null && _ds is not null)
         {
@@ -369,6 +409,7 @@ internal sealed class PhoneLink : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_telephony is { } tp) { _telephony = null; await tp.DisposeAsync(); }
         _obsStop?.Dispose(); _sysCalls?.Dispose();
         await _watchdog.DisposeAsync();
         var done = new TaskCompletionSource(); Post(async () => { try { await TeardownAsync(forgetDevice: true); } finally { done.TrySetResult(); } });

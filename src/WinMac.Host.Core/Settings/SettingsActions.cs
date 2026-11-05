@@ -160,6 +160,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("connect.battery", "toggle"): return cfg.UpdateConnect(c => c with { Battery = e.On }) || true;
             case ("connect.notifs", "toggle"): return cfg.UpdateConnect(c => c with { Notifications = e.On }) || true;
             case ("connect.calls", "toggle"): return cfg.UpdateConnect(c => c with { Calls = e.On }) || true;
+            case ("connect.callcontrol", "toggle"): return cfg.UpdateConnect(c => c with { CallControl = e.On }) || true;
             case ("connect.island", "toggle"): return cfg.UpdateConnect(c => c with { Island = e.On }) || true;
             case ("connect.alerts", "toggle"): return cfg.UpdateConnect(c => c with { Alerts = e.On }) || true;
             case ("connect.content", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.ContentNames.Length: return cfg.UpdateConnect(c => c with { Content = (WinMac.Connect.ContentLevel)e.Index }) || true;

@@ -39,13 +39,13 @@ public sealed partial class BarHost
 
     /// <summary>
     /// WM-038: la llamada del iPhone en la Isla. Mientras suena, una píldora persistente («Llamada de …»); perdida o terminada, unos segundos y se va.
-    /// Solo avisa: no hay botones de contestar ni rechazar (sin validar) ni audio (Windows lo restringe).
+    /// Con «Contestar desde el PC» activo y Windows listo, la Isla muestra los botones que el estado trae (CanAnswer/CanReject/CanHangup); si no, solo avisa (docs/60).
     /// </summary>
     public void ApplyPhoneCall(CallState? c) => Post(() =>
     {
         var s = c ?? CallState.Idle;
-        if (!_phone.Active || !_connectCfg.Notifications || !_connectCfg.Calls || !_connectCfg.Island || !_notchOpts.Notifications) s = CallState.Idle;
-        if (s.Phase == _callShown.Phase && s.Caller == _callShown.Caller && s.Uid == _callShown.Uid) return;
+        s = NotchFeed.Visible(s, _phone.Active, _connectCfg, _notchOpts.Notifications);
+        if (NotchFeed.SameCall(s, _callShown)) return;
         bool wasShowing = _callShown.Phase != CallPhase.None; _callShown = s;
         if (s.Phase == CallPhase.None && !wasShowing) return;
         Send(NotchFeed.Call(s));

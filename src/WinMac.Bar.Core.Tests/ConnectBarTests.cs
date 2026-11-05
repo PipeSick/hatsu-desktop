@@ -136,9 +136,30 @@ public class ConnectBarTests
         Assert.Equal("none", J(CallPhase.None, null).GetProperty("state").GetString());
         Assert.Equal("active", J(CallPhase.Active, "Mamá").GetProperty("state").GetString());
         Assert.True(J(CallPhase.Active, "Mamá").GetProperty("since").GetInt64() > 0); Assert.Equal(JsonValueKind.Null, J(CallPhase.Ringing, "Mamá").GetProperty("since").ValueKind);
-        Assert.False(J(CallPhase.Ringing, "Mamá").GetProperty("controls").GetProperty("answer").GetBoolean());   // sin mecanismo verificado: ningún botón
+        Assert.False(J(CallPhase.Ringing, "Mamá").GetProperty("controls").GetProperty("answer").GetBoolean());   // por defecto (sin proveedor listo): ningún botón
         Assert.Equal("iPhone", J(CallPhase.Ringing, "Mamá").GetProperty("device").GetString());
         var round = ConnectWire.ParseCall(JsonSerializer.SerializeToElement(new CallState(CallPhase.Ringing, "Mamá", 326, 1, DateTimeOffset.Now), ConnectSettings.Wire))!;
         Assert.Equal(CallPhase.Ringing, round.Phase); Assert.Equal("Mamá", round.Caller);
+    }
+
+    [Fact] public void Call_controls_audio_notice_and_device_travel_to_the_island_exactly_as_connect_computed_them()
+    {
+        var c = new CallState(CallPhase.Active, "Fernando", 0, 1, DateTimeOffset.FromUnixTimeSeconds(1_700_000_000)) { Device = "Android", ProviderCallId = "c1", CanHangup = true, CanMute = true, AudioOnPc = true, Notice = "ok" };
+        var j = System.Text.Json.JsonSerializer.SerializeToElement(NotchFeed.Call(c));
+        Assert.Equal("active", j.GetProperty("state").GetString()); Assert.Equal("Android", j.GetProperty("device").GetString()); Assert.Equal(1_700_000_000_000, j.GetProperty("since").GetInt64());
+        Assert.True(j.GetProperty("controls").GetProperty("hangup").GetBoolean()); Assert.False(j.GetProperty("controls").GetProperty("answer").GetBoolean()); Assert.True(j.GetProperty("audioOnPc").GetBoolean()); Assert.Equal("ok", j.GetProperty("notice").GetString());
+        var r = System.Text.Json.JsonSerializer.SerializeToElement(NotchFeed.Call(new CallState(CallPhase.Ringing, "X", 0, 1, DateTimeOffset.Now) { CanAnswer = true, CanReject = true }));
+        Assert.True(r.GetProperty("controls").GetProperty("answer").GetBoolean()); Assert.True(r.GetProperty("controls").GetProperty("reject").GetBoolean());
+    }
+
+    [Fact] public void Visibility_rules_android_without_iphone_shows_system_calls_but_ancs_only_calls_still_need_the_iphone()
+    {
+        var sys = new CallState(CallPhase.Ringing, "X", 0, 1, DateTimeOffset.Now) { ProviderCallId = "c1" }; var ancs = new CallState(CallPhase.Ringing, "X", 326, 1, DateTimeOffset.Now);
+        var on = new ConnectSettings { CallControl = true };
+        Assert.Equal(CallPhase.Ringing, NotchFeed.Visible(sys, iphoneActive: false, on, true).Phase);                                     // Android: sin iPhone
+        Assert.Equal(CallPhase.None, NotchFeed.Visible(sys, false, new ConnectSettings { CallControl = false }, true).Phase);              // función apagada: lo del sistema no se muestra
+        Assert.Equal(CallPhase.None, NotchFeed.Visible(ancs, false, on, true).Phase); Assert.Equal(CallPhase.Ringing, NotchFeed.Visible(ancs, true, on, true).Phase);
+        Assert.Equal(CallPhase.None, NotchFeed.Visible(sys, true, new ConnectSettings { CallControl = true, Calls = false }, true).Phase); Assert.Equal(CallPhase.None, NotchFeed.Visible(sys, true, on, false).Phase);
+        Assert.True(NotchFeed.SameCall(sys, sys with { Since = DateTimeOffset.Now.AddHours(1) })); Assert.False(NotchFeed.SameCall(sys, sys with { CanAnswer = true }));
     }
 }

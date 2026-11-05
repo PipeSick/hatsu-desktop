@@ -79,12 +79,27 @@ public static class NotchFeed
         kind = "call",
         state = c.Phase switch { WinMac.Connect.CallPhase.Ringing => "ringing", WinMac.Connect.CallPhase.Missed => "missed", WinMac.Connect.CallPhase.Ended => "ended", WinMac.Connect.CallPhase.Active => "active", _ => "none" },
         caller = c.Caller,
-        device = "iPhone",
-        // Solo en «active» (fuente de telefonía fiable): inicio en ms Unix para que la Isla pinte la duración.
+        device = c.Device,
+        // Solo en «active» (llamada confirmada por el sistema): inicio en ms Unix para que la Isla pinte la duración.
         since = c.Phase == WinMac.Connect.CallPhase.Active ? c.Since.ToUnixTimeMilliseconds() : (long?)null,
-        // Controles disponibles HOY: ninguno (contestar/rechazar/colgar no tienen mecanismo verificado; docs/56). La Isla no debe dibujar botones sin esto en true.
-        controls = new { answer = false, reject = false, hangup = false },
+        // Controles que HOY funcionan para esta llamada (los calcula Connect según lo que Windows permite). La Isla no dibuja ningún botón que venga en false.
+        controls = new { answer = c.CanAnswer, reject = c.CanReject, hangup = c.CanHangup, mute = c.CanMute },
+        audioOnPc = c.AudioOnPc,
+        muted = c.Muted,
+        notice = c.Notice,
     };
+
+    /// <summary>¿Se muestra esta llamada? Con el control de llamadas del sistema basta con tener la Isla y los avisos de llamadas; una llamada que solo conoce ANCS exige además el iPhone activo y sus notificaciones.</summary>
+    public static WinMac.Connect.CallState Visible(WinMac.Connect.CallState s, bool iphoneActive, WinMac.Connect.ConnectSettings cfg, bool notchNotifications)
+    {
+        if (!cfg.Calls || !cfg.Island || !notchNotifications) return WinMac.Connect.CallState.Idle;
+        bool viaSystem = s.ProviderCallId is not null && cfg.CallControl;
+        if (!viaSystem && (!iphoneActive || !cfg.Notifications)) return WinMac.Connect.CallState.Idle;
+        return s;
+    }
+
+    /// <summary>Igualdad para no repetir envíos a la Isla: todo menos la hora de inicio (la Isla la recibe una vez con «active»).</summary>
+    public static bool SameCall(WinMac.Connect.CallState a, WinMac.Connect.CallState b) => a with { Since = default } == b with { Since = default };
 
     /// <summary>Aviso emergente de una notificación nueva del iPhone (sin «Abrir»: no se puede abrir una app del iPhone desde el PC).</summary>
     public static object PhoneNotification(WinMac.Connect.ConnectWire.Item i)

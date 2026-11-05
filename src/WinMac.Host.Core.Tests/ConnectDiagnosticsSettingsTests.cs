@@ -66,3 +66,19 @@ public class ConnectDiagnosticsSettingsTests
         Assert.False(a.Apply(new SettingsEdit("connect.diag.exp:bogus", "button"))); Assert.False(new SettingsActions(cfg, () => { }, _ => { }).Apply(new SettingsEdit("connect.diag.exp:hfp", "button")));
     }
 }
+
+public class CallControlSettingsTests
+{
+    [Fact] public void Call_control_is_opt_in_off_by_default_explains_the_requirement_and_persists_only_when_toggled()
+    {
+        Assert.False(new WinMac.Connect.ConnectSettings().CallControl);
+        var cfg = new HostConfig { Connect = new WinMac.Connect.ConnectSettings() };
+        var rows = SettingsBuilder.Build(new SettingsInput(cfg, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "connect").Groups.SelectMany(g => g.Rows).ToList();
+        var t = rows.Single(r => r.Id == "connect.callcontrol"); Assert.False(t.On); Assert.Contains("audio en el PC", t.Title);
+        Assert.Contains("capacidad restringida", rows.Single(r => r.Id == "connect.callcontrol.why").Title);
+        var path = Path.Combine(Path.GetTempPath(), "hatsu-cc-" + Guid.NewGuid() + ".json"); var svc = new ConfigService(path, cfg);
+        Assert.True(new SettingsActions(svc, () => { }, _ => { }).Apply(new SettingsEdit("connect.callcontrol", "toggle", On: true)));
+        Assert.True(svc.Current.Connect!.CallControl);
+        Assert.True(WinMac.Connect.ConnectSettings.Parse(System.Text.Json.JsonSerializer.SerializeToElement(svc.Current.Connect, WinMac.Connect.ConnectSettings.Wire)).CallControl);   // viaja al módulo por el canal
+    }
+}
