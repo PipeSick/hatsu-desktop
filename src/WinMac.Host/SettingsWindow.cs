@@ -62,7 +62,7 @@ internal sealed class SettingsWindow : IDisposable
     public ConnectDiagnosticsService? ConnectDiag
     {
         get => _connectDiag;
-        set { _connectDiag = value; _actions.DiagRun = value is null ? null : value.Run; _actions.DiagOpen = value is null ? null : value.Open; _actions.DiagCopy = value is null ? null : value.Copy; _actions.DiagSave = value is null ? null : value.Save; _actions.DiagObserve = value is null ? null : value.Observe; }
+        set { _connectDiag = value; _actions.DiagRun = value is null ? null : value.Run; _actions.DiagOpen = value is null ? null : value.Open; _actions.DiagCopy = value is null ? null : value.Copy; _actions.DiagSave = value is null ? null : value.Save; _actions.DiagObserve = value is null ? null : value.Observe; _actions.DiagExperiment = value is null ? null : value.RunExperiment; }
     }
     private ConnectDiagnosticsService? _connectDiag;
     public Action? RunDiagnostics { get => _actions.RunDiagnostics; set => _actions.RunDiagnostics = value; }

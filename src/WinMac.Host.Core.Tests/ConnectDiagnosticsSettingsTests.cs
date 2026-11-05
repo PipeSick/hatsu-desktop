@@ -52,4 +52,17 @@ public class ConnectDiagnosticsSettingsTests
         var ios = r.Single(x => x.Id == "connect.diag.ios").Title; var and = r.Single(x => x.Id == "connect.diag.android").Title;
         Assert.Contains("NO debe aparecer «Llamada finalizada»", ios); Assert.Contains("Android no usa ANCS", and);
     }
+
+    [Fact] public void Experiments_are_separate_labelled_as_modifying_and_routed_with_their_kind_only()
+    {
+        var r = Rows();
+        foreach (var id in new[] { "connect.diag.exp:hfp", "connect.diag.exp:audio", "connect.diag.exp:restore" }) Assert.True(r.Single(x => x.Id == id).Enabled);
+        Assert.Contains("MODIFICA", r.Single(x => x.Id == "connect.diag.exp:hfp").Subtitle!); Assert.Contains("confirmación", r.Single(x => x.Id == "connect.diag.exp:audio").Subtitle!);
+        Assert.False(Rows(new ConnectDiagView(Running: true)).Single(x => x.Id == "connect.diag.exp:hfp").Enabled);   // nunca dos a la vez
+        var cfg = new ConfigService(Path.Combine(Path.GetTempPath(), "hatsu-diag3.json"), new HostConfig()); var got = new List<string>();
+        var a = new SettingsActions(cfg, () => { }, _ => { }) { DiagExperiment = k => got.Add(k) };
+        foreach (var k in new[] { "hfp", "audio", "restore" }) Assert.True(a.Apply(new SettingsEdit("connect.diag.exp:" + k, "button")));
+        Assert.Equal(["hfp", "audio", "restore"], got);
+        Assert.False(a.Apply(new SettingsEdit("connect.diag.exp:bogus", "button"))); Assert.False(new SettingsActions(cfg, () => { }, _ => { }).Apply(new SettingsEdit("connect.diag.exp:hfp", "button")));
+    }
 }

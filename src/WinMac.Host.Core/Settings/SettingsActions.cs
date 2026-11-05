@@ -48,6 +48,8 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
     public Action? DiagCopy { get; set; }
     public Action? DiagSave { get; set; }
     public Action<bool>? DiagObserve { get; set; }
+    /// <summary>Experimentos HFP con confirmación: «hfp», «audio» o «restore».</summary>
+    public Action<string>? DiagExperiment { get; set; }
 
     /// <summary>Abre una URI o una app (WinMac Connect). La da el host; null = no hace nada.</summary>
     public Action<string>? OpenUri { get; set; }
@@ -166,6 +168,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("connect.diag.open", _): if (DiagOpen is null) return false; DiagOpen(); return true;
             case ("connect.diag.copy", _): if (DiagCopy is null) return false; DiagCopy(); return true;
             case ("connect.diag.save", _): if (DiagSave is null) return false; DiagSave(); return true;
+            case ("connect.diag.exp:hfp" or "connect.diag.exp:audio" or "connect.diag.exp:restore", _): if (DiagExperiment is null) return false; DiagExperiment(id[(id.IndexOf(':') + 1)..]); return true;
             case ("connect.diag.observe", "toggle"): if (DiagObserve is null) return false; DiagObserve(e.On); return true;
             case ("connect.bt", "button"): if (OpenUri is null) return false; OpenUri("ms-settings:bluetooth"); return true;
         }

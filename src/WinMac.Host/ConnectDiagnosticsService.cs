@@ -11,7 +11,6 @@ namespace WinMac.Host.App;
 /// </summary>
 internal sealed class ConnectDiagnosticsService
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
     private readonly string _exeDir; private readonly Action<string> _log; private readonly Action<string, object?> _emit; private readonly Action _refresh;
     private readonly object _gate = new(); private bool _running, _observing; private string _status = "Sin ejecutar"; private string? _report; private IReadOnlyList<string> _summary = [];
     private Timer? _obsTimer; private DateTime _obsUntil;
@@ -25,31 +24,51 @@ internal sealed class ConnectDiagnosticsService
             _observing ? $"Activa hasta las {_obsUntil:HH:mm}" : "Detenida");
     }
 
-    public void Run()
+    public void Run() => Start("--probe-calls", "connect-probe-calls.txt", 60, null);
+
+    /// <summary>Experimentos HFP (docs/59): cambian el estado de Windows de forma acotada y reversible, así que piden una confirmación que explica exactamente qué hacen.</summary>
+    public void RunExperiment(string kind)
     {
-        lock (_gate) { if (_running) return; _running = true; _status = "Ejecutando…"; _summary = []; }
+        var (arg, title, text, seconds) = kind switch
+        {
+            "hfp" => ("--probe-hfp-experimental", "¿Probar el registro y la conexión HFP?", "Hatsu Desktop va a registrarse unos segundos como cliente del transporte telefónico Bluetooth de Windows y a pedirle que conecte el teléfono por HFP; observará qué aparece (líneas, enrutado, dispositivos de audio) y DESHARÁ el registro al terminar.\n\nNo contesta ni cuelga llamadas. Si Phone Link o Windows están usando ese teléfono, podrían notar una reconexión breve.", 60),
+            "audio" => ("--probe-audio-route", "¿Mover el audio de la llamada activa al PC?", "Debes tener una llamada ACTIVA (ya contestada) en el teléfono. Hatsu Desktop pedirá a Windows que pase su audio al PC durante unos 10 segundos y lo devolverá al teléfono. Comprueba si se oye por los altavoces del PC y si te oyen por el micrófono del PC.\n\nNo contesta ni cuelga la llamada. Si algo falla, cambia la salida en el teléfono o cuelga.", 70),
+            "restore" => ("--restore-hfp", "¿Deshacer el registro de Hatsu Desktop?", "Quita el registro de esta app como cliente del transporte telefónico Bluetooth, por si un experimento se interrumpió. No toca ninguna otra cosa.", 30),
+            _ => ("", "", "", 0),
+        };
+        if (arg.Length == 0) return;
+        _ = Task.Run(() =>
+        {
+            if (!WinMac.Dock.Win.Rendering.DarkDialog.Ask(title, text, "Continuar", false, _log)) { lock (_gate) _status = "Experimento cancelado"; _refresh(); return; }
+            Start(arg, "connect-probe-hfp.txt", seconds, "Ejecutando el experimento…");
+        });
+    }
+
+    private void Start(string arg, string file, int seconds, string? running)
+    {
+        lock (_gate) { if (_running) return; _running = true; _status = running ?? "Ejecutando…"; _summary = []; }
         _refresh();
         _ = Task.Run(() =>
         {
-            var (status, report, summary) = Execute();
+            var (status, report, summary) = Execute(arg, Path.Combine(Path.GetDirectoryName(ReportPath)!, file), seconds);
             _log("[connect] diagnóstico de telefonía: " + status);
             lock (_gate) { _running = false; _status = status; _report = report; _summary = summary; }
             _refresh();
         });
     }
 
-    private (string Status, string? Report, IReadOnlyList<string> Summary) Execute()
+    private (string Status, string? Report, IReadOnlyList<string> Summary) Execute(string arg, string path, int seconds)
     {
         try
         {
             var exe = Path.Combine(_exeDir, "HatsuDesktop.Connect.exe");
             if (!File.Exists(exe)) return ("No se encontró HatsuDesktop.Connect.exe en esta instalación", null, []);
-            Directory.CreateDirectory(Path.GetDirectoryName(ReportPath)!);
-            try { File.Delete(ReportPath); } catch (Exception) { }
-            using var p = Process.Start(new ProcessStartInfo(exe) { Arguments = "--probe-calls --out \"" + ReportPath + "\"", UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = _exeDir })!;
-            if (!p.WaitForExit((int)Timeout.TotalMilliseconds)) { try { p.Kill(true); } catch (Exception) { } return ("Error de ejecución: el diagnóstico no terminó en 60 s (se canceló)", null, []); }
-            if (!File.Exists(ReportPath)) return ($"Error de ejecución: no se generó el informe (código {p.ExitCode})", null, []);
-            var report = DiagRedactor.Redact(File.ReadAllText(ReportPath), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.UserName);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            try { File.Delete(path); } catch (Exception) { }
+            using var p = Process.Start(new ProcessStartInfo(exe) { Arguments = arg + " --out \"" + path + "\"", UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = _exeDir })!;
+            if (!p.WaitForExit(seconds * 1000)) { try { p.Kill(true); } catch (Exception) { } return ($"Error de ejecución: no terminó en {seconds} s (se canceló; si era un experimento usa «Deshacer registro»)", null, []); }
+            if (!File.Exists(path)) return ($"Error de ejecución: no se generó el informe (código {p.ExitCode})", null, []);
+            var report = DiagRedactor.Redact(File.ReadAllText(path), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.UserName);
             return ((p.ExitCode == 0 ? "Terminado " : "Terminado con errores ") + DateTime.Now.ToString("HH:mm"), report, DiagReport.SummaryOf(report));
         }
         catch (Exception e) { return ("Error de ejecución: " + e.GetType().Name, null, []); }

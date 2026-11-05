@@ -370,6 +370,12 @@ public class CallDiagnosticsTests
         Assert.Contains("0x8000", r); Assert.Contains("v2.0.1", r);
     }
 
+    [Fact] public void Dates_and_windows_versions_survive_but_ips_do_not()
+    {
+        var r = DiagRedactor.Redact("Fecha: 2026-11-05 16:29 · Windows NT 10.0.26200.0 · ip 192.168.1.20 · 14:05:33");
+        Assert.Contains("2026-11-05 16:29", r); Assert.Contains("10.0.26200.0", r); Assert.DoesNotContain("192.168.1.20", r); Assert.Contains("14:05:33", r);
+    }
+
     [Fact] public void Report_has_summary_on_top_and_distinguishes_all_states()
     {
         var f = new[]
@@ -383,5 +389,27 @@ public class CallDiagnosticsTests
         Assert.Equal(6, sum.Count); Assert.Contains("Acceso denegado — DeniedBySystem", sum[2]); Assert.Contains("No comprobado", sum[3]); Assert.Contains("Error de ejecución", sum[4]);
         Assert.True(t.IndexOf("RESUMEN|", StringComparison.Ordinal) < t.IndexOf("detalle", StringComparison.Ordinal));
         Assert.Contains("NO prueba que el teléfono sea incompatible", t);   // la ausencia de un transporte no se interpreta como incompatibilidad
+    }
+}
+
+public class DiagIdsTests
+{
+    [Fact] public void Tag_is_stable_case_insensitive_short_and_not_the_id()
+    {
+        var a = DiagIds.Tag("{ABC-123}"); Assert.Equal(a, DiagIds.Tag(" {abc-123} ")); Assert.NotEqual(a, DiagIds.Tag("{abc-124}"));
+        Assert.Equal(7, a.Length); Assert.DoesNotContain("abc", a, StringComparison.OrdinalIgnoreCase); Assert.Equal("-", DiagIds.Tag(null));
+    }
+
+    [Fact] public void Masks_numbers_and_names()
+    {
+        Assert.Equal("<número>…78", DiagIds.MaskNumber("+56 9 1234 5678")); Assert.Equal("(sin número)", DiagIds.MaskNumber(""));
+        Assert.Equal("(12 caracteres)", DiagIds.MaskName("Fernando Noc ")); Assert.DoesNotContain("Fernando", DiagIds.MaskName("Fernando Noc"));
+    }
+
+    [Fact] public void Names_the_hresults_seen_in_real_diagnostics()
+    {
+        Assert.Contains("ERROR_INVALID_STATE", DiagIds.HResultName(unchecked((int)0x8007139F)));
+        Assert.Contains("EPT_S_NOT_REGISTERED", DiagIds.HResultName(unchecked((int)0x800706D9)));
+        Assert.Contains("sin nombre", DiagIds.HResultName(0x12345));
     }
 }

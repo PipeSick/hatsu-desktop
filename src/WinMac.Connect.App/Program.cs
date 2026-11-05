@@ -26,6 +26,15 @@ internal static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        if (args.Contains("--probe-hfp-experimental") || args.Contains("--probe-audio-route") || args.Contains("--restore-hfp"))   // experimentos acotados y reversibles (docs/59): solo los lanza Ajustes tras una confirmación
+        {
+            int oi2 = Array.IndexOf(args, "--out"); string outFile2 = oi2 >= 0 && oi2 + 1 < args.Length ? args[oi2 + 1] : Path.Combine(Path.GetDirectoryName(LogPath)!, "connect-probe-hfp.txt");
+            string text2;
+            try { text2 = args.Contains("--restore-hfp") ? HfpExperiments.Restore() : args.Contains("--probe-audio-route") ? await HfpExperiments.AudioRouteAsync() : await HfpExperiments.RegisterAndConnectAsync(); }
+            catch (Exception e) { text2 = "== Experimento ==\nRESUMEN|Experimento: Error de ejecución — " + e.GetType().Name + " 0x" + e.HResult.ToString("X8") + " — " + DiagIds.HResultName(e.HResult) + "\n"; }
+            try { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outFile2))!); File.WriteAllText(outFile2, text2); Log("[connect] experimento HFP terminado"); } catch (Exception) { }
+            return 0;
+        }
         if (args.Contains("--probe-calls"))   // diagnóstico de solo lectura (docs/57-58): lo lanza Ajustes o se ejecuta a mano; escribe el informe y termina. No necesita el host
         {
             int oi = Array.IndexOf(args, "--out"); string outFile = oi >= 0 && oi + 1 < args.Length ? args[oi + 1] : Path.Combine(Path.GetDirectoryName(LogPath)!, "connect-probe-calls.txt");
