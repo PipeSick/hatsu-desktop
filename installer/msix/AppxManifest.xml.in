@@ -29,7 +29,7 @@
       <uap:VisualElements DisplayName="Hatsu Desktop" Description="Barra de menús, Dock e Isla para Windows 11" BackgroundColor="transparent"
                           Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
       <Extensions>
-        <!-- Alias de ejecución: permite escribir «HatsuDesktop.exe --diagnose» / «--quit» en una consola (la carpeta WindowsApps no es ejecutable directamente). -->
+        <!-- Alias de ejecución: permite usar HatsuDesktop.exe con las opciones de diagnóstico y de cierre desde una consola (la carpeta WindowsApps no es ejecutable directamente). -->
         <uap3:Extension Category="windows.appExecutionAlias" Executable="HatsuDesktop.exe" EntryPoint="Windows.FullTrustApplication">
           <uap3:AppExecutionAlias>
             <desktop:ExecutionAlias Alias="HatsuDesktop.exe" />
