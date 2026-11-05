@@ -9,7 +9,7 @@ on:
       ref:
         description: 'Commit (SHA completo) del que se leen las políticas y el generador'
         required: true
-        default: '0f38101dfd28f4985fdabbc170f5013bee878d67'
+        default: '622f9c2638725592de06b28e1bcbf3a456009f93'
       desplegar:
         description: 'Desplegar en GitHub Pages (false = solo construir y verificar, sin publicar)'
         type: boolean
