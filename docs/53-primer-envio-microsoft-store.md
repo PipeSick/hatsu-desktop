@@ -55,7 +55,7 @@ Según la página de Microsoft «Choose visibility options for MSIX app» (leíd
 
 ## 4. URL de la política de privacidad (GitHub Pages)
 **URL propuesta:** `https://pipesick.github.io/win11-macos/privacy/` (español) y `https://pipesick.github.io/win11-macos/privacy/en/` (inglés). Es pública, sin inicio de sesión y estable mientras el repositorio mantenga su nombre (no lo renombro). Alternativa más permanente: un repositorio `PipeSick/pipesick.github.io` (URL `https://pipesick.github.io/hatsu-desktop/privacy/`), si prefieres no depender del nombre del repo.
-**Estado: preparado e inerte, NO publicado.** `tools/site/build_site.py` genera el sitio a partir de `docs/privacy/*.md`; `.github/workflows/pages.yml` solo corre a mano (`workflow_dispatch`). Para publicar, tras aprobar el contenido final:
+**Estado: flujo visible en Actions (en la rama predeterminada) y probado sin desplegar; NO publicado. Pasos exactos: `docs/privacy/PUBLICAR-PAGES.md`.** `tools/site/build_site.py` genera el sitio a partir de `docs/privacy/*.md`; `.github/workflows/pages.yml` solo corre a mano (`workflow_dispatch`). Para publicar, tras aprobar el contenido final:
 1. GitHub → repositorio → *Settings → Pages → Build and deployment → Source: **GitHub Actions***.
 2. *Actions → pages-politica-de-privacidad → Run workflow* (rama `feat/hatsu-phase3-installer-onboarding` o la que decidas; en repos con reglas de entorno, aprueba `github-pages` si lo pide).
 3. Abrir la URL y comprobarla sin sesión iniciada. Pegarla en Partner Center → Propiedades → Política de privacidad.
