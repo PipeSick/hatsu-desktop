@@ -1,14 +1,48 @@
 name: store-screenshots
-# Capturas para Microsoft Store (Fase de lanzamiento). Se ejecuta con cada push a ESTA rama; no publica nada ni toca el paquete enviado.
+# Capturas para Microsoft Store con los binarios REALES sobre la sesión de escritorio real del runner. Se ejecuta con cada push a ESTA rama.
+# No publica versiones, no toca el MSIX enviado, no usa secretos. Las imágenes se guardan como artefacto y en la rama aislada «store-screenshots-output».
 on:
   push:
     branches: [feat/hatsu-store-screenshots]
+permissions:
+  contents: write
 jobs:
-  reconocimiento:
-    name: Reconocimiento del entorno de captura (runner de Windows)
+  capturas:
+    name: Capturas reales (Windows, sesión de escritorio interactiva)
     runs-on: windows-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - name: Probe-Environment.ps1
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Clonar Hatsu Notch (NotchWin) en el commit fijado, igual que el CI del MSIX
         shell: pwsh
-        run: ./tools/store-capture/Probe-Environment.ps1
+        run: |
+          $sha = (Get-Content tools/notch-pin.txt | Where-Object { $_ -and -not $_.StartsWith('#') } | Select-Object -First 1).Trim()
+          git clone --no-checkout https://github.com/PipeSick/notch-win C:\nw
+          git -C C:\nw fetch origin $sha
+          git -C C:\nw checkout --detach $sha
+          git -C C:\nw submodule update --init
+      - name: Compilar host, Barra, Dock y Hatsu Notch en dist/WinMac (igual que el CI del MSIX)
+        shell: pwsh
+        run: ./tools/Build-Local.ps1 -NotchPath C:\nw
+      - name: Capturar
+        shell: pwsh
+        run: ./tools/store-capture/Capture-Store.ps1 -DistDir dist/WinMac -OutDir capturas-store
+      - name: Subir capturas e informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-store-${{ github.sha }}
+          path: capturas-store
+          retention-days: 14
+      - name: Guardar las imágenes en la rama aislada store-screenshots-output (solo PNG e informe)
+        if: always()
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP 'out'; New-Item -ItemType Directory -Force $tmp | Out-Null; Copy-Item capturas-store\* $tmp -Recurse -Force
+          git config user.name 'github-actions'; git config user.email 'github-actions@users.noreply.github.com'
+          git checkout --orphan store-screenshots-output; git rm -rf --quiet . 2>$null
+          Copy-Item "$tmp\*" . -Recurse -Force; git add -A
+          git commit -q -m "Capturas de la Store desde $env:GITHUB_SHA [skip ci]"; git push --force origin store-screenshots-output
