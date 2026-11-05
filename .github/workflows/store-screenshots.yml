@@ -1,0 +1,14 @@
+name: store-screenshots
+# Capturas para Microsoft Store (Fase de lanzamiento). Se ejecuta con cada push a ESTA rama; no publica nada ni toca el paquete enviado.
+on:
+  push:
+    branches: [feat/hatsu-store-screenshots]
+jobs:
+  reconocimiento:
+    name: Reconocimiento del entorno de captura (runner de Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe-Environment.ps1
+        shell: pwsh
+        run: ./tools/store-capture/Probe-Environment.ps1
