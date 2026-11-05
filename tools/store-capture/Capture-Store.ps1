@@ -153,8 +153,8 @@ $hNote = [Cs]::FindClass('Notepad'); $hCalc = [Cs]::FindTitle('Calculator'); $hE
 Note ''; Note "## Ventanas de las aplicaciones: Bloc de notas=$hNote · Calculadora=$hCalc · Explorador=$hExp"
 for ($k = 0; $k -lt 2; $k++) {
   Place $hExp 852 70 1070 ($H - 70 - 80)
-  Place $hNote 40 70 800 600
-  Place $hCalc 70 ([int]($H * 0.52)) 340 430
+  Place $hNote 40 70 800 450
+  Place $hCalc 70 545 340 430
   Start-Sleep -Milliseconds 700
 }
 foreach ($pair in @(@('Explorador', $hExp), @('Bloc de notas', $hNote), @('Calculadora', $hCalc))) { if ($pair[1] -ne [IntPtr]::Zero) { $r = New-Object Cs+RC; [Cs]::GetWindowRect($pair[1], [ref]$r) | Out-Null; Note "- $($pair[0]): $($r.L),$($r.T) $($r.R - $r.L)x$($r.B - $r.T)" } }
@@ -194,7 +194,8 @@ if ($mx -gt 0 -and $my -gt 0) {
   [Cs]::Click($mx, $my); $sw = [IntPtr]::Zero
   $ok = WaitFor { $script:sw = [Cs]::FindWindow('WinMacSettings2', $null); $script:sw -ne [IntPtr]::Zero -and [Cs]::IsWindowVisible($script:sw) } 10
   Note "- Ventana de Ajustes visible: $ok"
-  if ($ok) { Start-Sleep -Milliseconds 1500; $r = New-Object Cs+RC; [Cs]::GetWindowRect($sw, [ref]$r) | Out-Null; Note "  posición: $($r.L),$($r.T) $($r.R - $r.L)x$($r.B - $r.T)" }
+  if (-not $ok) { $sw = [Cs]::FindClass('WinMacSettings2'); Note "  (la visibilidad se comprobó con IsWindowVisible; ventana por clase: $sw)" }
+  if ($sw -ne [IntPtr]::Zero) { Start-Sleep -Milliseconds 1200; $r = New-Object Cs+RC; [Cs]::GetWindowRect($sw, [ref]$r) | Out-Null; Note "  posición: $($r.L),$($r.T) $($r.R - $r.L)x$($r.B - $r.T)"; [Cs]::Click($r.L + 120, $r.B - 40); Start-Sleep -Milliseconds 1200 }   # clic real en una zona vacía de la barra lateral: foco real en la ventana
   Shot '04-ajustes' 'Ajustes de Hatsu Desktop (ventana real)'
 }
 
