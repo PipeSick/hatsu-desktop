@@ -1,0 +1,86 @@
+name: pages-politica-de-privacidad
+# Publica la política de privacidad (es/en) en GitHub Pages. SOLO manual (workflow_dispatch).
+# IMPORTANTE: GitHub solo muestra en la pestaña Actions los flujos que existen en la RAMA PREDETERMINADA; este archivo debe estar ahí.
+# El CONTENIDO se lee del commit indicado en «ref» (por defecto, el aprobado), no de la rama donde vive este archivo.
+# Con «desplegar = false» (valor por defecto) solo construye y verifica: NO publica nada.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit (SHA completo) del que se leen las políticas y el generador'
+        required: true
+        default: 'de51f4be1ee22086f983fcd87c09537f3ce48d84'
+      desplegar:
+        description: 'Desplegar en GitHub Pages (false = solo construir y verificar, sin publicar)'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  verificar:
+    name: Construir y verificar (no publica)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comprobar que «ref» es un SHA completo
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::ref debe ser un SHA de 40 caracteres hexadecimales"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install markdown==3.7
+      - name: Construir el sitio
+        run: python3 tools/site/build_site.py _site
+      - name: Verificar archivos aprobados, rutas y contenido (falla antes de desplegar)
+        run: python3 tools/site/verify_site.py _site
+      - name: Vista previa descargable (HTML generado)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sitio-previsualizacion
+          path: _site
+          retention-days: 7
+      - name: Empaquetar para Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  desplegar:
+    name: Desplegar en GitHub Pages
+    if: ${{ inputs.desplegar }}
+    needs: verificar
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Comprobar que Pages está activado con origen «GitHub Actions»
+        uses: actions/configure-pages@v5
+      - id: deployment
+        uses: actions/deploy-pages@v4
+  comprobar-urls:
+    name: Comprobar las URLs publicadas
+    needs: desplegar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Esperar y comprobar contenido de ambas URLs
+        run: |
+          check() { # url, frase obligatoria
+            for i in $(seq 1 18); do
+              code=$(curl -sS -o body.html -w '%{http_code}' -L "$1" || true)
+              if [ "$code" = "200" ] && grep -q "$2" body.html; then echo "OK $1 (HTTP 200, contiene «$2»)"; return 0; fi
+              echo "intento $i: $1 → HTTP $code"; sleep 10
+            done
+            echo "::error::$1 no devolvió 200 con el contenido esperado"; return 1
+          }
+          check "https://pipesick.github.io/win11-macos/privacy/" "Política de privacidad de Hatsu Desktop"
+          check "https://pipesick.github.io/win11-macos/privacy/en/" "Hatsu Desktop Privacy Policy"
