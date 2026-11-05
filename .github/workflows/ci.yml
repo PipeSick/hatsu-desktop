@@ -329,27 +329,31 @@ jobs:
             msix-out/*-store-unsigned.msix.sha256
           retention-days: 14
           if-no-files-found: warn
-      - name: "MSIX Beta ALTERNATIVO con la capacidad general phoneCall (NO restringida): artefacto SIN FIRMAR; comprueba identidad y que NO añade ninguna capacidad restringida (solo runFullTrust). No se publica ni se envía"
+      - name: "MSIX de llamadas completas (docs/60): variante A = Stable + phoneCall (general); variante B = A + phoneLineTransportManagement (RESTRINGIDA, requiere aprobación de Microsoft). SIN FIRMAR; comprueba identidad y capacidades exactas. No se publican ni se envían"
         shell: pwsh
         run: |
-          ./installer/msix/Build-Msix.ps1 -DistDir dist/WinMac -OutDir msix-out -Variant PhoneCall
-          $pkg = Get-ChildItem msix-out -Filter '*-beta-phonecall-unsigned.msix' | Select-Object -First 1
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = [IO.Compression.ZipFile]::OpenRead($pkg.FullName); try { $rd = New-Object IO.StreamReader($zip.GetEntry('AppxManifest.xml').Open()); [xml]$mx = $rd.ReadToEnd(); $rd.Dispose() } finally { $zip.Dispose() }
-          $caps = @($mx.Package.Capabilities.ChildNodes | ForEach-Object { $_.Prefix + ':' + $_.GetAttribute('Name') })
-          Write-Host ("Capacidades del MSIX Beta alterno: " + ($caps -join ', '))
-          if (-not ($mx.Package.Capabilities.InnerXml -match 'Name="phoneCall"')) { throw 'Falta phoneCall en la variante PhoneCall' }
-          $restricted = @($mx.Package.Capabilities.ChildNodes | Where-Object { $_.NamespaceURI -like '*restrictedcapabilities*' } | ForEach-Object { $_.GetAttribute('Name') })
-          if (($restricted | Where-Object { $_ -ne 'runFullTrust' }).Count -gt 0) { throw ('Capacidad restringida inesperada: ' + ($restricted -join ',')) }
-          if ($mx.Package.Identity.Name -ne 'PipeSick.HatsuDesktop' -or $mx.Package.Identity.Publisher -ne 'CN=ACC0FCB8-4D92-4E20-9731-7254D5E43289') { throw 'Identidad incorrecta en la variante PhoneCall' }
-          Write-Host "OK identidad conservada, phoneCall (general) añadida, ninguna capacidad restringida nueva. SHA-256 $((Get-FileHash $pkg.FullName -Algorithm SHA256).Hash.ToLowerInvariant())"
-      - name: "Subir el MSIX Beta alternativo con phoneCall (artefacto temporal; NO es una versión publicada ni se envía a certificación)"
+          foreach ($v in @(@{ Variant = 'PhoneCall'; Filter = '*-beta-phonecall-unsigned.msix'; Restricted = @('runFullTrust') }, @{ Variant = 'CallControl'; Filter = '*-beta-callcontrol-unsigned.msix'; Restricted = @('runFullTrust', 'phoneLineTransportManagement') })) {
+            ./installer/msix/Build-Msix.ps1 -DistDir dist/WinMac -OutDir msix-out -Variant $v.Variant
+            $pkg = Get-ChildItem msix-out -Filter $v.Filter | Select-Object -First 1
+            $zip = [IO.Compression.ZipFile]::OpenRead($pkg.FullName); try { $rd = New-Object IO.StreamReader($zip.GetEntry('AppxManifest.xml').Open()); [xml]$mx = $rd.ReadToEnd(); $rd.Dispose() } finally { $zip.Dispose() }
+            $all = @($mx.Package.Capabilities.ChildNodes | ForEach-Object { $_.Prefix + ':' + $_.GetAttribute('Name') })
+            Write-Host ("[$($v.Variant)] capacidades: " + ($all -join ', '))
+            if (-not ($mx.Package.Capabilities.InnerXml -match 'Name="phoneCall"')) { throw "Falta phoneCall en $($v.Variant)" }
+            $restricted = @($mx.Package.Capabilities.ChildNodes | Where-Object { $_.NamespaceURI -like '*restrictedcapabilities*' } | ForEach-Object { $_.GetAttribute('Name') } | Sort-Object)
+            if ((($restricted -join ',')) -ne (($v.Restricted | Sort-Object) -join ',')) { throw "Capacidades restringidas inesperadas en $($v.Variant): $($restricted -join ',')" }
+            if ($mx.Package.Identity.Name -ne 'PipeSick.HatsuDesktop' -or $mx.Package.Identity.Publisher -ne 'CN=ACC0FCB8-4D92-4E20-9731-7254D5E43289') { throw "Identidad incorrecta en $($v.Variant)" }
+            Write-Host "[$($v.Variant)] OK identidad conservada · v$($mx.Package.Identity.Version) · SHA-256 $((Get-FileHash $pkg.FullName -Algorithm SHA256).Hash.ToLowerInvariant())"
+          }
+      - name: "Subir los MSIX de llamadas completas (artefactos temporales; NO son una versión publicada ni se envían a certificación)"
         uses: actions/upload-artifact@v4
         with:
-          name: msix-beta-phonecall-sin-firmar-${{ github.sha }}
+          name: msix-llamadas-sin-firmar-${{ github.sha }}
           path: |
             msix-out/*-beta-phonecall-unsigned.msix
             msix-out/*-beta-phonecall-unsigned.msix.sha256
+            msix-out/*-beta-callcontrol-unsigned.msix
+            msix-out/*-beta-callcontrol-unsigned.msix.sha256
           retention-days: 14
           if-no-files-found: error
       - name: Subir el paquete (artefacto temporal, no es una versión publicada)

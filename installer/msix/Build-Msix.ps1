@@ -9,9 +9,10 @@
                                               instalarlo en el runner de CI. No es de confianza en ningún PC y NO demuestra nada sobre Smart App Control.
   Antes de terminar comprueba que el AppxManifest.xml DENTRO del .msix tiene exactamente la identidad de store-identity.json.
   -Variant PhoneCall: igual que Default + la capacidad GENERAL `phoneCall` (NO restringida; docs/59) para el vuelo Beta de diagnóstico. Solo si el propietario lo decide; la publicación estable usa Default.
+  -Variant CallControl: PhoneCall + la capacidad RESTRINGIDA `phoneLineTransportManagement`. NO se puede enviar a la Store sin la aprobación de Microsoft (docs/60); se genera para presentarla con la solicitud y, si se aprueba, publicarla.
   -Variant Unvirtualized: experimento de virtualización (capacidad restringida unvirtualizedResources; no necesaria, ver docs/52); nunca para la Store.
 #>
-param([string]$DistDir = 'dist\WinMac', [string]$OutDir = 'msix-out', [ValidateSet('Default', 'Unvirtualized', 'PhoneCall')][string]$Variant = 'Default', [switch]$Sign)
+param([string]$DistDir = 'dist\WinMac', [string]$OutDir = 'msix-out', [ValidateSet('Default', 'Unvirtualized', 'PhoneCall', 'CallControl')][string]$Variant = 'Default', [switch]$Sign)
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $id = Get-Content (Join-Path $PSScriptRoot 'store-identity.json') -Raw | ConvertFrom-Json
@@ -35,11 +36,11 @@ foreach ($a in @(@('Square44x44Logo', 44), @('Square150x150Logo', 150), @('Store
 $src.Dispose()
 $virt = if ($Variant -eq 'Unvirtualized') { "    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>`n    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>" } else { '' }
 # Esquema: primero las Capability (generales/restringidas), después las DeviceCapability.
-$caps = $(if ($Variant -eq 'PhoneCall') { "    <uap:Capability Name=`"phoneCall`" />`n" } else { '' }) + $(if ($Variant -eq 'Unvirtualized') { "    <rescap:Capability Name=`"unvirtualizedResources`" />`n" } else { '' }) + '    <DeviceCapability Name="bluetooth" />' + "`n" + '    <DeviceCapability Name="location" />' + "`n" + '    <DeviceCapability Name="webcam" />'
+$caps = $(if ($Variant -in 'PhoneCall', 'CallControl') { "    <uap:Capability Name=`"phoneCall`" />`n" } else { '' }) + $(if ($Variant -eq 'CallControl') { "    <rescap:Capability Name=`"phoneLineTransportManagement`" />`n" } else { '' }) + $(if ($Variant -eq 'Unvirtualized') { "    <rescap:Capability Name=`"unvirtualizedResources`" />`n" } else { '' }) + '    <DeviceCapability Name="bluetooth" />' + "`n" + '    <DeviceCapability Name="location" />' + "`n" + '    <DeviceCapability Name="webcam" />'
 $m = (Get-Content (Join-Path $PSScriptRoot 'AppxManifest.xml.in') -Raw -Encoding UTF8).Replace('@@IDENTITY_NAME@@', $id.identityName).Replace('@@PUBLISHER@@', $id.publisher).Replace('@@PUBLISHER_DISPLAY@@', $id.publisherDisplayName).Replace('@@VERSION@@', $msixVersion).Replace('@@VIRTUALIZATION@@', $virt).Replace('@@CAPABILITIES@@', $caps)
 if ($m -match '@@[A-Z_]+@@') { throw 'Quedan marcadores @@ sin sustituir en el manifiesto.' }
 [IO.File]::WriteAllText((Join-Path $stage 'AppxManifest.xml'), $m, (New-Object System.Text.UTF8Encoding($false)))
-$suffix = if ($Variant -eq 'Default') { 'store-unsigned' } elseif ($Variant -eq 'PhoneCall') { 'beta-phonecall-unsigned' } else { "experimento-$Variant-unsigned" }
+$suffix = if ($Variant -eq 'Default') { 'store-unsigned' } elseif ($Variant -eq 'PhoneCall') { 'beta-phonecall-unsigned' } elseif ($Variant -eq 'CallControl') { 'beta-callcontrol-unsigned' } else { "experimento-$Variant-unsigned" }
 $pkg = Join-Path $OutDir "HatsuDesktop-$msixVersion-$suffix.msix"; if (Test-Path $pkg) { Remove-Item $pkg }
 $mo = & $makeappx pack /d $stage /p $pkg /o /nv 2>&1; if ($LASTEXITCODE -ne 0) { $mo | Select-Object -Last 12 | Out-Host; throw "makeappx falló ($LASTEXITCODE)" }
 
