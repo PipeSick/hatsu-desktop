@@ -127,6 +127,14 @@ internal static class Program
 
         List<DockHost> Hosts() { lock (gate) return fleet.Select(x => x.Host).ToList(); }
         var link = ModuleHostLink.FromArgs(args, "dock", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
+        // Launchpad (en la Barra) avisa por el canal del host cuándo está abierto y en qué monitor: ese Dock se mantiene visible mientras dure (sin tocar su configuración)
+        link?.Subscribe(LaunchpadPin.Topic, d =>
+        {
+            if (LaunchpadState.Parse(d) is not { } st) return;
+            List<(string Key, DockHost Host, Thread Thread)> snap; lock (gate) snap = fleet.ToList();
+            var target = LaunchpadRouting.MonitorKeyFor(st, snap.Select(x => x.Key));
+            foreach (var f in snap) f.Host.SetLaunchpad(st.Open && f.Key == target);
+        });
         if (link is not null) { link.ShutdownRequested += () => { lock (gate) quitting = true; foreach (var h in Hosts()) h.RequestQuit(); }; link.HealthCheck = () => Hosts().All(h => h.Responsive); link.Start(); Log("Modo hosted: enlazado con HatsuDesktop.exe."); }
 
         using var quitEvent = new EventWaitHandle(false, EventResetMode.ManualReset, DockDefaults.QuitEventName);

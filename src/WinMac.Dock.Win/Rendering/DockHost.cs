@@ -131,8 +131,22 @@ public sealed class DockHost : IDisposable
         catch (Exception e) { _log("[dock] no se pudo actualizar el tema: " + e.GetType().Name + ": " + e.Message); }
     }
 
+    // Launchpad abierto en este monitor (lo avisa el proceso del Dock desde otro hilo): se lee aquí, en el hilo de esta ventana.
+    private long _lpSeq, _lpSeenSeq; private int _lpOpen; private long _lpRaisedAt;
+    public void SetLaunchpad(bool open) { Volatile.Write(ref _lpOpen, open ? 1 : 0); Interlocked.Increment(ref _lpSeq); }
+
+    private void ApplyLaunchpadPin()
+    {
+        long s = Volatile.Read(ref _lpSeq);
+        if (s != _lpSeenSeq) { _lpSeenSeq = s; bool o = Volatile.Read(ref _lpOpen) == 1; _ctl.SetLaunchpadOpen(o); if (o) _lpRaisedAt = 0; }
+        // Launchpad es una ventana superior a pantalla completa creada DESPUÉS que el Dock: se vuelve a poner el Dock por encima (sin activarlo ni moverlo; no roba el foco)
+        if (_ctl.LaunchpadPinned && _hwnd != IntPtr.Zero && Environment.TickCount64 - _lpRaisedAt > 1000)
+        { _lpRaisedAt = Environment.TickCount64; Native2.SetWindowPos(_hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0001u | 0x0002u | 0x0010u /* NOSIZE | NOMOVE | NOACTIVATE */); }
+    }
+
     private void PollInputs()
     {
+        ApplyLaunchpadPin();
         if (!Native.GetCursorPos(out var p)) return;
         double sx = (p.X - _winLeftPx) / _scale, sy = (p.Y - _winTopPx) / _scale;
         bool inWin = p.X >= _winLeftPx && p.X < _winLeftPx + _winWpx && p.Y >= _winTopPx && p.Y < _winTopPx + _winHpx;

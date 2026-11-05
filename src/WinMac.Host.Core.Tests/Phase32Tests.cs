@@ -65,4 +65,14 @@ public class Phase32Tests
         var hits = live.Where(f => { try { return File.ReadAllText(f).Contains("win11-macos"); } catch (Exception) { return false; } }).Select(f => Path.GetRelativePath(root, f)).ToList();
         Assert.Empty(hits);
     }
+
+    [Fact] public void Launchpad_dock_topic_is_the_same_string_on_both_sides_and_the_dock_never_hooks_the_windows_key()
+    {
+        string root = AppContext.BaseDirectory; while (!File.Exists(Path.Combine(root, "installer", "Package.wxs"))) root = Path.GetDirectoryName(root) ?? throw new InvalidOperationException("raíz no encontrada");
+        string Read(string rel) => File.ReadAllText(Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar)));
+        Assert.Contains("Topic = \"launchpad.state\"", Read("src/WinMac.Bar.Core/LaunchpadStatePublisher.cs")); Assert.Contains("Topic = \"launchpad.state\"", Read("src/WinMac.Dock.Core/LaunchpadPin.cs"));
+        // no se intercepta la tecla Windows otra vez: el único gancho sigue siendo el de la Barra
+        foreach (var f in Directory.EnumerateFiles(Path.Combine(root, "src", "WinMac.Dock.Win"), "*.cs", SearchOption.AllDirectories).Concat(Directory.EnumerateFiles(Path.Combine(root, "src", "WinMac.Dock.App"), "*.cs")).Concat(Directory.EnumerateFiles(Path.Combine(root, "src", "WinMac.Dock.Core"), "*.cs")))
+            if (!f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")) Assert.DoesNotContain("SetWindowsHookEx", File.ReadAllText(f));
+    }
 }

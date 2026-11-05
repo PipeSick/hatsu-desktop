@@ -22,6 +22,7 @@ public sealed partial class BarHost
     private string _lprefsPath = "";
     private Apps.IconService? _lpIcons;
     private LaunchpadWindow? _lp;
+    private PxRect _lpMonitor; private LaunchpadStatePublisher? _lpState;
     private WinKeyHook? _winKey;
     private EventWaitHandle? _lpEvent;
     private readonly List<FileSystemWatcher> _startMenuWatchers = [];
@@ -66,6 +67,9 @@ public sealed partial class BarHost
     {
         if (_lpEvent is not null && _lpEvent.WaitOne(0)) ToggleLaunchpad("orden externa");
         _lp?.Pump();
+        // Avisa al Dock (si lo hay) de que Launchpad está abierto/cerrado y dónde: el Dock de ese monitor se mantiene visible mientras dure
+        _lpState ??= new LaunchpadStatePublisher(p => ModuleEvent?.Invoke(LaunchpadStatePublisher.Topic, p), () => Environment.TickCount64);
+        _lpState.Tick(_lp?.IsOpen == true, _lpMonitor);
     }
 
     private void RefreshCatalog()
@@ -106,7 +110,7 @@ public sealed partial class BarHost
             if (_catalogDirty || _catalog.UpdatedUtc is null || DateTime.UtcNow - _catalog.UpdatedUtc > CatalogMaxAge) RefreshCatalog();
             PushLaunchpadApps();
             var (mon, scale) = CursorMonitor();
-            _lp.Show(mon, scale, AnimationsEnabled());
+            _lpMonitor = mon; _lp.Show(mon, scale, AnimationsEnabled());
             _log($"[launchpad] abierto ({why}): {_catalog.Apps.Count} apps");
             LogLauncherIcons("al abrir");
             Task.Delay(3000).ContinueWith(_ => Post(() => { if (_lp?.IsOpen == true) LogLauncherIcons("3 s después"); }));
