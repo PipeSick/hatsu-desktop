@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "WinMac.Extensions.Sdk/2.0.1": {
+        "dependencies": {
+          "WinMac.Ipc": "2.0.1"
+        },
+        "runtime": {
+          "WinMac.Extensions.Sdk.dll": {}
+        }
+      },
+      "WinMac.Ipc/2.0.1": {
+        "runtime": {
+          "WinMac.Ipc.dll": {
+            "assemblyVersion": "2.0.1.0",
+            "fileVersion": "2.0.1.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "WinMac.Extensions.Sdk/2.0.1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "WinMac.Ipc/2.0.1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

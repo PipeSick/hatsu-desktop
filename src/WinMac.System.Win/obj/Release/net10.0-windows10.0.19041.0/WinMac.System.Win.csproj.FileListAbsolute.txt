@@ -1,0 +1,16 @@
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\bin\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.deps.json
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\bin\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\bin\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.pdb
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\bin\Release\net10.0-windows10.0.19041.0\WinMac.System.Core.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\bin\Release\net10.0-windows10.0.19041.0\WinMac.System.Core.pdb
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.csproj.AssemblyReference.cache
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.GeneratedMSBuildEditorConfig.editorconfig
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.AssemblyInfoInputs.cache
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.AssemblyInfo.cs
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.csproj.CoreCompileInputs.cache
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.sourcelink.json
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\WinMac.S.CFFE87C3.Up2Date
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\refint\WinMac.System.Win.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\WinMac.System.Win.pdb
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.System.Win\obj\Release\net10.0-windows10.0.19041.0\ref\WinMac.System.Win.dll

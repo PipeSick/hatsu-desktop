@@ -1,0 +1,114 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "WinMac.Host.Core/2.0.1": {
+        "dependencies": {
+          "WinMac.Bar.Core": "2.0.1",
+          "WinMac.Dock.Core": "2.0.1",
+          "WinMac.Ipc": "2.0.1"
+        },
+        "runtime": {
+          "WinMac.Host.Core.dll": {}
+        }
+      },
+      "WinMac.Apps.Core/2.0.1": {
+        "runtime": {
+          "WinMac.Apps.Core.dll": {
+            "assemblyVersion": "2.0.1.0",
+            "fileVersion": "2.0.1.0"
+          }
+        }
+      },
+      "WinMac.Bar.Core/2.0.1": {
+        "dependencies": {
+          "WinMac.Apps.Core": "2.0.1",
+          "WinMac.Connect.Core": "2.0.1",
+          "WinMac.System.Core": "2.0.1"
+        },
+        "runtime": {
+          "WinMac.Bar.Core.dll": {
+            "assemblyVersion": "2.0.1.0",
+            "fileVersion": "2.0.1.0"
+          }
+        }
+      },
+      "WinMac.Connect.Core/2.0.1": {
+        "runtime": {
+          "WinMac.Connect.Core.dll": {
+            "assemblyVersion": "2.0.1.0",
+            "fileVersion": "2.0.1.0"
+          }
+        }
+      },
+      "WinMac.Dock.Core/2.0.1": {
+        "dependencies": {
+          "WinMac.Apps.Core": "2.0.1"
+        },
+        "runtime": {
+          "WinMac.Dock.Core.dll": {
+            "assemblyVersion": "2.0.1.0",
+            "fileVersion": "2.0.1.0"
+          }
+        }
+      },
+      "WinMac.Ipc/2.0.1": {
+        "runtime": {
+          "WinMac.Ipc.dll": {
+            "assemblyVersion": "2.0.1.0",
+            "fileVersion": "2.0.1.0"
+          }
+        }
+      },
+      "WinMac.System.Core/2.0.1": {
+        "runtime": {
+          "WinMac.System.Core.dll": {
+            "assemblyVersion": "2.0.1.0",
+            "fileVersion": "2.0.1.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "WinMac.Host.Core/2.0.1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "WinMac.Apps.Core/2.0.1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "WinMac.Bar.Core/2.0.1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "WinMac.Connect.Core/2.0.1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "WinMac.Dock.Core/2.0.1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "WinMac.Ipc/2.0.1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "WinMac.System.Core/2.0.1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

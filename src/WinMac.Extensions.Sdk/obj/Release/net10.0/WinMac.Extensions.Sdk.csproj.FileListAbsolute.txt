@@ -1,0 +1,16 @@
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\bin\Release\net10.0\WinMac.Extensions.Sdk.deps.json
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\bin\Release\net10.0\WinMac.Extensions.Sdk.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\bin\Release\net10.0\WinMac.Extensions.Sdk.pdb
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\bin\Release\net10.0\WinMac.Ipc.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\bin\Release\net10.0\WinMac.Ipc.pdb
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\WinMac.Extensions.Sdk.csproj.AssemblyReference.cache
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\WinMac.Extensions.Sdk.GeneratedMSBuildEditorConfig.editorconfig
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\WinMac.Extensions.Sdk.AssemblyInfoInputs.cache
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\WinMac.Extensions.Sdk.AssemblyInfo.cs
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\WinMac.Extensions.Sdk.csproj.CoreCompileInputs.cache
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\WinMac.Extensions.Sdk.sourcelink.json
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\WinMac.E.D2125D65.Up2Date
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\WinMac.Extensions.Sdk.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\refint\WinMac.Extensions.Sdk.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\WinMac.Extensions.Sdk.pdb
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Extensions.Sdk\obj\Release\net10.0\ref\WinMac.Extensions.Sdk.dll

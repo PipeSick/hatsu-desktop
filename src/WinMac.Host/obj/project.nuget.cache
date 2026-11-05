@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "dgSpecHash": "nF2ci+zlHBI=",
+  "success": true,
+  "projectFilePath": "D:\\a\\hatsu-desktop\\hatsu-desktop\\src\\WinMac.Host\\WinMac.Host.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\runneradmin\\.nuget\\packages\\sharpgen.runtime\\2.4.2-beta\\sharpgen.runtime.2.4.2-beta.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\sharpgen.runtime.com\\2.4.2-beta\\sharpgen.runtime.com.2.4.2-beta.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\vortice.direct2d1\\3.8.3\\vortice.direct2d1.3.8.3.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\vortice.direct3d11\\3.8.3\\vortice.direct3d11.3.8.3.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\vortice.directcomposition\\3.8.3\\vortice.directcomposition.3.8.3.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\vortice.directx\\3.8.3\\vortice.directx.3.8.3.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\vortice.dxgi\\3.8.3\\vortice.dxgi.3.8.3.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\vortice.mathematics\\2.1.0\\vortice.mathematics.2.1.0.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\10.0.14\\microsoft.netcore.app.runtime.win-x64.10.0.14.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\10.0.14\\microsoft.windowsdesktop.app.runtime.win-x64.10.0.14.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\10.0.14\\microsoft.aspnetcore.app.runtime.win-x64.10.0.14.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.57\\microsoft.windows.sdk.net.ref.10.0.19041.57.nupkg.sha512"
+  ],
+  "logs": []
+}

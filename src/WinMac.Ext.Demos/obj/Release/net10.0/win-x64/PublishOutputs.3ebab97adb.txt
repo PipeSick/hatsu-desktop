@@ -1,0 +1,4 @@
+D:\a\hatsu-desktop\hatsu-desktop\dist\WinMac\_ext-build\WinMac.Ext.Demos.pdb
+D:\a\hatsu-desktop\hatsu-desktop\dist\WinMac\_ext-build\WinMac.Extensions.Sdk.pdb
+D:\a\hatsu-desktop\hatsu-desktop\dist\WinMac\_ext-build\WinMac.Ipc.pdb
+D:\a\hatsu-desktop\hatsu-desktop\dist\WinMac\_ext-build\WinMac.Ext.Demos.exe

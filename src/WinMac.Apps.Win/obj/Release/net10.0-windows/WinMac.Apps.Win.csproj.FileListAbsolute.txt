@@ -1,0 +1,16 @@
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\bin\Release\net10.0-windows\WinMac.Apps.Win.deps.json
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\bin\Release\net10.0-windows\WinMac.Apps.Win.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\bin\Release\net10.0-windows\WinMac.Apps.Win.pdb
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\bin\Release\net10.0-windows\WinMac.Apps.Core.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\bin\Release\net10.0-windows\WinMac.Apps.Core.pdb
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\WinMac.Apps.Win.csproj.AssemblyReference.cache
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\WinMac.Apps.Win.GeneratedMSBuildEditorConfig.editorconfig
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\WinMac.Apps.Win.AssemblyInfoInputs.cache
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\WinMac.Apps.Win.AssemblyInfo.cs
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\WinMac.Apps.Win.csproj.CoreCompileInputs.cache
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\WinMac.Apps.Win.sourcelink.json
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\WinMac.A.4FC78508.Up2Date
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\WinMac.Apps.Win.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\refint\WinMac.Apps.Win.dll
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\WinMac.Apps.Win.pdb
+D:\a\hatsu-desktop\hatsu-desktop\src\WinMac.Apps.Win\obj\Release\net10.0-windows\ref\WinMac.Apps.Win.dll

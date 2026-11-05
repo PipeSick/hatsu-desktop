@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "dgSpecHash": "CSpy0OBUSrs=",
+  "success": true,
+  "projectFilePath": "D:\\a\\hatsu-desktop\\hatsu-desktop\\src\\WinMac.System.Win\\WinMac.System.Win.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\runneradmin\\.nuget\\packages\\system.codedom\\9.0.0\\system.codedom.9.0.0.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\system.management\\9.0.0\\system.management.9.0.0.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\10.0.14\\microsoft.netcore.app.runtime.win-x64.10.0.14.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\10.0.14\\microsoft.windowsdesktop.app.runtime.win-x64.10.0.14.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\10.0.14\\microsoft.aspnetcore.app.runtime.win-x64.10.0.14.nupkg.sha512",
+    "C:\\Users\\runneradmin\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.57\\microsoft.windows.sdk.net.ref.10.0.19041.57.nupkg.sha512"
+  ],
+  "logs": []
+}

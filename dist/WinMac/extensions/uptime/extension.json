@@ -1,0 +1,10 @@
+{
+  "id": "uptime",
+  "name": "Tiempo encendido",
+  "version": "1.0.0",
+  "api": 1,
+  "entry": "WinMac.Ext.Demos.exe",
+  "args": ["uptime"],
+  "permissions": ["activity"],
+  "description": "Demostración: cuánto tiempo lleva Windows encendido, como actividad en la Isla."
+}
