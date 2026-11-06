@@ -73,6 +73,8 @@ public static partial class SettingsBuilder
         ("peripheralAlerts", "Avisar cuando la batería de un periférico esté baja", b => b.PeripheralAlerts),
         ("showCleanup", "Icono de Limpieza en la barra", b => b.ShowCleanup),
         ("cleanupIsland", "Mostrar el progreso de la limpieza en Hatsu Notch", b => b.CleanupIsland),
+        ("mcEnabled", "Mission Control", b => b.McEnabled),
+        ("snapEnabled", "Snap", b => b.SnapEnabled),
     ];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];

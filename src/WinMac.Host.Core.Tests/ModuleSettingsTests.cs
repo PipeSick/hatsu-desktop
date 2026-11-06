@@ -48,3 +48,34 @@ public class ModuleSettingsTests
         FeatureStatusStore.Set(JsonDocument.Parse("42").RootElement); Assert.Null(FeatureStatusStore.Get("mission"));
     }
 }
+
+public class ModulePageTests
+{
+    private static IReadOnlyList<SettingsPage> Pages(BarConfig bar) => SettingsBuilder.Build(new SettingsInput(new HostConfig { Bar = bar }, new Dictionary<string, ModuleState>(), false));
+
+    [Fact] public void The_modules_page_lists_only_implemented_modules_and_disables_their_settings_while_off()
+    {
+        var page = Pages(new BarConfig()).Single(p => p.Id == "modules"); var rows = page.Groups.SelectMany(g => g.Rows).ToList();
+        Assert.Contains(rows, r => r.Id == "bar:mcEnabled" && !r.On); Assert.Contains(rows, r => r.Id == "bar:snapEnabled" && !r.On);
+        Assert.All(rows.Where(r => r.Id is "mod.key:mcHotkey" or "snap.mod" or "snap.layout" or "snap.edit"), r => { Assert.False(r.Enabled); Assert.Equal("Activa el módulo", r.Reason); });
+        Assert.DoesNotContain(rows, r => r.Id.Contains("livetext", StringComparison.OrdinalIgnoreCase));   // sin controles de módulos que todavía no existen
+    }
+
+    [Fact] public void Turning_a_module_on_enables_its_settings_and_shows_its_status()
+    {
+        var rows = Pages(new BarConfig { McEnabled = true, SnapEnabled = true }).Single(p => p.Id == "modules").Groups.SelectMany(g => g.Rows).ToList();
+        Assert.True(rows.Single(r => r.Id == "mod.key:mcHotkey").Enabled); Assert.Equal("Ctrl+Alt+Up", rows.Single(r => r.Id == "mod.key:mcHotkey").Text);
+        Assert.Contains("sin informar", rows.Single(r => r.Id == "mod.status:mission").Title); Assert.True(rows.Single(r => r.Id == "snap.edit").Enabled);
+        Assert.Contains("Mitades", rows.Single(r => r.Id == "snap.layout").Options!);
+    }
+
+    [Fact] public void Snap_edits_are_validated_and_stored()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "hatsu-snap-" + Guid.NewGuid() + ".json"); var cfg = new ConfigService(path, new HostConfig()); var a = new SettingsActions(cfg, () => { }, _ => { });
+        Assert.True(a.Apply(new SettingsEdit("snap.mod", "segment", Index: 1))); Assert.Equal("Ctrl", cfg.Bar.SnapModifier);
+        Assert.False(a.Apply(new SettingsEdit("snap.mod", "segment", Index: 9)));
+        a.Apply(new SettingsEdit("snap.gap", "text", Text: "12")); Assert.Equal(12, cfg.Bar.SnapGap); a.Apply(new SettingsEdit("snap.gap", "text", Text: "abc")); Assert.Equal(12, cfg.Bar.SnapGap); a.Apply(new SettingsEdit("snap.gap", "text", Text: "500")); Assert.Equal(64, cfg.Bar.SnapGap);
+        int t = cfg.Bar.SnapEditToken; a.Apply(new SettingsEdit("snap.edit", "button")); Assert.Equal(t + 1, cfg.Bar.SnapEditToken);
+        a.Apply(new SettingsEdit("snap.layout", "segment", Index: 1)); Assert.Equal("Tercios", cfg.Bar.SnapLayout);
+    }
+}

@@ -142,6 +142,8 @@ public sealed record BarConfig
     public string SnapLayout { get; init; } = "Mitades";
     /// <summary>Separación (px) entre ventanas colocadas por Snap.</summary>
     public int SnapGap { get; init; } = 0;
+    /// <summary>Ajustes › Módulos › «Editar zonas»: cada incremento abre el editor de zonas de Snap.</summary>
+    public int SnapEditToken { get; init; } = 0;
     /// <summary>Atajo para colocar la ventana activa en la zona siguiente de la distribución activa. Vacío = ninguno.</summary>
     public string SnapNextHotkey { get; init; } = "";
     /// <summary>Hatsu Live Text: reconocer el texto de una región de la pantalla (OCR local de Windows). APAGADO por defecto.</summary>

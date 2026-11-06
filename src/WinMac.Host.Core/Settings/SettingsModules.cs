@@ -12,7 +12,30 @@ public static partial class SettingsBuilder
     /// <summary>Módulos con ajustes: (id del módulo, interruptor, título, descripción, filas propias). Se añaden conforme se implementan.</summary>
     internal sealed record ModuleCard(string Id, string Toggle, string Title, string Description, Func<BarConfig, IReadOnlyList<SettingsRow>> Rows, string HotkeyModule = "");
 
-    internal static readonly List<ModuleCard> ModuleCards = [];
+    internal static readonly List<ModuleCard> ModuleCards =
+    [
+        new("mission", "mcEnabled", "Hatsu Mission Control", "Vista general de las ventanas abiertas, con miniaturas, búsqueda y varios monitores. Clic o Intro activan una ventana, Supr la cierra, Esc sale.",
+            b => [HotkeyRow("mcHotkey", "Atajo", b.McHotkey),
+                  new(RowKind.Info, "mod.mission.limit", "Muestra las ventanas del escritorio virtual actual (Windows no ofrece una API pública para listar las de otros escritorios). Las miniaturas son capturas, no vídeo en vivo; las ventanas protegidas muestran la inicial de la app.")], "Barra · Mission Control"),
+        new("snap", "snapEnabled", "Hatsu Snap", "Mantén la tecla elegida mientras arrastras una ventana: aparecen las zonas del monitor y al soltar la ventana se coloca en la zona. Sin la tecla, Windows funciona como siempre.",
+            b => [new(RowKind.Segmented, "snap.mod", "Tecla al arrastrar", Options: SnapMods, Selected: Math.Max(0, Array.IndexOf(WinMac.Bar.Features.FeatureConfig.SnapModifiers, b.SnapModifier))),
+                  new(RowKind.Segmented, "snap.layout", "Distribución", Options: SnapLayoutNames(), Selected: Math.Max(0, SnapLayoutNames().ToList().FindIndex(n => string.Equals(n, b.SnapLayout, StringComparison.OrdinalIgnoreCase)))),
+                  new(RowKind.Field, "snap.gap", "Separación entre ventanas (px)", Text: b.SnapGap.ToString(), Placeholder: "0"),
+                  HotkeyRow("snapNextHotkey", "Atajo: ventana activa a la zona siguiente", b.SnapNextHotkey),
+                  new(RowKind.Button, "snap.edit", "Crear una distribución nueva (editor de zonas)…"),
+                  new(RowKind.Info, "mod.snap.limit", "No mueve ventanas sin marco redimensionable, a pantalla completa ni de programas con más permisos que Hatsu (Windows lo impide). Las distribuciones propias se guardan en %APPDATA%\\WinMac\\snap-layouts.json.")], "Barra · Snap"),
+    ];
+
+    public static readonly string[] SnapMods = ["Mayús", "Ctrl", "Alt"];
+    public static string SnapLayoutsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "snap-layouts.json");
+
+    /// <summary>Predeterminadas + las del usuario (leídas del archivo; si no se puede leer, solo las predeterminadas).</summary>
+    public static string[] SnapLayoutNames()
+    {
+        IReadOnlyList<WinMac.Bar.Features.SnapLayout> custom = [];
+        try { if (File.Exists(SnapLayoutsFile)) custom = WinMac.Bar.Features.SnapLayouts.Parse(File.ReadAllText(SnapLayoutsFile)); } catch (Exception) { }
+        return WinMac.Bar.Features.SnapLayouts.All(custom).Select(l => l.Name).ToArray();
+    }
 
     /// <summary>Campos de atajo editables desde Ajustes (el patrón de la Barra solo acepta estos).</summary>
     public static readonly string[] HotkeyFields = ["mcHotkey", "ltHotkey", "snapNextHotkey", "gestKey1", "gestKey2"];

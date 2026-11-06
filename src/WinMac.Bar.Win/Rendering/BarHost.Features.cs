@@ -12,7 +12,15 @@ namespace WinMac.Bar.Win.Rendering;
 public sealed partial class BarHost
 {
     private FeatureManager? _features; private HotkeyRegistry? _hotkeys; private HotkeyBinder? _binder;
-    private int _retrySeen;
+    private int _retrySeen; private WindowCatalog? _winCatalog;
+    internal WindowCatalog Catalog => _winCatalog ??= new WindowCatalog(_log);
+    /// <summary>Lo fija Mission Control mientras está activo (Spotlight y Gestures lo usan). Null = módulo apagado.</summary>
+    internal Action? ToggleMissionControl { get; set; }
+    internal void PostToUi(Action a) => Post(a);
+    internal Action? SnapNextZone { get; set; }
+    internal Action? SnapEdit { get; set; }
+    internal int CurrentConfigEditToken => _cfg.SnapEditToken;
+    internal void PatchConfig(object patch) => ((IPanelUi)this).PatchConfig(patch);
 
     internal HotkeyBinder Binder => _binder ??= new HotkeyBinder(_hotkeys ??= new HotkeyRegistry(), Post, _log) { Changed = () => Post(ReportHotkeys) };
     internal FeatureManager Features => _features!;
@@ -36,7 +44,7 @@ public sealed partial class BarHost
         _features.Apply(c);
     }
 
-    private void StopFeatures() { try { _features?.Dispose(); } catch (Exception e) { _log("[módulos] error al apagar: " + e.Message); } _features = null; }
+    private void StopFeatures() { try { _features?.Dispose(); } catch (Exception e) { _log("[módulos] error al apagar: " + e.Message); } _features = null; try { _winCatalog?.Dispose(); } catch (Exception) { } _winCatalog = null; }
 
     /// <summary>Anota en el registro los atajos que la Barra ya tenía (Spotlight, capturas) para que los módulos vean los conflictos.</summary>
     private void SyncLegacyHotkeys(IReadOnlyList<HotkeyInfo>? list)
@@ -54,6 +62,9 @@ public sealed partial class BarHost
     }
 
     /// <summary>Alta de los módulos conforme se implementan (cada uno aporta su interruptor y su <see cref="IHatsuFeature"/>).</summary>
-    partial void RegisterFeaturesCore(FeatureManager m);
-    private void RegisterFeatures(FeatureManager m) => RegisterFeaturesCore(m);
+    private void RegisterFeatures(FeatureManager m)
+    {
+        m.Register(new MissionControlFeature(this, _log), c => c.McEnabled);
+        m.Register(new SnapFeature(this, _log), c => c.SnapEnabled);
+    }
 }

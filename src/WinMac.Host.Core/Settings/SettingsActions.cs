@@ -132,6 +132,10 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("bar.bg", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.BackgroundValues.Length: cfg.ApplyBarPatch(Patch("background", SettingsBuilder.BackgroundValues[e.Index])); return true;
             case ("bar.orderreset", _): cfg.ApplyBarPatch(Patch("barOrder", "")); return true;
             case ("bar.capmods", "segment") when e.Index >= 0 && e.Index < WinMac.Bar.Launcher.HotkeyAudit.CaptureModifierIds.Length: cfg.ApplyBarPatch(Patch("captureModifiers", WinMac.Bar.Launcher.HotkeyAudit.CaptureModifierIds[e.Index])); return true;
+            case ("snap.mod", "segment") when e.Index >= 0 && e.Index < WinMac.Bar.Features.FeatureConfig.SnapModifiers.Length: cfg.ApplyBarPatch(Patch("snapModifier", WinMac.Bar.Features.FeatureConfig.SnapModifiers[e.Index])); return true;
+            case ("snap.layout", "segment"): { var names = SettingsBuilder.SnapLayoutNames(); if (e.Index < 0 || e.Index >= names.Length) return false; cfg.ApplyBarPatch(Patch("snapLayout", names[e.Index])); return true; }
+            case ("snap.gap", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int gap)) cfg.ApplyBarPatch(Patch("snapGap", gap)); return true;
+            case ("snap.edit", _): cfg.UpdateBar(b => b with { SnapEditToken = b.SnapEditToken + 1 }); return true;
             case ("bar.keysreset", _): cfg.ApplyBarPatch(JsonSerializer.SerializeToElement(new Dictionary<string, object?> { ["captureModifiers"] = "CtrlShift", ["captureHotkeys"] = true, ["spotlightHotkey"] = "AltSpace" })); return true;
             case ("bar.capfmt", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.CaptureFormatValues.Length: cfg.ApplyBarPatch(Patch("captureFormat", SettingsBuilder.CaptureFormatValues[e.Index])); return true;
             case ("bar.capdir", "text"): { var t = (e.Text ?? "").Trim().Trim('"'); cfg.ApplyBarPatch(Patch("captureFolder", t.Length == 0 ? null : t)); return true; }
