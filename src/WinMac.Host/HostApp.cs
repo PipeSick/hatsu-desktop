@@ -166,6 +166,7 @@ internal static class HostApp
             settings.ModuleFailures = () => sup.Failures;
             settings.RetryModule = id => { bool ok = sup.Restart(id); log(ok ? $"[host] reintento manual de {id} pedido desde Ajustes" : $"[host] reintento de {id}: nada que reintentar ahora"); return ok; };
             settings.ConnectDiag = connectDiag = new ConnectDiagnosticsService(AppContext.BaseDirectory.TrimEnd('\\'), log, (t, d) => bus.Emit(t, d), settings.Refresh);   // docs/58
+            controller.CallStatusReceived = d => connectDiag?.SetCallStatus(d);
             settings.RunDiagnostics = () => _ = Task.Run(() => { try { var f = InstallDiagnose.Run(o, null, open: true, print: false); log("[host] informe de diagnóstico: " + (f ?? "no se pudo guardar")); } catch (Exception e) { log("[host] informe de diagnóstico falló: " + e.Message); } });
             var win = settings; controller.SettingsRequested = section => uiActions.Enqueue(() => win.Show(section));
             tray = new Tray(() => sup.States, RequestQuit, id => { if (sup.States.TryGetValue(id, out var st) && st == ModuleState.Disabled) config.SetModuleEnabled(id, true); else sup.Restart(id); }, settings.Show, log, showIcon: !o.NoTray);

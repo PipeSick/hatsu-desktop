@@ -13,7 +13,16 @@ internal sealed class ConnectDiagnosticsService
 {
     private readonly string _exeDir; private readonly Action<string> _log; private readonly Action<string, object?> _emit; private readonly Action _refresh;
     private readonly object _gate = new(); private bool _running, _observing; private string _status = "Sin ejecutar"; private string? _report; private IReadOnlyList<string> _summary = [];
-    private Timer? _obsTimer; private DateTime _obsUntil;
+    private Timer? _obsTimer; private DateTime _obsUntil; private string _callStatus = "sin información (el módulo Connect no ha informado)";
+
+    /// <summary>{state, reason} del proveedor de telefonía del módulo Connect (Apagado, No disponible con su causa, o Listo).</summary>
+    public void SetCallStatus(System.Text.Json.JsonElement d)
+    {
+        string st = d.TryGetProperty("state", out var a) && a.ValueKind == System.Text.Json.JsonValueKind.String ? a.GetString() ?? "" : "", why = d.TryGetProperty("reason", out var b) && b.ValueKind == System.Text.Json.JsonValueKind.String ? b.GetString() ?? "" : "";
+        string text = (st switch { "Ready" => "LISTO", "Unavailable" => "NO DISPONIBLE", "Off" => "apagado", _ => st }) + (why.Length == 0 ? "" : " — " + why);
+        bool changed; lock (_gate) { changed = _callStatus != text; _callStatus = text; }
+        if (changed) _refresh();
+    }
     private string ReportPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "connect-probe-calls.txt");
 
     public ConnectDiagnosticsService(string exeDir, Action<string> log, Action<string, object?> emit, Action refresh) { _exeDir = exeDir; _log = log; _emit = emit; _refresh = refresh; }
@@ -21,7 +30,7 @@ internal sealed class ConnectDiagnosticsService
     public ConnectDiagView View()
     {
         lock (_gate) return new(_status, _summary, _running, _report is not null, _observing,
-            _observing ? $"Activa hasta las {_obsUntil:HH:mm}" : "Detenida");
+            _observing ? $"Activa hasta las {_obsUntil:HH:mm}" : "Detenida", _callStatus);
     }
 
     public void Run() => Start("--probe-calls", "connect-probe-calls.txt", 60, null);
@@ -31,7 +40,7 @@ internal sealed class ConnectDiagnosticsService
     {
         var (arg, title, text, seconds) = kind switch
         {
-            "hfp" => ("--probe-hfp-experimental", "¿Probar el registro y la conexión HFP?", "Hatsu Desktop va a registrarse unos segundos como cliente del transporte telefónico Bluetooth de Windows y a pedirle que conecte el teléfono por HFP; observará qué aparece (líneas, enrutado, dispositivos de audio) y DESHARÁ el registro al terminar.\n\nNo contesta ni cuelga llamadas. Si Phone Link o Windows están usando ese teléfono, podrían notar una reconexión breve.", 60),
+            "hfp" => ("--probe-hfp-experimental", "¿Probar el registro y la conexión HFP?", "Hatsu Desktop va a registrarse unos segundos como cliente del transporte telefónico Bluetooth de Windows y a pedirle que conecte el teléfono por HFP, por etapas con tiempo límite (máx. 40 s), y DESHARÁ el registro al terminar.\n\nNo contesta ni cuelga llamadas. Si Phone Link o Windows están usando ese teléfono, podrían notar una reconexión breve.", 90),
             "audio" => ("--probe-audio-route", "¿Mover el audio de la llamada activa al PC?", "Debes tener una llamada ACTIVA (ya contestada) en el teléfono. Hatsu Desktop pedirá a Windows que pase su audio al PC durante unos 10 segundos y lo devolverá al teléfono. Comprueba si se oye por los altavoces del PC y si te oyen por el micrófono del PC.\n\nNo contesta ni cuelga la llamada. Si algo falla, cambia la salida en el teléfono o cuelga.", 70),
             "restore" => ("--restore-hfp", "¿Deshacer el registro de Hatsu Desktop?", "Quita el registro de esta app como cliente del transporte telefónico Bluetooth, por si un experimento se interrumpió. No toca ninguna otra cosa.", 30),
             _ => ("", "", "", 0),
@@ -66,7 +75,17 @@ internal sealed class ConnectDiagnosticsService
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             try { File.Delete(path); } catch (Exception) { }
             using var p = Process.Start(new ProcessStartInfo(exe) { Arguments = arg + " --out \"" + path + "\"", UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = _exeDir })!;
-            if (!p.WaitForExit(seconds * 1000)) { try { p.Kill(true); } catch (Exception) { } return ($"Error de ejecución: no terminó en {seconds} s (se canceló; si era un experimento usa «Deshacer registro»)", null, []); }
+            if (!p.WaitForExit(seconds * 1000))
+            {
+                try { p.Kill(true); } catch (Exception) { }
+                // El experimento reescribe su informe tras CADA etapa: aunque Windows haya colgado una llamada, se muestra hasta dónde llegó (no un «timeout» genérico).
+                if (File.Exists(path))
+                {
+                    var partial = DiagRedactor.Redact(File.ReadAllText(path), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.UserName);
+                    return ($"El proceso no terminó en {seconds} s y se cerró; informe PARCIAL con la última etapa alcanzada (si registró algo, usa «Deshacer el registro»)", partial, DiagReport.SummaryOf(partial));
+                }
+                return ($"Error de ejecución: no terminó en {seconds} s y no escribió ninguna etapa (se canceló)", null, []);
+            }
             if (!File.Exists(path)) return ($"Error de ejecución: no se generó el informe (código {p.ExitCode})", null, []);
             var report = DiagRedactor.Redact(File.ReadAllText(path), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.UserName);
             return ((p.ExitCode == 0 ? "Terminado " : "Terminado con errores ") + DateTime.Now.ToString("HH:mm"), report, DiagReport.SummaryOf(report));

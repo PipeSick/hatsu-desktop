@@ -82,3 +82,13 @@ public class CallControlSettingsTests
         Assert.True(WinMac.Connect.ConnectSettings.Parse(System.Text.Json.JsonSerializer.SerializeToElement(svc.Current.Connect, WinMac.Connect.ConnectSettings.Wire)).CallControl);   // viaja al módulo por el canal
     }
 }
+
+public class CallControlStatusRowTests
+{
+    [Fact] public void Settings_shows_the_real_provider_status_not_a_generic_timeout()
+    {
+        string Row(ConnectDiagView v) => SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false) { ConnectDiag = v }).Single(p => p.Id == "connect").Groups.SelectMany(g => g.Rows).Single(r => r.Id == "connect.callcontrol.status").Title;
+        Assert.Contains("sin información", Row(new()));
+        Assert.Contains("NO DISPONIBLE — Windows negó el registro", Row(new ConnectDiagView(CallControlStatus: "NO DISPONIBLE — Windows negó el registro")));
+    }
+}

@@ -102,7 +102,7 @@ public static class PhoneStatusText
 /// <summary>Tópicos del canal con el host. Estado y lista son retenidos (llegan al conectar); los avisos son eventos.</summary>
 public static class ConnectTopics
 {
-    public const string Config = "config.connect", State = "connect.state", Notifications = "connect.notifications", Alert = "connect.alert", Call = "connect.call", Diag = "connect.diag", CallCmd = "connect.callcmd";   // CallCmd: orden de llamada de la Isla/Barra: {cmd:"answer"|"reject"|"hangup"|"mute"}   // Diag: orden puntual del host (Ajustes › Diagnóstico): {observe:bool}; nunca se guarda
+    public const string Config = "config.connect", State = "connect.state", Notifications = "connect.notifications", Alert = "connect.alert", Call = "connect.call", Diag = "connect.diag", CallCmd = "connect.callcmd", CallStatus = "connect.callstatus";   // CallCmd: orden de llamada de la Isla/Barra: {cmd:"answer"|"reject"|"hangup"|"mute"}   // Diag: orden puntual del host (Ajustes › Diagnóstico): {observe:bool}; nunca se guarda
 }
 
 /// <summary>Formato de la lista y de los avisos (módulo → barra). El contenido solo viaja por el canal local con el host; nunca a disco ni a registros.</summary>

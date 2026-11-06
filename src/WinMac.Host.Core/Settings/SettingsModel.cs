@@ -20,7 +20,7 @@ public sealed record SettingsGroup(string? Header, IReadOnlyList<SettingsRow> Ro
 public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOnlyList<SettingsGroup> Groups);
 
 /// <summary>Vista del diagnóstico de llamadas (Ajustes › Hatsu Connect): lo da el host; puro para probar la página sin Windows.</summary>
-public sealed record ConnectDiagView(string Status = "Sin ejecutar", IReadOnlyList<string>? Summary = null, bool Running = false, bool HasReport = false, bool Observing = false, string ObserveStatus = "Detenida");
+public sealed record ConnectDiagView(string Status = "Sin ejecutar", IReadOnlyList<string>? Summary = null, bool Running = false, bool HasReport = false, bool Observing = false, string ObserveStatus = "Detenida", string CallControlStatus = "sin información (el módulo Connect no ha informado)");
 
 /// <param name="WeatherStatus">Texto de estado de la búsqueda de ciudad (qué se eligió, cómo pedir otra).</param>
 public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, ModuleState> States, bool Autostart, string WeatherStatus = "")
@@ -360,6 +360,7 @@ public static class SettingsBuilder
             ]),
             new("Llamadas completas desde el PC", [
                 new(RowKind.Toggle, "connect.callcontrol", "Contestar, rechazar y colgar desde Hatsu Notch, con el audio en el PC", "Windows lleva la llamada del teléfono (iPhone o Android) a tus altavoces y micrófono. Registra a Hatsu como cliente de telefonía mientras esté activo", c.CallControl, on && c.Calls, on ? null : off),
+                new(RowKind.Info, "connect.callcontrol.status", "Estado del control de llamadas: " + input.ConnectDiag.CallControlStatus),
                 new(RowKind.Info, "connect.callcontrol.why", "Necesita el teléfono emparejado en Windows (manos libres/HFP) y que Windows conceda a Hatsu la telefonía Bluetooth: es una capacidad restringida que aprueba Microsoft. Si Windows no la concede, no se muestra ningún botón de contestar y Hatsu sigue avisando de las llamadas como siempre. Al apagarlo, Hatsu deshace su registro."),
                 new(RowKind.Info, "connect.callcontrol.audio", "Audio: Windows usa tus dispositivos predeterminados de COMUNICACIONES (Configuración › Sistema › Sonido › Más opciones de sonido › pestañas Reproducción y Grabación). Revisa que el micrófono y los audífonos de comunicaciones sean los que quieres y que el nivel del micrófono no esté muy bajo."),
                 new(RowKind.Info, "connect.callcontrol.focus", "Si la llamada se corta al abrir un juego o una app a pantalla completa, desactiva en Windows las reglas automáticas del Asistente de concentración (jugando / pantalla completa): reinician la conexión de manos libres."),

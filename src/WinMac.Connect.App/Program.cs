@@ -30,9 +30,10 @@ internal static class Program
         {
             int oi2 = Array.IndexOf(args, "--out"); string outFile2 = oi2 >= 0 && oi2 + 1 < args.Length ? args[oi2 + 1] : Path.Combine(Path.GetDirectoryName(LogPath)!, "connect-probe-hfp.txt");
             string text2;
-            try { text2 = args.Contains("--restore-hfp") ? HfpExperiments.Restore() : args.Contains("--probe-audio-route") ? await HfpExperiments.AudioRouteAsync() : await HfpExperiments.RegisterAndConnectAsync(); }
+            try { text2 = args.Contains("--restore-hfp") ? await HfpExperiments.RestoreAsync() : args.Contains("--probe-audio-route") ? await HfpExperiments.AudioRouteAsync() : await HfpExperiments.RegisterAndConnectAsync(outFile2); }
             catch (Exception e) { text2 = "== Experimento ==\nRESUMEN|Experimento: Error de ejecución — " + e.GetType().Name + " 0x" + e.HResult.ToString("X8") + " — " + DiagIds.HResultName(e.HResult) + "\n"; }
             try { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outFile2))!); File.WriteAllText(outFile2, text2); Log("[connect] experimento HFP terminado"); } catch (Exception) { }
+            Environment.Exit(0);   // un hilo de Windows colgado no debe retener el proceso
             return 0;
         }
         if (args.Contains("--probe-calls"))   // diagnóstico de solo lectura (docs/57-58): lo lanza Ajustes o se ejecuta a mano; escribe el informe y termina. No necesita el host
@@ -61,6 +62,8 @@ internal static class Program
             item => link.Event(ConnectTopics.Alert, item),
             Log);
         phone.PublishCall = c => link.Publish(ConnectTopics.Call, c);
+        phone.PublishCallStatus = st => link.Event(ConnectTopics.CallStatus, new { state = st.State.ToString(), reason = st.Reason });
+        phone.OnTransportWedged = stage => { Log("[connect] Windows dejó de responder en «" + stage + "»: el módulo se reinicia (no se vuelve a tocar el transporte durante el enfriamiento)"); Task.Run(async () => { await Task.Delay(500); Environment.Exit(70); }); };
         if (Environment.GetEnvironmentVariable("HATSU_CONNECT_SYSTEM_CALLS") == "1") phone.SetObservation(true);   // avanzado; el interruptor de Ajustes es lo normal
         link.Subscribe(ConnectTopics.CallCmd, d => { if (d is { ValueKind: System.Text.Json.JsonValueKind.Object } o && o.TryGetProperty("cmd", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String) phone.Command(v.GetString() ?? ""); });   // docs/60: órdenes de la Isla
         link.Subscribe(ConnectTopics.Diag, d => { if (d is { ValueKind: System.Text.Json.JsonValueKind.Object } o && o.TryGetProperty("observe", out var v) && v.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False) phone.SetObservation(v.GetBoolean()); });

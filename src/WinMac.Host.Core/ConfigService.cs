@@ -103,6 +103,8 @@ public sealed class HostController
     public Action? QuitRequested { get; set; }
     /// <summary>The bar reported the real state of its shortcuts (Settings redraws).</summary>
     public Action? HotkeysChanged { get; set; }
+    /// <summary>Estado del control de llamadas del módulo Connect ({state, reason}); lo muestra Ajustes › Hatsu Connect.</summary>
+    public Action<JsonElement>? CallStatusReceived { get; set; }
     /// <summary>Abrir la ventana de Ajustes, en una sección o null.</summary>
     public Action<string?>? SettingsRequested { get; set; }
 
@@ -125,6 +127,7 @@ public sealed class HostController
         // cada módulo cambia SOLO sus propios ajustes y solo por su tópico
         if (module == "notch" && topic == NotchSettings.SetTopic) { try { _cfg.ApplyNotchPatch(d); } catch (Exception e) { _log("[config] parche de la Isla descartado: " + e.Message); } }
         else if (module == "bar" && topic == CommandTopic) { try { RunCommand(d); } catch (Exception e) { _log("[host] orden de la Barra descartada: " + e.Message); } }
+        else if (module == "connect" && topic == WinMac.Connect.ConnectTopics.CallStatus) { try { CallStatusReceived?.Invoke(d); } catch (Exception) { } }   // estado del control de llamadas → Ajustes
         else if (module == "bar" && topic == "bar.hotkeys") { HotkeyStatus.Set(d); HotkeysChanged?.Invoke(); }
         else if (module == "bar" && topic == BarSetTopic) { try { _cfg.ApplyBarPatch(d); } catch (Exception e) { _log("[config] parche de la Barra descartado: " + e.Message); } }
     }

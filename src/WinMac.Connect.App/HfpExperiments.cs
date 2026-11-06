@@ -15,49 +15,45 @@ namespace WinMac.Connect.App;
 /// </summary>
 internal static class HfpExperiments
 {
-    public static async Task<string> RegisterAndConnectAsync()
+    /// <summary>
+    /// Registro + conexión con la MISMA secuencia por etapas del módulo (<see cref="TransportSequence"/>): cada etapa con su tope y su HRESULT, presupuesto total de 40 s (el host espera 90 s) y el informe
+    /// se reescribe tras CADA etapa: aunque algo cuelgue, el archivo dice en qué etapa se quedó. Solo un proceso de Hatsu toca el transporte a la vez.
+    /// </summary>
+    public static async Task<string> RegisterAndConnectAsync(string outPath)
     {
         var F = new List<DiagFinding>(); var D = new List<string>(); void L(string s) => D.Add(s);
-        var paired = await PhoneEnv.PairedAsync();
-        var before = await Snapshot(paired); L("Antes: " + before.Text);
+        void Flush(string title) { try { File.WriteAllText(outPath, Render(title, F, D)); } catch (Exception) { } }
+        const string Title = "Hatsu Connect · registro + conexión HFP (por etapas, reversible)";
+        using var gate = HfpLock.TryTake();
+        if (gate is null) { F.Add(new("Transporte telefónico", DiagState.NotChecked, "el módulo de llamadas de Hatsu ya está usando el transporte (registro activo): no hace falta este experimento; su estado está en el registro de Connect")); return Render(Title, F, D); }
         var devs = await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth));
-        if (devs.Count == 0) F.Add(new("Transporte telefónico Bluetooth", DiagState.NotChecked, "Windows no lista ningún transporte: no hay nada que registrar"));
+        if (devs.Count == 0) { F.Add(new("Transporte telefónico Bluetooth", DiagState.NotChecked, "Windows no lista ningún transporte: no hay nada que registrar")); return Render(Title, F, D); }
+        F.Add(new("Etapa en curso", DiagState.NotChecked, "iniciando")); Flush(Title);
         foreach (var d in devs.Take(2))
         {
-            var t = PhoneLineTransportDevice.FromId(d.Id); string tag = DiagIds.Tag(d.Id); bool weRegistered = false;
-            try
+            string tag = DiagIds.Tag(d.Id);
+            using var seq = new TransportSequence(WinRtTransportOps.FromId(d.Id));
+            var res = await seq.RegisterAndConnectAsync(progress: st =>
             {
-                bool was = false; try { was = t.IsRegistered(); } catch (Exception) { }
-                L($"Transporte {tag}: registrado antes={was}");
-                if (!was)
-                {
-                    try { t.RegisterApp(); weRegistered = true; F.Add(new($"RegisterApp {tag}", DiagState.Available, "Windows aceptó el registro de esta app")); }
-                    catch (Exception e) { F.Add(new($"RegisterApp {tag}", CallProbe.Classify(e), CallProbe.Describe(e))); }
-                }
-                try { L($"  tras registrar: registrado={t.IsRegistered()}"); } catch (Exception) { }
-                try { var r = await t.ConnectAsync(); F.Add(new($"ConnectAsync {tag}", DiagState.Detected, "resultado: " + r)); }
-                catch (Exception e) { F.Add(new($"ConnectAsync {tag}", CallProbe.Classify(e), CallProbe.Describe(e))); }
-                for (int i = 0; i < 8; i++)   // observa hasta ~8 s si aparece algo (líneas, enrutado, endpoints)
-                {
-                    await Task.Delay(1000);
-                    string routing = "?"; try { routing = t.AudioRoutingStatus.ToString(); } catch (Exception) { }
-                    L($"  +{i + 1}s AudioRoutingStatus={routing}");
-                }
-                var after = await Snapshot(paired); L("Después: " + after.Text);
-                F.Add(new("Cambios observados tras registrar y conectar", before.Text == after.Text ? DiagState.NotChecked : DiagState.Detected,
-                    before.Text == after.Text ? "sin cambios en líneas ni endpoints" : "líneas/endpoints cambiaron: ver «Antes» y «Después» en el detalle"));
-                await AppendLines(paired, L);
+                F.RemoveAll(x => x.Area == "Etapa en curso");
+                F.Add(new($"{st.Stage} · transporte {tag}", st.Outcome == StageOutcome.Ok ? DiagState.Available : st.Outcome == StageOutcome.Threw && st.HResult == unchecked((int)0x80070005) ? DiagState.AccessDenied : st.Outcome is StageOutcome.Timeout or StageOutcome.Cancelled ? DiagState.Error : DiagState.Error,
+                    $"{st.Outcome} en {st.Ms} ms{(st.HResult != 0 ? $" · HRESULT 0x{unchecked((uint)st.HResult):X8} ({DiagIds.HResultName(st.HResult)})" : "")}{(string.IsNullOrEmpty(st.Detail) ? "" : " · " + st.Detail)}"));
+                F.Add(new("Etapa en curso", DiagState.NotChecked, "esperando a Windows tras «" + st.Stage + "»")); Flush(Title);
+            });
+            F.RemoveAll(x => x.Area == "Etapa en curso");
+            F.Add(new($"Resultado · transporte {tag}", res.Ready ? DiagState.Available : DiagState.Error, res.Status.Reason + (res.Wedged ? $" (BLOQUEO en «{res.WedgedStage}»)" : "")));
+            F.Add(new($"IsRegistered tras el experimento · {tag}", res.RegisteredAfter ? DiagState.Available : DiagState.NotChecked, res.RegisteredAfter ? "verdadero" : "falso"));
+            if (res.Ready)
+            {   // ¿aparecen líneas Bluetooth ahora que está registrado? (la línea solo existe con el registro)
+                var paired = await PhoneEnv.PairedAsync();
+                var lines = await PhoneEnv.LinesAsync(paired, TimeSpan.FromSeconds(6));
+                foreach (var l in lines) L($"  línea{l.IdTag} {l.Transport} dispositivo{l.DeviceIdTag} = {l.MatchesPaired ?? "?"} · llamadas activas: {l.Calls.Count}");
+                F.Add(new("Líneas Bluetooth tras registrar", lines.Any(l => l.Transport == "Bluetooth") ? DiagState.Detected : DiagState.NotChecked, $"{lines.Count(l => l.Transport == "Bluetooth")} línea(s) Bluetooth (sin teléfono conectado por HFP no aparece ninguna)"));
             }
-            finally
-            {
-                if (weRegistered)
-                {
-                    try { t.UnregisterApp(); F.Add(new($"UnregisterApp {tag}", DiagState.Available, "registro deshecho: Windows queda como estaba")); }
-                    catch (Exception e) { F.Add(new($"UnregisterApp {tag}", DiagState.Error, CallProbe.Describe(e) + " — ejecuta «Deshacer registro» en Ajustes")); }
-                }
-            }
+            var c = await seq.CleanupAsync(); F.Add(new($"Deshacer registro · {tag}", c.Ok ? DiagState.Available : DiagState.Error, c.ToString()));
+            if (res.Wedged) { Flush(Title); return Render(Title, F, D); }
         }
-        return Render("Hatsu Connect · experimento HFP: registrar + conectar (reversible)", F, D);
+        return Render(Title, F, D);
     }
 
     public static async Task<string> AudioRouteAsync()
@@ -96,17 +92,18 @@ internal static class HfpExperiments
         return Render("Hatsu Connect · experimento: audio de la llamada al PC", F, D);
     }
 
-    public static string Restore()
+    public static async Task<string> RestoreAsync()
     {
         var F = new List<DiagFinding>();
+        using var gate = HfpLock.TryTake();
+        if (gate is null) { F.Add(new("Deshacer registro", DiagState.NotChecked, "el módulo de llamadas de Hatsu está usando el transporte: desactiva «Llamadas completas desde el PC» en Ajustes y Hatsu deshará su registro")); return Render("Hatsu Connect · deshacer registro de la app", F, []); }
         try
         {
-            var devs = DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth)).AsTask().GetAwaiter().GetResult();
+            var devs = await DeviceInformation.FindAllAsync(PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth));
             foreach (var d in devs.Take(4))
             {
-                var t = PhoneLineTransportDevice.FromId(d.Id); string tag = DiagIds.Tag(d.Id);
-                try { if (t.IsRegistered()) { t.UnregisterApp(); F.Add(new($"UnregisterApp {tag}", DiagState.Available, "registro deshecho")); } else F.Add(new($"Transporte {tag}", DiagState.Detected, "esta app no estaba registrada")); }
-                catch (Exception e) { F.Add(new($"UnregisterApp {tag}", CallProbe.Classify(e), CallProbe.Describe(e))); }
+                using var seq = new TransportSequence(WinRtTransportOps.FromId(d.Id)); string tag = DiagIds.Tag(d.Id);
+                var c = await seq.CleanupAsync(); F.Add(new($"Transporte {tag}", c.Ok ? DiagState.Detected : DiagState.Error, c.ToString()));
             }
             if (devs.Count == 0) F.Add(new("Transporte telefónico Bluetooth", DiagState.NotChecked, "ninguno listado"));
         }

@@ -81,18 +81,26 @@ internal sealed class PhoneLink : IAsyncDisposable, IAncsCallActions
         CallChanged();
     });
 
+    /// <summary>Estado del proveedor de telefonía (Apagado / No disponible con causa / Listo) hacia el host, para Ajustes.</summary>
+    public Action<ProviderStatus>? PublishCallStatus { get; set; }
+    private void PublishCallStatusNow() { try { PublishCallStatus?.Invoke(_telephony?.Status ?? ProviderStatus.Off); } catch (Exception) { } }
+
+    /// <summary>Windows dejó una llamada del transporte sin responder: quien aloja el módulo lo reinicia (docs/62).</summary>
+    public Action<string>? OnTransportWedged { get; set; }
+
     private async Task SetTelephonyAsync(bool on)
     {
         if (on && _telephony is null)
         {
             _telephony = new WindowsTelephonyProvider(
                 c => { Post(async () => { var dev = _state.Status == PhoneLinkStatus.Connected ? "iPhone" : "Teléfono"; if (await _coord.OnProviderCallAsync(c, dev)) { _log("[connect] llamada (sistema): " + _call.State.Phase); CallChanged(); } }); return Task.CompletedTask; },   // todo el estado se toca en el hilo lógico único
-                _log, () => Post(() => { CallChanged(); return Task.CompletedTask; }));
+                _log, () => Post(() => { CallChanged(); PublishCallStatusNow(); return Task.CompletedTask; }),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "hfp-wedge.json"), stage => OnTransportWedged?.Invoke(stage));
             _log("[connect] control de llamadas desde el PC activado");
         }
         else if (!on && _telephony is not null)
         {
-            var t = _telephony; _telephony = null; await t.DisposeAsync(); ResetCall(); _log("[connect] control de llamadas desde el PC desactivado (registro deshecho)");
+            var t = _telephony; _telephony = null; await t.DisposeAsync(); ResetCall(); _log("[connect] control de llamadas desde el PC desactivado (registro deshecho)"); PublishCallStatusNow();
         }
     }
 
@@ -147,6 +155,7 @@ internal sealed class PhoneLink : IAsyncDisposable, IAncsCallActions
     private async Task CheckAsync()
     {
         if (!_configured) return;
+        PublishCallStatusNow();   // el host no guarda el estado del proveedor (evento, no retenido): se repite cada 30 s
         if (!_cfg.Battery && !_cfg.Notifications) { await TeardownAsync(forgetDevice: false); SetState(_state with { Status = PhoneLinkStatus.Disconnected, BatteryStatus = PhoneFeatureStatus.Off, NotificationsStatus = PhoneFeatureStatus.Off, Message = "Batería y notificaciones desactivadas en Ajustes" }); return; }
         GraceExpired();
         if (DateTime.UtcNow < _nextAttempt) return;
