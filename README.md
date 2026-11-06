@@ -31,7 +31,7 @@ Resumen en [`CHANGELOG.md`](CHANGELOG.md). Lo último (rama de trabajo, **pendie
 - Dock: botón × en cada ventana de la vista previa; «Reservar espacio» y la vista previa se aplican sin reiniciar.
 - VPN en la barra (opcional): ver el estado y conectar o desconectar las VPN de Windows desde un panel.
 - Limpieza con panel rediseñado; icono propio de Hatsu en la barra y el panel.
-- Gestures puede mostrar u ocultar el Dock al instante; Spotlight puede acomodar las ventanas abiertas con una distribución de Snap.
+- Gestures permite abrir tus aplicaciones o páginas web favoritas con una esquina, un botón del ratón o un atajo; Spotlight puede acomodar las ventanas abiertas con una distribución de Snap.
 
 ## Probar y compilar
 

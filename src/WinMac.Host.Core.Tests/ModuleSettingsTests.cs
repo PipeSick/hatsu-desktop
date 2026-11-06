@@ -189,3 +189,50 @@ public class HotkeyConflictTests
         HotkeyStatus.Set(System.Text.Json.JsonDocument.Parse("{}").RootElement); SettingsBuilder.HotkeyNote = null;
     }
 }
+
+public class GestureLauncherSettingsTests
+{
+    private static (ConfigService, SettingsActions) Make(Func<string, IReadOnlyList<(string Id, string Name)>>? find = null)
+    {
+        var cfg = new ConfigService(Path.Combine(Path.GetTempPath(), "hatsu-launch-" + Guid.NewGuid() + ".json"), new HostConfig());
+        return (cfg, new SettingsActions(cfg, () => { }, _ => { }) { FindApps = find });
+    }
+
+    [Fact] public void Adding_an_app_picks_the_best_match_stores_it_and_offers_it_in_the_dropdown()
+    {
+        var (cfg, a) = Make(q => [("Spotify.Id!App", "Spotify"), ("Otra.Id", "Spotify Lite")]);
+        Assert.True(a.Apply(new SettingsEdit("gest.addapp", "text", Text: "spotify")));
+        var l = WinMac.Bar.Features.Launchers.Parse(cfg.Bar.GestLaunchers).Single(); Assert.Equal("Spotify", l.Name); Assert.Equal("Spotify.Id!App", l.Target);
+        Assert.Contains(a.GestureChoices("gestCornerTL")!, c => c.Id == l.ActionId && c.Name == "Abrir: Spotify");
+        Assert.True(a.Apply(new SettingsEdit("gest.set:gestCornerTL", "text", Text: l.ActionId))); Assert.Equal(l.ActionId, cfg.Bar.GestCornerTL);
+        Assert.Contains("Abrir: Spotify", SettingsBuilder.GestRow("gestCornerTL", "Esquina", cfg.Bar.GestCornerTL, cfg.Bar).Title);
+    }
+
+    [Fact] public void Removing_a_launcher_sends_assignments_back_to_none()
+    {
+        var (cfg, a) = Make(q => [("X.Id", "Calculadora")]); a.Apply(new SettingsEdit("gest.addapp", "text", Text: "calc"));
+        var id = WinMac.Bar.Features.Launchers.Parse(cfg.Bar.GestLaunchers).Single().ActionId; a.Apply(new SettingsEdit("gest.set:gestMouseX1", "text", Text: id));
+        Assert.True(a.Apply(new SettingsEdit("gest.rm:" + id["launch:".Length..], "button"))); Assert.Equal("", cfg.Bar.GestLaunchers);
+        Assert.False(WinMac.Bar.Features.GestureRules.IsAvailable(cfg.Bar.GestMouseX1, cfg.Bar));   // la asignación huérfana ya no actúa
+        Assert.False(a.Apply(new SettingsEdit("gest.rm:zz", "button")));
+    }
+
+    [Fact] public void Websites_are_normalized_and_bad_input_leaves_a_visible_note()
+    {
+        var (cfg, a) = Make(); a.Apply(new SettingsEdit("gest.addurl", "text", Text: "youtube.com"));
+        var l = WinMac.Bar.Features.Launchers.Parse(cfg.Bar.GestLaunchers).Single(); Assert.Equal("https://youtube.com/", l.Target); Assert.Equal("Abrir página: youtube.com", WinMac.Bar.Features.Launchers.DisplayName(l));
+        a.Apply(new SettingsEdit("gest.addurl", "text", Text: "file:///C:/x.exe")); Assert.Contains("no parece una dirección web", SettingsBuilder.GestNote); Assert.Single(WinMac.Bar.Features.Launchers.Parse(cfg.Bar.GestLaunchers));
+        a.Apply(new SettingsEdit("gest.addapp", "text", Text: "algo")); Assert.Contains("No se puede buscar", SettingsBuilder.GestNote);   // sin buscador de apps
+        var (_, b) = Make(q => []); b.Apply(new SettingsEdit("gest.addapp", "text", Text: "inexistente")); Assert.Contains("No encontré", SettingsBuilder.GestNote);
+        SettingsBuilder.GestNote = null;
+    }
+
+    [Fact] public void The_limit_is_enforced_and_the_add_rows_disappear_when_full()
+    {
+        var (cfg, a) = Make(q => [(q + ".id", q)]);
+        for (int i = 0; i < 6; i++) a.Apply(new SettingsEdit("gest.addapp", "text", Text: "app" + i));
+        Assert.Equal(6, WinMac.Bar.Features.Launchers.Parse(cfg.Bar.GestLaunchers).Count);
+        a.Apply(new SettingsEdit("gest.addapp", "text", Text: "app7")); Assert.Equal(6, WinMac.Bar.Features.Launchers.Parse(cfg.Bar.GestLaunchers).Count); Assert.Contains("Ya hay 6", SettingsBuilder.GestNote);
+        SettingsBuilder.GestNote = null;
+    }
+}

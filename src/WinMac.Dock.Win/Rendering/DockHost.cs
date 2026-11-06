@@ -133,13 +133,10 @@ public sealed class DockHost : IDisposable
 
     // Launchpad abierto en este monitor (lo avisa el proceso del Dock desde otro hilo): se lee aquí, en el hilo de esta ventana.
     private long _lpSeq, _lpSeenSeq; private int _lpOpen; private long _lpRaisedAt;
-    private int _forceHidden; private bool _forceApplied;
-    public void SetForceHidden(bool hidden) => Volatile.Write(ref _forceHidden, hidden ? 1 : 0);
     public void SetLaunchpad(bool open) { Volatile.Write(ref _lpOpen, open ? 1 : 0); Interlocked.Increment(ref _lpSeq); }
 
     private void ApplyLaunchpadPin()
     {
-        { bool f = Volatile.Read(ref _forceHidden) == 1; if (f != _forceApplied) { _forceApplied = f; _ctl.SetForceHidden(f); } }
         long s = Volatile.Read(ref _lpSeq);
         if (s != _lpSeenSeq) { _lpSeenSeq = s; bool o = Volatile.Read(ref _lpOpen) == 1; _ctl.SetLaunchpadOpen(o); if (o) _lpRaisedAt = 0; }
         // Launchpad es una ventana superior a pantalla completa creada DESPUÉS que el Dock: se vuelve a poner el Dock por encima (sin activarlo ni moverlo; no roba el foco)

@@ -65,6 +65,7 @@ public static class GestureRules
 {
     public static bool IsAvailable(string actionId, BarConfig cfg)
     {
+        if (actionId.StartsWith(Launchers.Prefix, StringComparison.Ordinal)) return Launchers.Find(cfg, actionId) is not null;   // un acceso rápido existe mientras siga en la lista
         var d = GestureActions.All.FirstOrDefault(a => a.Id == actionId); if (d is null || actionId == "none") return false;
         return d.Module switch
         {

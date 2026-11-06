@@ -28,6 +28,7 @@ internal sealed class SettingsWindow : IDisposable
     private D2DDevice? _dev; private SettingsPainter? _painter; private IDXGISwapChain1? _swap; private ID2D1Bitmap1? _bmp; private double _scale = 1; private bool _dark; private int _wPx, _hPx;
     public IntPtr Handle => _hwnd;
     public bool IsOpen => _hwnd != IntPtr.Zero;
+    private IReadOnlyList<WinMac.Apps.InstalledApp>? _appsCache; private DateTime _appsAt;
 
     public SettingsWindow(ConfigService cfg, Func<IReadOnlyDictionary<string, ModuleState>> states, Action openLocal, string exePath, Action<string> log)
     {
@@ -37,6 +38,15 @@ internal sealed class SettingsWindow : IDisposable
             try { if (on) Autostart.Install(_exe); else Autostart.Remove(); }
             catch (Exception e) { _log("[host] no se pudo cambiar el inicio automático: " + e.Message); throw new InvalidOperationException(e.Message); }
         }, log);
+        _actions.FindApps = q =>
+        {   // el mismo índice y la misma búsqueda que Launchpad y Spotlight; la lista se lee una vez y se reutiliza un minuto
+            try
+            {
+                if (_appsCache is null || (DateTime.UtcNow - _appsAt).TotalSeconds > 60) { _appsCache = WinMac.Apps.Win.AppsFolderReader.Read(_log); _appsAt = DateTime.UtcNow; }
+                return WinMac.Apps.AppMatcher.Search(_appsCache, q, null, 5).Select(a => (a.Id, a.Name)).ToList();
+            }
+            catch (Exception e) { _log("[host] buscar aplicaciones: " + e.GetType().Name); return []; }
+        };
         _actions.AdoptAutostart = () =>
         {   // adopción EXPLÍCITA: confirmación clara y solo si Windows hoy inicia OTRA copia; no se borra nada
             var other = Autostart.ForeignPath(_exe); if (other is null) return false;

@@ -122,9 +122,6 @@ public sealed class DockController
     /// <summary>Launchpad se abrió o cerró en el monitor de este Dock (ver <see cref="LaunchpadPin"/>). No cambia la configuración.</summary>
     public void SetLaunchpadOpen(bool open) => _lp.Apply(open);
     public bool LaunchpadPinned => _lp.Active;
-    private bool _forceHidden;
-    /// <summary>Ocultar/mostrar el Dock al instante (gesto): mientras esté activo el Dock queda escondido hasta que se vuelva a alternar; Launchpad lo sigue mostrando.</summary>
-    public void SetForceHidden(bool hidden) => _forceHidden = hidden;
     public void Bounce(string id) => _anim.Bounce(id);
 
     private double BarTop => _m.WindowHeight - _m.ShadowMargin - _m.BarHeight;
@@ -147,7 +144,7 @@ public sealed class DockController
         // Ocultamiento automático
         _lp.Step(dt);
         if (_lp.Active) { _hiddenTarget = false; _outside = 0; _edge = 0; }   // Launchpad abierto en este monitor: el Dock se ve (también si estaba oculto o suprimido); al cerrarse, la cuenta de ocultar parte de cero
-        else if (_suppressed || _forceHidden) { _hiddenTarget = true; _outside = 0; _edge = 0; }
+        else if (_suppressed) _hiddenTarget = true;
         else if (_cfg.AutoHide)
         {
             if (_hiddenTarget)

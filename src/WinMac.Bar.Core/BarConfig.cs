@@ -169,6 +169,8 @@ public sealed record BarConfig
     public int GestCornerDelayMs { get; init; } = 450;
     public string GestMouseX1 { get; init; } = "none";
     public string GestMouseX2 { get; init; } = "none";
+    /// <summary>Accesos rápidos de Gestures (JSON: aplicaciones y páginas web, máximo 6). Ver <see cref="Features.Launchers"/>.</summary>
+    public string GestLaunchers { get; init; } = "";
     public string GestKey1 { get; init; } = "";
     public string GestKey1Action { get; init; } = "none";
     public string GestKey2 { get; init; } = "";
@@ -195,6 +197,7 @@ public sealed record BarConfig
         McHotkey = Features.FeatureConfig.NormalizeHotkey(McHotkey, "Ctrl+Alt+Up"),
         LtHotkey = Features.FeatureConfig.NormalizeHotkey(LtHotkey, "Ctrl+Alt+Space"),
         SnapNextHotkey = Features.FeatureConfig.NormalizeHotkey(SnapNextHotkey, ""),
+        GestLaunchers = Features.Launchers.Serialize(Features.Launchers.Parse(GestLaunchers)),
         GestKey1 = Features.FeatureConfig.NormalizeHotkey(GestKey1, ""), GestKey2 = Features.FeatureConfig.NormalizeHotkey(GestKey2, ""),
         SnapModifier = Features.FeatureConfig.SnapModifiers.Contains(SnapModifier) ? SnapModifier : "Shift",
         SnapLayout = string.IsNullOrWhiteSpace(SnapLayout) ? "Mitades" : SnapLayout.Trim(),

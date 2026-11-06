@@ -135,12 +135,6 @@ internal static class Program
             var target = LaunchpadRouting.MonitorKeyFor(st, snap.Select(x => x.Key));
             foreach (var f in snap) f.Host.SetLaunchpad(st.Open && f.Key == target);
         });
-        // Gesto «mostrar/ocultar el Dock»: el host publica el estado y todos los Docks lo aplican al instante (sin tocar dock.json)
-        link?.Subscribe("dock.force", d =>
-        {
-            bool hide = d is { ValueKind: System.Text.Json.JsonValueKind.Object } dd && dd.ValueKind == System.Text.Json.JsonValueKind.Object && dd.TryGetProperty("hidden", out var hv) && hv.ValueKind == System.Text.Json.JsonValueKind.True;
-            foreach (var h in Hosts()) h.SetForceHidden(hide);
-        });
         if (link is not null) { link.ShutdownRequested += () => { lock (gate) quitting = true; foreach (var h in Hosts()) h.RequestQuit(); }; link.HealthCheck = () => Hosts().All(h => h.Responsive); link.Start(); Log("Modo hosted: enlazado con HatsuDesktop.exe."); }
 
         using var quitEvent = new EventWaitHandle(false, EventResetMode.ManualReset, DockDefaults.QuitEventName);

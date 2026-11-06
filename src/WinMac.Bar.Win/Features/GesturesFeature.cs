@@ -105,12 +105,26 @@ internal sealed class GesturesFeature : IHatsuFeature
                 case "livetext": _host.LiveTextRun?.Invoke(); break;
                 case "snapnext": _host.SnapNextZone?.Invoke(); break;
                 case "capture": _host.BeginRegionCaptureFromFeature("gesto"); break;
-                case "dock": _host.HostCommandFromFeature("dock.toggle"); break;
+                case var l when l.StartsWith(Launchers.Prefix, StringComparison.Ordinal): RunLauncher(Launchers.Find(cfg, l)); break;
                 case "desktopprev": SendDesktopKeys(0x25); break;
                 case "desktopnext": SendDesktopKeys(0x27); break;
             }
         }
         catch (Exception e) { _log($"[gestures] «{action}» falló: {e.GetType().Name}: {e.Message}"); }
+    }
+
+    /// <summary>Abre un acceso rápido: una aplicación del menú Inicio (la abre el Explorador, como Launchpad) o una página web (el navegador predeterminado). Solo http(s) y apps de AppsFolder: nunca una ruta o comando arbitrarios.</summary>
+    private void RunLauncher(GestLauncher? l)
+    {
+        if (l is null) return;
+        if (l.Kind == GestLauncher.Url)
+        {
+            if (!Launchers.IsSafeUrl(l.Target, out var u)) { _log($"[gestures] «{l.Name}»: dirección no válida"); return; }
+            BarNative.ShellExecuteW(IntPtr.Zero, "open", u!.ToString(), null, null, 1); return;
+        }
+
+        using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "\"shell:AppsFolder\\" + l.Target + "\"") { UseShellExecute = false });
+        _log($"[gestures] abrir «{l.Name}»");
     }
 
     /// <summary>Cambiar de escritorio virtual con el atajo documentado de Windows Win+Ctrl+←/→ (no se usan interfaces privadas de escritorios virtuales).</summary>

@@ -9,6 +9,32 @@ public sealed record SettingsEdit(string Id, string Kind, bool On = false, int I
 /// <summary>Aplica un cambio de Ajustes a la configuración central (que valida, guarda de forma atómica y avisa a los módulos). Puro respecto de la interfaz: se prueba con un ConfigService real sobre un archivo temporal.</summary>
 public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<bool> setAutostart, Action<string>? log = null)
 {
+    /// <summary>Agrega un acceso rápido (app o página) a Gestures. Un texto vacío no hace nada; si no se puede, deja un aviso visible en la tarjeta.</summary>
+    private bool AddLauncher(string kind, string text)
+    {
+        SettingsBuilder.GestNote = null; if (text.Length == 0) return true;
+        var cur = WinMac.Bar.Features.Launchers.Parse(cfg.Bar.GestLaunchers);
+        if (cur.Count >= WinMac.Bar.Features.Launchers.Max) { SettingsBuilder.GestNote = $"Ya hay {WinMac.Bar.Features.Launchers.Max} accesos rápidos: quita uno para agregar otro."; return true; }
+        string name, target;
+        if (kind == WinMac.Bar.Features.GestLauncher.Url)
+        {
+            var url = WinMac.Bar.Features.Launchers.NormalizeUrl(text); if (url is null) { SettingsBuilder.GestNote = $"«{text}» no parece una dirección web válida (escribe el dominio completo, con su terminación)."; return true; }
+            name = WinMac.Bar.Features.Launchers.SiteName(url); target = url;
+        }
+        else
+        {
+            if (FindApps is null) { SettingsBuilder.GestNote = "No se puede buscar aplicaciones ahora."; return true; }
+            var found = FindApps(text);
+            if (found.Count == 0) { SettingsBuilder.GestNote = $"No encontré ninguna aplicación instalada que se llame «{text}». Prueba con otra parte del nombre."; return true; }
+            var best = found.FirstOrDefault(f => string.Equals(f.Name, text, StringComparison.CurrentCultureIgnoreCase)); if (best.Id is null) best = found[0];
+            name = best.Name; target = best.Id;
+            if (found.Count > 1 && !string.Equals(best.Name, text, StringComparison.CurrentCultureIgnoreCase)) SettingsBuilder.GestNote = $"Agregué «{best.Name}». Otras coincidencias: {string.Join(", ", found.Skip(1).Take(3).Select(f => f.Name))}. Si no era esa, quítala y escribe el nombre completo.";
+        }
+
+        if (WinMac.Bar.Features.Launchers.Add(cur, name, kind, target) is not { } added) { SettingsBuilder.GestNote ??= $"«{name}» ya está en la lista o no es válido."; return true; }
+        cfg.ApplyBarPatch(Patch("gestLaunchers", WinMac.Bar.Features.Launchers.Serialize(added.List))); return true;
+    }
+
     private static JsonElement Patch(string field, object? value) => JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [field] = value });
 
     /// <summary>true si el cambio se reconoció (aunque no modificara nada).</summary>
@@ -17,6 +43,9 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
         try { return ApplyCore(e); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { log?.Invoke("[host] ajuste «" + e.Id + "» no se pudo aplicar: " + ex.Message); return false; }
     }
+
+    /// <summary>Busca aplicaciones instaladas por nombre (la implementa el host con el índice de Launchpad/Spotlight). Devuelve (Id, nombre) ordenadas de mejor a peor coincidencia.</summary>
+    public Func<string, IReadOnlyList<(string Id, string Name)>>? FindApps { get; set; }
 
     /// <summary>Clears the Island's clipboard history (pinned included); provided by the host.</summary>
     public Action? ClearClipboard { get; set; }
@@ -112,6 +141,14 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             cfg.ApplyBarPatch(Patch(f, e.Text)); return true;
         }
 
+        if (id.StartsWith("gest.rm:", StringComparison.Ordinal) && e.Kind == "button")
+        {
+            var cur = WinMac.Bar.Features.Launchers.Parse(cfg.Bar.GestLaunchers); string lid = id[8..]; if (!cur.Any(l => l.Id == lid)) return false;
+            SettingsBuilder.GestNote = null; cfg.ApplyBarPatch(Patch("gestLaunchers", WinMac.Bar.Features.Launchers.Serialize(WinMac.Bar.Features.Launchers.Remove(cur, lid)))); return true;   // Sanitize deja en «Nada» las asignaciones que apuntaban a él al validarse
+        }
+
+        if (id == "gest.addapp" && e.Kind == "text") return AddLauncher(WinMac.Bar.Features.GestLauncher.App, (e.Text ?? "").Trim());
+        if (id == "gest.addurl" && e.Kind == "text") return AddLauncher(WinMac.Bar.Features.GestLauncher.Url, (e.Text ?? "").Trim());
         if (id.StartsWith("mod.key:", StringComparison.Ordinal) && e.Kind == "text")
         {
             string f = id[8..]; if (!SettingsBuilder.HotkeyFields.Contains(f)) return false;

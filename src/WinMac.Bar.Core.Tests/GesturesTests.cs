@@ -55,7 +55,8 @@ public class GesturesTests
     {
         var off = new BarConfig(); var on = new BarConfig { McEnabled = true, SnapEnabled = true, LiveTextEnabled = true };
         Assert.False(GestureRules.IsAvailable("mission", off)); Assert.True(GestureRules.IsAvailable("mission", on)); Assert.False(GestureRules.IsAvailable("snapnext", off)); Assert.False(GestureRules.IsAvailable("livetext", off));
-        Assert.True(GestureRules.IsAvailable("spotlight", off)); Assert.True(GestureRules.IsAvailable("dock", off)); Assert.False(GestureRules.IsAvailable("none", on)); Assert.False(GestureRules.IsAvailable("inventada", on));
+        Assert.True(GestureRules.IsAvailable("spotlight", off)); Assert.False(GestureRules.IsAvailable("dock", off));   // ocultar el Dock ya no es una acción: una asignación antigua queda en «Nada»
+        Assert.Equal("none", FeatureConfig.NormalizeAction("dock")); Assert.False(GestureRules.IsAvailable("none", on)); Assert.False(GestureRules.IsAvailable("inventada", on));
     }
 
     [Fact] public void Corner_assignments_read_the_right_config_field()
@@ -64,3 +65,48 @@ public class GesturesTests
         Assert.Equal("mission", GestureRules.ForCorner(c, HotCorner.TopLeft)); Assert.Equal("spotlight", GestureRules.ForCorner(c, HotCorner.BottomRight)); Assert.Equal("none", GestureRules.ForCorner(c, HotCorner.TopRight));
     }
 }
+
+public class LauncherTests
+{
+    private static readonly GestLauncher Spot = new("l1", "Spotify", GestLauncher.App, "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify");
+
+    [Fact]
+    public void Urls_are_normalized_and_only_http_https_are_accepted()
+    {
+        Assert.Equal("https://youtube.com/", Launchers.NormalizeUrl("youtube.com")); Assert.Equal("http://localhost.local/x", Launchers.NormalizeUrl("http://localhost.local/x"));
+        Assert.Null(Launchers.NormalizeUrl("")); Assert.Null(Launchers.NormalizeUrl("dos palabras.com")); Assert.Null(Launchers.NormalizeUrl("localhost"));
+        Assert.Null(Launchers.NormalizeUrl("file:///C:/Windows/notepad.exe")); Assert.Null(Launchers.NormalizeUrl("javascript:alert(1)"));
+        Assert.False(Launchers.IsSafeUrl("ms-settings:", out _)); Assert.False(Launchers.IsSafeUrl("ftp://x.com", out _));
+    }
+
+    [Fact]
+    public void Add_remove_roundtrip_respects_the_limit_and_duplicates()
+    {
+        IReadOnlyList<GestLauncher> list = [];
+        var (l1, a1) = Launchers.Add(list, "Spotify", GestLauncher.App, Spot.Target)!.Value; Assert.Equal("launch:l1", a1.ActionId);
+        Assert.Null(Launchers.Add(l1, "Otra vez", GestLauncher.App, Spot.Target.ToLowerInvariant()));                       // mismo destino: no se repite
+        Assert.Null(Launchers.Add(l1, "Mala", GestLauncher.Url, "file:///x"));                                                  // dirección no válida
+        var cur = l1; for (int i = 0; i < Launchers.Max - 1; i++) cur = Launchers.Add(cur, "App" + i, GestLauncher.App, "id" + i)!.Value.List;
+        Assert.Equal(Launchers.Max, cur.Count); Assert.Null(Launchers.Add(cur, "Extra", GestLauncher.App, "extra"));
+        var back = Launchers.Parse(Launchers.Serialize(cur)); Assert.Equal(cur.Select(x => x.Id), back.Select(x => x.Id));
+        Assert.DoesNotContain(Launchers.Remove(cur, "l1"), x => x.Id == "l1");
+    }
+
+    [Fact]
+    public void Parse_drops_garbage_and_dangerous_entries()
+    {
+        Assert.Empty(Launchers.Parse("no es json")); Assert.Empty(Launchers.Parse("")); Assert.Empty(Launchers.Parse("{}"));
+        var l = Launchers.Parse("[{\"id\":\"l1\",\"name\":\"ok\",\"kind\":\"url\",\"target\":\"https://a.com\"},{\"id\":\"L2\",\"name\":\"mayus\",\"kind\":\"app\",\"target\":\"x\"},{\"id\":\"l3\",\"name\":\"cmd\",\"kind\":\"app\",\"target\":\"a\\\"b\"},{\"id\":\"l4\",\"name\":\"mala\",\"kind\":\"url\",\"target\":\"file:///c\"}]");
+        Assert.Equal(["l1"], l.Select(x => x.Id));
+    }
+
+    [Fact]
+    public void A_launcher_action_is_available_only_while_it_exists_and_is_normalized()
+    {
+        var cfg = new BarConfig { GestLaunchers = Launchers.Serialize([Spot]) };
+        Assert.True(GestureRules.IsAvailable("launch:l1", cfg)); Assert.False(GestureRules.IsAvailable("launch:l2", cfg)); Assert.False(GestureRules.IsAvailable("launch:l1", new BarConfig()));
+        Assert.Equal("launch:l1", FeatureConfig.NormalizeAction("launch:l1")); Assert.Equal("none", FeatureConfig.NormalizeAction("launch:")); Assert.Equal("none", FeatureConfig.NormalizeAction("launch:../x"));
+        Assert.Equal("Abrir: Spotify", Launchers.DisplayName(Spot)); Assert.Equal("youtube.com", Launchers.SiteName("https://www.youtube.com/watch"));
+    }
+}
+
