@@ -7,14 +7,19 @@ namespace WinMac.Bar.Notch;
 /// Qué quiere la Isla (NotchWin) que le cuente la barra: sale de los ajustes centrales de la Isla (tópico retenido <c>config.notch</c>, campos <c>pillVolume</c>,
 /// <c>pillBrightness</c>, <c>pillNotifications</c>). Lo que la Isla no quiere ni se lee ni se envía (las notificaciones no salen de la barra si está apagado).
 /// </summary>
-public sealed record NotchFeedOptions(bool Volume = true, bool Brightness = true, bool Notifications = true)
+public sealed record NotchFeedOptions(bool Volume = true, bool Brightness = true, bool Notifications = true, bool Shelf = true)
 {
     public static NotchFeedOptions Parse(JsonElement? e)
     {
         var o = new NotchFeedOptions();
         if (e is not { ValueKind: JsonValueKind.Object } d) return o;
         static bool? B(JsonElement d, string n) => d.TryGetProperty(n, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : null;
-        return new NotchFeedOptions(B(d, "pillVolume") ?? o.Volume, B(d, "pillBrightness") ?? o.Brightness, B(d, "pillNotifications") ?? o.Notifications);
+        // Shelf+: la pestaña «shelf» de la Isla está activa (así las acciones de Hatsu que dependen de la estantería solo se ofrecen si existe)
+        bool shelf = o.Shelf;
+        if (d.TryGetProperty("sections", out var secs) && secs.ValueKind == JsonValueKind.Array)
+            foreach (var s in secs.EnumerateArray())
+                if (s.ValueKind == JsonValueKind.Object && s.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String && id.GetString() == "shelf") shelf = B(s, "enabled") ?? shelf;
+        return new NotchFeedOptions(B(d, "pillVolume") ?? o.Volume, B(d, "pillBrightness") ?? o.Brightness, B(d, "pillNotifications") ?? o.Notifications, shelf);
     }
 }
 

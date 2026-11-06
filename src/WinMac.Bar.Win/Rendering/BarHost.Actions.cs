@@ -33,6 +33,10 @@ public sealed partial class BarHost
             if (_actionRegistry.Register(new SpotAction(target, title, "Acción de Hatsu Desktop", kw, null, ActionRisk.Normal, [], avail, () => { run(); return ActionResult.Success; }))) ids.Add(target);
         }
 
+        // Shelf+ vive en la Isla (otro proceso): la acción solo se ofrece si la pestaña «Estantería» está activa
+        if (_actionRegistry.Register(new SpotAction("winmac:shelf:open", "Estantería: abrir en la Isla", "Abre la estantería de la Isla (Shelf+)", "estanteria shelf bandeja archivos temporal isla", "shelf", ActionRisk.Normal, [], () => _notchOpts.Shelf,
+                () => { ModuleEvent?.Invoke("notch.cmd", new { cmd = "shelf-open" }); return ActionResult.Success; }))) ids.Add("winmac:shelf:open");
+
         void Sys(string id, string title, string kw, SystemActionKind k, ActionRisk risk)
         {
             if (_actionRegistry.Register(new SpotAction(id, title, "Acción del sistema" + (risk == ActionRisk.Confirm ? " · pide un segundo Intro" : ""), kw, null, risk, [], null, () => { RunSystemAction(k, null); return ActionResult.Success; }))) ids.Add(id);

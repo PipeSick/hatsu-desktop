@@ -80,8 +80,9 @@ public static partial class SettingsBuilder
     internal static SettingsRow HotkeyRow(string field, string title, string value, string? subtitle = null) =>
         new(RowKind.Field, "mod.key:" + field, title, subtitle ?? "Ctrl o Alt + una tecla (p. ej. Ctrl+Alt+Up). Vacío = sin atajo", Text: value, Placeholder: "sin atajo");
 
-    internal static SettingsPage? ModulesPage(BarConfig bar)
+    internal static SettingsPage? ModulesPage(HostConfig cfg, bool notchInstalled)
     {
+        var bar = cfg.Bar ?? new BarConfig();
         if (ModuleCards.Count == 0) return null;
         var groups = new List<SettingsGroup>
         {
@@ -98,7 +99,27 @@ public static partial class SettingsBuilder
             groups.Add(new(null, rows));
         }
 
+        groups.Add(ShelfGroup(cfg.Notch ?? NotchSettings.Factory, notchInstalled));
         return new SettingsPage("modules", "Módulos", "puzzle", groups);
+    }
+
+    /// <summary>Shelf+ es la estantería de la Isla (otro proceso): su interruptor es la pestaña «shelf» y sus límites viajan por la configuración de la Isla.</summary>
+    private static SettingsGroup ShelfGroup(NotchSettings n, bool installed)
+    {
+        const string why = "Hatsu Notch no está instalado junto a Hatsu Desktop.";
+        bool on = n.Sections.FirstOrDefault(s => s.Id == "shelf")?.Enabled ?? true;
+        var rows = new List<SettingsRow>
+        {
+            new(RowKind.Toggle, "shelf.enabled", "Hatsu Shelf+", "Bandeja temporal en la Isla: suelta archivos, carpetas, imágenes o texto y arrástralos después a otra app.", on, installed, installed ? null : why),
+            new(RowKind.Info, "mod.status:shelf", installed ? (on ? "Estado: activa en la Isla (pestaña «Estantería»)" : "Estado: apagada") : "Estado: " + why),
+        };
+        if (on && installed)
+        {
+            rows.Add(new(RowKind.Field, "shelf.max", "Elementos que guarda (1–100)", "El más antiguo sale primero al pasarse", Text: n.ShelfMaxItems.ToString(), Placeholder: "20"));
+            rows.Add(new(RowKind.Info, "mod.shelf.info", "Archivos y carpetas se guardan por referencia: nunca se copian, mueven ni borran; si el original desaparece, el elemento se marca «no encontrado». Texto e imágenes sueltas se guardan como copia propia temporal. Al reiniciar, la estantería se vacía. Desde Live Text puedes enviar el texto reconocido aquí."));
+        }
+
+        return new(null, rows);
     }
 
     private static bool ToggleValue(BarConfig b, string field) { foreach (var t in BarToggles) if (t.Field == field) return t.Get(b); return false; }

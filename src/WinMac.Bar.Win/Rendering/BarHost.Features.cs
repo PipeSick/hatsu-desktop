@@ -20,6 +20,8 @@ public sealed partial class BarHost
     internal Action? SnapNextZone { get; set; }
     internal Action? SnapEdit { get; set; }
     internal Action? LiveTextRun { get; set; }
+    internal bool ShelfAvailable => _notchOpts.Shelf;
+    internal void SendToShelf(string text) => ModuleEvent?.Invoke("notch.cmd", new { cmd = "shelf-add-text", text });
     internal void ToggleSpotlightFromFeature(string why) => ToggleSpotlight(why);
     internal void ToggleLaunchpadFromFeature(string why) => ToggleLaunchpad(why);
     internal void BeginRegionCaptureFromFeature(string why) => BeginCapture(WinMac.Bar.Capture.CaptureMode.Region, why, delay: 0);

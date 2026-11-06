@@ -58,7 +58,7 @@ public class ModulePageTests
         var page = Pages(new BarConfig()).Single(p => p.Id == "modules"); var rows = page.Groups.SelectMany(g => g.Rows).ToList();
         Assert.Contains(rows, r => r.Id == "bar:mcEnabled" && !r.On); Assert.Contains(rows, r => r.Id == "bar:snapEnabled" && !r.On);
         Assert.All(rows.Where(r => r.Id is "mod.key:mcHotkey" or "snap.mod" or "snap.layout" or "snap.edit"), r => { Assert.False(r.Enabled); Assert.Equal("Activa el módulo", r.Reason); });
-        Assert.DoesNotContain(rows, r => r.Id.Contains("shelf", StringComparison.OrdinalIgnoreCase));   // sin controles de módulos que todavía no existen
+        foreach (var id in new[] { "bar:mcEnabled", "bar:snapEnabled", "bar:liveTextEnabled", "bar:spotActionsEnabled", "bar:gesturesEnabled", "shelf.enabled" }) Assert.Contains(rows, r => r.Id == id);   // los seis módulos tienen su interruptor
     }
 
     [Fact] public void Turning_a_module_on_enables_its_settings_and_shows_its_status()
@@ -107,5 +107,40 @@ public class GestureSettingsTests
     [Fact] public void The_host_toggles_the_dock_autohide_when_the_bar_asks()
     {
         Assert.NotNull(typeof(HostController).GetProperty("DockAutoHideToggleRequested"));    // el cableado real (dock.json) se valida en Windows
+    }
+}
+
+public class ShelfPlusSettingsTests
+{
+    private static string Tmp() => Path.Combine(Path.GetTempPath(), "hatsu-shelf-" + Guid.NewGuid() + ".json");
+
+    [Fact] public void Shelf_plus_has_its_card_with_the_real_state_of_the_shelf_tab_and_its_limit()
+    {
+        var rows = SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "modules").Groups.SelectMany(g => g.Rows).ToList();
+        Assert.True(rows.Single(r => r.Id == "shelf.enabled").On); Assert.Equal("20", rows.Single(r => r.Id == "shelf.max").Text); Assert.Contains("activa", rows.Single(r => r.Id == "mod.status:shelf").Title);
+        var off = SettingsBuilder.Build(new SettingsInput(new HostConfig { Notch = NotchSettings.Factory.ToggleSection(NotchSettings.SectionIds.ToList().IndexOf("shelf")) }, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "modules").Groups.SelectMany(g => g.Rows).ToList();
+        Assert.False(off.Single(r => r.Id == "shelf.enabled").On); Assert.DoesNotContain(off, r => r.Id == "shelf.max");
+    }
+
+    [Fact] public void The_toggle_switches_only_the_shelf_tab_and_the_limit_is_clamped_and_sent_to_the_island()
+    {
+        var cfg = new ConfigService(Tmp(), new HostConfig()); var a = new SettingsActions(cfg, () => { }, _ => { }); var others = cfg.Notch.Sections.Where(s => s.Id != "shelf").Select(s => (s.Id, s.Enabled)).ToList();
+        a.Apply(new SettingsEdit("shelf.enabled", "toggle", On: false)); Assert.False(cfg.Notch.Sections.Single(s => s.Id == "shelf").Enabled); Assert.Equal(others, cfg.Notch.Sections.Where(s => s.Id != "shelf").Select(s => (s.Id, s.Enabled)).ToList());
+        a.Apply(new SettingsEdit("shelf.enabled", "toggle", On: false)); Assert.False(cfg.Notch.Sections.Single(s => s.Id == "shelf").Enabled);   // repetir no lo cambia de vuelta
+        a.Apply(new SettingsEdit("shelf.enabled", "toggle", On: true)); Assert.True(cfg.Notch.Sections.Single(s => s.Id == "shelf").Enabled);
+        a.Apply(new SettingsEdit("shelf.max", "text", Text: "40")); Assert.Equal(40, cfg.Notch.ShelfMaxItems); a.Apply(new SettingsEdit("shelf.max", "text", Text: "9999")); Assert.Equal(100, cfg.Notch.ShelfMaxItems); a.Apply(new SettingsEdit("shelf.max", "text", Text: "x")); Assert.Equal(100, cfg.Notch.ShelfMaxItems);
+        var wire = System.Text.Json.JsonSerializer.Serialize(cfg.Notch.ToWire()); Assert.Contains("\"shelfMaxItems\":100", wire);
+    }
+
+    [Fact] public void The_bar_learns_from_the_island_config_whether_the_shelf_tab_is_active()
+    {
+        using var on = System.Text.Json.JsonDocument.Parse("{\"sections\":[{\"id\":\"shelf\",\"enabled\":true}]}"); using var off = System.Text.Json.JsonDocument.Parse("{\"sections\":[{\"id\":\"music\",\"enabled\":true},{\"id\":\"shelf\",\"enabled\":false}]}");
+        Assert.True(WinMac.Bar.Notch.NotchFeedOptions.Parse(on.RootElement).Shelf); Assert.False(WinMac.Bar.Notch.NotchFeedOptions.Parse(off.RootElement).Shelf); Assert.True(WinMac.Bar.Notch.NotchFeedOptions.Parse(null).Shelf);
+    }
+
+    [Fact] public void The_patch_path_accepts_the_shelf_limit_and_ignores_garbage()
+    {
+        var n = NotchSettings.Factory.ApplyPatch(System.Text.Json.JsonDocument.Parse("{\"shelfMaxItems\": 7}").RootElement); Assert.Equal(7, n.ShelfMaxItems);
+        Assert.Equal(20, NotchSettings.Factory.ApplyPatch(System.Text.Json.JsonDocument.Parse("{\"shelfMaxItems\": \"muchos\"}").RootElement).ShelfMaxItems);
     }
 }

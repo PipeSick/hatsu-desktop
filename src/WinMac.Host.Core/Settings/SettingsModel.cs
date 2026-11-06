@@ -302,7 +302,7 @@ public static partial class SettingsBuilder
         var connectPage = ConnectPage(input, On("connect"));
         _bar = null;
         var pages = new List<SettingsPage> { general, dockPage, barPage, notchPage, capturePage, spotPage };
-        if (ModulesPage(bar) is { } modulesPage) pages.Add(modulesPage);
+        if (ModulesPage(cfg, installed) is { } modulesPage) pages.Add(modulesPage);
         pages.AddRange([ncPage, weatherPage, clipPage, connectPage, ExtensionsPage(input.Extensions)]);
         return pages;
     }

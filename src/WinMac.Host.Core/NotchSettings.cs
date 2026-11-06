@@ -31,6 +31,8 @@ public sealed record NotchSettings
     public bool LyricsEnabled { get; init; }
     public bool LyricsInPill { get; init; }
     public int PollIntervalSeconds { get; init; } = 30;
+    /// <summary>Shelf+: cuántos elementos guarda la estantería de la Isla (1–100). El más antiguo sale primero.</summary>
+    public int ShelfMaxItems { get; init; } = 20;
     // Lo que la Isla cerrada muestra un momento (lo detecta la barra y lo reenvía; ver docs/21-isla-informativa.md)
     public bool PillVolume { get; init; } = true;
     public bool PillBrightness { get; init; } = true;
@@ -88,6 +90,7 @@ public sealed record NotchSettings
         MusicPlayer = Players.FirstOrDefault(p => string.Equals(p, MusicPlayer, StringComparison.OrdinalIgnoreCase)) ?? "Spotify",
         CustomPlayerPath = string.IsNullOrWhiteSpace(CustomPlayerPath) ? null : CustomPlayerPath.Trim().Trim('"'),
         PollIntervalSeconds = Math.Clamp(PollIntervalSeconds, 5, 3600),
+        ShelfMaxItems = Math.Clamp(ShelfMaxItems, 1, 100),
         PillHudSeconds = Math.Clamp(PillHudSeconds, 1, 10),
         PillNotifySeconds = Math.Clamp(PillNotifySeconds, 2, 30),
         ClipboardLimit = Math.Clamp(ClipboardLimit, 5, 500),
@@ -113,6 +116,7 @@ public sealed record NotchSettings
                 case "lyricsenabled" when IsBool(v): n = n with { LyricsEnabled = v.GetBoolean() }; break;
                 case "lyricsinpill" when IsBool(v): n = n with { LyricsInPill = v.GetBoolean() }; break;
                 case "pollintervalseconds" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int s): n = n with { PollIntervalSeconds = s }; break;
+                case "shelfmaxitems" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int sh): n = n with { ShelfMaxItems = sh }; break;
                 case "pillvolume" when IsBool(v): n = n with { PillVolume = v.GetBoolean() }; break;
                 case "pillbrightness" when IsBool(v): n = n with { PillBrightness = v.GetBoolean() }; break;
                 case "pillnotifications" when IsBool(v): n = n with { PillNotifications = v.GetBoolean() }; break;
@@ -152,7 +156,7 @@ public sealed record NotchSettings
     public object ToWire() => new
     {
         position = Position, glassLevel = GlassLevel, sections = Sections.Select(s => new { id = s.Id, enabled = s.Enabled }).ToArray(), musicEnabled = MusicEnabled, agentsEnabled = AgentsEnabled,
-        musicPlayer = MusicPlayer, customPlayerPath = CustomPlayerPath, lyricsEnabled = LyricsEnabled, lyricsInPill = LyricsInPill, pollIntervalSeconds = PollIntervalSeconds,
+        musicPlayer = MusicPlayer, customPlayerPath = CustomPlayerPath, lyricsEnabled = LyricsEnabled, lyricsInPill = LyricsInPill, pollIntervalSeconds = PollIntervalSeconds, shelfMaxItems = ShelfMaxItems,
         pillVolume = PillVolume, pillBrightness = PillBrightness, pillNotifications = PillNotifications, pillHudSeconds = PillHudSeconds, pillNotifySeconds = PillNotifySeconds, pillAnimations = PillAnimations,
         clipboardLimit = ClipboardLimit, clipboardPersist = ClipboardPersist, clipboardSkipSecrets = ClipboardSkipSecrets,
         clipboardExcludedApps = ClipboardExclusionsOn ? ParseApps(ClipboardExcludedApps).ToArray() : Array.Empty<string>(),
@@ -182,6 +186,7 @@ public sealed record NotchSettings
                     case "lyricsenabled" when IsBool(v): n = n with { LyricsEnabled = v.GetBoolean() }; break;
                     case "lyricsinpill" when IsBool(v): n = n with { LyricsInPill = v.GetBoolean() }; break;
                     case "pollintervalseconds" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int s): n = n with { PollIntervalSeconds = s }; break;
+                    case "shelfmaxitems" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int sh): n = n with { ShelfMaxItems = sh }; break;
                     case "notchsections" when v.ValueKind == JsonValueKind.Array:
                         var list = new List<NotchSection>();
                         foreach (var item in v.EnumerateArray())

@@ -143,6 +143,8 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("snap.gap", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int gap)) cfg.ApplyBarPatch(Patch("snapGap", gap)); return true;
             case ("mod.lang", "text"): { var t = (e.Text ?? "").Trim(); if (t.Length > 16) return true; cfg.ApplyBarPatch(Patch("ltLanguage", t)); return true; }
             case ("gest.delay", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int gd)) cfg.ApplyBarPatch(Patch("gestCornerDelayMs", gd)); return true;
+            case ("shelf.enabled", "toggle"): cfg.UpdateNotch(n => { int i = n.Sections.ToList().FindIndex(s => s.Id == "shelf"); return i >= 0 && n.Sections[i].Enabled != e.On ? n.ToggleSection(i) : n; }); return true;
+            case ("shelf.max", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int shm)) cfg.UpdateNotch(n => n with { ShelfMaxItems = shm }); return true;
             case ("snap.edit", _): cfg.UpdateBar(b => b with { SnapEditToken = b.SnapEditToken + 1 }); return true;
             case ("bar.keysreset", _): cfg.ApplyBarPatch(JsonSerializer.SerializeToElement(new Dictionary<string, object?> { ["captureModifiers"] = "CtrlShift", ["captureHotkeys"] = true, ["spotlightHotkey"] = "AltSpace" })); return true;
             case ("bar.capfmt", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.CaptureFormatValues.Length: cfg.ApplyBarPatch(Patch("captureFormat", SettingsBuilder.CaptureFormatValues[e.Index])); return true;

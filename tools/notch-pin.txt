@@ -1,4 +1,4 @@
 # Commit de PipeSick/notch-win que el CI de Hatsu Desktop compila para validar la integración.
-# RAMA DE TRABAJO feat/hatsu-calls (e98863c): sobre chore/submodule-url-hatsu-desktop (42d61c9) añade los botones de la llamada en la píldora de Hatsu Notch (contestar, rechazar, colgar, silenciar, pasar el audio al PC, duración).
+# RAMA DE TRABAJO feat/hatsu-shelf-plus (29a0eeb): sobre feat/hatsu-calls (e98863c) añade Shelf+ (estantería de la Isla con archivos, carpetas, texto e imágenes, límite, vaciar y comandos shelf-open / shelf-add-text).
 # Solo vale para esta rama de Hatsu Desktop; el pin de Stable (42d61c9) NO se cambia hasta que el propietario autorice la fusión y se valide en un PC real.
-e98863cebe0f3736db8c441e9791b0f7b80a33d7
+29a0eebbf4c3c1d023b908263b574c0bfc248c5f
