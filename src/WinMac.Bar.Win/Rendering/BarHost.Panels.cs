@@ -121,14 +121,14 @@ public sealed partial class BarHost : IPanelUi
         var net = _network.Kind == NetKind.Wifi && s.Wifi.Available && s.Wifi.Connected ? _network with { Ssid = s.Wifi.Ssid, Bars = s.Wifi.Bars } : _network;
         var bt = s.Bluetooth.Available ? new BluetoothInfo(true, s.Bluetooth.RadioOn, s.Bluetooth.ConnectedCount) : BluetoothInfo.None;
         var wx = _weather.Current(); var wbar = wx.Snapshot is { } sn ? new WeatherBarInfo(WeatherCodes.Icon(sn.Main.Code, sn.Main.IsDay), TempFormat.Bar(sn.Main.TempC, _cfg.WeatherFahrenheit)) : WeatherBarInfo.None;
-        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar, _cfg.ShowTrayIcons ? _trayStore.Visible : null, TrayOpen: _popover is { IsOpen: true } && _pkind == PanelKind.Tray, Phone: _phone.State);
+        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar, _cfg.ShowTrayIcons ? _trayStore.Visible : null, TrayOpen: _popover is { IsOpen: true } && _pkind == PanelKind.Tray, Phone: _phone.State, VpnConnected: _cfg.ShowVpn && _vpn.Available ? _vpn.AnyConnected : null, VpnTip: _cfg.ShowVpn ? Vpn.VpnText.Tip(_vpn) : null);
     }
 
     private void OnHubChanged() { SetStateAll(); if (_popover is { IsOpen: true }) RebuildPanel(); }
 
     private void PanelsTick()
     {
-        _popover?.Pump(); HubTick(); TrayTick(); NotchTick(); PeripheralsTick(); CleanupTick(); LauncherTick(); SpotlightTick(); CaptureTick(); MenuDiag();
+        _popover?.Pump(); HubTick(); TrayTick(); NotchTick(); PeripheralsTick(); CleanupTick(); VpnTick(); LauncherTick(); SpotlightTick(); CaptureTick(); MenuDiag();
         if (_popover is not { IsOpen: true }) return;
         var now = DateTime.UtcNow;
         if (_pkind == PanelKind.Notifications && _nc.NeedsPolling && now - _lastNcPoll >= NcPollEvery) { _lastNcPoll = now; _nc.Refresh(); }   // sin evento de Windows: relectura suave, solo con el panel abierto
@@ -203,6 +203,7 @@ public sealed partial class BarHost : IPanelUi
     {
         if (kind == PanelKind.Peripherals) { RefreshPeripherals(force: false); return; }
         if (kind == PanelKind.Cleanup) { EnsureClean(); return; }
+        if (kind == PanelKind.Vpn) { _vpnMsg = null; RefreshVpn(); return; }
         if (kind == PanelKind.Weather) { _weather.Refresh(); return; }
         if (kind == PanelKind.Hub) { _hubMon.StartSession(); _hubTicks = 0; _lastHubTick = DateTime.UtcNow; RefreshHubTab(first: true); return; }
         _hub.RefreshAudio();
@@ -342,6 +343,7 @@ public sealed partial class BarHost : IPanelUi
         if (_pkind == PanelKind.Tray) { TrayPanelAction(e); return; }
         if (_pkind == PanelKind.Peripherals) { PeripheralsAction(e); return; }
         if (_pkind == PanelKind.Cleanup) { CleanupAction(e); return; }
+        if (_pkind == PanelKind.Vpn) { VpnAction(e); return; }
         if (e.Kind == PanelEventKind.Click && e.Id == "bat:details") { _pctx = _pctx with { BatteryDetailsOpen = !_pctx.BatteryDetailsOpen }; RebuildPanel(); return; }   // WM-027
         if (_pkind == PanelKind.AppMenu) { AppMenuAction(e); return; }
         _ops.Handle(e);

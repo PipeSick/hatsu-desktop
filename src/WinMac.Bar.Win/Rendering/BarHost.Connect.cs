@@ -56,6 +56,7 @@ public sealed partial class BarHost
     {
         Periph = _cfg.ShowPeripherals ? PeripheralsViewNow() : null,
         Clean = _cfg.ShowCleanup ? CleanupViewNow() : null,
+        Vpn = _cfg.ShowVpn ? VpnViewNow() : null,
     };
 
     private PanelContext WithPhone(PanelContext p) => p with

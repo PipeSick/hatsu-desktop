@@ -7,6 +7,8 @@ Formato libre por versión. Las entradas marcadas «sin validar» están impleme
 - Mission Control (escritorio actual, multimonitor sin validar), Snap (zonas, editor, distribuciones propias), Live Text (OCR local), Spotlight Actions, Gestures (esquinas y botones laterales), Shelf+ en la Isla (archivos, carpetas, texto, imágenes).
 - Gestures: «Mostrar/ocultar el Dock» actúa al instante. Spotlight: «usar la distribución» acomoda las ventanas abiertas.
 
+**VPN en la barra** (opcional, *Ajustes › Barra › VPN*): icono de escudo que muestra el estado y abre un panel para conectar o desconectar las VPN de Windows (Configuración › Red › VPN) con las credenciales ya guardadas. No cubre apps de VPN de terceros. Sin validar en Windows real.
+
 **Hatsu Notch:** banner de descargas con ancho adaptable; clic en una notificación abre la app que la envió; protección frente al error del fondo translúcido.
 **Dock:** × en cada ventana de la vista previa; «Reservar espacio» y la vista previa se aplican en vivo.
 **Barra:** icono propio de Hatsu; panel de Limpieza rediseñado; las rutas largas de Spotlight se recortan con «…».

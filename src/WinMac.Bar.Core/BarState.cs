@@ -40,7 +40,7 @@ public sealed record WeatherBarInfo(string IconKey, string Text)
 
 /// <summary>Todo lo que la barra muestra. Lo rellenan los proveedores del adaptador de Windows; el núcleo no lee el sistema.</summary>
 public sealed record BarState(DateTime Now, string? ActiveApp, BatteryInfo Battery, VolumeInfo Volume, NetworkInfo Network, BluetoothInfo? Bluetooth = null, IReadOnlyList<string>? AppMenus = null, WeatherBarInfo? WeatherInfo = null,
-    IReadOnlyList<Tray.TrayIcon>? TrayIcons = null, bool TrayOpen = false, WinMac.Connect.PhoneState? Phone = null)
+    IReadOnlyList<Tray.TrayIcon>? TrayIcons = null, bool TrayOpen = false, WinMac.Connect.PhoneState? Phone = null, bool? VpnConnected = null, string? VpnTip = null)
 {
     /// <summary>Iconos de la bandeja de Windows (apps en segundo plano) que la barra muestra.</summary>
     public IReadOnlyList<Tray.TrayIcon> Tray => TrayIcons ?? [];

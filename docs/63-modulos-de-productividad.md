@@ -103,3 +103,5 @@ Probado por el propietario en un solo monitor, versión portable. **Funcionaba:*
 | 15 | Spotlight: rutas largas se recortan con «…» | CORREGIDO — pendiente de validar |
 | 16 | Al abrir la app de ChatGPT desaparecían Dock y Barra hasta pulsar Alt+Tab: Windows la marcaba «ocupada/pantalla completa» | CORREGIDO en código: ese estado solo oculta si la ventana en primer plano cubre el monitor entero — pendiente de validar; si se repite, enviar `host.log` |
 | 17 | Atajos: aviso de conflicto con las Capturas (Ctrl+Mayús+3–6) | NUEVO |
+| 18 | VPN en la barra (pedido aparte de los seis módulos): icono de escudo + panel con las VPN de Windows | NUEVO — pendiente de validar. Los perfiles se leen de `rasphone.pbk` (del usuario y de todos los usuarios, `Type=2`), «conectada» se **infiere** de una interfaz de red activa con el nombre del perfil, y conectar/desconectar usa `rasdial.exe` (credenciales guardadas del perfil; si Windows las pide, el panel lo explica y ofrece abrir Configuración). Solo VPN de Windows: WireGuard y apps de proveedores no. Apagado por defecto |
+

@@ -4,13 +4,13 @@ Experiencia de escritorio inspirada en macOS Tahoe para **Windows 11**: barra su
 
 > **Estado: en desarrollo activo (versión 2.0.x).** Lo lógico se prueba en cada commit en el CI; lo gráfico, la entrada y el hardware se validan a mano en un Windows real, y cada documento dice qué está validado y qué no.
 >
-> Antes se llamaba «WinMac». Por compatibilidad se conservan los identificadores internos (`WinMac*.exe`, `%APPDATA%\WinMac`, canales entre componentes). Ver [`docs/46`](docs/46-rebranding-hatsu-desktop.md). El repositorio antes era `PipeSick/win11-macos` ([`docs/54`](docs/54-migracion-repositorio-hatsu-desktop.md)).
+> **Hatsu Desktop es la evolución de WinMac.** Antes se llamaba «WinMac». Por compatibilidad se conservan los identificadores internos (`WinMac*.exe`, `%APPDATA%\WinMac`, canales entre componentes). Ver [`docs/46`](docs/46-rebranding-hatsu-desktop.md). El repositorio antes era `PipeSick/win11-macos` ([`docs/54`](docs/54-migracion-repositorio-hatsu-desktop.md)).
 
 ## Qué incluye
 
 | Área | Qué hace | Documento |
 |---|---|---|
-| **Barra superior** | Menú de la app activa (Global Menu), reloj, batería, Control Center, panel multifunción con Tiempo, Limpieza y Periféricos | [12](docs/12-barra-superior.md) · [17](docs/17-barra-control-center.md) · [18](docs/18-panel-multifuncion-y-tiempo.md) · [23](docs/23-global-menu.md) |
+| **Barra superior** | Menú de la app activa (Global Menu), reloj, batería, Control Center, panel multifunción con Tiempo, Limpieza, Periféricos y VPN | [12](docs/12-barra-superior.md) · [17](docs/17-barra-control-center.md) · [18](docs/18-panel-multifuncion-y-tiempo.md) · [23](docs/23-global-menu.md) |
 | **Dock** | Iconos reales, anclado, vista previa de ventanas (con × para cerrar cada una), un Dock por monitor, ocultamiento automático | [10](docs/10-dock-funcional.md) |
 | **Launchpad y Spotlight** | Búsqueda con vista previa, proveedores y acciones | [22](docs/22-launchpad-spotlight.md) · [27](docs/27-spotlight-pro.md) |
 | **Centro de notificaciones** | Notificaciones reales de Windows y widgets | [20](docs/20-centro-de-notificaciones.md) |
@@ -29,6 +29,7 @@ Resumen en [`CHANGELOG.md`](CHANGELOG.md). Lo último (rama de trabajo, **pendie
 - Seis módulos de productividad nuevos, con interruptor individual, atajos configurables con captura de teclado y estado de salud en Ajustes.
 - Hatsu Notch: banner de descargas que se ajusta al contenido, clic en una notificación abre la app que la envió, Shelf+.
 - Dock: botón × en cada ventana de la vista previa; «Reservar espacio» y la vista previa se aplican sin reiniciar.
+- VPN en la barra (opcional): ver el estado y conectar o desconectar las VPN de Windows desde un panel.
 - Limpieza con panel rediseñado; icono propio de Hatsu en la barra y el panel.
 - Gestures puede mostrar u ocultar el Dock al instante; Spotlight puede acomodar las ventanas abiertas con una distribución de Snap.
 

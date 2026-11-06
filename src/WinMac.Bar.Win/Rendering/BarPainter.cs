@@ -120,6 +120,7 @@ public sealed class BarPainter : IDisposable
                 case BarItemKind.PowerPlug: DrawPlug(x + 8, cy); break;
                 case BarItemKind.Peripherals: DrawMouse(x + 8, cy); break;
                 case BarItemKind.Cleanup: DrawSparkles(x + 8, cy); break;
+                case BarItemKind.Vpn: DrawShield(x + 8, cy, f.Item.Look == BarItemLook.Normal); break;
             }
             x += (float)(f.Item.GlyphWidth + (string.IsNullOrEmpty(f.Item.Text) ? 0 : _m.GlyphTextGap));
         }
@@ -291,6 +292,27 @@ public sealed class BarPainter : IDisposable
         Brush(Fg());
         _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.6f, cy - 7f, cx + 4.6f, cy + 7f), RadiusX = 4.6f, RadiusY = 4.6f }, _solid, 1.3f);
         _ctx.DrawLine(new Vector2(cx, cy - 7f), new Vector2(cx, cy - 1.5f), _solid, 1.2f, _round); _ctx.DrawLine(new Vector2(cx - 4.6f, cy - 1.5f), new Vector2(cx + 4.6f, cy - 1.5f), _solid, 1.2f, _round);
+    }
+
+    /// <summary>VPN: escudo; relleno con una marca cuando hay una conexión activa, solo contorno cuando no.</summary>
+    private void DrawShield(float cx, float cy, bool on)
+    {
+        using var g = _dev.Factory.CreatePathGeometry(); using (var s = g.Open())
+        {
+            s.BeginFigure(new Vector2(cx, cy - 7.2f), FigureBegin.Filled);
+            s.AddLine(new Vector2(cx + 6.2f, cy - 4.6f)); s.AddLine(new Vector2(cx + 6.2f, cy + 0.6f));
+            s.AddBezier(new BezierSegment { Point1 = new Vector2(cx + 6.2f, cy + 4.2f), Point2 = new Vector2(cx + 3f, cy + 6.2f), Point3 = new Vector2(cx, cy + 7.4f) });
+            s.AddBezier(new BezierSegment { Point1 = new Vector2(cx - 3f, cy + 6.2f), Point2 = new Vector2(cx - 6.2f, cy + 4.2f), Point3 = new Vector2(cx - 6.2f, cy + 0.6f) });
+            s.AddLine(new Vector2(cx - 6.2f, cy - 4.6f)); s.EndFigure(FigureEnd.Closed); s.Close();
+        }
+
+        Brush(Fg());
+        if (on)
+        {
+            _ctx.FillGeometry(g, _solid);
+            Brush(new Color4(0.13f, 0.13f, 0.15f, 1f)); _ctx.DrawLine(new Vector2(cx - 2.6f, cy + 0.2f), new Vector2(cx - 0.6f, cy + 2.4f), _solid, 1.7f, _round); _ctx.DrawLine(new Vector2(cx - 0.6f, cy + 2.4f), new Vector2(cx + 3f, cy - 2.2f), _solid, 1.7f, _round);
+        }
+        else _ctx.DrawGeometry(g, _solid, 1.5f);
     }
 
     /// <summary>Cleanup: destellos (una estrella de cuatro puntas grande y una pequeña).</summary>

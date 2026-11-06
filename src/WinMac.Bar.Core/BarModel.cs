@@ -1,6 +1,6 @@
 namespace WinMac.Bar;
 
-public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather, TrayMenu, Phone, TaskManager, PowerPlug, Peripherals, Cleanup }
+public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather, TrayMenu, Phone, TaskManager, PowerPlug, Peripherals, Cleanup, Vpn }
 
 /// <summary>
 /// Un elemento de la barra. <see cref="Text"/> puede estar vacío (solo icono). <see cref="GlyphWidth"/> es el ancho fijo del icono (0 = sin icono).
@@ -46,6 +46,7 @@ public static class BarModel
         if (c.ShowBattery && PcPowerBar.Evaluate(s.Battery, c) is { } pw) right.Add(pw);
         if (c.ShowPeripherals) right.Add(new BarItem(BarItemKind.Peripherals, "", IconW, Tip: "Periféricos"));
         if (c.ShowCleanup) right.Add(new BarItem(BarItemKind.Cleanup, "", IconW, Tip: "Limpieza"));
+        if (c.ShowVpn) right.Add(new BarItem(BarItemKind.Vpn, "", IconW, Look: s.VpnConnected == true ? BarItemLook.Normal : BarItemLook.Dim, Tip: s.VpnTip ?? "VPN"));
         if (c.ShowTaskManager) right.Add(new BarItem(BarItemKind.TaskManager, "", IconW, Tip: "Administrador de tareas"));
         if (c.ShowControlCenter) right.Add(new BarItem(BarItemKind.ControlCenter, "", IconW));
         right.Add(new BarItem(BarItemKind.Clock, ClockFormat.Format(s.Now, c), 0));
@@ -70,6 +71,7 @@ public static class BarModel
         BarItemKind.TaskManager => new BarAction(BarActionKind.OpenTaskManager),
         BarItemKind.Peripherals => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Peripherals),
         BarItemKind.Cleanup => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Cleanup),
+        BarItemKind.Vpn => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Vpn),
         BarItemKind.PowerPlug => new BarAction(BarActionKind.OpenSettings, "ms-settings:batterysaver"),
         _ => new BarAction(BarActionKind.None),
     };

@@ -72,6 +72,7 @@ public static partial class SettingsBuilder
         ("showPeripherals", "Icono de Periféricos en la barra", b => b.ShowPeripherals),
         ("peripheralAlerts", "Avisar cuando la batería de un periférico esté baja", b => b.PeripheralAlerts),
         ("showCleanup", "Icono de Limpieza en la barra", b => b.ShowCleanup),
+        ("showVpn", "Icono de VPN en la barra (conexiones VPN de Windows)", b => b.ShowVpn),
         ("cleanupIsland", "Mostrar el progreso de la limpieza en Hatsu Notch", b => b.CleanupIsland),
         ("mcEnabled", "Mission Control", b => b.McEnabled),
         ("snapEnabled", "Snap", b => b.SnapEnabled),
@@ -200,6 +201,9 @@ public static partial class SettingsBuilder
             new("Limpieza", [
                 BarF("showCleanup", "Analiza primero y pide confirmación antes de borrar. Nunca limpia por sí sola ni en segundo plano; no toca documentos, descargas ni proyectos"),
                 BarF("cleanupIsland", "Análisis y limpieza como actividad de Hatsu Notch; no sustituye la música, las letras ni las notificaciones"),
+            ]),
+            new("VPN", [
+                BarF("showVpn", "Muestra las conexiones VPN de Windows (Configuración › Red › VPN) y las conecta o desconecta con las credenciales que Windows ya guardó. No funciona con apps de VPN de terceros (WireGuard, NordVPN…)"),
             ]),
             new("Panel de Hatsu Desktop", [
                 Bar(21),

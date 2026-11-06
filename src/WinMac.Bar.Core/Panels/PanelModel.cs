@@ -2,7 +2,7 @@ using WinMac.Calendar;
 
 namespace WinMac.Bar;
 
-public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications, AppleMenu, Tray, AppMenu, Phone, Peripherals, Cleanup }
+public enum PanelKind { ControlCenter, Wifi, Bluetooth, Sound, Battery, Calendar, Display, Hub, Weather, Notifications, AppleMenu, Tray, AppMenu, Phone, Peripherals, Cleanup, Vpn }
 
 public enum WidgetKind
 {

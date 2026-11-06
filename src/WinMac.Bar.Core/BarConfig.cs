@@ -108,6 +108,8 @@ public sealed record BarConfig
     public string PeripheralHidden { get; init; } = "";
     /// <summary>It8: módulo Cleanup (icono de destellos). APAGADO por defecto. Nunca limpia por sí solo.</summary>
     public bool ShowCleanup { get; init; } = false;
+    /// <summary>Icono de VPN en la barra (conexiones VPN de Windows: ver, conectar y desconectar). APAGADO por defecto.</summary>
+    public bool ShowVpn { get; init; } = false;
     /// <summary>It8: mostrar el progreso de Cleanup en la Isla.</summary>
     public bool CleanupIsland { get; init; } = true;
     /// <summary>It7: botón del Administrador de tareas en la barra (abre taskmgr.exe). Apagado por defecto.</summary>
