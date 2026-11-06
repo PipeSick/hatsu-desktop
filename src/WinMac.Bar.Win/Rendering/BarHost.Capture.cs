@@ -110,6 +110,8 @@ public sealed partial class BarHost
         var list = _captureKeyInfo.Select(k => k.Info).ToList();
         if (SpotlightHotkeyInfo() is { } s) list.Add(s);
         if (_cfg.LaunchpadOnWinKey) list.Add(new HotkeyInfo("Win (sola)", "Launchpad", "Barra · Launchpad", true));
+        SyncLegacyHotkeys(list);
+        if (_binder is not null) list.AddRange(_binder.Infos());
         var checkedList = HotkeyAudit.Check(list);
         foreach (var k in checkedList.Where(k => k.Problem is not null)) _log($"[atajos] {k.Keys} ({k.Purpose}): {k.Problem}");
         ModuleEvent?.Invoke("bar.hotkeys", new { items = checkedList.Select(k => new { keys = k.Keys, purpose = k.Purpose, module = k.Module, registered = k.Registered, problem = k.Problem }).ToArray() });
@@ -121,6 +123,7 @@ public sealed partial class BarHost
     {
         if (_hkReportAgain != default && DateTime.UtcNow > _hkReportAgain) { _hkReportAgain = default; ReportHotkeys(); }   // once more when the link to the host is surely up
         RecordTick();
+        _features?.Pump();
         if (_editRequest is { } req) { _editRequest = null; OpenEditor(req, "Hatsu Notch"); }
         if (_editEvent?.WaitOne(0) == true)
             try { var p = File.ReadAllText(EditRequestFile).Trim(); File.Delete(EditRequestFile); OpenEditor(p, "orden externa"); } catch (Exception e) { _log("[editor] petición ilegible: " + e.Message); }

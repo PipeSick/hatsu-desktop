@@ -42,7 +42,7 @@ public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, M
 }
 
 /// <summary>Construye las páginas de Ajustes a partir de la configuración vigente. Puro: se prueba sin Windows.</summary>
-public static class SettingsBuilder
+public static partial class SettingsBuilder
 {
     /// <summary>Opciones booleanas de la Barra: (campo del parche, texto, lectura). Un solo lugar; la ventana las pinta y aplica por tabla.</summary>
     public static readonly (string Field, string Text, Func<BarConfig, bool> Get)[] BarToggles =
@@ -294,7 +294,10 @@ public static class SettingsBuilder
 
         var connectPage = ConnectPage(input, On("connect"));
         _bar = null;
-        return [general, dockPage, barPage, notchPage, capturePage, spotPage, ncPage, weatherPage, clipPage, connectPage, ExtensionsPage(input.Extensions)];
+        var pages = new List<SettingsPage> { general, dockPage, barPage, notchPage, capturePage, spotPage };
+        if (ModulesPage(bar) is { } modulesPage) pages.Add(modulesPage);
+        pages.AddRange([ncPage, weatherPage, clipPage, connectPage, ExtensionsPage(input.Extensions)]);
+        return pages;
     }
 
     /// <summary>WM-019 / WM-001: tamaño del Dock (preajustes compactos y ajuste fino) y comportamiento. Escribe en dock.json, que el Dock vuelve a leer al cambiar.</summary>

@@ -127,6 +127,45 @@ public sealed record BarConfig
     /// <summary>Widgets del Centro de Notificaciones, en orden («calendar,weather,battery»). Vacío = ninguno.</summary>
     public string NcWidgets { get; init; } = Notifications.NcWidgets.Default;
 
+    // ── Módulos de productividad (Ajustes › Módulos). Cada uno se enciende y se apaga en caliente (FeatureManager); apagado no deja ganchos, atajos ni tareas.
+    /// <summary>Ajustes › Módulos › «Reintentar»: cada incremento pide reiniciar los módulos en fallo (el canal de configuración solo lleva valores).</summary>
+    public int FeatureRetryToken { get; init; } = 0;
+    /// <summary>Hatsu Mission Control: vista general de las ventanas del escritorio virtual actual. APAGADO por defecto.</summary>
+    public bool McEnabled { get; init; } = false;
+    /// <summary>Atajo de Mission Control («Ctrl+Alt+Up»). Vacío = sin atajo (el módulo sigue activo: Spotlight y Gestures pueden abrirlo).</summary>
+    public string McHotkey { get; init; } = "Ctrl+Alt+Up";
+    /// <summary>Hatsu Snap: zonas al arrastrar una ventana con la tecla elegida. APAGADO por defecto.</summary>
+    public bool SnapEnabled { get; init; } = false;
+    /// <summary>Tecla que se mantiene al arrastrar para ver las zonas: Shift, Ctrl o Alt.</summary>
+    public string SnapModifier { get; init; } = "Shift";
+    /// <summary>Distribución activa de Snap (nombre de una predeterminada o guardada).</summary>
+    public string SnapLayout { get; init; } = "Mitades";
+    /// <summary>Separación (px) entre ventanas colocadas por Snap.</summary>
+    public int SnapGap { get; init; } = 0;
+    /// <summary>Atajo para colocar la ventana activa en la zona siguiente de la distribución activa. Vacío = ninguno.</summary>
+    public string SnapNextHotkey { get; init; } = "";
+    /// <summary>Hatsu Live Text: reconocer el texto de una región de la pantalla (OCR local de Windows). APAGADO por defecto.</summary>
+    public bool LiveTextEnabled { get; init; } = false;
+    public string LtHotkey { get; init; } = "Ctrl+Alt+Space";
+    /// <summary>Conservar los saltos de línea al copiar el texto reconocido.</summary>
+    public bool LtKeepLineBreaks { get; init; } = true;
+    /// <summary>Spotlight Actions: registro central de acciones en Spotlight. Activado por defecto (no instala ganchos).</summary>
+    public bool SpotActionsEnabled { get; init; } = true;
+    /// <summary>Hatsu Gestures: esquinas activas y botones del ratón. APAGADO por defecto (instala un gancho de ratón mientras esté activo).</summary>
+    public bool GesturesEnabled { get; init; } = false;
+    public string GestCornerTL { get; init; } = "none";
+    public string GestCornerTR { get; init; } = "none";
+    public string GestCornerBL { get; init; } = "none";
+    public string GestCornerBR { get; init; } = "none";
+    /// <summary>Tiempo (ms) que el puntero debe quedarse en la esquina para disparar la acción.</summary>
+    public int GestCornerDelayMs { get; init; } = 450;
+    public string GestMouseX1 { get; init; } = "none";
+    public string GestMouseX2 { get; init; } = "none";
+    public string GestKey1 { get; init; } = "";
+    public string GestKey1Action { get; init; } = "none";
+    public string GestKey2 { get; init; } = "";
+    public string GestKey2Action { get; init; } = "none";
+
     /// <summary>Formato de los mensajes entre el host y la barra (camelCase), el mismo patrón que los ajustes de la Isla.</summary>
     public static readonly JsonSerializerOptions Wire = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
@@ -145,6 +184,18 @@ public sealed record BarConfig
         PeripheralAlertThreshold = Peripherals.PeripheralSettings.ClampThreshold(PeripheralAlertThreshold),
         PeripheralHidden = Peripherals.PeripheralSettings.SerializeHidden(Peripherals.PeripheralSettings.ParseHidden(PeripheralHidden)),
         NcWidgets = Notifications.NcWidgets.Serialize(Notifications.NcWidgets.Parse(NcWidgets ?? Notifications.NcWidgets.Default)),
+        McHotkey = Features.FeatureConfig.NormalizeHotkey(McHotkey, "Ctrl+Alt+Up"),
+        LtHotkey = Features.FeatureConfig.NormalizeHotkey(LtHotkey, "Ctrl+Alt+Space"),
+        SnapNextHotkey = Features.FeatureConfig.NormalizeHotkey(SnapNextHotkey, ""),
+        GestKey1 = Features.FeatureConfig.NormalizeHotkey(GestKey1, ""), GestKey2 = Features.FeatureConfig.NormalizeHotkey(GestKey2, ""),
+        SnapModifier = Features.FeatureConfig.SnapModifiers.Contains(SnapModifier) ? SnapModifier : "Shift",
+        SnapLayout = string.IsNullOrWhiteSpace(SnapLayout) ? "Mitades" : SnapLayout.Trim(),
+        SnapGap = Math.Clamp(SnapGap, 0, 64),
+        GestCornerDelayMs = Math.Clamp(GestCornerDelayMs, 150, 2000),
+        GestCornerTL = Features.FeatureConfig.NormalizeAction(GestCornerTL), GestCornerTR = Features.FeatureConfig.NormalizeAction(GestCornerTR),
+        GestCornerBL = Features.FeatureConfig.NormalizeAction(GestCornerBL), GestCornerBR = Features.FeatureConfig.NormalizeAction(GestCornerBR),
+        GestMouseX1 = Features.FeatureConfig.NormalizeAction(GestMouseX1), GestMouseX2 = Features.FeatureConfig.NormalizeAction(GestMouseX2),
+        GestKey1Action = Features.FeatureConfig.NormalizeAction(GestKey1Action), GestKey2Action = Features.FeatureConfig.NormalizeAction(GestKey2Action),
     };
 
     /// <summary>Aplica un parche JSON (camelCase, solo los campos presentes): lo desconocido o de otro tipo se ignora campo a campo.</summary>

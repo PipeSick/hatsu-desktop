@@ -129,6 +129,7 @@ public sealed class HostController
         else if (module == "bar" && topic == CommandTopic) { try { RunCommand(d); } catch (Exception e) { _log("[host] orden de la Barra descartada: " + e.Message); } }
         else if (module == "connect" && topic == WinMac.Connect.ConnectTopics.CallStatus) { try { CallStatusReceived?.Invoke(d); } catch (Exception) { } }   // estado del control de llamadas → Ajustes
         else if (module == "bar" && topic == "bar.hotkeys") { HotkeyStatus.Set(d); HotkeysChanged?.Invoke(); }
+        else if (module == "bar" && topic == "bar.features") { FeatureStatusStore.Set(d); HotkeysChanged?.Invoke(); }
         else if (module == "bar" && topic == BarSetTopic) { try { _cfg.ApplyBarPatch(d); } catch (Exception e) { _log("[config] parche de la Barra descartado: " + e.Message); } }
     }
 
@@ -182,3 +183,27 @@ public static class HotkeyStatus
     }
 }
 
+
+/// <summary>Estado de salud de los módulos de productividad tal como lo informa la Barra (Ajustes › Módulos). Thread-safe. Lo que la Barra no ha informado aparece como «Sin informar».</summary>
+public static class FeatureStatusStore
+{
+    public sealed record Item(string Id, string State, string? Detail, int Faults);
+    private static IReadOnlyDictionary<string, Item> _items = new Dictionary<string, Item>();
+    private static readonly object Gate = new();
+
+    public static Item? Get(string id) { lock (Gate) return _items.TryGetValue(id, out var i) ? i : null; }
+    public static void Clear() { lock (Gate) _items = new Dictionary<string, Item>(); }
+
+    public static void Set(JsonElement d)
+    {
+        var map = new Dictionary<string, Item>();
+        if (d.ValueKind == JsonValueKind.Object && d.TryGetProperty("items", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            foreach (var e in arr.EnumerateArray().Take(16))
+            {
+                string? S(string n) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+                if (S("id") is { Length: > 0 and <= 24 } id && S("state") is { Length: > 0 and <= 16 } st)
+                    map[id] = new Item(id, st, S("detail") is { Length: <= 300 } de ? de : null, e.TryGetProperty("faults", out var f) && f.ValueKind == JsonValueKind.Number ? f.GetInt32() : 0);
+            }
+        lock (Gate) _items = map;
+    }
+}
