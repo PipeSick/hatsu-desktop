@@ -191,3 +191,17 @@ public class CallRoutingCommandTests
         var s = c.Present(); Assert.False(s.AudioOnPc); Assert.Contains("sigue en el teléfono", s.Notice);
     }
 }
+
+public class SystemBlockersTests
+{
+    private static IReadOnlyDictionary<string, int?> S(params (string, int?)[] x) => x.ToDictionary(a => a.Item1, a => a.Item2);
+
+    [Fact] public void Reports_the_phone_link_policy_and_disabled_services_but_never_a_clean_system()
+    {
+        Assert.Null(SystemBlockers.Describe(null, S(("PhoneSvc", 3), ("CDPSvc", 2))));
+        Assert.Null(SystemBlockers.Describe(1, S()));
+        var d = SystemBlockers.Describe(0, S(("PhoneSvc", 4), ("bthserv", 3)))!;
+        Assert.Contains("EnableMmx=0", d); Assert.Contains("Servicio telefónico", d); Assert.DoesNotContain("bthserv", d); Assert.Contains("Hatsu no cambia esto", d);
+        Assert.Contains("servicios deshabilitados", SystemBlockers.Describe(null, S(("CDPSvc", 4)))!); Assert.DoesNotContain("EnableMmx", SystemBlockers.Describe(null, S(("CDPSvc", 4)))!);
+    }
+}

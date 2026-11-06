@@ -104,6 +104,7 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
                 _log("[connect] registrando Hatsu como cliente del transporte telefónico (etapas con tope; presupuesto 40 s)…");
                 var res = await seq.RegisterAndConnectAsync(_cts.Token, st => _log("[connect] etapa: " + st));   // cada etapa: resultado, milisegundos y HRESULT
                 last = res.Status;
+                if (last.Reason == RegistrationPlanner.NoEffect && ReadBlockers() is { } blockers) last = new(last.State, last.Reason + ". Se detectó en este equipo: " + blockers);
                 _log($"[connect] transporte: registrado antes de esta secuencia={res.Stages.FirstOrDefault(x => x.Stage.StartsWith("¿registrado"))?.Outcome}, registrado después={res.RegisteredAfter}, conexión terminó={res.ConnectReturned} → {res.Status.State}: {res.Status.Reason}");
                 if (res.Wedged) { await CleanupFresh(d.Id); seq.Dispose(); Wedge(res.WedgedStage ?? "transporte"); return false; }
                 if (!res.Ready) { seq.Dispose(); continue; }
@@ -115,7 +116,7 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
             if (ready.Count == 0)
             {
                 ReleaseLock(); SetStatus(last?.State ?? ProviderState.Unavailable, last?.Reason ?? "Sin acceso al transporte telefónico");
-                if (last?.Reason == RegistrationPlanner.NoEffect) _nextSetup = DateTime.UtcNow.AddMinutes(10);   // Windows ignora el registro: no insistir cada 30 s
+                if (last?.Reason.StartsWith(RegistrationPlanner.NoEffect, StringComparison.Ordinal) == true) _nextSetup = DateTime.UtcNow.AddMinutes(10);   // Windows ignora el registro: no insistir cada 30 s
                 return false;
             }
             await StartWatcherAsync();
@@ -186,6 +187,19 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
             tp.Seq.Dispose();
         }
         ReleaseLock();
+    }
+
+    /// <summary>Lectura de SOLO LECTURA del registro de Windows (directiva de vinculación teléfono-PC y servicios). Hatsu no escribe nada ahí.</summary>
+    private static string? ReadBlockers()
+    {
+        try
+        {
+            int? mmx = null; using (var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\System")) if (k?.GetValue("EnableMmx") is int v) mmx = v;
+            var starts = new Dictionary<string, int?>();
+            foreach (var (svc, _) in SystemBlockers.Services) { using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + svc); starts[svc] = k?.GetValue("Start") as int?; }
+            return SystemBlockers.Describe(mmx, starts);
+        }
+        catch (Exception) { return null; }
     }
 
     private async Task StartWatcherAsync()
