@@ -180,8 +180,8 @@ internal sealed class SpotlightWindow : IDisposable
                 else if (i == _ctl.Hover) { Brush(new Color4(1, 1, 1, 0.08f)); _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = R(r.X, r.Y, r.W, r.H), RadiusX = 8, RadiusY = 8 }, _solid!); }
                 DrawItemIcon(it, new LpRect(r.X + 10, r.Y + 7, 32, 32));
                 Brush(new Color4(1, 1, 1, 0.96f));
-                using (var l = _dw.CreateTextLayout(it.Title, _title!, (float)(r.W - 160), 20)) _ctx.DrawTextLayout(new Vector2((float)(r.X + 52), (float)(r.Y + (it.Subtitle is null ? 13 : 5))), l, _solid!);
-                if (it.Subtitle is not null) { Brush(new Color4(1, 1, 1, i == _ctl.Selected ? 0.8f : 0.55f)); using var l = _dw.CreateTextLayout(it.Subtitle, _sub!, (float)(r.W - 160), 16); _ctx.DrawTextLayout(new Vector2((float)(r.X + 52), (float)(r.Y + 25)), l, _solid!); }
+                using (var l = _dw.CreateTextLayout(it.Title, _title!, (float)(r.W - 160), 20)) { Ellipsis(l); _ctx.DrawTextLayout(new Vector2((float)(r.X + 52), (float)(r.Y + (it.Subtitle is null ? 13 : 5))), l, _solid!); }
+                if (it.Subtitle is not null) { Brush(new Color4(1, 1, 1, i == _ctl.Selected ? 0.8f : 0.55f)); using var l = _dw.CreateTextLayout(it.Subtitle, _sub!, (float)(r.W - 160), 16); Ellipsis(l); _ctx.DrawTextLayout(new Vector2((float)(r.X + 52), (float)(r.Y + 25)), l, _solid!); }
                 if (it.Section != lastSection) { Brush(new Color4(1, 1, 1, i == _ctl.Selected ? 0.85f : 0.45f)); using var l = _dw.CreateTextLayout(it.Section, _section!, 100, 16); _ctx.DrawTextLayout(new Vector2((float)(r.X + r.W - 104), (float)(r.Y + 15)), l, _solid!); lastSection = it.Section; }
             }
 
@@ -303,6 +303,14 @@ internal sealed class SpotlightWindow : IDisposable
         catch (Exception) { bmp = null; }
         if (_bitmaps.Count > 300) { foreach (var v in _bitmaps.Values) v.Bmp?.Dispose(); _bitmaps.Clear(); }
         _bitmaps[key] = (px, bmp); return bmp;
+    }
+
+    /// <summary>Un texto que no cabe en su columna se corta con «…» en vez de salirse sobre el panel de la derecha (rutas largas de archivos).</summary>
+    private void Ellipsis(IDWriteTextLayout l)
+    {
+        l.WordWrapping = WordWrapping.NoWrap;
+        using var sign = _dw!.CreateEllipsisTrimmingSign(l);
+        l.SetTrimming(new Trimming { Granularity = TrimmingGranularity.Character }, sign);
     }
 
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)

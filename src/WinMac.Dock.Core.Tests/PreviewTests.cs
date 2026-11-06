@@ -177,3 +177,16 @@ public class TemporaryDragTests
 }
 
 internal static class TestExt { public static DockItemModel with_(this DockItemModel m, bool running) => m with { Running = running, Windows = null, WindowCount = 0 }; }
+
+public class PreviewCloseButtonTests
+{
+    [Fact] public void Every_card_has_a_close_button_inside_its_thumbnail_and_inside_the_panel()
+    {
+        var f = PreviewSpec.Compute([1.6, 1.0, 1.8], 400, 600, 1200, 1000);
+        foreach (var c in f.Cards)
+        {
+            Assert.True(c.Close.W == PreviewSpec.CloseSize && c.Close.X >= c.Thumb.X && c.Close.Right <= c.Thumb.Right && c.Close.Y >= c.Thumb.Y && c.Close.Bottom <= c.Thumb.Bottom);
+            Assert.True(c.Close.X >= f.Panel.X && c.Close.Right <= f.Panel.Right);
+        }
+    }
+}

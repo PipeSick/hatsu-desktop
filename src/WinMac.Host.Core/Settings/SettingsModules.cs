@@ -83,6 +83,31 @@ public static partial class SettingsBuilder
     }
 
     /// <summary>Campos de atajo editables desde Ajustes (el patrón de la Barra solo acepta estos).</summary>
+    /// <summary>Módulo (como lo informa la Barra) que es dueño de cada campo de atajo; sirve para no confundir un atajo con el que ya tenía ese mismo campo.</summary>
+    public static string HotkeyOwner(string field) => field switch
+    {
+        "mcHotkey" => "Barra · Mission Control", "ltHotkey" => "Barra · Live Text", "snapNextHotkey" => "Barra · Snap", _ => "Barra · Gestures",
+    };
+
+    /// <summary>
+    /// Si <paramref name="spec"/> ya la usa otro atajo de Hatsu (Spotlight, Capturas, otro módulo), devuelve quién; null si está libre. Se mira lo que la Barra informó (<see cref="HotkeyStatus"/>);
+    /// los atajos de OTROS programas no se pueden conocer: Windows solo lo dice al intentar registrarlo.
+    /// </summary>
+    public static string? HotkeyConflict(string field, WinMac.Bar.Features.HotkeySpec spec)
+    {
+        string owner = HotkeyOwner(field);
+        foreach (var k in HotkeyStatus.Items)
+        {
+            if (k.Module == owner && field is not ("gestKey1" or "gestKey2")) continue;                 // el atajo que ya tenía este mismo campo
+            if (WinMac.Bar.Features.HotkeySpec.TryParse(k.Keys, out var other) && other == spec) return $"«{k.Purpose}» ({k.Module})";
+        }
+
+        return null;
+    }
+
+    /// <summary>Último aviso al cambiar un atajo (conflicto con otro de Hatsu); se muestra arriba en Módulos hasta el siguiente cambio correcto.</summary>
+    public static string? HotkeyNote { get; set; }
+
     public static readonly string[] HotkeyFields = ["mcHotkey", "ltHotkey", "snapNextHotkey", "gestKey1", "gestKey2"];
 
     internal static SettingsRow HotkeyRow(string field, string title, string value, string? subtitle = null) =>
@@ -94,7 +119,7 @@ public static partial class SettingsBuilder
         if (ModuleCards.Count == 0) return null;
         var groups = new List<SettingsGroup>
         {
-            new(null, [new(RowKind.Info, "mod.intro", "Cada módulo se enciende y se apaga al momento. Apagado no deja atajos, ganchos ni tareas en marcha. Desactivar un atajo no desactiva su módulo.")]),
+            new(null, HotkeyNote is { } note ? [new(RowKind.Info, "mod.intro", "Cada módulo se enciende y se apaga al momento. Apagado no deja atajos, ganchos ni tareas en marcha. Desactivar un atajo no desactiva su módulo."), new(RowKind.Info, "mod.hotkeynote", "⚠ " + note)] : [new(RowKind.Info, "mod.intro", "Cada módulo se enciende y se apaga al momento. Apagado no deja atajos, ganchos ni tareas en marcha. Desactivar un atajo no desactiva su módulo.")]),
         };
         foreach (var c in ModuleCards)
         {

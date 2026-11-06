@@ -117,6 +117,13 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             string f = id[8..]; if (!SettingsBuilder.HotkeyFields.Contains(f)) return false;
             string t = (e.Text ?? "").Trim();
             if (t.Length > 0 && !WinMac.Bar.Features.HotkeySpec.TryParse(t, out _)) { log?.Invoke("[módulos] atajo no válido (se necesita Ctrl o Alt y una tecla): " + t); return true; }   // la fila se repinta con el valor vigente
+            if (t.Length > 0 && WinMac.Bar.Features.HotkeySpec.TryParse(t, out var wanted))
+            {
+                if (wanted.ReservedBy() is { } reserved) { SettingsBuilder.HotkeyNote = $"{wanted.Display()} no se guardó: Windows la reserva ({reserved})."; return true; }
+                if (SettingsBuilder.HotkeyConflict(f, wanted) is { } other) { SettingsBuilder.HotkeyNote = $"{wanted.Display()} no se guardó: ya la usa {other}. Elige otra combinación."; return true; }
+            }
+
+            SettingsBuilder.HotkeyNote = null;
             cfg.ApplyBarPatch(Patch(f, t.Length == 0 ? "" : WinMac.Bar.Features.HotkeySpec.TryParse(t, out var hs) ? hs.Format() : t)); return true;
         }
 

@@ -9,7 +9,7 @@ public readonly record struct PRect(double X, double Y, double W, double H)
 }
 
 /// <summary>Una tarjeta de la vista previa: etiqueta con el título (píldora) y miniatura de la ventana.</summary>
-public sealed record PreviewCardFrame(PRect Pill, PRect Thumb);
+public sealed record PreviewCardFrame(PRect Pill, PRect Thumb, PRect Close = default);
 
 /// <summary>Geometría de la vista previa en DIP, relativa a la ventana del Dock. El pico («cola») apunta al ícono.</summary>
 public sealed record PreviewFrame(PRect Panel, PRect Header, PreviewCardFrame[] Cards, double TailX, double TailBaseY, double TailTipY);
@@ -24,6 +24,8 @@ public static class PreviewSpec
     public const double ThumbMaxW = 240, ThumbMaxH = 150, ThumbMinW = 120, CardGap = 12;
     public const double Radius = 22, ThumbRadius = 10, TailW = 22, TailH = 10, AnchorGap = 8, Margin = 8, MinPanelW = 220;
     public const int MaxCards = 5;
+    /// <summary>Botón «×» de cada tarjeta (arriba a la derecha de la miniatura): cierra esa ventana.</summary>
+    public const double CloseSize = 22;
     public const double DefaultAspect = 1.6;
 
     public static double PanelHeight => Pad + HeaderH + HeaderGap + PillH + PillGap + ThumbMaxH + Pad;
@@ -55,7 +57,7 @@ public static class PreviewSpec
         var cards = new PreviewCardFrame[n];
         for (int i = 0; i < n; i++)
         {
-            cards[i] = new PreviewCardFrame(new PRect(x, yPill, tw[i], PillH), new PRect(x, yThumb, tw[i], th[i]));
+            cards[i] = new PreviewCardFrame(new PRect(x, yPill, tw[i], PillH), new PRect(x, yThumb, tw[i], th[i]), new PRect(x + tw[i] - CloseSize - 6, yThumb + 6, CloseSize, CloseSize));
             x += tw[i] + CardGap;
         }
         double tail = Math.Clamp(anchorX, px + Radius + TailW / 2, px + pw - Radius - TailW / 2);

@@ -173,3 +173,19 @@ public class DropdownTests
         c.SetSuggestions("hub.city", ["Santiago"]); Assert.False(c.SuggestHasChecks); Assert.Equal(-1, c.SuggestChecked); c.ClearSuggestions(); Assert.Null(c.SuggestFor);
     }
 }
+
+public class HotkeyConflictTests
+{
+    [Fact] public void A_combination_already_used_by_another_hatsu_shortcut_is_refused_with_a_note_and_a_free_one_is_saved()
+    {
+        FeatureStatusStore.Clear();
+        HotkeyStatus.Set(System.Text.Json.JsonDocument.Parse("{\"items\":[{\"keys\":\"Ctrl+Mayús+3\",\"purpose\":\"Capturar pantalla\",\"module\":\"Barra · Capturas\",\"registered\":true},{\"keys\":\"Ctrl+Alt+Up\",\"purpose\":\"Mission Control\",\"module\":\"Barra · Mission Control\",\"registered\":true}]}").RootElement);
+        var path = Path.Combine(Path.GetTempPath(), "hatsu-hk-" + Guid.NewGuid() + ".json"); var cfg = new ConfigService(path, new HostConfig()); var a = new SettingsActions(cfg, () => { }, _ => { });
+        a.Apply(new SettingsEdit("mod.key:ltHotkey", "text", Text: "Ctrl+Shift+3")); Assert.Equal("Ctrl+Alt+Space", cfg.Bar.LtHotkey); Assert.Contains("Capturar pantalla", SettingsBuilder.HotkeyNote);
+        a.Apply(new SettingsEdit("mod.key:ltHotkey", "text", Text: "Ctrl+Alt+Up")); Assert.Equal("Ctrl+Alt+Space", cfg.Bar.LtHotkey); Assert.Contains("Mission Control", SettingsBuilder.HotkeyNote);
+        a.Apply(new SettingsEdit("mod.key:ltHotkey", "text", Text: "Ctrl+Shift+7")); Assert.Equal("Ctrl+Shift+7", cfg.Bar.LtHotkey); Assert.Null(SettingsBuilder.HotkeyNote);
+        a.Apply(new SettingsEdit("mod.key:mcHotkey", "text", Text: "Ctrl+Alt+Up")); Assert.Equal("Ctrl+Alt+Up", cfg.Bar.McHotkey);        // el que ya tenía su propio campo no es conflicto
+        a.Apply(new SettingsEdit("mod.key:mcHotkey", "text", Text: "Alt+Tab")); Assert.Equal("Ctrl+Alt+Up", cfg.Bar.McHotkey); Assert.Contains("reserva", SettingsBuilder.HotkeyNote);
+        HotkeyStatus.Set(System.Text.Json.JsonDocument.Parse("{}").RootElement); SettingsBuilder.HotkeyNote = null;
+    }
+}
