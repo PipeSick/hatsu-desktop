@@ -39,11 +39,12 @@ internal sealed class DockAppBar(IntPtr hwnd, uint callbackMessage, Action<strin
         return abd.rc.B;
     }
 
-    public void Remove()
+    /// <summary>Libera la franja. Con <paramref name="force"/> envía ABM_REMOVE aunque se crea que no está registrada (idempotente: Windows lo ignora si no lo estaba): evita que una franja quede reservada si el estado interno y el de Windows se desincronizaron.</summary>
+    public void Remove(bool force = false)
     {
-        if (!_registered) return;
-        var abd = New(); SHAppBarMessage(ABM_REMOVE, ref abd); _registered = false; _last = default;
-        log("[dock] espacio reservado liberado");
+        if (!_registered && !force) return;
+        var abd = New(); SHAppBarMessage(ABM_REMOVE, ref abd); bool was = _registered; _registered = false; _last = default;
+        log(was ? "[dock] espacio reservado liberado" : "[dock] espacio reservado: liberación forzada (Windows ya no lo tenía registrado o no se sabía)");
     }
 
     /// <summary>Explorer restarted (TaskbarCreated): its AppBar list is new.</summary>

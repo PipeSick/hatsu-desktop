@@ -295,13 +295,13 @@ public sealed class DockHost : IDisposable
         if (_cfg.ReserveSpace && !_cfg.AutoHide && !_demo)
         {
             int band = (int)Math.Ceiling((_m.BarHeight + 6 + DockSettings.ClampBottom(_cfg.BottomOffset)) * _scale);
-            int bottom = _appBar.Reserve(mi.rcMonitor, band, flushWithEdge: freeEdge);
+            _everReserved = true; int bottom = _appBar.Reserve(mi.rcMonitor, band, flushWithEdge: freeEdge);
             mi.rcWork.Bottom = bottom;   // place the Dock on its own strip, not above it
         }
-        else if (_appBar.Registered)
+        else if (_appBar.Registered || _everReserved)
         {
             // WM-033: the work area read above still excluded the Dock's own strip; after freeing it, read it again or the Dock is placed one strip too high
-            _appBar.Remove();
+            _appBar.Remove(force: true); _everReserved = false;
             Native.GetMonitorInfo(Native.MonitorFromPoint(pt, Native.MONITOR_DEFAULTTOPRIMARY), ref mi);
         }
         _reserving = _appBar.Registered;
@@ -390,7 +390,7 @@ public sealed class DockHost : IDisposable
     }
 
     // ------------------------------------------------------------------ mensajes
-    private DockAppBar? _appBar; private bool _reserving;
+    private DockAppBar? _appBar; private bool _reserving, _everReserved;
     private const int WM_APPBAR = 0x8000 + 0x51;   // WM_APP + 0x51: AppBar notifications
     private uint _taskbarCreated;
 
