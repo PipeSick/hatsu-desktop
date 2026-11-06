@@ -21,6 +21,9 @@ public interface ITransportOps
     AccessResult RequestAccess();
     bool IsRegistered();
     void RegisterApp();
+    /// <summary>Variante por usuario (<c>RegisterAppForUser</c>): la documentación dice que el registro es por usuario; se prueba solo si <see cref="RegisterApp"/> volvió sin efecto.</summary>
+    void RegisterAppForUser();
+    void UnregisterAppForUser();
     /// <summary>Espera a que ConnectAsync termine. El valor devuelto por Windows no es fiable (ambos proyectos de referencia lo documentan) y no se evalúa.</summary>
     bool Connect();
     void UnregisterApp();
@@ -138,6 +141,17 @@ public sealed class TransportSequence : IDisposable
 
             var (v, after) = await Stage("verificación del registro (IsRegistered)", _b.IsRegistered, total, _ops.IsRegistered, ct); Add(v);
             if (!v.Ok) return Stop("", access, before, reg, false, byUs, false);
+            // RegisterApp volvió sin error pero IsRegistered sigue en falso (síntoma documentado en Windows 11 por MyPhone #26 y un Q&A de Microsoft): único camino público alternativo, RegisterAppForUser.
+            if (!after && reg == RegisterResult.Returned)
+            {
+                var (ru, _) = await Stage("registro alternativo (RegisterAppForUser)", _b.Register, total, () => { _ops.RegisterAppForUser(); return true; }, ct); Add(ru);
+                if (ru.Outcome is StageOutcome.Timeout or StageOutcome.Cancelled) return Stop("", access, before, reg, false, true, false, wedged: true);
+                if (ru.Ok)
+                {
+                    var (v3, after3) = await Stage("verificación tras RegisterAppForUser (IsRegistered)", _b.IsRegistered, total, _ops.IsRegistered, ct); Add(v3);
+                    if (v3.Ok && after3) { after = true; }
+                }
+            }
             var plan = RegistrationPlanner.Evaluate(access, before, reg, after);
             if (!plan.Ready) return new(stages, plan, false, null, byUs, after, false);
 
@@ -155,7 +169,7 @@ public sealed class TransportSequence : IDisposable
     public async Task<StageResult> CleanupAsync()
     {
         if (_w.Poisoned) return new("deshacer registro (UnregisterApp)", StageOutcome.Skipped, 0, 0, "transporte aislado: el registro se deshace al reiniciar el módulo");
-        var sw = Stopwatch.StartNew(); var t = _w.Run(() => { if (_ops.IsRegistered()) { _ops.UnregisterApp(); return "deshecho"; } return "no estaba registrado"; });
+        var sw = Stopwatch.StartNew(); var t = _w.Run(() => { if (!_ops.IsRegistered()) return "no estaba registrado"; _ops.UnregisterApp(); if (_ops.IsRegistered()) _ops.UnregisterAppForUser(); return "deshecho"; });
         var done = await Task.WhenAny(t, Task.Delay(_b.Cleanup));
         if (done != t) { _w.Poison(); return new("deshacer registro (UnregisterApp)", StageOutcome.Timeout, sw.ElapsedMilliseconds, 0, "Windows no respondió"); }
         try { return new("deshacer registro (UnregisterApp)", StageOutcome.Ok, sw.ElapsedMilliseconds, 0, await t); }

@@ -22,6 +22,10 @@ internal sealed class WinRtTransportOps : ITransportOps
     public void RegisterApp() => _t.RegisterApp();
     public bool Connect() => _t.ConnectAsync().AsTask().GetAwaiter().GetResult();
     public void UnregisterApp() => _t.UnregisterApp();
+    public void RegisterAppForUser() => _t.RegisterAppForUser(CurrentUser());
+    public void UnregisterAppForUser() => _t.UnregisterAppForUser(CurrentUser());
+    /// <summary>El usuario de la sesión (API pública Windows.System.User). Si Windows no lo entrega, la excepción llega a la etapa con su HRESULT.</summary>
+    private static Windows.System.User CurrentUser() => Windows.System.User.FindAllAsync(Windows.System.UserType.LocalUser, Windows.System.UserAuthenticationStatus.LocallyAuthenticated).AsTask().GetAwaiter().GetResult().FirstOrDefault() ?? throw new InvalidOperationException("Windows no entregó el usuario de la sesión");
 
     /// <summary>Un identificador de transporte → sus operaciones (FromId es local y rápido, pero igualmente se llama con tope por quien lo use).</summary>
     public static WinRtTransportOps FromId(string id) => new(PhoneLineTransportDevice.FromId(id));

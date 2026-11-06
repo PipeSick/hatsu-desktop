@@ -65,3 +65,26 @@ Un Q&A de Microsoft sobre la 26300 y el issue 26 de MyPhone describen `RegisterA
 | **Candidato con `phoneLineTransportManagement`** | `HatsuDesktop-2.0.4.0-beta-callcontrol-unsigned.msix` (172 MB) | `400f665ad4cde592e5f0cb61bdf086bbee7501033d3c1a862b68e8013fbbca74` | `msix-llamadas-sin-firmar-41923787f388ad0cd684afedb8075d0ad799aad7` |
 | Equivalente a Stable (sin las capacidades de telefonía) | `HatsuDesktop-2.0.4.0-store-unsigned.msix` | `a5a43a227ef6af6d0a738f3dd0c16c9b5788c54296d870a6b269d17db6c834e3` | `msix-store-sin-firmar-41923787f388ad0cd684afedb8075d0ad799aad7` |
 Capacidades del candidato (leídas del manifiesto del `.msix`): `runFullTrust`, `phoneLineTransportManagement`, `phoneCall`, `userNotificationListener`, `bluetooth`, `location`, `webcam`. Identidad `PipeSick.HatsuDesktop` · `CN=ACC0FCB8-4D92-4E20-9731-7254D5E43289` · v2.0.4.0 · x64. El paquete instalado en el runner conserva la PFN `PipeSick.HatsuDesktop_83tr6qzbbarj8`. Los artefactos caducan a los 14 días.
+
+## 10. Resultado real de 2.0.4.0 (OBSERVADO, 2026-11-06 10:44, Windows 11 26300.0, iPhone emparejado) y siguiente paso
+```
+acceso (RequestAccessAsync)            Ok en 14 ms
+¿registrado antes? (IsRegistered)      Ok en 0 ms   (falso)
+registro (RegisterApp)                 Ok en 24 ms  (sin excepción)
+verificación (IsRegistered)            Ok en 0 ms   → FALSO
+Resultado: RegisterApp no tuvo efecto
+```
+- **No hubo bloqueo.** Las etapas funcionan y terminan en milisegundos. Esto **cambia** la hipótesis de §3: lo que colgaba en 2.0.3.0 era, con alta probabilidad, `ConnectAsync()` llamado sobre un transporte **no registrado** (2.0.3.0 lo llamaba aunque el registro no existiera); 2.0.4.0 ya no lo llama sin registro verificado. (Sigue siendo inferencia: no se observó el cuelgue.)
+- **El hecho real es otro:** Windows acepta `RegisterApp()` y no registra. Es el síntoma que describen el issue 26 de MyPhone y el Q&A de Microsoft para la compilación 26300 («RegisterApp sin efecto, IsRegistered queda en falso, con la capacidad declarada y `RequestAccessAsync = Allowed`»). El paquete lleva `phoneLineTransportManagement` aprobado por la Store: la capacidad **no** es lo que falta.
+- **Qué se agregó (2.0.5.0):** si `RegisterApp` vuelve sin efecto, se prueba **una vez** el camino público alternativo `RegisterAppForUser` (la documentación dice que el registro es por usuario) y se vuelve a verificar con `IsRegistered()`; el módulo no insiste cada 30 s (reintenta cada 10 min); el mensaje de estado explica las causas posibles y qué hacer.
+- **Qué NO se hace (ilegítimo):** `BypassRegistration` en HKLM, claves comunitarias de Limited Access Feature, APIs privadas.
+
+### Causas posibles de «sin efecto» y qué las distingue
+| Causa | Evidencia | Qué lo descarta/confirma |
+|---|---|---|
+| Otra app tiene el rol HFP de ese iPhone (Enlace Móvil/Phone Link, Intel Unison…) | my-phone README e issue 26: el rol es de una app por teléfono; el síntoma típico es `DeniedBySystem`, a veces sin efecto | cerrar/desinstalar esa app y quitar el iPhone de ella; si el registro funciona después, era eso |
+| Windows 11 26300 ignora el registro de apps de terceros | Q&A de Microsoft y issue 26 | no hay prueba desde Hatsu; solo Microsoft puede confirmarlo |
+| La API exige un acceso limitado (Limited Access Feature) en esta compilación | hilos contradictorios (un comentarista dice que Microsoft la sacó de la lista; Klangbruecke no la necesita en Windows 10) | **solo Microsoft** puede conceder una LAF; no se usa ninguna clave comunitaria |
+
+### Camino legítimo con Microsoft (propietario)
+Abrir un caso de soporte del desarrollador en Partner Center (o publicar en Microsoft Q&A con la etiqueta de Windows App SDK/Bluetooth) con estos datos: app `PipeSick.HatsuDesktop` 2.0.5.0 distribuida por la Store con `phoneLineTransportManagement` aprobada; Windows 11 compilación 26300.0; `PhoneLineTransportDevice.RequestAccessAsync` = Allowed; `IsRegistered()` falso antes; `RegisterApp()` vuelve sin excepción en ≈24 ms; `IsRegistered()` sigue falso; `RegisterAppForUser` igual (según 2.0.5.0). Preguntar: (1) ¿requiere esta API una Limited Access Feature en esta compilación y cómo se solicita? (2) ¿hay un cambio de comportamiento documentado de `RegisterApp` para apps de terceros? (3) ¿el rol HFP del iPhone lo retiene Enlace Móvil?

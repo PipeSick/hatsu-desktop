@@ -11,6 +11,9 @@ internal sealed class FakeOps : ITransportOps, IDisposable
     public bool IsRegistered() { Log("isreg"); return Registered; }
     public void RegisterApp() { Log("register"); if (HangRegister is not null) Release.Wait(); if (RegisterThrows is not null) throw RegisterThrows; if (RegisterHasEffect) Registered = true; }
     public bool Connect() { Log("connect"); if (HangConnect is not null) Release.Wait(); if (ConnectThrows is not null) throw ConnectThrows; return false; }   // false: el valor no se evalúa
+    public bool RegisterForUserHasEffect;
+    public void RegisterAppForUser() { Log("registerForUser"); if (RegisterForUserHasEffect) Registered = true; }
+    public void UnregisterAppForUser() { Log("unregisterForUser"); Registered = false; }
     public void UnregisterApp() { Log("unregister"); Registered = false; }
     public int Count(string c) { lock (Calls) return Calls.Count(x => x == c); }
     public void Dispose() => Release.Set();
@@ -41,7 +44,16 @@ public class TransportSequenceTests
     {
         using var ops = new FakeOps { RegisterHasEffect = false }; using var seq = new TransportSequence(ops, Fast());
         var r = await seq.RegisterAndConnectAsync();
-        Assert.False(r.Ready); Assert.Contains("no tuvo efecto", r.Status.Reason); Assert.False(r.Wedged); Assert.Equal(0, ops.Count("connect"));   // sin registro verificado no se conecta
+        Assert.False(r.Ready); Assert.Contains("no tuvo efecto", r.Status.Reason); Assert.Contains("Enlace Móvil", r.Status.Reason); Assert.False(r.Wedged); Assert.Equal(0, ops.Count("connect"));   // sin registro verificado no se conecta (ConnectAsync sobre un transporte no registrado es lo que probablemente colgaba 2.0.3.0)
+        Assert.Equal(1, ops.Count("registerForUser"));   // se probó la variante por usuario una vez, y no sirvió
+    }
+
+    [Fact] public async Task RegisterAppForUser_is_the_fallback_when_RegisterApp_does_nothing_and_it_unregisters_cleanly()
+    {
+        using var ops = new FakeOps { RegisterHasEffect = false, RegisterForUserHasEffect = true }; using var seq = new TransportSequence(ops, Fast());
+        var r = await seq.RegisterAndConnectAsync();
+        Assert.True(r.Ready); Assert.True(r.RegisteredAfter); Assert.Equal(1, ops.Count("connect")); Assert.Contains(r.Stages, s => s.Stage.StartsWith("registro alternativo") && s.Ok);
+        ops.Registered = true; var c = await seq.CleanupAsync(); Assert.Equal("deshecho", c.Detail);
     }
 
     [Fact] public async Task Denied_access_stops_before_registering()

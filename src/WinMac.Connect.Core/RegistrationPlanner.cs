@@ -11,6 +11,11 @@ public enum RegisterResult { NotNeeded, Returned, Unauthorized, Threw }
 /// </summary>
 public static class RegistrationPlanner
 {
+    /// <summary>
+    /// Causa y qué se puede hacer cuando Windows acepta RegisterApp (y RegisterAppForUser) pero IsRegistered queda en falso. Las posibles causas están documentadas por otros proyectos, no demostradas aquí:
+    /// otra app con el rol de manos libres de ese teléfono (Enlace Móvil/Phone Link), el comportamiento de Windows 11 compilación 26300 (MyPhone #26, Q&amp;A de Microsoft), o una restricción de Windows sobre esta API.
+    /// </summary>
+    public const string NoEffect = "RegisterApp no tuvo efecto: Windows lo aceptó pero IsRegistered sigue en falso (también con RegisterAppForUser). Posibles causas: otra app tiene el rol de este teléfono (cierra Enlace Móvil/Phone Link y quita el teléfono de él), o Windows 11 ignora el registro en esta compilación (síntoma documentado por otros proyectos)";
     public const string CapabilityHint = "hace falta la capacidad restringida phoneLineTransportManagement aprobada por Microsoft";
 
     public static ProviderStatus Evaluate(AccessResult access, bool registeredBefore, RegisterResult register, bool registeredAfter)
@@ -23,7 +28,7 @@ public static class RegistrationPlanner
         {
             RegisterResult.Unauthorized => new(ProviderState.Unavailable, "Windows negó el registro de Hatsu como cliente de telefonía: " + CapabilityHint),
             RegisterResult.Threw => new(ProviderState.Unavailable, "El registro como cliente de telefonía falló inesperadamente"),
-            _ when !registeredAfter => new(ProviderState.Unavailable, "RegisterApp no tuvo efecto (IsRegistered sigue en falso): sin la capacidad aprobada Windows lo ignora en silencio, o hay otra app con el rol"),
+            _ when !registeredAfter => new(ProviderState.Unavailable, NoEffect),
             _ => new(ProviderState.Ready, "Windows gestiona la llamada del teléfono; el audio puede pasar al PC"),
         };
     }

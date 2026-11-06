@@ -72,7 +72,7 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
             int delay = 1500;
             try
             {
-                if (DateTime.UtcNow >= _nextSetup && !await SetupAsync()) _nextSetup = DateTime.UtcNow.AddSeconds(30);
+                if (DateTime.UtcNow >= _nextSetup && !await SetupAsync() && _nextSetup <= DateTime.UtcNow) _nextSetup = DateTime.UtcNow.AddSeconds(30);
                 if (_status.Ready) { await ReconcileAsync(); if (_status.Ready) delay = await PollAsync() ? 400 : 1500; }   // mientras hay una llamada se mira más seguido
             }
             catch (OperationCanceledException) { break; }
@@ -112,7 +112,12 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
                 ready.Add(new Tp { Id = d.Id, DeviceId = devId, Seq = seq });
             }
             lock (_tps) { _tps.Clear(); _tps.AddRange(ready); }
-            if (ready.Count == 0) { ReleaseLock(); SetStatus(last?.State ?? ProviderState.Unavailable, last?.Reason ?? "Sin acceso al transporte telefónico"); return false; }
+            if (ready.Count == 0)
+            {
+                ReleaseLock(); SetStatus(last?.State ?? ProviderState.Unavailable, last?.Reason ?? "Sin acceso al transporte telefónico");
+                if (last?.Reason == RegistrationPlanner.NoEffect) _nextSetup = DateTime.UtcNow.AddMinutes(10);   // Windows ignora el registro: no insistir cada 30 s
+                return false;
+            }
             await StartWatcherAsync();
             SetStatus(ProviderState.Ready, "Registro HFP verificado (IsRegistered); Windows gestiona la llamada del teléfono y el audio puede pasar al PC");
             return true;
