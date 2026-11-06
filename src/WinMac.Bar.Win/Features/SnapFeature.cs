@@ -218,7 +218,7 @@ internal sealed class SnapEditor : IDisposable
     public void Show(IReadOnlyList<SnapLayout> custom)
     {
         _custom = custom; _dw = DWrite.DWriteCreateFactory<IDWriteFactory>(); _fmt = _dw.CreateTextFormat("Segoe UI", 15); _fmt.TextAlignment = TextAlignment.Center;
-        _ov = new D2DOverlay("SnapEdit", clickThrough: false, Msg, _log);
+        _ov = new D2DOverlay("SnapEdit", clickThrough: false, Msg, _log, cursor: 32515 /* cruz: se dibujan zonas */);
         var area = _m.Work.W > 0 ? _m.Work : _m.Bounds; _ov.Show(area, _m.Scale, focus: true); Redraw();
     }
 

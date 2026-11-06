@@ -15,13 +15,13 @@ namespace WinMac.Bar.Win.Features;
 internal sealed class D2DOverlay : IDisposable
 {
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOREDIRECTIONBITMAP = 0x00200000, WS_EX_NOACTIVATE = 0x08000000, WS_EX_LAYERED = 0x80000, WS_EX_TRANSPARENT = 0x20;
-    private static int _seq;
+    private static int _seq; private readonly int _cursor;
     private readonly string _cls; private readonly bool _clickThrough; private readonly Func<IntPtr, uint, IntPtr, IntPtr, IntPtr?>? _user; private readonly Action<string> _log; private readonly BarNative.WndProc _proc;
     private IntPtr _hwnd; private D2DDevice? _dev; private IDXGISwapChain1? _swap; private ID2D1Bitmap1? _bmp; private IDCompositionDevice? _dcomp; private IDCompositionTarget? _target; private IDCompositionVisual? _visual;
     private int _wPx, _hPx; private double _scale = 1;
 
-    public D2DOverlay(string name, bool clickThrough, Func<IntPtr, uint, IntPtr, IntPtr, IntPtr?>? messages, Action<string> log)
-    { _cls = "WinMac" + name + Interlocked.Increment(ref _seq); _clickThrough = clickThrough; _user = messages; _log = log; _proc = WndProc; }
+    public D2DOverlay(string name, bool clickThrough, Func<IntPtr, uint, IntPtr, IntPtr, IntPtr?>? messages, Action<string> log, int cursor = 32512 /* IDC_ARROW */)
+    { _cursor = cursor; _cls = "WinMac" + name + Interlocked.Increment(ref _seq); _clickThrough = clickThrough; _user = messages; _log = log; _proc = WndProc; }
 
     public IntPtr Handle => _hwnd;
     public bool IsVisible { get; private set; }
@@ -34,7 +34,7 @@ internal sealed class D2DOverlay : IDisposable
         _scale = scale; Area = area;
         if (_hwnd == IntPtr.Zero)
         {
-            var cls = new BarNative.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<BarNative.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = BarNative.GetModuleHandle(null), lpszClassName = _cls, hCursor = BarNative.LoadCursor(IntPtr.Zero, _clickThrough ? 32512 : 32515) };
+            var cls = new BarNative.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<BarNative.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = BarNative.GetModuleHandle(null), lpszClassName = _cls, hCursor = BarNative.LoadCursor(IntPtr.Zero, _cursor) };
             BarNative.RegisterClassEx(ref cls);
             uint ex = WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | (_clickThrough ? WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT : 0);
             _hwnd = BarNative.CreateWindowEx(ex, _cls, "Hatsu Desktop", WS_POPUP, 0, 0, 10, 10, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
