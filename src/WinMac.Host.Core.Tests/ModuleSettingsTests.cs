@@ -154,3 +154,22 @@ public class ShelfPlusSettingsTests
         Assert.Equal(20, NotchSettings.Factory.ApplyPatch(System.Text.Json.JsonDocument.Parse("{\"shelfMaxItems\": \"muchos\"}").RootElement).ShelfMaxItems);
     }
 }
+
+public class DropdownTests
+{
+    private static RowFrame RowAt(double y) => new(new SettingsRow(RowKind.Button, "gest.pick:x", "t"), 0, y, 560, 56, true, true);
+
+    [Fact] public void The_list_opens_below_its_row_when_it_fits_and_above_or_pinned_when_it_does_not()
+    {
+        var below = SettingsLayout.SuggestRect(RowAt(40), 4); Assert.True(below.Y > 40 + 20);
+        var near = SettingsLayout.SuggestRect(RowAt(SettingsLayout.ViewportH - 70), 10); Assert.True(near.Y + near.H <= SettingsLayout.ViewportH - 5); Assert.True(near.Y >= 6);
+        var huge = SettingsLayout.SuggestRect(RowAt(SettingsLayout.ViewportH - 70), 40); Assert.Equal(6, huge.Y, 3);
+    }
+
+    [Fact] public void The_dropdown_marks_the_current_choice_and_plain_suggestions_have_no_marks()
+    {
+        var c = new SettingsController(); c.OpenDropdown("gest.pick:x", ["Nada", "Mission Control"], 1);
+        Assert.True(c.SuggestHasChecks); Assert.Equal(1, c.SuggestChecked); Assert.Equal(1, c.SuggestIndex); Assert.Equal("gest.pick:x", c.SuggestFor);
+        c.SetSuggestions("hub.city", ["Santiago"]); Assert.False(c.SuggestHasChecks); Assert.Equal(-1, c.SuggestChecked); c.ClearSuggestions(); Assert.Null(c.SuggestFor);
+    }
+}

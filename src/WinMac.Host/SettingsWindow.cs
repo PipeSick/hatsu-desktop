@@ -262,28 +262,29 @@ internal sealed class SettingsWindow : IDisposable
         switch (e.Kind)
         {
             case "focus": if (_edit != IntPtr.Zero && _editId == e.Id) PlaceCaretFromClick(); else ShowEdit(e.Id); return;
-            case "suggest": ChooseSuggestion(e.Index); return;
+            case "suggest": if (e.Id.StartsWith("gest.pick:", StringComparison.Ordinal)) ChoosePick(e.Id, e.Index); else ChooseSuggestion(e.Index); return;
         }
 
         if (e.Kind == "button" && e.Id.StartsWith("gest.pick:", StringComparison.Ordinal)) { EndEdit(commit: true); ShowGestureMenu(e.Id[10..]); return; }
         EndEdit(commit: true); _actions.Apply(e); RebuildPages();
     }
 
-    /// <summary>Lista desplegable de acciones (menú nativo de Windows) para una asignación de Gestures. La opción actual va marcada.</summary>
+    private List<string> _pickIds = [];
+
+    /// <summary>Desplegable de acciones de Gestures: la misma lista de la ventana que usan las sugerencias de ciudad (mismo estilo), con la acción actual marcada.</summary>
     private void ShowGestureMenu(string field)
     {
         if (_actions.GestureChoices(field) is not { Count: > 0 } choices) return;
-        IntPtr menu = Native.CreatePopupMenu();
-        try
-        {
-            for (int i = 0; i < choices.Count; i++) Native.AppendMenuW(menu, choices[i].Current ? 0x8u /* CHECKED */ : 0u, (UIntPtr)(uint)(100 + i), choices[i].Name);
-            Native.GetCursorPos(out var p);
-            int cmd = Native.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, p.X, p.Y, _hwnd, IntPtr.Zero);
-            Native.PostMessage(_hwnd, Native.WM_NULL, IntPtr.Zero, IntPtr.Zero);
-            if (cmd >= 100 && cmd - 100 < choices.Count) { _actions.Apply(new SettingsEdit("gest.set:" + field, "text", Text: choices[cmd - 100].Id)); RebuildPages(); Invalidate(); }
-        }
-        catch (Exception ex) { _log("[host] ajustes: la lista de acciones falló: " + ex.Message); }
-        finally { Native.DestroyMenu(menu); }
+        _pickIds = choices.Select(c => c.Id).ToList();
+        _ctl.OpenDropdown("gest.pick:" + field, choices.Select(c => c.Name).ToList(), choices.ToList().FindIndex(c => c.Current));
+        Invalidate();
+    }
+
+    private void ChoosePick(string rowId, int index)
+    {
+        string field = rowId["gest.pick:".Length..]; _ctl.ClearSuggestions();
+        if (index >= 0 && index < _pickIds.Count) _actions.Apply(new SettingsEdit("gest.set:" + field, "text", Text: _pickIds[index]));
+        RebuildPages(); Invalidate();
     }
 
     // ───────────────────────────── campo de texto nativo (solo mientras se edita)

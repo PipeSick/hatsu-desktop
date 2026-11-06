@@ -85,7 +85,16 @@ public static class SettingsLayout
 
     // ── Lista de sugerencias bajo un campo (coordenadas locales)
     public const double SuggestRowH = 38;
-    public static (double X, double Y, double W, double H) SuggestRect(RowFrame field, int count) { var f = FieldRect(field); double w = Math.Max(f.W, 300); return (f.X + f.W - w, f.Y + f.H + 4, w, count * SuggestRowH + 8); }
+    public static (double X, double Y, double W, double H) SuggestRect(RowFrame field, int count)
+    {
+        var f = FieldRect(field); double w = Math.Max(f.W, 300), h = count * SuggestRowH + 8, y = f.Y + f.H + 4;
+        if (y + h > ViewportH - 6)                                  // no cabe debajo: se abre hacia arriba, y si tampoco cabe, se pega al borde visible
+        {
+            double up = f.Y - 4 - h; y = up >= 6 ? up : Math.Max(6, ViewportH - h - 6);
+        }
+
+        return (f.X + f.W - w, y, w, h);
+    }
 
     /// <summary>Qué hay bajo el punto (coordenadas locales): fila y parte («switch», «seg:i», «field», «slider», «up», «down», «row»).</summary>
     public static (RowFrame Row, string Part)? Hit(PageFrame f, double x, double y)

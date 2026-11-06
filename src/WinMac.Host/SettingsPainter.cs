@@ -236,7 +236,9 @@ internal sealed class SettingsPainter : IDisposable
         for (int i = 0; i < c.Suggestions.Count; i++)
         {
             double y = s.Y + 4 + i * SettingsLayout.SuggestRowH; if (i == c.SuggestIndex) RR(s.X + 4, y, s.W - 8, SettingsLayout.SuggestRowH, 8, new Color4(Tint.R, Tint.G, Tint.B, _dark ? 0.35f : 0.16f));
-            Text(c.Suggestions[i], _small, s.X + 16, y, s.W - 32, SettingsLayout.SuggestRowH, Label());
+            double off = c.SuggestHasChecks ? 24 : 0;
+            if (c.SuggestHasChecks && i == c.SuggestChecked) Text("✓", _small, s.X + 14, y, 18, SettingsLayout.SuggestRowH, new Color4(Tint.R, Tint.G, Tint.B, 1f));
+            Text(c.Suggestions[i], _small, s.X + 16 + off, y, s.W - 32 - off, SettingsLayout.SuggestRowH, Label());
         }
     }
 

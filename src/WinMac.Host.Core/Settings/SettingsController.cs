@@ -22,8 +22,13 @@ public sealed class SettingsController
     public string? SuggestFor { get; private set; }
     public IReadOnlyList<string> Suggestions { get; private set; } = [];
     public int SuggestIndex { get; private set; } = -1;
-    public void SetSuggestions(string fieldId, IReadOnlyList<string> labels) { SuggestFor = labels.Count == 0 ? null : fieldId; Suggestions = labels; SuggestIndex = -1; }
-    public void ClearSuggestions() { SuggestFor = null; Suggestions = []; SuggestIndex = -1; }
+    /// <summary>Con una lista de elecciones (desplegable), cuál es la actual (se dibuja con una marca); -1 = lista sin marcas (sugerencias de ciudad).</summary>
+    public int SuggestChecked { get; private set; } = -1;
+    public bool SuggestHasChecks { get; private set; }
+    public void SetSuggestions(string fieldId, IReadOnlyList<string> labels) { SuggestFor = labels.Count == 0 ? null : fieldId; Suggestions = labels; SuggestIndex = -1; SuggestChecked = -1; SuggestHasChecks = false; }
+    /// <summary>Abre un desplegable de elecciones bajo la fila <paramref name="rowId"/> con la elección actual marcada.</summary>
+    public void OpenDropdown(string rowId, IReadOnlyList<string> labels, int current) { SetSuggestions(rowId, labels); SuggestChecked = current; SuggestHasChecks = true; SuggestIndex = current; }
+    public void ClearSuggestions() { SuggestFor = null; Suggestions = []; SuggestIndex = -1; SuggestChecked = -1; SuggestHasChecks = false; }
     public void MoveSuggestion(int delta) { if (Suggestions.Count == 0) return; SuggestIndex = Math.Clamp(SuggestIndex + delta, 0, Suggestions.Count - 1); }
 
     public void SetPages(IReadOnlyList<SettingsPage> pages)
