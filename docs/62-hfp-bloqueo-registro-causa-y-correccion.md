@@ -58,3 +58,10 @@ Un Q&A de Microsoft sobre la 26300 y el issue 26 de MyPhone describen `RegisterA
 1. Que `IsRegistered()` sea verdadero tras `RegisterApp()` en el equipo del usuario (Ajustes lo muestra).
 2. Que aparezca una línea Bluetooth con el iPhone conectado por HFP.
 3. Una llamada entrante: contestar desde Notch, oír y hablar por el PC, colgar.
+
+## 9. Paquete candidato 2.0.4.0 y CI (OBSERVADO: run 42143938006, commit `4192378`, pin NotchWin `e98863c`; los 4 jobs en success; log del paso MSIX leído, sin FALLO)
+| Paquete | Archivo | SHA-256 | Artefacto |
+|---|---|---|---|
+| **Candidato con `phoneLineTransportManagement`** | `HatsuDesktop-2.0.4.0-beta-callcontrol-unsigned.msix` (172 MB) | `400f665ad4cde592e5f0cb61bdf086bbee7501033d3c1a862b68e8013fbbca74` | `msix-llamadas-sin-firmar-41923787f388ad0cd684afedb8075d0ad799aad7` |
+| Equivalente a Stable (sin las capacidades de telefonía) | `HatsuDesktop-2.0.4.0-store-unsigned.msix` | `a5a43a227ef6af6d0a738f3dd0c16c9b5788c54296d870a6b269d17db6c834e3` | `msix-store-sin-firmar-41923787f388ad0cd684afedb8075d0ad799aad7` |
+Capacidades del candidato (leídas del manifiesto del `.msix`): `runFullTrust`, `phoneLineTransportManagement`, `phoneCall`, `userNotificationListener`, `bluetooth`, `location`, `webcam`. Identidad `PipeSick.HatsuDesktop` · `CN=ACC0FCB8-4D92-4E20-9731-7254D5E43289` · v2.0.4.0 · x64. El paquete instalado en el runner conserva la PFN `PipeSick.HatsuDesktop_83tr6qzbbarj8`. Los artefactos caducan a los 14 días.
