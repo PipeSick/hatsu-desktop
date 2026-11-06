@@ -80,6 +80,11 @@ public sealed partial class BarHost
     private void RunAction(string target)
     {
         _log("[spotlight] acción " + target);
+        if (UseActionRegistry && _actionRegistry.Find(target) is not null)
+        {
+            var res = _actionRegistry.Execute(target); if (!res.Ok) _log("[spotlight] la acción falló: " + res.Error); return;
+        }
+
         switch (target)
         {
             case "winmac:capture:region": BeginCapture(CaptureMode.Region, "Spotlight"); break;

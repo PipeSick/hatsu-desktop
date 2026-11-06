@@ -31,6 +31,8 @@ internal sealed class MissionControlFeature : IHatsuFeature
         scope.Add(Close);
         _host.ToggleMissionControl = () => Toggle("acción");
         scope.Add(() => _host.ToggleMissionControl = null);
+        _host.RegisterModuleAction(scope, new SpotAction("mission:open", "Mission Control", "Mostrar las ventanas abiertas (módulo Mission Control)", "mission control ventanas expose vista general", Id, ActionRisk.Normal, [], null,
+            () => { _host.PostToUi(() => Toggle("Spotlight")); return ActionResult.Success; }));
     }
 
     public void Reconfigure(BarConfig cfg)

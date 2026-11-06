@@ -135,6 +135,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("snap.mod", "segment") when e.Index >= 0 && e.Index < WinMac.Bar.Features.FeatureConfig.SnapModifiers.Length: cfg.ApplyBarPatch(Patch("snapModifier", WinMac.Bar.Features.FeatureConfig.SnapModifiers[e.Index])); return true;
             case ("snap.layout", "segment"): { var names = SettingsBuilder.SnapLayoutNames(); if (e.Index < 0 || e.Index >= names.Length) return false; cfg.ApplyBarPatch(Patch("snapLayout", names[e.Index])); return true; }
             case ("snap.gap", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int gap)) cfg.ApplyBarPatch(Patch("snapGap", gap)); return true;
+            case ("mod.lang", "text"): { var t = (e.Text ?? "").Trim(); if (t.Length > 16) return true; cfg.ApplyBarPatch(Patch("ltLanguage", t)); return true; }
             case ("snap.edit", _): cfg.UpdateBar(b => b with { SnapEditToken = b.SnapEditToken + 1 }); return true;
             case ("bar.keysreset", _): cfg.ApplyBarPatch(JsonSerializer.SerializeToElement(new Dictionary<string, object?> { ["captureModifiers"] = "CtrlShift", ["captureHotkeys"] = true, ["spotlightHotkey"] = "AltSpace" })); return true;
             case ("bar.capfmt", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.CaptureFormatValues.Length: cfg.ApplyBarPatch(Patch("captureFormat", SettingsBuilder.CaptureFormatValues[e.Index])); return true;

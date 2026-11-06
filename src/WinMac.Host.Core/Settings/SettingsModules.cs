@@ -14,6 +14,8 @@ public static partial class SettingsBuilder
 
     internal static readonly List<ModuleCard> ModuleCards =
     [
+        new("spotactions", "spotActionsEnabled", "Spotlight Actions", "Spotlight como centro de comandos: capturas, grabación, Launchpad, Ajustes, espacios de trabajo, acciones del sistema y las de los módulos que tengas activos (Mission Control, Snap, Live Text).",
+            b => [new(RowKind.Info, "mod.spotactions.info", "Escribe, por ejemplo, «mission», «snap», «live text», «bloquear» o «capturar». Las acciones que cierran sesión, suspenden, reinician o apagan piden un segundo Intro. Si apagas un módulo, sus acciones desaparecen; si apagas este, Spotlight vuelve a su lista clásica.")]),
         new("mission", "mcEnabled", "Hatsu Mission Control", "Vista general de las ventanas abiertas, con miniaturas, búsqueda y varios monitores. Clic o Intro activan una ventana, Supr la cierra, Esc sale.",
             b => [HotkeyRow("mcHotkey", "Atajo", b.McHotkey),
                   new(RowKind.Info, "mod.mission.limit", "Muestra las ventanas del escritorio virtual actual (Windows no ofrece una API pública para listar las de otros escritorios). Las miniaturas son capturas, no vídeo en vivo; las ventanas protegidas muestran la inicial de la app.")], "Barra · Mission Control"),
@@ -24,6 +26,12 @@ public static partial class SettingsBuilder
                   HotkeyRow("snapNextHotkey", "Atajo: ventana activa a la zona siguiente", b.SnapNextHotkey),
                   new(RowKind.Button, "snap.edit", "Crear una distribución nueva (editor de zonas)…"),
                   new(RowKind.Info, "mod.snap.limit", "No mueve ventanas sin marco redimensionable, a pantalla completa ni de programas con más permisos que Hatsu (Windows lo impide). Las distribuciones propias se guardan en %APPDATA%\\WinMac\\snap-layouts.json.")], "Barra · Snap"),
+        new("livetext", "liveTextEnabled", "Hatsu Live Text", "Elige una región de la pantalla y Hatsu reconoce su texto en tu equipo (sin Internet, nada sale del PC) y lo copia.",
+            b => [HotkeyRow("ltHotkey", "Atajo", b.LtHotkey),
+                  new(RowKind.Toggle, "bar:ltAutoCopy", "Copiar el texto al reconocerlo", "También se puede copiar desde el panel", b.LtAutoCopy),
+                  new(RowKind.Toggle, "bar:ltKeepLineBreaks", "Conservar los saltos de línea", "Apagado, las líneas se unen en un párrafo", b.LtKeepLineBreaks),
+                  new(RowKind.Field, "mod.lang", "Idioma de reconocimiento", "Etiqueta como es-ES o en-US. Vacío = los idiomas de tu perfil de Windows", Text: b.LtLanguage, Placeholder: "automático"),
+                  new(RowKind.Info, "mod.livetext.limit", "Usa los paquetes de reconocimiento de texto que Windows tenga instalados (el estado de arriba dice cuáles). Regiones muy grandes se rechazan con un aviso.")], "Barra · Live Text"),
     ];
 
     public static readonly string[] SnapMods = ["Mayús", "Ctrl", "Alt"];

@@ -102,7 +102,7 @@ public sealed partial class BarHost
     {
         if (_spot is null) return;
         var recent = _cfg.SpotlightFiles ? SpotlightEngine.MatchRecent(q, _recent) : [];
-        IReadOnlyList<SpotItem> Local(IReadOnlyList<SpotItem> files) => FillLocalTools(SpotlightEngine.Query(q, _catalog.Apps, _lprefs.Usage, _folders, files, p => Directory.Exists(p) || File.Exists(p), IsRecording, _scripts, _wsNames, _clipItems));
+        IReadOnlyList<SpotItem> Local(IReadOnlyList<SpotItem> files) => FillLocalTools(SpotlightEngine.Query(q, _catalog.Apps, _lprefs.Usage, _folders, files, p => Directory.Exists(p) || File.Exists(p), IsRecording, _scripts, _wsNames, _clipItems, UseActionRegistry ? _actionRegistry : null));
         if (!askClipboard) { _spot.Controller.SetResults(Local(recent.Concat(_spotFiles).ToList())); _spot.Refresh(); return; }
         int gen = ++_spotGen; _toolCts?.Cancel(); _spotFiles = [];   // the text changed: a running ping/DNS is for the old text
         AskClipboard(q);

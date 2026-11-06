@@ -48,6 +48,12 @@ internal sealed class SnapFeature : IHatsuFeature
         scope.Add(() => { _overlay?.Dispose(); _overlay = null; });
         _host.SnapNextZone = NextZone; scope.Add(() => _host.SnapNextZone = null);
         _host.SnapEdit = OpenEditor; scope.Add(() => _host.SnapEdit = null);
+        _host.RegisterModuleAction(scope, new SpotAction("snap:next", "Snap: ventana activa a la zona siguiente", "Mueve la ventana activa por las zonas de la distribución activa (módulo Snap)", "snap zona siguiente ventana mover", Id, ActionRisk.Normal, [], null, () => { _host.PostToUi(NextZone); return ActionResult.Success; }));
+        _host.RegisterModuleAction(scope, new SpotAction("snap:edit", "Snap: crear una distribución", "Abre el editor de zonas (módulo Snap)", "snap editor zonas distribucion crear", Id, ActionRisk.Normal, [], null, () => { _host.PostToUi(OpenEditor); return ActionResult.Success; }));
+        SpotAction? Layout(string name) => SnapLayouts.All(LoadCustom()).FirstOrDefault(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase)) is { } l
+            ? new SpotAction("snap:layout:" + l.Name, "Snap: usar la distribución «" + l.Name + "»", "Cambia la distribución activa de Snap", "snap distribucion " + l.Name.ToLowerInvariant(), Id, ActionRisk.Normal, [], null, () => { _host.PatchConfig(new { snapLayout = l.Name }); return ActionResult.Success; }) : null;
+        _host.Actions.RegisterProvider(Id, q => SnapLayouts.All(LoadCustom()).Select(l => Layout(l.Name)!), id => id.StartsWith("snap:layout:", StringComparison.Ordinal) ? Layout(id["snap:layout:".Length..]) : null);
+        scope.Add(() => _host.Actions.UnregisterModule(Id));
     }
 
     public void Reconfigure(BarConfig cfg)

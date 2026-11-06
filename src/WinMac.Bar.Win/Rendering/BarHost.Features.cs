@@ -19,6 +19,8 @@ public sealed partial class BarHost
     internal void PostToUi(Action a) => Post(a);
     internal Action? SnapNextZone { get; set; }
     internal Action? SnapEdit { get; set; }
+    internal Action? LiveTextRun { get; set; }
+    internal void CopyTextPublic(string text) => CopyText(text);
     internal int CurrentConfigEditToken => _cfg.SnapEditToken;
     internal void PatchConfig(object patch) => ((IPanelUi)this).PatchConfig(patch);
 
@@ -64,7 +66,9 @@ public sealed partial class BarHost
     /// <summary>Alta de los módulos conforme se implementan (cada uno aporta su interruptor y su <see cref="IHatsuFeature"/>).</summary>
     private void RegisterFeatures(FeatureManager m)
     {
+        m.Register(new SpotlightActionsFeature(this), c => c.SpotActionsEnabled);
         m.Register(new MissionControlFeature(this, _log), c => c.McEnabled);
         m.Register(new SnapFeature(this, _log), c => c.SnapEnabled);
+        m.Register(new LiveTextFeature(this, _log), c => c.LiveTextEnabled);
     }
 }

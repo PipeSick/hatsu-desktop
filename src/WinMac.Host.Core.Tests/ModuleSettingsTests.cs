@@ -58,7 +58,7 @@ public class ModulePageTests
         var page = Pages(new BarConfig()).Single(p => p.Id == "modules"); var rows = page.Groups.SelectMany(g => g.Rows).ToList();
         Assert.Contains(rows, r => r.Id == "bar:mcEnabled" && !r.On); Assert.Contains(rows, r => r.Id == "bar:snapEnabled" && !r.On);
         Assert.All(rows.Where(r => r.Id is "mod.key:mcHotkey" or "snap.mod" or "snap.layout" or "snap.edit"), r => { Assert.False(r.Enabled); Assert.Equal("Activa el módulo", r.Reason); });
-        Assert.DoesNotContain(rows, r => r.Id.Contains("livetext", StringComparison.OrdinalIgnoreCase));   // sin controles de módulos que todavía no existen
+        Assert.DoesNotContain(rows, r => r.Id.Contains("gest", StringComparison.OrdinalIgnoreCase));   // sin controles de módulos que todavía no existen
     }
 
     [Fact] public void Turning_a_module_on_enables_its_settings_and_shows_its_status()

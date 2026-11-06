@@ -75,6 +75,10 @@ public static partial class SettingsBuilder
         ("cleanupIsland", "Mostrar el progreso de la limpieza en Hatsu Notch", b => b.CleanupIsland),
         ("mcEnabled", "Mission Control", b => b.McEnabled),
         ("snapEnabled", "Snap", b => b.SnapEnabled),
+        ("spotActionsEnabled", "Spotlight Actions", b => b.SpotActionsEnabled),
+        ("liveTextEnabled", "Live Text", b => b.LiveTextEnabled),
+        ("ltKeepLineBreaks", "Conservar los saltos de línea", b => b.LtKeepLineBreaks),
+        ("ltAutoCopy", "Copiar el texto al reconocerlo", b => b.LtAutoCopy),
     ];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];

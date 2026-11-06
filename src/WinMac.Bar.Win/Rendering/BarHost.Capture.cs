@@ -19,6 +19,8 @@ public sealed partial class BarHost
     private readonly List<GlobalHotkey> _captureKeys = [];
     private readonly Dictionary<string, EventWaitHandle> _captureEvents = [];
     private CaptureOverlay? _overlay;
+    /// <summary>Otro módulo (Live Text) usa el mismo capturador: si hay un destino, la región elegida se le entrega en vez de guardarse como captura. Se anula al cerrar o cancelar.</summary>
+    private Action<byte[], CaptureRect, CaptureRect>? _captureSink;
     private CaptureEditor? _editor;
     private EventWaitHandle? _editEvent;
     private volatile string? _editRequest;
@@ -223,7 +225,7 @@ public sealed partial class BarHost
             var monitors = ScreenGrabber.Monitors(); var windows = ScreenGrabber.Windows(IntPtr.Zero); long tEnum = t0.ElapsedMilliseconds;
             if (MenuDiagOn) _log($"[captura] etapas: copia {tGrab} ms, ventanas {tEnum - tGrab} ms");
             _overlay = new CaptureOverlay(frame, rect, monitors, windows, mode,
-                (t, m, title) => Post(() => { if (record) StartRecording(t, monitors); else SaveCapture(frame, rect, t, m, title); }), () => Post(EndCapture), _log, record);
+                (t, m, title) => Post(() => { var sink = _captureSink; if (sink is not null) { _captureSink = null; EndCapture(); sink(frame, rect, t); } else if (record) StartRecording(t, monitors); else SaveCapture(frame, rect, t, m, title); }), () => Post(EndCapture), _log, record);
             _overlay.Show();
             if (MenuDiagOn) _log($"[captura] etapas: superposición visible a los {t0.ElapsedMilliseconds} ms");
             _log($"[captura] abierta ({why}){(record ? " para grabar" : "")}: modo {mode}, pantalla virtual {rect.X},{rect.Y} {rect.W}x{rect.H}, {monitors.Count} monitor(es), {windows.Count} ventana(s)");
@@ -239,7 +241,15 @@ public sealed partial class BarHost
         _log("[captura] diag " + string.Join(" | ", _overlay.ToolbarButtons.Select(b => $"{b.Mode}@{b.Rect.X + b.Rect.W / 2},{b.Rect.Y + b.Rect.H / 2}")));
     }
 
-    private void EndCapture() { _overlay?.Dispose(); _overlay = null; }
+    private void EndCapture() { _overlay?.Dispose(); _overlay = null; _captureSink = null; }
+
+    /// <summary>Abre el capturador existente para elegir una región y entregarla a <paramref name="sink"/> (sin guardar nada). Devuelve false si ya hay una captura abierta.</summary>
+    internal bool BeginRegionPick(Action<byte[], CaptureRect, CaptureRect> sink, string why)
+    {
+        if (_overlay is not null || _countdown is not null) return false;
+        _captureSink = sink; BeginCapture(CaptureMode.Region, why, delay: 0);
+        return true;   // si la Isla se está cerrando, la captura se abre unos instantes después y conserva el destino; si no se puede abrir, EndCapture lo anula
+    }
 
     private void SaveCapture(byte[] frame, CaptureRect frameRect, CaptureRect t, CaptureMode mode, string? title)
     {

@@ -163,7 +163,7 @@ public static class SpotlightEngine
 
     public static IReadOnlyList<SpotItem> Query(string text, IReadOnlyList<InstalledApp> apps, IReadOnlyDictionary<string, int>? usage,
         IReadOnlyList<(string Name, string Path)> folders, IReadOnlyList<SpotItem> files, Func<string, bool>? pathExists = null,
-        bool recording = false, IReadOnlyList<SpotScript>? scripts = null, IReadOnlyList<string>? workspaces = null, IReadOnlyList<SpotItem>? clipboard = null)
+        bool recording = false, IReadOnlyList<SpotScript>? scripts = null, IReadOnlyList<string>? workspaces = null, IReadOnlyList<SpotItem>? clipboard = null, Features.ActionRegistry? actions = null)
     {
         var q = text.Trim(); var list = new List<SpotItem>();
         if (q.Length == 0) return list;
@@ -182,7 +182,7 @@ public static class SpotlightEngine
         var ranked = new List<(int Score, int Order, SpotItem Item)>();
         ranked.AddRange(AppMatcher.Search(apps, q, usage, 5).Select(a => (AppMatcher.Score(q, a.Name) + 1, 0, new SpotItem(SpotKind.App, a.Name, "Aplicación", a.Id, a))));
         ranked.AddRange(SpotSettings.Search(q).OrderByDescending(x => x.Score).Take(2).Select(x => (x.Score, 1, x.Item)));
-        ranked.AddRange(SpotPro.SearchActions(q, recording).OrderByDescending(x => x.Score).Take(3).Select(x => (x.Score, 1, x.Item)));
+        ranked.AddRange((actions is null ? SpotPro.SearchActions(q, recording) : actions.Search(q)).OrderByDescending(x => x.Score).Take(3).Select(x => (x.Score, 1, x.Item)));
         if (workspaces is { Count: > 0 }) ranked.AddRange(SpotPro.SearchWorkspaces(q, workspaces).OrderByDescending(x => x.Score).Take(3).Select(x => (x.Score, 1, x.Item)));
         if (scripts is { Count: > 0 }) ranked.AddRange(SpotPro.SearchScripts(q, scripts).Take(2).Select(s => (AppMatcher.Score(q, s.Title), 3, s)));
         ranked.AddRange(folders.Select(f => (f, s: AppMatcher.Score(q, f.Name))).Where(x => x.s >= 400).OrderByDescending(x => x.s).Take(2)

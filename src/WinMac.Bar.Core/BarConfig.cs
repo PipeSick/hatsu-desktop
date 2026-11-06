@@ -151,6 +151,10 @@ public sealed record BarConfig
     public string LtHotkey { get; init; } = "Ctrl+Alt+Space";
     /// <summary>Conservar los saltos de línea al copiar el texto reconocido.</summary>
     public bool LtKeepLineBreaks { get; init; } = true;
+    /// <summary>Copiar el texto al portapapeles en cuanto se reconoce (se puede copiar también desde el panel). El historial de la Isla lo recoge como cualquier copia: no hay un historial aparte.</summary>
+    public bool LtAutoCopy { get; init; } = true;
+    /// <summary>Idioma de reconocimiento (etiqueta BCP-47, p. ej. «es-ES»). Vacío = los idiomas del perfil del usuario.</summary>
+    public string LtLanguage { get; init; } = "";
     /// <summary>Spotlight Actions: registro central de acciones en Spotlight. Activado por defecto (no instala ganchos).</summary>
     public bool SpotActionsEnabled { get; init; } = true;
     /// <summary>Hatsu Gestures: esquinas activas y botones del ratón. APAGADO por defecto (instala un gancho de ratón mientras esté activo).</summary>
@@ -193,6 +197,7 @@ public sealed record BarConfig
         SnapModifier = Features.FeatureConfig.SnapModifiers.Contains(SnapModifier) ? SnapModifier : "Shift",
         SnapLayout = string.IsNullOrWhiteSpace(SnapLayout) ? "Mitades" : SnapLayout.Trim(),
         SnapGap = Math.Clamp(SnapGap, 0, 64),
+        LtLanguage = (LtLanguage ?? "").Trim().Length <= 16 ? (LtLanguage ?? "").Trim() : "",
         GestCornerDelayMs = Math.Clamp(GestCornerDelayMs, 150, 2000),
         GestCornerTL = Features.FeatureConfig.NormalizeAction(GestCornerTL), GestCornerTR = Features.FeatureConfig.NormalizeAction(GestCornerTR),
         GestCornerBL = Features.FeatureConfig.NormalizeAction(GestCornerBL), GestCornerBR = Features.FeatureConfig.NormalizeAction(GestCornerBR),
