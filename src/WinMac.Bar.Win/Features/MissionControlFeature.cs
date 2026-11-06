@@ -56,11 +56,9 @@ internal sealed class MissionControlFeature : IHatsuFeature
             BarNative.GetCursorPos(out var cur); int focusMon = 0;
             for (int i = 0; i < _mons.Count; i++) { var b = _mons[i].Bounds; if (cur.X >= b.X && cur.X < b.X + b.W && cur.Y >= b.Y && cur.Y < b.Y + b.H) focusMon = i; }
             _wins = [];
-            for (int i = 0; i < _mons.Count; i++)
-            {
-                var w = new MissionControlWindow(_ctl, i, _mons[i], h => _catalog.Thumbs.Get(h), OnCommand, _log); _wins.Add(w);
-                w.Show(focus: i == focusMon);
-            }
+            for (int i = 0; i < _mons.Count; i++) _wins.Add(new MissionControlWindow(_ctl, i, _mons[i], h => _catalog.Thumbs.Get(h), OnCommand, _log, h => _wins.Any(x => x.Handle == h)));
+            for (int i = 0; i < _wins.Count; i++) if (i != focusMon) _wins[i].Show(focus: false);   // primero los demás monitores y al final el del puntero, para que quede con el foco
+            _wins[focusMon].Show(focus: true);
 
             IsOpen = true; RequestThumbs();
             _loop = CancellationTokenSource.CreateLinkedTokenSource(_scope!.Token); var tok = _loop.Token;
@@ -92,8 +90,8 @@ internal sealed class MissionControlFeature : IHatsuFeature
         switch (c.Kind)
         {
             case McCmdKind.Redraw: foreach (var w in _wins) w.Invalidate(); foreach (var w in _wins) w.Pump(); break;
-            case McCmdKind.Close: Close(); break;
-            case McCmdKind.Activate: { long h = c.Hwnd; Close(); _catalog?.Activate(h); break; }
+            case McCmdKind.Close: _host.PostToUi(Close); break;   // no se destruye una ventana desde su propio procedimiento de mensajes
+            case McCmdKind.Activate: { long h = c.Hwnd; _host.PostToUi(() => { Close(); _catalog?.Activate(h); }); break; }
             case McCmdKind.CloseWindow: _catalog?.Close(c.Hwnd); _ctl.Forget(c.Hwnd); foreach (var w in _wins) { w.Invalidate(); w.Pump(); } break;
         }
     }

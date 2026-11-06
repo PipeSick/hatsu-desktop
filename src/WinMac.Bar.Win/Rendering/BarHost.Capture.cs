@@ -123,7 +123,7 @@ public sealed partial class BarHost
 
     private void CaptureTick()
     {
-        if (_hkReportAgain != default && DateTime.UtcNow > _hkReportAgain) { _hkReportAgain = default; ReportHotkeys(); }   // once more when the link to the host is surely up
+        if (_hkReportAgain != default && DateTime.UtcNow > _hkReportAgain) { _hkReportAgain = default; ReportHotkeys(); ReportFeatures(); }   // once more when the link to the host is surely up
         RecordTick();
         _features?.Pump();
         if (_editRequest is { } req) { _editRequest = null; OpenEditor(req, "Hatsu Notch"); }

@@ -29,15 +29,15 @@ internal sealed class MissionControlWindow : IDisposable
     private const double FadeMs = 140;
 
     private readonly McController _ctl; private readonly int _index; private readonly CaptureMonitor _mon; private readonly Func<long, IconBitmap?> _thumbs; private readonly Action<McCommand> _onCommand; private readonly Action<string> _log;
-    private readonly BarNative.WndProc _proc; private readonly string _cls;
+    private readonly BarNative.WndProc _proc; private readonly string _cls; private readonly Func<IntPtr, bool> _isSibling;
     private IntPtr _hwnd; private D2DDevice? _dev; private IDXGISwapChain1? _swap; private ID2D1Bitmap1? _bmp; private IDCompositionDevice? _dcomp; private IDCompositionTarget? _target; private IDCompositionVisual? _visual;
     private IDWriteFactory? _dw; private IDWriteTextFormat? _label, _search, _initial; private ID2D1SolidColorBrush? _solid;
     private readonly WallpaperSource _wall = new(); private ID2D1Bitmap1? _blurred; private readonly Dictionary<long, (IconBitmap Src, ID2D1Bitmap? Bmp)> _tcache = [];
     private double _scale = 1; private int _wPx, _hPx; private bool _open, _tracking, _dirty; private long _openedAt; private IReadOnlyList<McCard> _cards = [];
 
     private static int _seq;
-    public MissionControlWindow(McController ctl, int index, CaptureMonitor mon, Func<long, IconBitmap?> thumbs, Action<McCommand> onCommand, Action<string> log)
-    { _ctl = ctl; _index = index; _mon = mon; _thumbs = thumbs; _onCommand = onCommand; _log = log; _proc = WndProcImpl; _cls = "WinMacMission" + Interlocked.Increment(ref _seq); }
+    public MissionControlWindow(McController ctl, int index, CaptureMonitor mon, Func<long, IconBitmap?> thumbs, Action<McCommand> onCommand, Action<string> log, Func<IntPtr, bool> isSibling)
+    { _isSibling = isSibling; _ctl = ctl; _index = index; _mon = mon; _thumbs = thumbs; _onCommand = onCommand; _log = log; _proc = WndProcImpl; _cls = "WinMacMission" + Interlocked.Increment(ref _seq); }
 
     public IntPtr Handle => _hwnd;
     public bool IsOpen => _open;
@@ -191,7 +191,9 @@ internal sealed class MissionControlWindow : IDisposable
                 case WM_RBUTTONUP: _onCommand(McCommand.Close); return IntPtr.Zero;
                 case WM_KEYDOWN or WM_SYSKEYDOWN: Do(_ctl.Key((int)w)); return IntPtr.Zero;
                 case WM_CHAR: Do(_ctl.Char((char)(int)w)); return IntPtr.Zero;
-                case WM_ACTIVATE when ((long)w & 0xFFFF) == 0: _onCommand(McCommand.Close); return IntPtr.Zero;   // perdió el foco
+                case WM_ACTIVATE when ((long)w & 0xFFFF) == 0:   // perdió el foco: se cierra, salvo que el foco pase a otra ventana de Mission Control (otro monitor)
+                    if (!_isSibling(l)) _onCommand(McCommand.Close);
+                    return IntPtr.Zero;
                 case 0x2E0: return IntPtr.Zero;
             }
         }
