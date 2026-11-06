@@ -51,6 +51,7 @@ internal sealed class OnboardingWindow : IDisposable
             _hwnd = Native.CreateWindowEx(0, ClassName, "Hatsu Desktop", style, Math.Max(0, (sw - ww) / 2), Math.Max(0, (sh - wh) / 2), ww, wh, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
             if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
             int dk = _dark ? 1 : 0; Native.DwmSetWindowAttribute(_hwnd, 20, ref dk, 4);
+            WindowChrome.Apply(_hwnd, _dark, _dark ? 0x161618 : 0xE8E8ED);
             _dev = new D2DDevice(); _dev.SetDpi(_scale); _painter = new OnboardingPainter(_dev, _dark); CreateSurface();
             Native.ShowWindow(_hwnd, 5); Native.SetForegroundWindow(_hwnd);
         }

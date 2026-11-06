@@ -117,6 +117,7 @@ internal sealed class SettingsWindow : IDisposable
         _hwnd = Native.CreateWindowEx(0, ClassName, "Ajustes de Hatsu Desktop", style, Math.Max(0, (sw - ww) / 2), Math.Max(0, (sh - wh) / 2), ww, wh, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
         int dark = _dark ? 1 : 0; Native.DwmSetWindowAttribute(_hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, ref dark, 4);
+        WindowChrome.Apply(_hwnd, _dark, _dark ? 0x161618 : 0xE8E8ED);   // icono de Hatsu y barra de título del color de la barra lateral
         _dev = new D2DDevice(); _dev.SetDpi(_scale); _painter = new SettingsPainter(_dev, _dark); CreateSurface();
         Native.ShowWindow(_hwnd, 5); _clickLogged = false;
     }
