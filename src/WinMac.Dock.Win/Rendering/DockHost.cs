@@ -61,7 +61,7 @@ public sealed class DockHost : IDisposable
         _cfg = cfg; _glass = glass; _demo = demo; _log = log; _proc = WndProcImpl; _cfgPath = demo ? null : configPath;
         _screen = monitor is { } mm ? new Native.RECT { Left = mm.Left, Top = mm.Top, Right = mm.Right, Bottom = mm.Bottom } : null;
         // Vista previa de ventanas: la ventana crece hacia arriba y a los lados (zona transparente que deja pasar el ratón); la barra sigue igual y centrada.
-        _m = Compose(m, cfg); _appliedLayout = DockSettings.LayoutKey(cfg);
+        _m = Compose(m, cfg); _appliedLayout = DockSettings.LayoutKey(cfg); _appliedPreviews = cfg.PreviewsEnabled;
         _ctl = new DockController(_m, cfg);
         _builder = new DockModelBuilder(cfg, DockDefaults.Title);
         if (demo) _icons = new NoIconSource();        // los íconos de demostración (letras) son solo para pruebas automatizadas y --demo
@@ -170,13 +170,15 @@ public sealed class DockHost : IDisposable
     /// <summary>Añade a las métricas la holgura de la vista previa (la ventana crece hacia arriba y a los lados; la barra no cambia).</summary>
     private DockMetrics Compose(DockMetrics m, DockConfig cfg) => !_demo && cfg.PreviewsEnabled ? m with { PreviewHeadroom = PreviewSpec.Headroom(m), PreviewMaxWidth = Math.Min(PreviewSpec.MaxPanelWidth, Math.Max(PreviewSpec.MinPanelW + 40, ScreenWidthDip() - 2 * m.ShadowMargin - 24)) } : m;
 
-    private (double, DockAlignment, double, double) _appliedLayout;
+    private (double, DockAlignment, double, double) _appliedLayout; private bool _appliedPreviews;
 
     /// <summary>Aplica en vivo un cambio de tamaño, alineación o altura: el tamaño reconstruye controlador y painter con las métricas nuevas; lo demás solo recoloca la ventana.</summary>
     private void ApplyLayoutChange()
     {
         var key = DockSettings.LayoutKey(_cfg);
-        if (key == _appliedLayout)
+        // Activar o desactivar la vista previa cambia la holgura de la ventana (Compose): antes solo se aplicaba al reiniciar el Dock
+        bool previewsChanged = _cfg.PreviewsEnabled != _appliedPreviews;
+        if (key == _appliedLayout && !previewsChanged)
         {
             // WM-033: a change that is not size/position (auto-hide, magnification, previews…) must reach the controller too. It did not: with «Ocultar
             // automáticamente» on, the controller never hid the Dock while the window was re-placed — the Dock «went up and stayed visible».
@@ -184,7 +186,7 @@ public sealed class DockHost : IDisposable
             if ((_cfg.ReserveSpace && !_cfg.AutoHide) != _reserving && _hwnd != IntPtr.Zero) PlaceWindow(show: false);   // only the reservation changed
             return;
         }
-        bool sizeChanged = key.Item1 != _appliedLayout.Item1; _appliedLayout = key;
+        bool sizeChanged = key.Item1 != _appliedLayout.Item1 || previewsChanged; _appliedLayout = key; _appliedPreviews = _cfg.PreviewsEnabled;
         if (_hwnd == IntPtr.Zero) { _ctl.Config = _cfg; return; }
         _pressed = -1; _pressDrag = false;
         if (sizeChanged)
