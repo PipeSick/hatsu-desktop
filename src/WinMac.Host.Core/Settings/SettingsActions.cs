@@ -57,6 +57,9 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
     /// <summary>Extension operations, provided by the host (null when extensions are not available).</summary>
     public IExtensionOps? Extensions { get; set; }
 
+    /// <summary>Lo que muestra la lista desplegable de una asignación de Gestures.</summary>
+    public IReadOnlyList<(string Id, string Name, bool Current)>? GestureChoices(string field) => SettingsBuilder.GestureChoices(cfg.Bar, field);
+
     private bool ApplyCore(SettingsEdit e)
     {
         string id = e.Id;
@@ -103,10 +106,10 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
         }
 
         if (id.StartsWith("feature.retry:", StringComparison.Ordinal)) { cfg.UpdateBar(b => b with { FeatureRetryToken = b.FeatureRetryToken + 1 }); return true; }
-        if (id.StartsWith("gest.cycle:", StringComparison.Ordinal))
+        if (id.StartsWith("gest.set:", StringComparison.Ordinal) && e.Kind == "text")
         {
-            string f = id[11..]; if (SettingsBuilder.NextGestureAction(cfg.Bar, f) is not { } next) return false;
-            cfg.ApplyBarPatch(Patch(f, next)); return true;
+            string f = id[9..]; if (SettingsBuilder.GestureChoices(cfg.Bar, f) is not { } choices || !choices.Any(c => c.Id == e.Text)) return false;   // solo acciones de la lista (módulo encendido)
+            cfg.ApplyBarPatch(Patch(f, e.Text)); return true;
         }
 
         if (id.StartsWith("mod.key:", StringComparison.Ordinal) && e.Kind == "text")

@@ -142,3 +142,26 @@ public class FeatureTests
         Assert.Equal(c, BarConfig.FromJson(c.ToJson()));
     }
 }
+
+public class HotkeyCaptureTests
+{
+    [Fact] public void A_real_keypress_becomes_the_canonical_combination()
+    {
+        Assert.Equal("Ctrl+Alt+Up", HotkeySpec.FromKey(0x26, true, true, false)!.Value.Format()); Assert.Equal("Ctrl+Shift+K", HotkeySpec.FromKey(0x4B, true, false, true)!.Value.Format());
+        Assert.Equal("Alt+F9", HotkeySpec.FromKey(0x78, false, true, false)!.Value.Format()); Assert.Equal("Ctrl+Alt+Space", HotkeySpec.FromKey(0x20, true, true, false)!.Value.Format());
+    }
+
+    [Fact] public void Without_ctrl_or_alt_or_with_an_unsupported_key_nothing_is_captured()
+    {
+        Assert.Null(HotkeySpec.FromKey(0x41, false, false, false)); Assert.Null(HotkeySpec.FromKey(0x41, false, false, true));           // letra suelta o solo Mayús
+        Assert.Null(HotkeySpec.FromKey(0x10, true, true, true)); Assert.Null(HotkeySpec.FromKey(0xBA, true, false, false)); Assert.Null(HotkeySpec.FromKey(0x5B, true, true, false));   // modificador solo, tecla OEM, Windows
+    }
+
+    [Fact] public void What_the_capture_produces_is_always_accepted_by_the_parser_and_the_registry()
+    {
+        foreach (uint vk in new uint[] { 0x30, 0x39, 0x41, 0x5A, 0x70, 0x87, 0x25, 0x28, 0x20, 0x0D, 0x09, 0x1B, 0x24, 0x23, 0x21, 0x22, 0x2D, 0x2E, 0x08 })
+        {
+            var s = HotkeySpec.FromKey(vk, true, true, false)!.Value; Assert.True(HotkeySpec.TryParse(s.Format(), out var back)); Assert.Equal(s, back);
+        }
+    }
+}

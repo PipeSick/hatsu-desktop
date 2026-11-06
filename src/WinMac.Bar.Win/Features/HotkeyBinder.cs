@@ -20,6 +20,8 @@ internal sealed class HotkeyBinder
     public ClaimResult Bind(FeatureScope? scope, string owner, string id, string purpose, string module, string? spec, Action run)
     {
         var k = (owner, id);
+        // Misma combinación y ya registrada: no se toca (cada cambio de configuración volvía a registrar todos los atajos y a esperar a sus hilos)
+        if (!string.IsNullOrWhiteSpace(spec) && HotkeySpec.TryParse(spec, out var same) && _bound.TryGetValue(k, out var cur) && cur.Registered && cur.Spec == same.Format()) return new ClaimResult(ClaimStatus.Ok);
         Release(owner, id);
         if (string.IsNullOrWhiteSpace(spec)) { Changed?.Invoke(); return new ClaimResult(ClaimStatus.Ok); }
         var r = _reg.TryClaim(owner, id, purpose, spec);

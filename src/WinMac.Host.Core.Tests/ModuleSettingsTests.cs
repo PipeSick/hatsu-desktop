@@ -82,7 +82,7 @@ public class ModulePageTests
 
 public class GestureSettingsTests
 {
-    [Fact] public void The_cycle_button_offers_only_actions_whose_module_is_on_and_wraps_around()
+    [Fact] public void The_rotation_helper_still_skips_actions_of_switched_off_modules()
     {
         var off = new BarConfig(); var seen = new List<string>(); var b = off;
         for (int i = 0; i < 12; i++) { var next = SettingsBuilder.NextGestureAction(b, "gestCornerTL")!; seen.Add(next); b = b with { GestCornerTL = next }; }
@@ -96,11 +96,21 @@ public class GestureSettingsTests
         Assert.DoesNotContain("módulo apagado", SettingsBuilder.GestRow("gestCornerTL", "Esquina", "mission", new BarConfig { McEnabled = true }).Title);
     }
 
-    [Fact] public void Cycling_and_delay_edits_are_stored_and_validated()
+    [Fact] public void The_dropdown_lists_none_plus_only_available_actions_marks_the_current_one_and_rejects_anything_else()
     {
         var path = Path.Combine(Path.GetTempPath(), "hatsu-gest-" + Guid.NewGuid() + ".json"); var cfg = new ConfigService(path, new HostConfig()); var a = new SettingsActions(cfg, () => { }, _ => { });
-        Assert.True(a.Apply(new SettingsEdit("gest.cycle:gestCornerTR", "button"))); Assert.NotEqual("none", cfg.Bar.GestCornerTR);
-        Assert.False(a.Apply(new SettingsEdit("gest.cycle:otraCosa", "button")));
+        var off = a.GestureChoices("gestCornerTR")!; Assert.Equal("none", off[0].Id); Assert.True(off[0].Current); Assert.DoesNotContain(off, c => c.Id is "mission" or "livetext" or "snapnext"); Assert.Contains(off, c => c.Id == "spotlight");
+        Assert.False(a.Apply(new SettingsEdit("gest.set:gestCornerTR", "text", Text: "mission")));                    // módulo apagado: no se puede elegir
+        Assert.True(a.Apply(new SettingsEdit("gest.set:gestCornerTR", "text", Text: "spotlight"))); Assert.Equal("spotlight", cfg.Bar.GestCornerTR);
+        Assert.True(a.GestureChoices("gestCornerTR")!.Single(c => c.Id == "spotlight").Current);
+        cfg.ApplyBarPatch(System.Text.Json.JsonSerializer.SerializeToElement(new { mcEnabled = true })); Assert.Contains(a.GestureChoices("gestCornerTR")!, c => c.Id == "mission");
+        Assert.True(a.Apply(new SettingsEdit("gest.set:gestMouseX1", "text", Text: "mission"))); Assert.Equal("mission", cfg.Bar.GestMouseX1);
+        Assert.False(a.Apply(new SettingsEdit("gest.set:otraCosa", "text", Text: "none"))); Assert.Null(a.GestureChoices("otraCosa"));
+    }
+
+    [Fact] public void Delay_edits_are_stored_and_validated()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "hatsu-gest3-" + Guid.NewGuid() + ".json"); var cfg = new ConfigService(path, new HostConfig()); var a = new SettingsActions(cfg, () => { }, _ => { });
         a.Apply(new SettingsEdit("gest.delay", "text", Text: "700")); Assert.Equal(700, cfg.Bar.GestCornerDelayMs); a.Apply(new SettingsEdit("gest.delay", "text", Text: "5")); Assert.Equal(150, cfg.Bar.GestCornerDelayMs);
     }
 

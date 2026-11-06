@@ -46,6 +46,7 @@ internal static class Native
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern IntPtr CreatePopupMenu();
     [DllImport("user32.dll")] public static extern bool DestroyMenu(IntPtr m);
+    [DllImport("user32.dll")] public static extern short GetKeyState(int vk);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool AppendMenuW(IntPtr m, uint flags, UIntPtr id, string? text);
     [DllImport("user32.dll")] public static extern int TrackPopupMenuEx(IntPtr m, uint flags, int x, int y, IntPtr hwnd, IntPtr tpm);
     [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc proc, IntPtr lParam);

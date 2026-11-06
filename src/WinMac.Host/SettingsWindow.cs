@@ -265,7 +265,25 @@ internal sealed class SettingsWindow : IDisposable
             case "suggest": ChooseSuggestion(e.Index); return;
         }
 
+        if (e.Kind == "button" && e.Id.StartsWith("gest.pick:", StringComparison.Ordinal)) { EndEdit(commit: true); ShowGestureMenu(e.Id[10..]); return; }
         EndEdit(commit: true); _actions.Apply(e); RebuildPages();
+    }
+
+    /// <summary>Lista desplegable de acciones (menú nativo de Windows) para una asignación de Gestures. La opción actual va marcada.</summary>
+    private void ShowGestureMenu(string field)
+    {
+        if (_actions.GestureChoices(field) is not { Count: > 0 } choices) return;
+        IntPtr menu = Native.CreatePopupMenu();
+        try
+        {
+            for (int i = 0; i < choices.Count; i++) Native.AppendMenuW(menu, choices[i].Current ? 0x8u /* CHECKED */ : 0u, (UIntPtr)(uint)(100 + i), choices[i].Name);
+            Native.GetCursorPos(out var p);
+            int cmd = Native.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, p.X, p.Y, _hwnd, IntPtr.Zero);
+            Native.PostMessage(_hwnd, Native.WM_NULL, IntPtr.Zero, IntPtr.Zero);
+            if (cmd >= 100 && cmd - 100 < choices.Count) { _actions.Apply(new SettingsEdit("gest.set:" + field, "text", Text: choices[cmd - 100].Id)); RebuildPages(); Invalidate(); }
+        }
+        catch (Exception ex) { _log("[host] ajustes: la lista de acciones falló: " + ex.Message); }
+        finally { Native.DestroyMenu(menu); }
     }
 
     // ───────────────────────────── campo de texto nativo (solo mientras se edita)
@@ -320,10 +338,31 @@ internal sealed class SettingsWindow : IDisposable
         }
     }
 
+    /// <summary>
+    /// Campo de atajo: en vez de escribir, se pulsa la combinación. Solo modificadores = se espera; Esc cancela; Retroceso o Supr quitan el atajo; una combinación válida (Ctrl o Alt + tecla) se guarda al instante.
+    /// Si la combinación ya la tiene un atajo global de Hatsu, Windows se la entrega a ese atajo y no llega aquí (se dice en el estado del módulo).
+    /// </summary>
+    private void CaptureHotkey(int vk)
+    {
+        if (vk is 0x10 or 0x11 or 0x12 or 0x5B or 0x5C or 0xA0 or 0xA1 or 0xA2 or 0xA3 or 0xA4 or 0xA5) return;   // solo un modificador: se sigue esperando
+        string id = _editId!;
+        bool ctrl = (Native.GetKeyState(0x11) & 0x8000) != 0, alt = (Native.GetKeyState(0x12) & 0x8000) != 0, shift = (Native.GetKeyState(0x10) & 0x8000) != 0;
+        if (vk == VK_ESCAPE && !ctrl && !alt) { EndEdit(commit: false); Native.SetFocus(_hwnd); return; }
+        if ((vk == 0x08 || vk == 0x2E) && !ctrl && !alt) { Native.SetWindowText(_edit, ""); _editDirty = true; EndEdit(commit: true); Native.SetFocus(_hwnd); return; }   // quitar el atajo
+        if (WinMac.Bar.Features.HotkeySpec.FromKey((uint)vk, ctrl, alt, shift) is not { } spec) { _log("[host] ajustes: combinación no válida (necesita Ctrl o Alt y una tecla compatible)"); return; }
+        Native.SetWindowText(_edit, spec.Format()); _editDirty = true; EndEdit(commit: true); Native.SetFocus(_hwnd);
+    }
+
     private IntPtr EditProc(IntPtr h, uint msg, IntPtr w, IntPtr l)
     {
         try
         {
+            if (_editId is { } hid && hid.StartsWith("mod.key:", StringComparison.Ordinal) && msg is WM_KEYDOWN or 0x104 /* WM_SYSKEYDOWN */ or WM_CHAR or 0x106 /* WM_SYSCHAR */)
+            {
+                if (msg is WM_CHAR or 0x106) return IntPtr.Zero;                         // captura de teclado: nunca se escribe texto, solo se lee la combinación
+                CaptureHotkey((int)w); return IntPtr.Zero;
+            }
+
             if (msg == WM_KEYDOWN)
             {
                 int vk = (int)w;

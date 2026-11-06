@@ -81,3 +81,16 @@ Mission Control: `Close()` destruye ventanas y detiene el bucle; el catálogo se
 | Acciones de Spotlight | `SpotPro.Actions` | se registran en `ActionRegistry` (misma lista) |
 | Estantería | `NotchWindow.Extras` | ampliada, no sustituida |
 | Historial del portapapeles | Isla | Live Text y Shelf+ copian al portapapeles normal |
+
+## 11. Resultados de la primera prueba en Windows real (paquete del CI #218) y pendientes
+Probado por el propietario en un solo monitor, versión portable. **Funcionaba:** Mission Control (activar, miniaturas, «(minimizada)»), Snap (zonas, colocación), Live Text desde Spotlight, Spotlight Actions, Gestures (esquinas), Shelf+ (todo lo probado). Hallazgos:
+| # | Hallazgo | Estado |
+|---|---|---|
+| 1 | Mission Control con **dos monitores**: no se pudo probar | PENDIENTE DE VALIDACIÓN |
+| 2 | Snap: al soltar en un borde con Mayús aparece además la previsualización del Snap de Windows, pero la ventana queda en la zona de Hatsu | Conocido (cosmético); no se suprime el Snap nativo |
+| 3 | Snap: una app ejecutada como administrador no se deja mover (UIPI) | Límite de Windows, documentado; no se eleva Hatsu |
+| 4 | Live Text: el **atajo** no respondió (por Spotlight sí). Causa más probable: Windows rechazó Ctrl+Alt+Espacio porque otro programa lo tiene; Ajustes › Módulos lo muestra en la línea de estado | A confirmar con el texto de estado; ahora se puede elegir otra combinación |
+| 5 | **Cambiar atajos no funcionaba** (había que escribir el texto a mano) | CORREGIDO: captura de teclado (clic en el campo y pulsar la combinación; Retroceso la quita; Esc cancela) — pendiente de validar |
+| 6 | Gestures: la asignación se cambiaba con clics sucesivos | CORREGIDO: lista desplegable con la acción actual marcada y solo las acciones de módulos encendidos — pendiente de validar |
+| 7 | Gestures: «Mostrar/ocultar el Dock» solo activa o desactiva «Ocultar automáticamente» | **INCOMPLETO** (no muestra/oculta al instante) |
+| 8 | Spotlight: «usar la distribución» solo cambia la distribución activa de Snap, no reordena las ventanas abiertas | **INCOMPLETO** |

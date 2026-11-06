@@ -53,9 +53,17 @@ public static partial class SettingsBuilder
 
     /// <summary>Fila que rota entre «Nada» y las acciones disponibles (las de módulos apagados no se ofrecen).</summary>
     public static SettingsRow GestRow(string field, string title, string value, BarConfig b) =>
-        new(RowKind.Button, "gest.cycle:" + field, $"{title}: {ActionName(value)}{(value != "none" && !WinMac.Bar.Features.GestureRules.IsAvailable(value, b) ? " (módulo apagado: no actúa)" : "")}", "Clic para cambiar de acción");
+        new(RowKind.Button, "gest.pick:" + field, $"{title}: {ActionName(value)}{(value != "none" && !WinMac.Bar.Features.GestureRules.IsAvailable(value, b) ? " (módulo apagado: no actúa)" : "")}", "Clic para elegir la acción de una lista");
 
-    /// <summary>Siguiente acción disponible tras la actual (para el botón que rota). Null si el campo no es de Gestures.</summary>
+    /// <summary>Lista desplegable de una asignación: «Nada» + las acciones disponibles (las de módulos apagados no se ofrecen). Null si el campo no es de Gestures.</summary>
+    public static IReadOnlyList<(string Id, string Name, bool Current)>? GestureChoices(BarConfig b, string field)
+    {
+        if (!GestFields.Contains(field)) return null;
+        string cur = GestValue(b, field);
+        return WinMac.Bar.Features.GestureActions.All.Where(a => a.Id == "none" || WinMac.Bar.Features.GestureRules.IsAvailable(a.Id, b)).Select(a => (a.Id, a.Name, a.Id == cur)).ToList();
+    }
+
+    /// <summary>Siguiente acción disponible tras la actual (se conserva para pruebas). Null si el campo no es de Gestures.</summary>
     public static string? NextGestureAction(BarConfig b, string field)
     {
         if (!GestFields.Contains(field)) return null;
@@ -78,7 +86,7 @@ public static partial class SettingsBuilder
     public static readonly string[] HotkeyFields = ["mcHotkey", "ltHotkey", "snapNextHotkey", "gestKey1", "gestKey2"];
 
     internal static SettingsRow HotkeyRow(string field, string title, string value, string? subtitle = null) =>
-        new(RowKind.Field, "mod.key:" + field, title, subtitle ?? "Ctrl o Alt + una tecla (p. ej. Ctrl+Alt+Up). Vacío = sin atajo", Text: value, Placeholder: "sin atajo");
+        new(RowKind.Field, "mod.key:" + field, title, subtitle ?? "Haz clic y pulsa la combinación (Ctrl o Alt + una tecla). Retroceso la quita", Text: value, Placeholder: "sin atajo");
 
     internal static SettingsPage? ModulesPage(HostConfig cfg, bool notchInstalled)
     {

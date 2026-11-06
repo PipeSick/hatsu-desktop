@@ -35,6 +35,18 @@ public readonly record struct HotkeySpec(uint Mods, uint Vk)
         spec = new HotkeySpec(mods, vk); return true;
     }
 
+    /// <summary>
+    /// Combinación a partir de una pulsación real (captura de teclado en Ajustes). Null si es solo un modificador, si no lleva Ctrl o Alt, o si la tecla no es una que Hatsu sepa registrar
+    /// (letras, cifras, F1–F24, flechas, Espacio, Intro, Tab, Esc, Inicio/Fin, RePág/AvPág, Insertar/Supr, Retroceso).
+    /// </summary>
+    public static HotkeySpec? FromKey(uint vk, bool ctrl, bool alt, bool shift)
+    {
+        bool supported = vk is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A or >= 0x70 and <= 0x87 || Names.ContainsValue(vk);
+        if (!supported || (!ctrl && !alt)) return null;
+        uint mods = (ctrl ? Ctrl : 0) | (alt ? Alt : 0) | (shift ? Shift : 0);
+        return new HotkeySpec(mods, vk);
+    }
+
     /// <summary>Texto canónico (el que se guarda): «Ctrl+Alt+Up».</summary>
     public string Format()
     {
