@@ -196,6 +196,12 @@ public class SystemBlockersTests
 {
     private static IReadOnlyDictionary<string, int?> S(params (string, int?)[] x) => x.ToDictionary(a => a.Item1, a => a.Item2);
 
+    [Fact] public void Reports_the_consumer_features_policy_that_blocks_phone_link()
+    {
+        var d = SystemBlockers.Describe(1, S(("PhoneSvc", 3)), disableConsumerFeatures: 1)!; Assert.Contains("DisableWindowsConsumerFeatures=1", d); Assert.DoesNotContain("EnableMmx", d); Assert.Contains("no está demostrado", d);
+        Assert.Null(SystemBlockers.Describe(1, S(), disableConsumerFeatures: 0)); Assert.Null(SystemBlockers.Describe(null, S(), null));
+    }
+
     [Fact] public void Reports_the_phone_link_policy_and_disabled_services_but_never_a_clean_system()
     {
         Assert.Null(SystemBlockers.Describe(null, S(("PhoneSvc", 3), ("CDPSvc", 2))));

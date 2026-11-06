@@ -11,10 +11,12 @@ public static class SystemBlockers
     [("PhoneSvc", "Servicio telefónico"), ("CDPSvc", "Servicio de plataforma de dispositivos conectados"), ("BTAGService", "Servicio de puerta de enlace de audio Bluetooth"), ("bthserv", "Servicio de compatibilidad con Bluetooth")];
 
     /// <param name="enableMmx">Valor de HKLM\SOFTWARE\Policies\Microsoft\Windows\System\EnableMmx (directiva «Vinculación teléfono-PC en este dispositivo»): 0 = bloqueada; null = no definida.</param>
+    /// <param name="disableConsumerFeatures">HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent\DisableWindowsConsumerFeatures: 1 = activa (bloquea Enlace Móvil según winhelponline); null = no definida.</param>
     /// <param name="serviceStart">Valor «Start» de cada servicio (HKLM\SYSTEM\CurrentControlSet\Services\&lt;nombre&gt;): 4 = deshabilitado; null = no se pudo leer.</param>
-    public static string? Describe(int? enableMmx, IReadOnlyDictionary<string, int?> serviceStart)
+    public static string? Describe(int? enableMmx, IReadOnlyDictionary<string, int?> serviceStart, int? disableConsumerFeatures = null)
     {
         var parts = new List<string>();
+        if (disableConsumerFeatures == 1) parts.Add("la directiva «Desactivar experiencias de consumidor de Microsoft» está activa (DisableWindowsConsumerFeatures=1, clave CloudContent): según fuentes públicas hace que Enlace Móvil muestre «bloqueado por el administrador»; no está demostrado que afecte al registro de telefonía");
         if (enableMmx == 0) parts.Add("la directiva «Vinculación teléfono-PC en este dispositivo» está en «No vincular» (EnableMmx=0): es el motivo de «El administrador del sistema ha bloqueado esta característica» en Enlace Móvil");
         var off = Services.Where(s => serviceStart.TryGetValue(s.Service, out var v) && v == 4).Select(s => $"«{s.Display}» ({s.Service})").ToList();
         if (off.Count > 0) parts.Add("servicios deshabilitados: " + string.Join(", ", off));

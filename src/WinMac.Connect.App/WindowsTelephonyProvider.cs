@@ -195,11 +195,24 @@ internal sealed class WindowsTelephonyProvider : ITelephonyProvider, IAsyncDispo
         try
         {
             int? mmx = null; using (var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\System")) if (k?.GetValue("EnableMmx") is int v) mmx = v;
+            int? consumer = null; using (var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\CloudContent")) if (k?.GetValue("DisableWindowsConsumerFeatures") is int c) consumer = c;
             var starts = new Dictionary<string, int?>();
             foreach (var (svc, _) in SystemBlockers.Services) { using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + svc); starts[svc] = k?.GetValue("Start") as int?; }
-            return SystemBlockers.Describe(mmx, starts);
+            var d = SystemBlockers.Describe(mmx, starts, consumer);
+            string laf = LafStatus();
+            return d is null ? laf : d + "; " + laf;
         }
         catch (Exception) { return null; }
+    }
+
+    /// <summary>
+    /// Estado de la «función de acceso limitado» (Limited Access Feature) <c>phonelinetransportdevice_v1</c> que otros proyectos citan como puerta de esta API en Windows 11. Es una CONSULTA con token vacío: no desbloquea nada.
+    /// Hatsu no usa claves de terceros ni derivadas: desbloquearla exige un token que concede Microsoft. Sirve para el caso de soporte (docs/62).
+    /// </summary>
+    private static string LafStatus()
+    {
+        try { var r = Windows.ApplicationModel.LimitedAccessFeatures.TryUnlockFeature("phonelinetransportdevice_v1", "", ""); return $"función de acceso limitado phonelinetransportdevice_v1: {r.Status} (consulta sin token)"; }
+        catch (Exception e) { return "función de acceso limitado: consulta no disponible (0x" + e.HResult.ToString("X8") + ")"; }
     }
 
     private async Task StartWatcherAsync()
