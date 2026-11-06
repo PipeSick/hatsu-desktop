@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using WinMac.Apps;
 using WinMac.Apps.Win;
+using WinMac.Bar.Features;
 using WinMac.Bar.Launcher;
 using WinMac.Bar.Win.Interop;
 using WinMac.Bar.Win.Launcher;
@@ -53,14 +54,32 @@ public sealed partial class BarHost
         ApplyLauncherConfig();
     }
 
-    /// <summary>Instala o quita el gancho de la tecla Windows según el ajuste (en vivo).</summary>
+    private int _hookUsers;
+
+    /// <summary>El gancho de bajo nivel es UNO solo: lo comparten la tecla Windows (Launchpad) y Gestures. Se crea cuando alguien lo necesita y se quita cuando ya no lo usa nadie.</summary>
+    private WinKeyHook EnsureInputHook()
+    {
+        if (_winKey is null) { _winKey = new WinKeyHook(() => Post(() => ToggleLaunchpad("tecla Windows")), _log); _winKey.Enabled = _cfg.LaunchpadOnWinKey; _winKey.Start(); }
+        return _winKey;
+    }
+
+    /// <summary>Gestures pide el gancho; se suelta solo con el <paramref name="scope"/> del módulo.</summary>
+    internal WinKeyHook AcquireInputHook(FeatureScope scope)
+    {
+        _hookUsers++; var h = EnsureInputHook(); bool released = false;
+        scope.Add(() => { if (released) return; released = true; _hookUsers--; ApplyLauncherConfig(); });
+        return h;
+    }
+
+    /// <summary>Instala o quita el gancho de la tecla Windows según el ajuste (en vivo). Si Gestures lo sigue usando, el gancho se queda pero la tecla Windows vuelve a abrir Inicio.</summary>
     private void ApplyLauncherConfig()
     {
-        if (_cfg.LaunchpadOnWinKey && _winKey is null)
+        if (_cfg.LaunchpadOnWinKey) { EnsureInputHook().Enabled = true; }
+        else if (_winKey is not null)
         {
-            _winKey = new WinKeyHook(() => Post(() => ToggleLaunchpad("tecla Windows")), _log); _winKey.Start();
+            _winKey.Enabled = false;
+            if (_hookUsers <= 0) { _winKey.Dispose(); _winKey = null; _log("[launchpad] tecla Windows: gancho quitado (vuelve el menú Inicio)"); }
         }
-        else if (!_cfg.LaunchpadOnWinKey && _winKey is not null) { _winKey.Dispose(); _winKey = null; _log("[launchpad] tecla Windows: gancho quitado (vuelve el menú Inicio)"); }
     }
 
     private void LauncherTick()

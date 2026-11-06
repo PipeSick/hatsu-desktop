@@ -77,6 +77,7 @@ public static partial class SettingsBuilder
         ("snapEnabled", "Snap", b => b.SnapEnabled),
         ("spotActionsEnabled", "Spotlight Actions", b => b.SpotActionsEnabled),
         ("liveTextEnabled", "Live Text", b => b.LiveTextEnabled),
+        ("gesturesEnabled", "Gestures", b => b.GesturesEnabled),
         ("ltKeepLineBreaks", "Conservar los saltos de línea", b => b.LtKeepLineBreaks),
         ("ltAutoCopy", "Copiar el texto al reconocerlo", b => b.LtAutoCopy),
     ];

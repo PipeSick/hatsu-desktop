@@ -32,7 +32,36 @@ public static partial class SettingsBuilder
                   new(RowKind.Toggle, "bar:ltKeepLineBreaks", "Conservar los saltos de línea", "Apagado, las líneas se unen en un párrafo", b.LtKeepLineBreaks),
                   new(RowKind.Field, "mod.lang", "Idioma de reconocimiento", "Etiqueta como es-ES o en-US. Vacío = los idiomas de tu perfil de Windows", Text: b.LtLanguage, Placeholder: "automático"),
                   new(RowKind.Info, "mod.livetext.limit", "Usa los paquetes de reconocimiento de texto que Windows tenga instalados (el estado de arriba dice cuáles). Regiones muy grandes se rechazan con un aviso.")], "Barra · Live Text"),
+        new("gestures", "gesturesEnabled", "Hatsu Gestures", "Esquinas activas, botones laterales del ratón y atajos de teclado que abren Mission Control, Spotlight, Launchpad, Live Text, cambian de escritorio y más.",
+            b => [GestRow("gestCornerTL", "Esquina superior izquierda", b.GestCornerTL, b), GestRow("gestCornerTR", "Esquina superior derecha", b.GestCornerTR, b),
+                  GestRow("gestCornerBL", "Esquina inferior izquierda", b.GestCornerBL, b), GestRow("gestCornerBR", "Esquina inferior derecha", b.GestCornerBR, b),
+                  new(RowKind.Field, "gest.delay", "Espera en la esquina (ms)", "Entre 150 y 2000. Con un botón del ratón pulsado nunca se activa", Text: b.GestCornerDelayMs.ToString(), Placeholder: "450"),
+                  GestRow("gestMouseX1", "Botón lateral «atrás» del ratón", b.GestMouseX1, b), GestRow("gestMouseX2", "Botón lateral «adelante» del ratón", b.GestMouseX2, b),
+                  HotkeyRow("gestKey1", "Atajo 1", b.GestKey1), GestRow("gestKey1Action", "Acción del atajo 1", b.GestKey1Action, b),
+                  HotkeyRow("gestKey2", "Atajo 2", b.GestKey2), GestRow("gestKey2Action", "Acción del atajo 2", b.GestKey2Action, b),
+                  new(RowKind.Info, "mod.gest.limit", "No captura gestos del panel táctil (los de 3 y 4 dedos son de Windows y no hay una vía compatible). Un botón lateral solo se reasigna si le pones una acción; sin acción sigue siendo atrás/adelante. Sin esquinas si hay otra pantalla pegada. Cambiar de escritorio envía Win+Ctrl+←/→.")], "Barra · Gestures"),
     ];
+
+    internal static readonly string[] GestFields = ["gestCornerTL", "gestCornerTR", "gestCornerBL", "gestCornerBR", "gestMouseX1", "gestMouseX2", "gestKey1Action", "gestKey2Action"];
+
+    private static string ActionName(string id) => WinMac.Bar.Features.GestureActions.All.FirstOrDefault(a => a.Id == id)?.Name ?? "Nada";
+    private static string GestValue(BarConfig b, string field) => field switch
+    {
+        "gestCornerTL" => b.GestCornerTL, "gestCornerTR" => b.GestCornerTR, "gestCornerBL" => b.GestCornerBL, "gestCornerBR" => b.GestCornerBR,
+        "gestMouseX1" => b.GestMouseX1, "gestMouseX2" => b.GestMouseX2, "gestKey1Action" => b.GestKey1Action, _ => b.GestKey2Action,
+    };
+
+    /// <summary>Fila que rota entre «Nada» y las acciones disponibles (las de módulos apagados no se ofrecen).</summary>
+    public static SettingsRow GestRow(string field, string title, string value, BarConfig b) =>
+        new(RowKind.Button, "gest.cycle:" + field, $"{title}: {ActionName(value)}{(value != "none" && !WinMac.Bar.Features.GestureRules.IsAvailable(value, b) ? " (módulo apagado: no actúa)" : "")}", "Clic para cambiar de acción");
+
+    /// <summary>Siguiente acción disponible tras la actual (para el botón que rota). Null si el campo no es de Gestures.</summary>
+    public static string? NextGestureAction(BarConfig b, string field)
+    {
+        if (!GestFields.Contains(field)) return null;
+        var options = WinMac.Bar.Features.GestureActions.All.Where(a => a.Id == "none" || WinMac.Bar.Features.GestureRules.IsAvailable(a.Id, b)).Select(a => a.Id).ToList();
+        int i = options.IndexOf(GestValue(b, field)); return options[(i + 1) % options.Count];
+    }
 
     public static readonly string[] SnapMods = ["Mayús", "Ctrl", "Alt"];
     public static string SnapLayoutsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "snap-layouts.json");

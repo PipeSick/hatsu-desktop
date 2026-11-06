@@ -23,6 +23,11 @@ internal sealed class WinKeyHook : IDisposable
     public WinKeyHook(Action open, Action<string> log) { _open = open; _log = log; _kbProc = KeyboardProc; _mouseProc = MouseProc; }
 
     public bool Enabled { get => _tap.Enabled; set => _tap.Enabled = value; }
+    /// <summary>
+    /// Otro módulo (Gestures) escucha el ratón por este MISMO gancho: recibe (mensaje, x, y, datos) en el hilo del gancho y debe ser instantáneo (solo anotar y avisar). Devuelve true para CONSUMIR el evento
+    /// (solo los botones laterales con una acción asignada por el usuario); en cualquier otro caso el evento sigue su camino. Null = nadie escucha.
+    /// </summary>
+    public Func<int, int, int, uint, bool>? MouseSink { get; set; }
     public bool Running => _running;
 
     public void Start()
@@ -74,6 +79,13 @@ internal sealed class WinKeyHook : IDisposable
     private IntPtr MouseProc(int code, IntPtr w, IntPtr l)
     {
         if (code >= 0 && (int)w is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN) _tap.OnMouse();
+        var sink = MouseSink;
+        if (code >= 0 && sink is not null)
+        {
+            try { var m = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(l); if (sink((int)w, m.x, m.y, m.mouseData)) return (IntPtr)1; }
+            catch (Exception) { /* nunca se retiene un evento por un error nuestro */ }
+        }
+
         return CallNextHookEx(IntPtr.Zero, code, w, l);
     }
 
@@ -104,6 +116,7 @@ internal sealed class WinKeyHook : IDisposable
     }
 
     private delegate IntPtr HookProc(int code, IntPtr w, IntPtr l);
+    [StructLayout(LayoutKind.Sequential)] private struct MSLLHOOKSTRUCT { public int x, y; public uint mouseData, flags, time; public IntPtr extra; }
     [StructLayout(LayoutKind.Sequential)] private struct KBDLLHOOKSTRUCT { public uint vkCode, scanCode, flags, time; public IntPtr extra; }
     [StructLayout(LayoutKind.Sequential)] private struct MSG { public IntPtr hwnd; public uint message; public IntPtr wParam, lParam; public uint time; public int x, y; }
     [StructLayout(LayoutKind.Sequential)] private struct KEYBDINPUT { public ushort wVk, wScan; public uint dwFlags, time; public IntPtr extra; }

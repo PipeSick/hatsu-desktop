@@ -101,6 +101,8 @@ public sealed class HostController
     public static readonly string[] SettingsSections = ["sound", "system", "network", "disks", "weather"];
     /// <summary>Cierre ordenado de WinMac completo (lo ejecuta el anfitrión en su hilo de interfaz).</summary>
     public Action? QuitRequested { get; set; }
+    /// <summary>La Barra (gesto o atajo de Gestures) pide mostrar u ocultar automáticamente el Dock: el host cambia su configuración (dock.json), que el Dock vuelve a leer.</summary>
+    public Action? DockAutoHideToggleRequested { get; set; }
     /// <summary>The bar reported the real state of its shortcuts (Settings redraws).</summary>
     public Action? HotkeysChanged { get; set; }
     /// <summary>Estado del control de llamadas del módulo Connect ({state, reason}); lo muestra Ajustes › Hatsu Connect.</summary>
@@ -141,6 +143,7 @@ public sealed class HostController
         switch (cmd)
         {
             case "quit": _log("[host] la Barra pidió cerrar Hatsu Desktop"); QuitRequested?.Invoke(); break;
+            case "dock.autohide.toggle": DockAutoHideToggleRequested?.Invoke(); break;
             case "settings": SettingsRequested?.Invoke(section is not null && SettingsSections.Contains(section) ? section : null); break;
         }
     }

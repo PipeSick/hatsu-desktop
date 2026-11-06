@@ -20,6 +20,10 @@ public sealed partial class BarHost
     internal Action? SnapNextZone { get; set; }
     internal Action? SnapEdit { get; set; }
     internal Action? LiveTextRun { get; set; }
+    internal void ToggleSpotlightFromFeature(string why) => ToggleSpotlight(why);
+    internal void ToggleLaunchpadFromFeature(string why) => ToggleLaunchpad(why);
+    internal void BeginRegionCaptureFromFeature(string why) => BeginCapture(WinMac.Bar.Capture.CaptureMode.Region, why, delay: 0);
+    internal void HostCommandFromFeature(string cmd) { if (HostCommand is { } hc) hc(cmd, null); }
     internal void CopyTextPublic(string text) => CopyText(text);
     internal int CurrentConfigEditToken => _cfg.SnapEditToken;
     internal void PatchConfig(object patch) => ((IPanelUi)this).PatchConfig(patch);
@@ -70,5 +74,6 @@ public sealed partial class BarHost
         m.Register(new MissionControlFeature(this, _log), c => c.McEnabled);
         m.Register(new SnapFeature(this, _log), c => c.SnapEnabled);
         m.Register(new LiveTextFeature(this, _log), c => c.LiveTextEnabled);
+        m.Register(new GesturesFeature(this, _log), c => c.GesturesEnabled);
     }
 }

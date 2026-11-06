@@ -116,6 +116,7 @@ internal static class HostApp
         OnboardingWindow? wizard = null;
         string exePath = Environment.ProcessPath ?? "HatsuDesktop.exe";
         var ports = new HostOnboardingPorts(config, sup, exePath, log); var applier = new OnboardingApplier(ports, log);
+        controller.DockAutoHideToggleRequested = () => { try { if (ports.LoadDock() is { } d && ports.SaveDock(d with { AutoHide = !d.AutoHide })) log("[host] Dock: ocultar automáticamente " + (!d.AutoHide ? "activado" : "desactivado") + " (gesto)"); } catch (Exception e) { log("[host] Dock: no se pudo cambiar (" + e.Message + ")"); } };
         void OpenWizard(OnboardingMode mode)
         {
             if (wizard is { IsOpen: true }) { wizard.Show(); return; }

@@ -32,7 +32,7 @@ public static class GestureActions
         new("snapnext", "Siguiente zona de Snap", FeatureConfig.Snap),
         new("desktopprev", "Escritorio anterior (Win+Ctrl+←)", null),
         new("desktopnext", "Escritorio siguiente (Win+Ctrl+→)", null),
-        new("dock", "Mostrar u ocultar el Dock", null),
+        new("dock", "Mostrar u ocultar el Dock automáticamente", null),
         new("capture", "Capturar región", null),
     ];
 }

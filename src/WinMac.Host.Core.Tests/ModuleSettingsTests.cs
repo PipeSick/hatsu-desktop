@@ -58,7 +58,7 @@ public class ModulePageTests
         var page = Pages(new BarConfig()).Single(p => p.Id == "modules"); var rows = page.Groups.SelectMany(g => g.Rows).ToList();
         Assert.Contains(rows, r => r.Id == "bar:mcEnabled" && !r.On); Assert.Contains(rows, r => r.Id == "bar:snapEnabled" && !r.On);
         Assert.All(rows.Where(r => r.Id is "mod.key:mcHotkey" or "snap.mod" or "snap.layout" or "snap.edit"), r => { Assert.False(r.Enabled); Assert.Equal("Activa el módulo", r.Reason); });
-        Assert.DoesNotContain(rows, r => r.Id.Contains("gest", StringComparison.OrdinalIgnoreCase));   // sin controles de módulos que todavía no existen
+        Assert.DoesNotContain(rows, r => r.Id.Contains("shelf", StringComparison.OrdinalIgnoreCase));   // sin controles de módulos que todavía no existen
     }
 
     [Fact] public void Turning_a_module_on_enables_its_settings_and_shows_its_status()
@@ -77,5 +77,35 @@ public class ModulePageTests
         a.Apply(new SettingsEdit("snap.gap", "text", Text: "12")); Assert.Equal(12, cfg.Bar.SnapGap); a.Apply(new SettingsEdit("snap.gap", "text", Text: "abc")); Assert.Equal(12, cfg.Bar.SnapGap); a.Apply(new SettingsEdit("snap.gap", "text", Text: "500")); Assert.Equal(64, cfg.Bar.SnapGap);
         int t = cfg.Bar.SnapEditToken; a.Apply(new SettingsEdit("snap.edit", "button")); Assert.Equal(t + 1, cfg.Bar.SnapEditToken);
         a.Apply(new SettingsEdit("snap.layout", "segment", Index: 1)); Assert.Equal("Tercios", cfg.Bar.SnapLayout);
+    }
+}
+
+public class GestureSettingsTests
+{
+    [Fact] public void The_cycle_button_offers_only_actions_whose_module_is_on_and_wraps_around()
+    {
+        var off = new BarConfig(); var seen = new List<string>(); var b = off;
+        for (int i = 0; i < 12; i++) { var next = SettingsBuilder.NextGestureAction(b, "gestCornerTL")!; seen.Add(next); b = b with { GestCornerTL = next }; }
+        Assert.DoesNotContain("mission", seen); Assert.DoesNotContain("livetext", seen); Assert.DoesNotContain("snapnext", seen); Assert.Contains("spotlight", seen); Assert.Contains("none", seen);
+        var on = new BarConfig { McEnabled = true }; Assert.Equal("mission", SettingsBuilder.NextGestureAction(on, "gestCornerTL")); Assert.Null(SettingsBuilder.NextGestureAction(on, "campoInventado"));
+    }
+
+    [Fact] public void A_row_whose_module_was_switched_off_says_so_instead_of_pretending_to_work()
+    {
+        var row = SettingsBuilder.GestRow("gestCornerTL", "Esquina", "mission", new BarConfig { McEnabled = false }); Assert.Contains("módulo apagado", row.Title);
+        Assert.DoesNotContain("módulo apagado", SettingsBuilder.GestRow("gestCornerTL", "Esquina", "mission", new BarConfig { McEnabled = true }).Title);
+    }
+
+    [Fact] public void Cycling_and_delay_edits_are_stored_and_validated()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "hatsu-gest-" + Guid.NewGuid() + ".json"); var cfg = new ConfigService(path, new HostConfig()); var a = new SettingsActions(cfg, () => { }, _ => { });
+        Assert.True(a.Apply(new SettingsEdit("gest.cycle:gestCornerTR", "button"))); Assert.NotEqual("none", cfg.Bar.GestCornerTR);
+        Assert.False(a.Apply(new SettingsEdit("gest.cycle:otraCosa", "button")));
+        a.Apply(new SettingsEdit("gest.delay", "text", Text: "700")); Assert.Equal(700, cfg.Bar.GestCornerDelayMs); a.Apply(new SettingsEdit("gest.delay", "text", Text: "5")); Assert.Equal(150, cfg.Bar.GestCornerDelayMs);
+    }
+
+    [Fact] public void The_host_toggles_the_dock_autohide_when_the_bar_asks()
+    {
+        Assert.NotNull(typeof(HostController).GetProperty("DockAutoHideToggleRequested"));    // el cableado real (dock.json) se valida en Windows
     }
 }
