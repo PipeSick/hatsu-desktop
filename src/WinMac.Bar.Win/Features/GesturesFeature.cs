@@ -105,7 +105,7 @@ internal sealed class GesturesFeature : IHatsuFeature
                 case "livetext": _host.LiveTextRun?.Invoke(); break;
                 case "snapnext": _host.SnapNextZone?.Invoke(); break;
                 case "capture": _host.BeginRegionCaptureFromFeature("gesto"); break;
-                case "dock": _host.HostCommandFromFeature("dock.autohide.toggle"); break;
+                case "dock": _host.HostCommandFromFeature("dock.toggle"); break;
                 case "desktopprev": SendDesktopKeys(0x25); break;
                 case "desktopnext": SendDesktopKeys(0x27); break;
             }

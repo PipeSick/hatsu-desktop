@@ -92,5 +92,14 @@ Probado por el propietario en un solo monitor, versión portable. **Funcionaba:*
 | 4 | Live Text: el **atajo** no respondió (por Spotlight sí). Causa más probable: Windows rechazó Ctrl+Alt+Espacio porque otro programa lo tiene; Ajustes › Módulos lo muestra en la línea de estado | A confirmar con el texto de estado; ahora se puede elegir otra combinación |
 | 5 | **Cambiar atajos no funcionaba** (había que escribir el texto a mano) | CORREGIDO: captura de teclado (clic en el campo y pulsar la combinación; Retroceso la quita; Esc cancela) — pendiente de validar |
 | 6 | Gestures: la asignación se cambiaba con clics sucesivos | CORREGIDO: lista desplegable con la acción actual marcada y solo las acciones de módulos encendidos — pendiente de validar |
-| 7 | Gestures: «Mostrar/ocultar el Dock» solo activa o desactiva «Ocultar automáticamente» | **INCOMPLETO** (no muestra/oculta al instante) |
-| 8 | Spotlight: «usar la distribución» solo cambia la distribución activa de Snap, no reordena las ventanas abiertas | **INCOMPLETO** |
+| 7 | Gestures: «Mostrar/ocultar el Dock» solo activa o desactiva «Ocultar automáticamente» | CORREGIDO en código: el gesto alterna un estado «oculto forzado» (tema `dock.force`, no toca `dock.json`); Launchpad lo sigue mostrando — pendiente de validar |
+| 8 | Spotlight: «usar la distribución» solo cambia la distribución activa de Snap, no reordena las ventanas abiertas | CORREGIDO en código: además de activar la distribución, acomoda las ventanas abiertas del escritorio actual (más reciente → primera zona, por monitor; minimizadas/otros escritorios/administrador no se tocan) — pendiente de validar |
+| 9 | Isla: banner de descargas cortado | CORREGIDO (ancho según contenido) — pendiente de validar |
+| 10 | Isla: clic en una notificación abre la app que la envió (por AUMID) | NUEVO — pendiente de validar |
+| 11 | Isla «muerta» una vez (se arregló moviendo su posición); sin crash.log ni errores en host.log | Causa no confirmada; ya existen vigilancia de hilo de UI y reaplicación de posición; se captura el error del fondo translúcido |
+| 12 | Dock: vista previa multiventana con × por tarjeta para cerrar cada ventana | NUEVO — pendiente de validar |
+| 13 | Icono propio de Hatsu (panel y barra) en lugar del planeta de ejemplo | NUEVO — pendiente de validar |
+| 14 | Limpieza: panel rediseñado (resumen, filas sin texto cortado, etiqueta «Definitivo») | NUEVO — pendiente de validar |
+| 15 | Spotlight: rutas largas se recortan con «…» | CORREGIDO — pendiente de validar |
+| 16 | Al abrir la app de ChatGPT desaparecían Dock y Barra hasta pulsar Alt+Tab: Windows la marcaba «ocupada/pantalla completa» | CORREGIDO en código: ese estado solo oculta si la ventana en primer plano cubre el monitor entero — pendiente de validar; si se repite, enviar `host.log` |
+| 17 | Atajos: aviso de conflicto con las Capturas (Ctrl+Mayús+3–6) | NUEVO |

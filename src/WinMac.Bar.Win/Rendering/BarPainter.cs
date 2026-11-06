@@ -155,11 +155,11 @@ public sealed class BarPainter : IDisposable
     /// <summary>El icono único de la aplicación (planeta con anillo, como el logotipo del panel). La identidad es provisional: este dibujo es lo único que cambia al cambiar el logotipo.</summary>
     private void DrawHubIcon(float cx, float cy)
     {
-        _ctx.Transform = Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy));
-        using (var back = Arc(cx, cy, 7.4f, Math.PI, Math.PI * 2)) { var sc = new Matrix3x2(1, 0, 0, 0.28f, 0, cy * (1 - 0.28f)); _ctx.Transform = sc * Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy)); Stroke(back, 1.5f); }
-        _ctx.Transform = Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy)); Brush(Fg()); _ctx.FillEllipse(new Ellipse(new Vector2(cx, cy), 4.3f, 4.3f), _solid);
-        using (var front = Arc(cx, cy, 7.4f, 0, Math.PI)) { _ctx.Transform = new Matrix3x2(1, 0, 0, 0.28f, 0, cy * (1 - 0.28f)) * Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy)); Stroke(front, 1.5f); }
-        _ctx.Transform = Matrix3x2.Identity;
+        // Marca de Hatsu: una «H» redondeada con la barra inclinada en cinta (monocroma, tomando el color de la barra)
+        Brush(Fg());
+        _ctx.DrawLine(new Vector2(cx - 4.6f, cy - 6.4f), new Vector2(cx - 4.6f, cy + 6.4f), _solid, 2.1f, _round);
+        _ctx.DrawLine(new Vector2(cx + 4.6f, cy - 6.4f), new Vector2(cx + 4.6f, cy + 6.4f), _solid, 2.1f, _round);
+        _ctx.DrawLine(new Vector2(cx - 4.6f, cy + 1.6f), new Vector2(cx + 4.6f, cy - 1.6f), _solid, 2.1f, _round);
     }
 
     /// <summary>Icono del Tiempo en la barra: pequeño y reconocible (sol, luna, nube, lluvia…), con los mismos códigos que el panel.</summary>

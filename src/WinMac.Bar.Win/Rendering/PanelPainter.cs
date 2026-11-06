@@ -107,6 +107,17 @@ public sealed partial class PanelPainter : IDisposable
         _ctx.EndDraw();
     }
 
+    /// <summary>Recorta el texto para que ocupe como máximo dos líneas del ancho dado, terminando en «…».</summary>
+    private string TwoLines(string text, IDWriteTextFormat fmt, double width)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        bool Fits(string t) { using var l = _dw.CreateTextLayout(t, fmt, (float)Math.Max(1, width), 1000f); l.WordWrapping = WordWrapping.Wrap; return l.Metrics.LineCount <= 2; }
+        if (Fits(text)) return text;
+        int lo = 0, hi = text.Length;
+        while (lo < hi) { int mid = (lo + hi + 1) / 2; if (Fits(text[..mid].TrimEnd() + "…")) lo = mid; else hi = mid - 1; }
+        return text[..lo].TrimEnd() + "…";
+    }
+
     private void Text(string text, IDWriteTextFormat fmt, double x, double y, double w, double h, Color4 c, bool center = false, bool vcenter = true)
     {
         if (string.IsNullOrEmpty(text)) return;
@@ -342,16 +353,25 @@ public sealed partial class PanelPainter : IDisposable
             }
             case WidgetKind.CleanRow when w.Data is CleanRowData cr:
             {
-                // It8: categoría de limpieza: casilla, título, tamaño analizado y por qué se puede (o no) limpiar.
-                EnsureFonts(); bool dimmed = cr.Locked && !cr.Checked; FillRR(x, y, x + wd, y + h, 12, Fill(hover && !cr.Locked ? 0.11f : 0.06f));
-                double bx = x + 14, by2 = y + 12; float a = dimmed ? 0.4f : 1f;
+                // Categoría de limpieza: casilla centrada, título (1 línea), motivo (máx. 2 líneas con «…») y, a la derecha, tamaño y etiqueta.
+                EnsureFonts(); bool dimmed = cr.Locked && !cr.Checked; float a = dimmed ? 0.45f : 1f;
+                FillRR(x, y + 2, x + wd, y + h - 2, 12, Fill(hover && !cr.Locked ? 0.11f : 0.06f));
+                double bx = x + 14, by2 = y + h / 2 - 10;
                 if (cr.Checked) { FillRR(bx, by2, bx + 20, by2 + 20, 6, new Color4(Accent.R, Accent.G, Accent.B, a)); Line(bx + 5, by2 + 10.5, bx + 9, by2 + 14.5, new Color4(1, 1, 1, 1), 2f); Line(bx + 9, by2 + 14.5, bx + 15.5, by2 + 6, new Color4(1, 1, 1, 1), 2f); }
                 else { Brush(Fg(0.5f * a)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(bx + 1, by2 + 1, bx + 19, by2 + 19), RadiusX = 5, RadiusY = 5 }, _solid, 1.5f); }
-                double sw = Math.Max(54, MeasureText(cr.Size, _bodyBold) + 4);
-                Text(w.Text, _bodyBold, x + 46, y + 7, wd - 46 - sw - 20, 20, Fg(0.95f * a));
-                TextAlign(cr.Size, _bodyBold, x + wd - sw - 12, y + 7, sw, 20, Fg((cr.Locked ? 0.55f : 0.9f)), TextAlignment.Trailing);
-                if (cr.Badge is { } bd) TextAlign(bd, _small, x + wd - sw - 12, y + 27, sw, 16, new Color4(1f, 0.35f, 0.3f, 1), TextAlignment.Trailing);
-                TextAlign(cr.Reason, _small, x + 46, y + 28, wd - 46 - (cr.Badge is null ? 14 : sw + 16), 32, Fg(0.52f * a + 0.05f), vcenter: false, wrap: true);
+                double sw = Math.Min(wd * 0.34, Math.Max(58, MeasureText(cr.Size, _bodyBold) + 6));
+                double tx = x + 46, tw = wd - 46 - sw - 22;
+                Text(w.Text, _bodyBold, tx, y + 10, tw, 20, Fg(0.95f * a));
+                TextAlign(cr.Size, _bodyBold, x + wd - sw - 14, y + 10, sw, 20, cr.Locked ? Fg(0.55f) : Fg(0.92f), TextAlignment.Trailing);
+                if (cr.Badge is { } bd)
+                {
+                    double bw = MeasureText(bd, _small) + 14; double bxr = x + wd - 14 - bw;
+                    FillRR(bxr, y + 38, bxr + bw, y + 56, 9, new Color4(1f, 0.35f, 0.3f, 0.18f));
+                    TextAlign(bd, _small, bxr, y + 38, bw, 18, new Color4(1f, 0.45f, 0.4f, 1), TextAlignment.Center);
+                }
+
+                double rw = wd - 46 - 16 - (cr.Badge is null ? 0 : sw * 0.6);
+                TextAlign(TwoLines(cr.Reason, _small, rw), _small, tx, y + 33, rw, 36, Fg(0.55f * a + 0.05f), vcenter: false, wrap: true);
                 break;
             }
             case WidgetKind.StatCards when w.Data is StatCardsData sc:

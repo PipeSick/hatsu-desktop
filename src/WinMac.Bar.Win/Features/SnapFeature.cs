@@ -51,7 +51,7 @@ internal sealed class SnapFeature : IHatsuFeature
         _host.RegisterModuleAction(scope, new SpotAction("snap:next", "Snap: ventana activa a la zona siguiente", "Mueve la ventana activa por las zonas de la distribución activa (módulo Snap)", "snap zona siguiente ventana mover", Id, ActionRisk.Normal, [], null, () => { _host.PostToUi(NextZone); return ActionResult.Success; }));
         _host.RegisterModuleAction(scope, new SpotAction("snap:edit", "Snap: crear una distribución", "Abre el editor de zonas (módulo Snap)", "snap editor zonas distribucion crear", Id, ActionRisk.Normal, [], null, () => { _host.PostToUi(OpenEditor); return ActionResult.Success; }));
         SpotAction? Layout(string name) => SnapLayouts.All(LoadCustom()).FirstOrDefault(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase)) is { } l
-            ? new SpotAction("snap:layout:" + l.Name, "Snap: usar la distribución «" + l.Name + "»", "Cambia la distribución activa de Snap", "snap distribucion " + l.Name.ToLowerInvariant(), Id, ActionRisk.Normal, [], null, () => { _host.PatchConfig(new { snapLayout = l.Name }); return ActionResult.Success; }) : null;
+            ? new SpotAction("snap:layout:" + l.Name, "Snap: usar la distribución «" + l.Name + "»", "Activa la distribución y reordena las ventanas abiertas en sus zonas", "snap distribucion " + l.Name.ToLowerInvariant(), Id, ActionRisk.Normal, [], null, () => { _host.PatchConfig(new { snapLayout = l.Name }); _host.PostToUi(() => ArrangeOpen(l)); return ActionResult.Success; }) : null;
         _host.Actions.RegisterProvider(Id, q => SnapLayouts.All(LoadCustom()).Select(l => Layout(l.Name)!), id => id.StartsWith("snap:layout:", StringComparison.Ordinal) ? Layout(id["snap:layout:".Length..]) : null);
         scope.Add(() => _host.Actions.UnregisterModule(Id));
     }
@@ -156,6 +156,34 @@ internal sealed class SnapFeature : IHatsuFeature
         catch (Exception e) { _log("[snap] colocar: " + e.GetType().Name + ": " + e.Message); }
     }
 
+    /// <summary>Reordena las ventanas abiertas del escritorio actual en las zonas de la distribución (la más reciente en la primera zona), por monitor. Las minimizadas, de otro escritorio, las de Hatsu y las que no se pueden redimensionar no se tocan.</summary>
+    public void ArrangeOpen(SnapLayout layout)
+    {
+        try
+        {
+            var mons = ScreenGrabber.Monitors(); if (mons.Count == 0) return;
+            var wins = new List<IntPtr>();
+            EnumWindows((h, _) =>
+            {
+                if (Eligible(h) && !IsIconic(h) && DwmGetInt(h, 14 /* CLOAKED */, out int cloaked, 4) == 0 && cloaked == 0 && GetWindowTextLength(h) > 0) wins.Add(h);
+                return true;
+            }, IntPtr.Zero);   // orden Z: de la más al frente a la más atrás
+            var perMon = new Dictionary<int, int>(); int placed = 0;
+            foreach (var h in wins)
+            {
+                if (!GetWindowRect(h, out var r)) continue;
+                int cx = (r.L + r.R) / 2, cy = (r.T + r.B) / 2; int mi = -1;
+                for (int i = 0; i < mons.Count; i++) { var b = mons[i].Bounds; if (cx >= b.X && cx < b.X + b.W && cy >= b.Y && cy < b.Y + b.H) { mi = i; break; } }
+                if (mi < 0) continue;
+                var area = mons[mi].Work.W > 0 ? mons[mi].Work : mons[mi].Bounds; var rects = SnapMath.Rects(layout, area, _cfg.SnapGap);
+                perMon.TryGetValue(mi, out int n); if (n >= rects.Length) continue;
+                perMon[mi] = n + 1; Place(h, rects[n]); placed++;
+            }
+            _log($"[snap] distribución «{layout.Name}»: {placed} ventana(s) acomodada(s)");
+        }
+        catch (Exception e) { _log("[snap] reordenar: " + e.GetType().Name + ": " + e.Message); }
+    }
+
     /// <summary>Atajo: la ventana activa pasa a la zona siguiente de la distribución activa (del monitor donde está).</summary>
     public void NextZone()
     {
@@ -198,6 +226,11 @@ internal sealed class SnapFeature : IHatsuFeature
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int L, T, R, B; }
     [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventProc proc, uint pid, uint thread, uint flags);
     [DllImport("user32.dll")] private static extern bool UnhookWinEvent(IntPtr h);
+    private delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc cb, IntPtr l);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] private static extern int GetWindowTextLength(IntPtr h);
+    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] private static extern int DwmGetInt(IntPtr h, int attr, out int value, int size);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr h);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);

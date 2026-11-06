@@ -166,7 +166,7 @@ public static class PanelLayout
         WidgetKind.LinkRow => 30,
         WidgetKind.BatteryHero => 96,
         WidgetKind.DeviceCard => w.Data is DeviceCardData { Note: not null } ? 104 : 88,
-        WidgetKind.CleanRow => 64,
+        WidgetKind.CleanRow => 76,
         WidgetKind.PhoneHeader => 66,
         WidgetKind.PhoneBattery => 124,
         WidgetKind.PhoneNotifs => 82,

@@ -320,7 +320,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
                 case WM_RBUTTONUP: _host.OnBarAction(this, new BarAction(BarActionKind.ShowMenu), null); _force = true; return IntPtr.Zero;
                 case WM_APP_BAR:
                     if ((long)w == BarNative.ABN_POSCHANGED && _registered) { PlaceWindow(); _force = true; }
-                    else if ((long)w == BarNative.ABN_FULLSCREENAPP) BarNative.SetWindowPos(Hwnd, (long)l != 0 ? new IntPtr(1) /* HWND_BOTTOM */ : new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE|NOMOVE|NOACTIVATE */);
+                    else if ((long)w == BarNative.ABN_FULLSCREENAPP) BarNative.SetWindowPos(Hwnd, ((long)l != 0 && FullscreenWatcher.ForegroundCoversMonitor()) ? new IntPtr(1) /* HWND_BOTTOM */ : new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE|NOMOVE|NOACTIVATE */);
                     return IntPtr.Zero;
                 case WM_DPICHANGED: if (!_resizing) { _scale = (int)((long)w & 0xFFFF) / 96.0; _dev.SetDpi(_scale); ResizeWindow(); } return IntPtr.Zero;
                 case WM_DISPLAYCHANGE: _host.NotifyDisplayChange(); return IntPtr.Zero;   // el anfitrión espera a que Windows termine de acomodar las pantallas y reconcilia

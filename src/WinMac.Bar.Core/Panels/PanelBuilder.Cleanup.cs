@@ -23,6 +23,15 @@ public static partial class PanelBuilder
         else if (v is not null)
         {
             bool busy = phase is CleanupPhase.Scanning or CleanupPhase.Cleaning;
+            if (phase is CleanupPhase.Ready)
+            {   // resumen arriba: cuánto se puede recuperar y cuánto está marcado
+                long total = v.Rows.Where(r => r.Selectable && r.Analyzed).Sum(r => r.Bytes);
+                w.Add(new Widget(WidgetKind.StatCards, "clean-summary-cards", "", Data: new StatCardsData(new[]
+                {
+                    new StatCard("Se puede liberar", CleanupText.Size(total), total > 0 ? "good" : null),
+                    new StatCard("Seleccionado", CleanupText.Size(v.SelectedBytes), v.SelectedBytes > 0 ? "good" : null),
+                })));
+            }
             foreach (var r in v.Rows)
             {
                 string size = r.Category.Kind == CleanupKind.ReviewOnly ? "Solo revisión" : r.Analyzed ? (r.Bytes > 0 ? CleanupText.Size(r.Bytes) : "Nada que limpiar") : "…";
@@ -38,7 +47,7 @@ public static partial class PanelBuilder
             }
             else
             {
-                w.Add(new Widget(WidgetKind.Note, "clean-status", v.Status + (phase == CleanupPhase.Ready && v.SelectedBytes > 0 ? $" · seleccionado: {CleanupText.Size(v.SelectedBytes)}" : "")));
+                w.Add(new Widget(WidgetKind.Note, "clean-status", v.Status));
                 if (phase == CleanupPhase.Done && v.Summary is { } sum) w.Add(new Widget(WidgetKind.Note, "clean-summary", sum));
                 if (phase == CleanupPhase.Ready)
                     w.Add(new Widget(WidgetKind.Button, CleanRun, v.SelectedBytes > 0 ? $"Limpiar lo seleccionado ({CleanupText.Size(v.SelectedBytes)})…" : "Nada seleccionado", Enabled: v.SelectedBytes > 0, Glyph: "sparkles"));

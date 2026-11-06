@@ -3,6 +3,7 @@ using Vortice.Direct2D1;
 using Vortice.DirectWrite;
 using Vortice.Mathematics;
 using Vortice;
+using WinMac.Dock.Win.Rendering;
 
 namespace WinMac.Bar.Win.Rendering;
 
@@ -296,9 +297,15 @@ public sealed partial class PanelPainter
     }
 
     // ───────────────────────────── logotipo (identidad desacoplada: se elige por clave)
+    private ID2D1Bitmap? _brandLogo; private bool _brandLogoTried;
     private void DrawLogo(string key, double cx, double cy, double box)
     {
         var c = Fg(1f);
+        if (_brandLogo is null && !_brandLogoTried) { _brandLogoTried = true; _brandLogo = BrandIcon.Create(_ctx, 128); }
+        if (_brandLogo is not null)
+        {   // icono de la marca Hatsu (sustituye al planeta provisional)
+            float h = (float)Math.Min(box, 40) ; _ctx.DrawBitmap(_brandLogo, new RawRectF((float)cx - h / 2, (float)cy - h / 2, (float)cx + h / 2, (float)cy + h / 2), 1f, BitmapInterpolationMode.Linear, null); return;
+        }
         switch (key)
         {
             default:   // «planet»: esfera con anillo inclinado
