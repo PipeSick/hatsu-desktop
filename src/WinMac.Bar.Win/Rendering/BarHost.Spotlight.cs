@@ -80,6 +80,7 @@ public sealed partial class BarHost
             case SpotCommandKind.Open when c.Item is { Kind: SpotKind.Action or SpotKind.Tool or SpotKind.Command or SpotKind.Script } pro:
                 if (!OpenPro(pro)) _spot.Hide(); else _spot.Refresh();
                 return;
+            case SpotCommandKind.OpenAdmin when c.Item is { App: { } adminApp }: _spot.Hide(); LaunchApp(adminApp, admin: true); return;
             case SpotCommandKind.Open when c.Item is { } it: _spot.Hide(); Open(it, reveal: false); return;
             case SpotCommandKind.Reveal when c.Item is { } it: _spot.Hide(); Open(it, reveal: true); return;
         }

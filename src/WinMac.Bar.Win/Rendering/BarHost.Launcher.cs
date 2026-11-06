@@ -129,6 +129,8 @@ public sealed partial class BarHost
             case LpCommandKind.Close: _lp?.Hide(); return;
             case LpCommandKind.Launch when c.App is { } app:
                 _lp?.Hide(); LaunchApp(app); return;
+            case LpCommandKind.LaunchAdmin when c.App is { } app:
+                _lp?.Hide(); LaunchApp(app, admin: true); return;
             case LpCommandKind.Move when c.App is { } app:
                 if (_lprefs.Move(_lprefs.Arrange(_catalog.Apps), app.Id, c.Index)) SaveLauncherPrefs(); break;
             case LpCommandKind.Hide when c.App is { } app: _lprefs.Hide(app.Id); SaveLauncherPrefs(); break;
@@ -140,10 +142,10 @@ public sealed partial class BarHost
     }
 
     /// <summary>Lanzador compartido (Launchpad y Spotlight): el Explorador abre la app como lo haría el menú Inicio; se cuenta el uso para ordenar la búsqueda.</summary>
-    private void LaunchApp(InstalledApp app)
+    private void LaunchApp(InstalledApp app, bool admin = false)
     {
         _lprefs.RecordLaunch(app.Id); SaveLauncherPrefs();
-        Task.Run(() => { var err = AppLauncher.Launch(app); if (err is not null) _log($"[launchpad] no se pudo abrir «{app.Name}»: {err}"); });
+        Task.Run(() => { var err = admin ? AppLauncher.LaunchAsAdmin(app) : AppLauncher.Launch(app); if (err is not null) _log($"[launchpad] no se pudo abrir «{app.Name}»{(admin ? " como administrador" : "")}: {err}"); });
     }
 
     private void SaveLauncherPrefs()

@@ -89,4 +89,20 @@ public static class AppLauncher
         }
         catch (Exception e) { return e.GetType().Name + ": " + e.Message; }
     }
+
+    /// <summary>
+    /// «Ejecutar como administrador» (Ctrl+Mayús+Intro en Spotlight y Launchpad, y el menú de clic derecho de Launchpad). Usa el verbo <c>runas</c> del Shell sobre el mismo destino que el menú Inicio:
+    /// Windows muestra su propio aviso de Control de cuentas de usuario (UAC); Hatsu nunca eleva nada por su cuenta. Devuelve null si se abrió O si el usuario canceló el aviso (no es un error);
+    /// un texto con el motivo si Windows no puede abrir esa app elevada (p. ej. algunas apps de la Tienda).
+    /// </summary>
+    public static string? LaunchAsAdmin(InstalledApp app)
+    {
+        try
+        {
+            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(app.LaunchTarget) { UseShellExecute = true, Verb = "runas" });
+            return null;
+        }
+        catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223) { return null; }   // ERROR_CANCELLED: el usuario dijo «No» en UAC
+        catch (Exception e) { return e.GetType().Name + ": " + e.Message; }
+    }
 }

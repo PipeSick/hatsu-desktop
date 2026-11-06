@@ -223,7 +223,7 @@ public static class SpotlightEngine
             .Select(x => new SpotItem(SpotKind.File, x.r.Name, "Reciente", x.r.LinkPath)).ToList();
 }
 
-public enum SpotCommandKind { None, Redraw, Close, Open, Reveal, Delete, ToolAction }
+public enum SpotCommandKind { None, Redraw, Close, Open, OpenAdmin, Reveal, Delete, ToolAction }
 
 /// <summary><see cref="Action"/>: for <see cref="SpotCommandKind.ToolAction"/>, the tool button pressed («repeat», «cancel», «copy»).</summary>
 public readonly record struct SpotCommand(SpotCommandKind Kind, SpotItem? Item = null, string? Action = null)
@@ -306,6 +306,7 @@ public sealed class SpotlightController
                 var it = Results[Selected];
                 if (it.Confirm && Pending != Selected) { Pending = Selected; return (SpotCommand.Redraw, false); }   // first Enter only asks
                 Pending = -1;
+                if (ctrl && shift && it.Kind == SpotKind.App && it.App is not null) return (new SpotCommand(SpotCommandKind.OpenAdmin, it), false);   // Ctrl+Mayús+Intro: como administrador
                 return (new SpotCommand(ctrl && it.Kind is SpotKind.File or SpotKind.Folder or SpotKind.Path or SpotKind.Clipboard ? SpotCommandKind.Reveal : SpotCommandKind.Open, it), false);
         }
 

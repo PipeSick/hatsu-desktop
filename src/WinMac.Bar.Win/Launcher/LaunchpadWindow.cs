@@ -146,7 +146,7 @@ internal sealed class LaunchpadWindow : IDisposable
                 case WM_LBUTTONUP: BarNative.ReleaseCapture(); Do(_ctl.PointerUp(X(l), Y(l))); return IntPtr.Zero;
                 case WM_RBUTTONUP: Do(_ctl.RightClick(X(l), Y(l))); return IntPtr.Zero;
                 case WM_MOUSEWHEEL: Do(_ctl.Wheel((short)(((long)w >> 16) & 0xFFFF))); return IntPtr.Zero;
-                case WM_KEYDOWN or WM_SYSKEYDOWN: Do(_ctl.Key((int)w)); return IntPtr.Zero;
+                case WM_KEYDOWN or WM_SYSKEYDOWN: Do(_ctl.Key((int)w, (BarNative.GetKeyState(0x11) & 0x8000) != 0, (BarNative.GetKeyState(0x10) & 0x8000) != 0)); return IntPtr.Zero;
                 case WM_CHAR: Do(_ctl.Char((char)(int)w)); return IntPtr.Zero;
                 case WM_ACTIVATE when ((long)w & 0xFFFF) == 0 && _open: _onCommand(LpCommand.Close); return IntPtr.Zero;   // perdió el foco (otra ventana, Alt+Tab, la tecla Windows otra vez)
                 case 0x2E0 /* WM_DPICHANGED */: return IntPtr.Zero;

@@ -168,12 +168,29 @@ public class LaunchpadControllerTests
     {
         var c = Make(10); var cell = c.Geometry.Cells[2];
         c.RightClick(cell.Cx, cell.Cy);
-        Assert.Equal(["open", "front", "hide"], c.Menu!.Items.Select(i => i.Id));
-        var r = c.Menu.ItemRect(2); var hide = c.PointerUp(r.Cx, r.Cy);
+        Assert.Equal(["open", "admin", "front", "hide"], c.Menu!.Items.Select(i => i.Id));
+        var r = c.Menu.ItemRect(3); var hide = c.PointerUp(r.Cx, r.Cy);
         Assert.Equal(LpCommandKind.Hide, hide.Kind); Assert.Equal("id2", hide.App!.Id); Assert.Null(c.Menu);
         c.SetApps(Apps(10).Skip(1).ToList(), 1); c.RightClick(3, 3);
         Assert.Equal(["unhide", "reset"], c.Menu!.Items.Select(i => i.Id));
         Assert.Equal(LpCommandKind.Redraw, c.Key(0x1B).Kind); Assert.Null(c.Menu);
+    }
+
+    [Fact]
+    public void RunAsAdministratorIsOfferedInTheMenuAndWithCtrlShiftEnterAndNeverRepeatsOrChangesNormalLaunch()
+    {
+        var c = Make(10); var cell = c.Geometry.Cells[4];
+        c.RightClick(cell.Cx, cell.Cy); var r = c.Menu!.ItemRect(1);   // «Abrir como administrador»
+        Assert.Equal("Abrir como administrador", c.Menu.Items[1].Text);
+        var cmd = c.PointerUp(r.Cx, r.Cy); Assert.Equal(LpCommandKind.LaunchAdmin, cmd.Kind); Assert.Equal("id4", cmd.App!.Id); Assert.Null(c.Menu);
+        c.PointerDown(cell.Cx, cell.Cy); Assert.Equal(LpCommandKind.Launch, c.PointerUp(cell.Cx, cell.Cy).Kind);   // el clic normal sigue abriendo normal
+        c = Make(10); c.Key(0x27);   // → selecciona
+        Assert.Equal(LpCommandKind.Launch, c.Key(0x0D, ctrl: false, shift: false).Kind);                      // Intro: normal
+        Assert.Equal(LpCommandKind.Launch, c.Key(0x0D, ctrl: true, shift: false).Kind); Assert.Equal(LpCommandKind.Launch, c.Key(0x0D, ctrl: false, shift: true).Kind);   // solo Ctrl o solo Mayús: normal
+        var admin = c.Key(0x0D, ctrl: true, shift: true); Assert.Equal(LpCommandKind.LaunchAdmin, admin.Kind); Assert.NotNull(admin.App);
+        Assert.Equal(LpCommandKind.None, Make(0).Key(0x0D, ctrl: true, shift: true).Kind);                  // sin app seleccionada: nada
+        var searching = Make(10); foreach (var ch in "App 03") searching.Char(ch);                            // buscando: Ctrl+Mayús+Intro abre como administrador la primera coincidencia
+        Assert.Equal(LpCommandKind.LaunchAdmin, searching.Key(0x0D, ctrl: true, shift: true).Kind);
     }
 
     [Fact]
@@ -268,6 +285,19 @@ public class SpotlightTests
         c.SetResults(SpotlightEngine.Query(c.Query, Apps, null, Folders, []));
         Assert.Equal(SpotCommandKind.Reveal, c.Key(0x0D, true).Command.Kind);   // Ctrl+Intro: mostrar la carpeta en el Explorador
         Assert.Equal(SpotCommandKind.Redraw, c.Key(0x1B, false).Command.Kind); Assert.Equal(SpotCommandKind.Close, c.Key(0x1B, false).Command.Kind);
+    }
+
+    [Fact]
+    public void CtrlShiftEnterOnAnAppRunsItAsAdministratorAndOnlyThen()
+    {
+        var c = new SpotlightController();
+        foreach (var ch in "blo") c.Char(ch);
+        c.SetResults(SpotlightEngine.Query(c.Query, Apps, null, Folders, []));
+        Assert.Equal(SpotCommandKind.Open, c.Key(0x0D, ctrl: false, shift: false).Command.Kind);   // Intro normal
+        Assert.Equal(SpotCommandKind.Open, c.Key(0x0D, ctrl: false, shift: true).Command.Kind);    // Mayús+Intro: nada nuevo
+        var (adm, _) = c.Key(0x0D, ctrl: true, shift: true); Assert.Equal(SpotCommandKind.OpenAdmin, adm.Kind); Assert.NotNull(adm.Item!.App); Assert.Equal("np", adm.Item.Target);
+        c.Reset(); foreach (var ch in "doc") c.Char(ch); c.SetResults(SpotlightEngine.Query(c.Query, Apps, null, Folders, []));
+        Assert.NotEqual(SpotCommandKind.OpenAdmin, c.Key(0x0D, ctrl: true, shift: true).Command.Kind);   // una carpeta/archivo NO se eleva: Ctrl+Mayús+Intro no hace nada nuevo
     }
 }
 

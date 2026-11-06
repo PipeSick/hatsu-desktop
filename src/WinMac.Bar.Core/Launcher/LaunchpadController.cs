@@ -40,7 +40,7 @@ public sealed record LaunchpadGeometry(double Width, double Height, LpRect Searc
     public LpRect Dot(int i, int pages) { double step = 18, x0 = Width / 2 - (pages - 1) * step / 2; return new LpRect(x0 + i * step - 8, DotsY - 8, 16, 16); }
 }
 
-public enum LpCommandKind { None, Redraw, Launch, Close, Move, Hide, UnhideAll, ResetOrder }
+public enum LpCommandKind { None, Redraw, Launch, LaunchAdmin, Close, Move, Hide, UnhideAll, ResetOrder }
 
 /// <summary>Lo que el anfitrión debe hacer tras un evento. <see cref="Index"/> es el destino de <see cref="LpCommandKind.Move"/> en el orden completo.</summary>
 public readonly record struct LpCommand(LpCommandKind Kind, InstalledApp? App = null, int Index = -1)
@@ -95,6 +95,17 @@ public sealed class LaunchpadController
     public void Reset() { Query = ""; Page = 0; Selected = -1; Hover = -1; Menu = null; Drag = null; _press = null; }
 
     // ───────────────────────────── teclado
+    /// <summary>Teclado con modificadores: Ctrl+Mayús+Intro abre la app seleccionada como administrador (como el menú Inicio de Windows).</summary>
+    public LpCommand Key(int vk, bool ctrl, bool shift)
+    {
+        if (vk == 0x0D && ctrl && shift && Menu is null)
+        {
+            var items = PageItems; int i = Selected >= 0 ? Selected : Searching ? 0 : -1;
+            return i >= 0 && i < items.Count ? new LpCommand(LpCommandKind.LaunchAdmin, items[i]) : LpCommand.None;
+        }
+        return Key(vk);
+    }
+
     public LpCommand Key(int vk)
     {
         if (Menu is not null && vk == 0x1B) { Menu = null; return LpCommand.Redraw; }
@@ -194,7 +205,7 @@ public sealed class LaunchpadController
         var items = new List<LpMenuItem>(); InstalledApp? target = null;
         if (cell >= 0)
         {
-            target = PageItems[cell]; items.Add(new("open", "Abrir"));
+            target = PageItems[cell]; items.Add(new("open", "Abrir")); items.Add(new("admin", "Abrir como administrador"));
             if (!Searching) items.Add(new("front", "Mover al principio"));
             items.Add(new("hide", "Ocultar de Launchpad"));
         }
@@ -212,6 +223,7 @@ public sealed class LaunchpadController
     private static LpCommand MenuCommand(string id, InstalledApp? app) => id switch
     {
         "open" when app is not null => new LpCommand(LpCommandKind.Launch, app),
+        "admin" when app is not null => new LpCommand(LpCommandKind.LaunchAdmin, app),
         "front" when app is not null => new LpCommand(LpCommandKind.Move, app, 0),
         "hide" when app is not null => new LpCommand(LpCommandKind.Hide, app),
         "unhide" => new LpCommand(LpCommandKind.UnhideAll),
