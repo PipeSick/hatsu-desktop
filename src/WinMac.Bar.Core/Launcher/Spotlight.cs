@@ -254,7 +254,29 @@ public sealed class SpotlightController
     public LpRect PreviewRect => new(ListW, FieldH + 8, Width - ListW - 8, Height - FieldH - 16);
     public SpotItem? Current => Selected >= 0 && Selected < Results.Count ? Results[Selected] : null;
 
-    public void Reset() { Query = ""; Results = []; Selected = -1; Hover = -1; Pending = -1; }
+    public void Reset() { Query = ""; Results = []; Selected = -1; Hover = -1; Pending = -1; Menu = null; MenuHover = -1; }
+
+    // ── menú de clic derecho sobre una app: «Abrir» / «Abrir como administrador»
+    public const double MenuW = 230, MenuItemH = 30;
+    public sealed record SpotMenu(LpRect Rect, IReadOnlyList<(string Id, string Text)> Items, SpotItem Target)
+    {
+        public LpRect ItemRect(int i) => new(Rect.X + 6, Rect.Y + 6 + i * MenuItemH, Rect.W - 12, MenuItemH);
+    }
+    public SpotMenu? Menu { get; private set; }
+    public int MenuHover { get; private set; } = -1;
+
+    /// <summary>Clic derecho: solo sobre una APP (archivos, carpetas, ajustes y herramientas no se elevan) abre el menú junto al cursor.</summary>
+    public SpotCommand RightClick(double x, double y)
+    {
+        bool had = Menu is not null; Menu = null; MenuHover = -1;
+        int r = RowAt(x, y);
+        if (r < 0 || Results[r] is not { Kind: SpotKind.App, App: not null } it) return had ? SpotCommand.Redraw : SpotCommand.None;
+        Selected = r; Pending = -1;
+        IReadOnlyList<(string, string)> items = [("open", "Abrir"), ("admin", "Abrir como administrador")];
+        double h = 12 + items.Count * MenuItemH, mx = Math.Min(x, Width - MenuW - 8), my = Math.Min(y, Height - h - 8);
+        Menu = new SpotMenu(new LpRect(Math.Max(8, mx), Math.Max(8, my), MenuW, h), items, it);
+        return SpotCommand.Redraw;
+    }
 
     /// <summary>A provider finished (ping, DNS…): replace that result in place, keeping the selection.</summary>
     public void Update(SpotItem item)
@@ -284,6 +306,7 @@ public sealed class SpotlightController
 
     public (SpotCommand Command, bool TextChanged) Key(int vk, bool ctrl, bool shift)
     {
+        if (Menu is not null) { Menu = null; MenuHover = -1; if (vk == 0x1B) return (SpotCommand.Redraw, false); }   // Esc cierra solo el menú; otra tecla lo cierra y sigue
         switch (vk)
         {
             case 0x1B: if (Query.Length > 0) { Reset(); return (SpotCommand.Redraw, true); } return (SpotCommand.Close, false);
@@ -313,10 +336,26 @@ public sealed class SpotlightController
         return (SpotCommand.None, false);
     }
 
-    public SpotCommand PointerMove(double x, double y) { int h = RowAt(x, y); if (h == Hover) return SpotCommand.None; Hover = h; return SpotCommand.Redraw; }
+    public SpotCommand PointerMove(double x, double y)
+    {
+        if (Menu is { } m)
+        {
+            int mh = -1; for (int i = 0; i < m.Items.Count; i++) if (m.ItemRect(i).Contains(x, y)) mh = i;
+            if (mh == MenuHover) return SpotCommand.None; MenuHover = mh; return SpotCommand.Redraw;
+        }
+        int h = RowAt(x, y); if (h == Hover) return SpotCommand.None; Hover = h; return SpotCommand.Redraw;
+    }
 
     public SpotCommand Click(double x, double y)
     {
+        if (Menu is { } m)
+        {
+            Menu = null; MenuHover = -1;
+            for (int i = 0; i < m.Items.Count; i++)
+                if (m.ItemRect(i).Contains(x, y)) return new SpotCommand(m.Items[i].Id == "admin" ? SpotCommandKind.OpenAdmin : SpotCommandKind.Open, m.Target);
+            return SpotCommand.Redraw;   // clic fuera del menú: solo se cierra
+        }
+
         int r = RowAt(x, y); if (r < 0) return SpotCommand.None;
         if (Results[r].Confirm && Pending != r) { Selected = r; Pending = r; return SpotCommand.Redraw; }
         Pending = -1; return new SpotCommand(SpotCommandKind.Open, Results[r]);

@@ -288,6 +288,32 @@ public class SpotlightTests
     }
 
     [Fact]
+    public void RightClickOnAnAppOffersOpenAndRunAsAdministratorAndResolvesLikeAMenu()
+    {
+        var c = new SpotlightController();
+        foreach (var ch in "blo") c.Char(ch);
+        c.SetResults(SpotlightEngine.Query(c.Query, Apps, null, Folders, []));
+        var row = c.Row(0); Assert.Equal(SpotCommandKind.Redraw, c.RightClick(row.Cx, row.Cy).Kind);
+        Assert.Equal(["open", "admin"], c.Menu!.Items.Select(i => i.Id)); Assert.Equal("Abrir como administrador", c.Menu.Items[1].Text); Assert.Equal(0, c.Selected);
+        var r1 = c.Menu.ItemRect(1); c.PointerMove(r1.Cx, r1.Cy); Assert.Equal(1, c.MenuHover);
+        var admin = c.Click(r1.Cx, r1.Cy); Assert.Equal(SpotCommandKind.OpenAdmin, admin.Kind); Assert.Equal("np", admin.Item!.Target); Assert.Null(c.Menu);
+        c.RightClick(row.Cx, row.Cy); var r0 = c.Menu!.ItemRect(0); Assert.Equal(SpotCommandKind.Open, c.Click(r0.Cx, r0.Cy).Kind);   // «Abrir»: normal
+        c.RightClick(row.Cx, row.Cy); Assert.Equal(SpotCommandKind.Redraw, c.Click(3, 3).Kind); Assert.Null(c.Menu);                    // clic fuera: solo cierra, no abre nada
+        c.RightClick(row.Cx, row.Cy); Assert.Equal(SpotCommandKind.Redraw, c.Key(0x1B, false).Command.Kind); Assert.Null(c.Menu); Assert.Equal("blo", c.Query);   // Esc: cierra el menú, conserva la búsqueda
+        Assert.Equal(SpotCommandKind.None, c.RightClick(3, 3).Kind);   // clic derecho fuera de una fila: nada
+    }
+
+    [Fact]
+    public void RightClickOnFilesFoldersAndOtherItemsNeverOffersElevation()
+    {
+        var c = new SpotlightController();
+        foreach (var ch in "doc") c.Char(ch);
+        c.SetResults(SpotlightEngine.Query(c.Query, Apps, null, Folders, []));
+        var row = c.Row(0); Assert.NotEqual(SpotKind.App, c.Results[0].Kind);
+        Assert.Equal(SpotCommandKind.None, c.RightClick(row.Cx, row.Cy).Kind); Assert.Null(c.Menu);
+    }
+
+    [Fact]
     public void CtrlShiftEnterOnAnAppRunsItAsAdministratorAndOnlyThen()
     {
         var c = new SpotlightController();

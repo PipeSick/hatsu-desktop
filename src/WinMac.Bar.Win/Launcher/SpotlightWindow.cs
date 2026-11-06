@@ -22,7 +22,7 @@ namespace WinMac.Bar.Win.Launcher;
 internal sealed class SpotlightWindow : IDisposable
 {
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
-    private const int WM_MOUSEMOVE = 0x200, WM_LBUTTONUP = 0x202, WM_ACTIVATE = 0x6, WM_KEYDOWN = 0x100, WM_CHAR = 0x102, WM_SYSKEYDOWN = 0x104;
+    private const int WM_MOUSEMOVE = 0x200, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_ACTIVATE = 0x6, WM_KEYDOWN = 0x100, WM_CHAR = 0x102, WM_SYSKEYDOWN = 0x104;
 
     private readonly SpotlightController _ctl = new();
     private readonly Action<SpotCommand, bool> _onCommand; private readonly Action<string> _log; private readonly BarNative.WndProc _proc;
@@ -193,12 +193,29 @@ internal sealed class SpotlightWindow : IDisposable
             }
 
             DrawPreview();
+            DrawMenu();
             _ctx.EndDraw(); _dcomp.Commit(); _swap.Present(1, PresentFlags.None); _dirty = false;
         }
         catch (Exception e) { _log("[spotlight] dibujo: " + e.GetType().Name + ": " + e.Message); _dirty = false; }
     }
 
     /// <summary>Spotlight Pro (docs/27): preview of the selected result on the right — icon, name, details and the keys that act on it.</summary>
+    /// <summary>Menú de clic derecho de una app (mismo estilo que el de Launchpad: panel oscuro, elemento resaltado en azul).</summary>
+    private void DrawMenu()
+    {
+        if (_ctl.Menu is not { } m) return;
+        Brush(new Color4(0.13f, 0.13f, 0.15f, 0.98f)); _ctx!.FillRoundedRectangle(new RoundedRectangle { Rect = R(m.Rect.X, m.Rect.Y, m.Rect.W, m.Rect.H), RadiusX = 10, RadiusY = 10 }, _solid!);
+        Brush(new Color4(1, 1, 1, 0.14f)); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(m.Rect.X + 0.5, m.Rect.Y + 0.5, m.Rect.W - 1, m.Rect.H - 1), RadiusX = 10, RadiusY = 10 }, _solid!, 1f);
+        for (int i = 0; i < m.Items.Count; i++)
+        {
+            var r = m.ItemRect(i);
+            if (i == _ctl.MenuHover) { Brush(new Color4(0.04f, 0.52f, 1f, 0.92f)); _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = R(r.X, r.Y, r.W, r.H), RadiusX = 7, RadiusY = 7 }, _solid!); }
+            Brush(new Color4(1, 1, 1, 0.96f));
+            using var l = _dw!.CreateTextLayout(m.Items[i].Text, _title!, (float)(r.W - 20), (float)r.H); l.ParagraphAlignment = ParagraphAlignment.Center;
+            _ctx.DrawTextLayout(new Vector2((float)(r.X + 10), (float)r.Y), l, _solid!);
+        }
+    }
+
     private void DrawPreview()
     {
         if (_ctl.Current is not { } it || _dw is null) return;
@@ -292,13 +309,14 @@ internal sealed class SpotlightWindow : IDisposable
     {
         try
         {
-            if (!_open && (int)msg is WM_MOUSEMOVE or WM_LBUTTONUP or WM_KEYDOWN or WM_CHAR) return IntPtr.Zero;
+            if (!_open && (int)msg is WM_MOUSEMOVE or WM_LBUTTONUP or WM_RBUTTONUP or WM_KEYDOWN or WM_CHAR) return IntPtr.Zero;
             switch ((int)msg)
             {
                 case WM_MOUSEMOVE: if (_ctl.PointerMove(X(l), Y(l)).Kind != SpotCommandKind.None) { _dirty = true; } return IntPtr.Zero;
+                case WM_RBUTTONUP: if (_ctl.RightClick(X(l), Y(l)).Kind != SpotCommandKind.None) _dirty = true; return IntPtr.Zero;
                 case WM_LBUTTONUP:
                 {
-                    var tb = _toolButtons.FirstOrDefault(b => b.Rect.Contains(X(l), Y(l)));
+                    var tb = _ctl.Menu is not null ? default : _toolButtons.FirstOrDefault(b => b.Rect.Contains(X(l), Y(l)));
                     if (tb.Id is not null && _ctl.Current is { } cur) { _onCommand(new SpotCommand(SpotCommandKind.ToolAction, cur, tb.Id), false); return IntPtr.Zero; }
                     var c = _ctl.Click(X(l), Y(l)); if (c.Kind != SpotCommandKind.None) _onCommand(c, false); return IntPtr.Zero;
                 }
