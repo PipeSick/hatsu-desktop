@@ -31,7 +31,8 @@ public static class VpnText
     /// <summary>Traduce los códigos de error de RAS más habituales a algo que el usuario entienda. Sin código conocido, el mensaje genérico con el número.</summary>
     public static string Explain(int code) => code switch
     {
-        691 => "Credenciales rechazadas: abre Configuración › VPN, entra una vez con tu usuario y contraseña y vuelve a intentarlo.",
+        691 => "Credenciales rechazadas: Windows pedirá tu usuario, contraseña y dominio; escríbelos y marca la opción de guardarlos.",
+        628 => "El servidor cerró la conexión antes de completarla (suele faltar el usuario, la contraseña o el dominio). Windows los pedirá en su propia ventana.",
         623 => "Windows no encuentra el perfil (¿se borró?).",
         651 => "El módem o el adaptador VPN informó un error. Comprueba la conexión a internet.",
         678 or 800 or 809 => "El servidor VPN no respondió. Comprueba tu conexión o que el servidor esté disponible.",
