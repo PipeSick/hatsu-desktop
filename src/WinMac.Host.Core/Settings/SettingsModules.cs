@@ -29,6 +29,7 @@ public static partial class SettingsBuilder
         new("livetext", "liveTextEnabled", "Hatsu Live Text", "Elige una región de la pantalla y Hatsu reconoce su texto en tu equipo (sin Internet, nada sale del PC) y lo copia.",
             b => [HotkeyRow("ltHotkey", "Atajo", b.LtHotkey),
                   new(RowKind.Toggle, "bar:ltAutoCopy", "Copiar el texto al reconocerlo", "También se puede copiar desde el panel", b.LtAutoCopy),
+                  new(RowKind.Toggle, "bar:ltAutoShelf", "Guardarlo también en la estantería", "Necesita Hatsu Notch con la estantería activa. Apagado, puedes enviarlo desde el globo con un botón", b.LtAutoShelf),
                   new(RowKind.Toggle, "bar:ltKeepLineBreaks", "Conservar los saltos de línea", "Apagado, las líneas se unen en un párrafo", b.LtKeepLineBreaks),
                   new(RowKind.Field, "mod.lang", "Idioma de reconocimiento", "Etiqueta como es-ES o en-US. Vacío = los idiomas de tu perfil de Windows", Text: b.LtLanguage, Placeholder: "automático"),
                   new(RowKind.Info, "mod.livetext.limit", "Usa los paquetes de reconocimiento de texto que Windows tenga instalados (el estado de arriba dice cuáles). Regiones muy grandes se rechazan con un aviso.")], "Barra · Live Text"),

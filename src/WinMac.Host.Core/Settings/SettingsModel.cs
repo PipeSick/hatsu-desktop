@@ -81,6 +81,7 @@ public static partial class SettingsBuilder
         ("gesturesEnabled", "Gestures", b => b.GesturesEnabled),
         ("ltKeepLineBreaks", "Conservar los saltos de línea", b => b.LtKeepLineBreaks),
         ("ltAutoCopy", "Copiar el texto al reconocerlo", b => b.LtAutoCopy),
+        ("ltAutoShelf", "Guardar el texto reconocido en la estantería", b => b.LtAutoShelf),
     ];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];

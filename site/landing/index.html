@@ -87,7 +87,7 @@ kbd{font:600 .78rem ui-monospace,Consolas,monospace;padding:.12rem .45rem;border
 .zones{position:absolute;inset:1.4rem;display:grid;gap:.5rem;grid-template-columns:1.4fr 1fr;grid-template-rows:1fr 1fr}
 .zones div{border-radius:12px;border:2px dashed rgba(255,255,255,.6);background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:.8rem}
 .zones div.hot{background:rgba(56,189,248,.35);border:2px solid #38bdf8}.zones div.big{grid-row:1/3}
-.sel-box{position:absolute;border:2px dashed #38bdf8;background:rgba(56,189,248,.14);border-radius:6px}
+.sel-box{position:absolute;border:2px solid #38bdf8;background:rgba(56,189,248,.14);border-radius:6px}
 .bubble{position:absolute;padding:.5rem .7rem;border-radius:12px;background:rgba(18,10,36,.92);border:1px solid var(--glassb);font-size:.75rem;max-width:15rem}
 .corner{position:absolute;width:3.2rem;height:3.2rem;border-radius:50%;background:radial-gradient(closest-side,rgba(56,189,248,.8),transparent);animation:glow 2.8s ease-in-out infinite}
 @keyframes glow{50%{opacity:.35;transform:scale(1.25)}}
@@ -193,9 +193,9 @@ footer .wrap{display:grid;gap:.6rem}
     <div class="stage" style="min-height:15rem"><div class="zones"><div class="big hot">Arrastra aquí</div><div>Zona 2</div><div>Zona 3</div></div><span class="lbl">Ilustración</span></div></div>
 
   <div class="show"><div class="txt"><span class="eyebrow">Live Text</span><h3>Copia texto de cualquier pantalla</h3>
-    <p>Selecciona una región con <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Espacio</kbd> y Hatsu reconoce el texto en tu propio equipo, sin enviar nada a Internet, y lo copia.</p></div>
+    <p>Selecciona una región con <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Espacio</kbd> y Hatsu reconoce el texto en tu propio equipo, sin enviar nada a Internet, y lo copia. Si quieres, también lo guarda en la estantería de la Isla.</p></div>
     <div class="stage" style="min-height:15rem"><div class="win" style="left:6%;top:12%;width:70%;height:70%"><div class="t">Imagen</div><div class="c" style="font-size:.85rem;color:#fff">Reunión de equipo<br>Martes 12 de noviembre · 10:30<br>Sala Aurora</div></div>
-      <div class="sel-box" style="left:9%;top:34%;width:50%;height:30%"></div><div class="bubble" style="right:5%;bottom:10%">✓ Texto copiado<br><span style="opacity:.75">Reunión de equipo · Martes 12 de noviembre…</span></div><span class="lbl">Ilustración</span></div></div>
+      <div class="sel-box" style="left:9%;top:34%;width:50%;height:30%"></div><div class="bubble" style="right:4%;bottom:8%;max-width:17rem"><b style="color:#6ee7b7">✓ Texto copiado · es-ES</b><br><span style="opacity:.8">Reunión de equipo · Martes 12 de noviembre · 10:30 · Sala Aurora</span><div style="display:flex;gap:.4rem;justify-content:flex-end;margin-top:.55rem"><span style="padding:.15rem .6rem;border-radius:99px;background:rgba(255,255,255,.14);font-size:.68rem">A la estantería</span><span style="padding:.15rem .6rem;border-radius:99px;background:rgba(255,255,255,.14);font-size:.68rem">Copiado ✓</span><span style="padding:.15rem .5rem;border-radius:99px;background:rgba(255,255,255,.14);font-size:.68rem">✕</span></div></div><span class="lbl">Ilustración</span></div></div>
 
   <div class="show rev"><div class="txt"><span class="eyebrow">Gestures</span><h3>Tu mouse y tu teclado, a tu manera</h3>
     <p>Esquinas activas, botones laterales del ratón y atajos que abren Mission Control, Spotlight, Launchpad, cambian de escritorio o hacen una captura.</p>

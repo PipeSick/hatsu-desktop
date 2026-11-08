@@ -89,9 +89,11 @@ internal sealed class LiveTextFeature : IHatsuFeature
     private void ShowResult(string? text, string? lang, string? error, CaptureRect region)
     {
         bool copied = false;
+        bool shelved = false;
         if (text is not null && _cfg.LtAutoCopy) { _host.CopyTextPublic(text); copied = true; }
+        if (text is not null && _cfg.LtAutoShelf && _host.ShelfAvailable) { _host.SendToShelf(text); shelved = true; }
         _panel?.Dispose();
-        _panel = new LiveTextPanel(region, text, lang, error, copied, t => _host.CopyTextPublic(t), _host.ShelfAvailable ? t => _host.SendToShelf(t) : null, () => { var p = _panel; _panel = null; p?.Dispose(); }, _log);
+        _panel = new LiveTextPanel(region, text, lang, error, copied, shelved, t => _host.CopyTextPublic(t), _host.ShelfAvailable ? t => _host.SendToShelf(t) : null, () => { var p = _panel; _panel = null; p?.Dispose(); }, _log);
         _panel.Show();
         _log(error is null ? $"[livetext] {text!.Length} caracteres reconocidos ({lang}){(copied ? ", copiados" : "")}" : "[livetext] sin resultado");
     }
@@ -104,8 +106,8 @@ internal sealed class LiveTextPanel : IDisposable
     private D2DOverlay? _ov; private IDWriteFactory? _dw; private IDWriteTextFormat? _title, _body, _btn; private CaptureMonitor _mon = null!; private McRectLocal _card, _copyBtn, _closeBtn, _shelfBtn; private bool _gone;
     private readonly record struct McRectLocal(double X, double Y, double W, double H) { public bool Contains(double x, double y) => x >= X && x <= X + W && y >= Y && y <= Y + H; }
 
-    public LiveTextPanel(CaptureRect region, string? text, string? lang, string? error, bool copied, Action<string> copy, Action<string>? toShelf, Action closed, Action<string> log)
-    { _region = region; _text = text; _lang = lang; _error = error; _copied = copied; _copy = copy; _toShelf = toShelf; _closed = closed; _log = log; }
+    public LiveTextPanel(CaptureRect region, string? text, string? lang, string? error, bool copied, bool shelved, Action<string> copy, Action<string>? toShelf, Action closed, Action<string> log)
+    { _region = region; _text = text; _lang = lang; _error = error; _copied = copied; _shelved = shelved; _copy = copy; _toShelf = toShelf; _closed = closed; _log = log; }
 
     public void Show()
     {
@@ -139,23 +141,36 @@ internal sealed class LiveTextPanel : IDisposable
 
     private void Close() { if (_gone) return; _gone = true; _closed(); }
 
+    /// <summary>Globo junto a la región reconocida (debajo, o encima si no hay lugar): resalta la región, dice «Texto copiado» y muestra un adelanto con los botones justos. Clic fuera o Esc lo cierran.</summary>
     private void Redraw() => _ov?.Draw((c, w, h) =>
     {
-        using var b = c.CreateSolidColorBrush(new Color4(0, 0, 0, 0.45f)); c.FillRectangle(new RawRectF(0, 0, (float)w, (float)h), b);
+        using var b = c.CreateSolidColorBrush(new Color4(0, 0, 0, 0.30f)); c.FillRectangle(new RawRectF(0, 0, (float)w, (float)h), b);
+        double rx = (_region.X - _mon.Bounds.X) / S, ry = (_region.Y - _mon.Bounds.Y) / S, rw = _region.W / S, rh = _region.H / S;
+        var sel = new RoundedRectangle { Rect = new RawRectF((float)rx, (float)ry, (float)(rx + rw), (float)(ry + rh)), RadiusX = 6, RadiusY = 6 };
+        b.Color = new Color4(0.22f, 0.74f, 0.97f, 0.14f); c.FillRoundedRectangle(sel, b); b.Color = new Color4(0.22f, 0.74f, 0.97f, 1f); c.DrawRoundedRectangle(sel, b, 2f);
+
         var (preview, more) = _text is null ? (_error ?? "", 0) : LiveText.Preview(_text);
-        double cw = Math.Min(640, w - 80); using var tl = _dw!.CreateTextLayout(preview, _body!, (float)(cw - 48), (float)(h - 240));
-        double th = Math.Min(h - 240, tl.Metrics.Height); double ch = 56 + th + 24 + 52 + (more > 0 ? 22 : 0);
-        _card = new McRectLocal((w - cw) / 2, (h - ch) / 2, cw, ch);
-        var rr = new RoundedRectangle { Rect = new RawRectF((float)_card.X, (float)_card.Y, (float)(_card.X + cw), (float)(_card.Y + ch)), RadiusX = 18, RadiusY = 18 };
-        b.Color = new Color4(0.10f, 0.10f, 0.13f, 0.97f); c.FillRoundedRectangle(rr, b); b.Color = new Color4(1, 1, 1, 0.16f); c.DrawRoundedRectangle(rr, b, 1);
-        b.Color = new Color4(1, 1, 1, 0.95f); using (var t = _dw.CreateTextLayout(_error is null ? $"Texto reconocido ({_lang})" : "Live Text", _title!, (float)(cw - 48), 28)) c.DrawTextLayout(new Vector2((float)_card.X + 24, (float)_card.Y + 16), t, b);
-        b.Color = new Color4(1, 1, 1, _error is null ? 0.92f : 0.75f); c.DrawTextLayout(new Vector2((float)_card.X + 24, (float)_card.Y + 52), tl, b);
-        double by = _card.Y + 52 + th + 14; if (more > 0) { b.Color = new Color4(1, 1, 1, 0.5f); using var m = _dw.CreateTextLayout($"… y {more} línea(s) más (se copian completas)", _body!, (float)(cw - 48), 20); c.DrawTextLayout(new Vector2((float)_card.X + 24, (float)by), m, b); by += 22; }
-        by += 10; _closeBtn = new McRectLocal(_card.X + cw - 24 - 100, by, 100, 34); _copyBtn = _text is null ? default : new McRectLocal(_closeBtn.X - 12 - 160, by, 160, 34); _shelfBtn = _text is null || _toShelf is null ? default : new McRectLocal(_copyBtn.X - 12 - 170, by, 170, 34);
-        void Button(McRectLocal r, string label, bool primary) { b.Color = primary ? new Color4(0.04f, 0.52f, 1f, 1) : new Color4(1, 1, 1, 0.14f); c.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF((float)r.X, (float)r.Y, (float)(r.X + r.W), (float)(r.Y + r.H)), RadiusX = 9, RadiusY = 9 }, b); b.Color = new Color4(1, 1, 1, 1); using var l = _dw!.CreateTextLayout(label, _btn!, (float)r.W, (float)r.H); c.DrawTextLayout(new Vector2((float)r.X, (float)r.Y), l, b); }
+        double cw = Math.Min(380, w - 40); using var tl = _dw!.CreateTextLayout(preview, _body!, (float)(cw - 32), 78f); tl.WordWrapping = WordWrapping.Wrap;
+        double th = Math.Min(78, tl.Metrics.Height); double ch = 14 + 24 + 4 + th + (more > 0 ? 20 : 0) + 12 + 32 + 14;
+        double cx = Math.Clamp(rx + rw - cw, 20, Math.Max(20, w - cw - 20)), cy = ry + rh + 12;
+        if (cy + ch > h - 20) cy = ry - 12 - ch; if (cy < 20) cy = Math.Clamp(ry + rh - ch - 12, 20, Math.Max(20, h - ch - 20));
+        _card = new McRectLocal(cx, cy, cw, ch);
+        var rr = new RoundedRectangle { Rect = new RawRectF((float)cx, (float)cy, (float)(cx + cw), (float)(cy + ch)), RadiusX = 14, RadiusY = 14 };
+        b.Color = new Color4(0.07f, 0.04f, 0.16f, 0.97f); c.FillRoundedRectangle(rr, b); b.Color = new Color4(1, 1, 1, 0.18f); c.DrawRoundedRectangle(rr, b, 1);
+
+        string head = _error is not null ? "Live Text" : _copied ? "✓ Texto copiado" : "Texto reconocido";
+        b.Color = _error is null && _copied ? new Color4(0.43f, 0.91f, 0.72f, 1) : new Color4(1, 1, 1, 0.95f);
+        using (var t = _dw.CreateTextLayout(head + (_error is null && _lang is not null ? $" · {_lang}" : ""), _title!, (float)(cw - 32), 24)) c.DrawTextLayout(new Vector2((float)cx + 16, (float)cy + 12), t, b);
+        b.Color = new Color4(1, 1, 1, _error is null ? 0.82f : 0.75f); c.DrawTextLayout(new Vector2((float)cx + 16, (float)cy + 14 + 24 + 4), tl, b);
+        double by = cy + 14 + 24 + 4 + th + (more > 0 ? 20 : 0) + 12;
+        if (more > 0) { b.Color = new Color4(1, 1, 1, 0.5f); using var m = _dw.CreateTextLayout($"… y {more} línea(s) más (se copian completas)", _body!, (float)(cw - 32), 20); c.DrawTextLayout(new Vector2((float)cx + 16, (float)(by - 12 - 20)), m, b); }
+        _closeBtn = new McRectLocal(cx + cw - 16 - 34, by, 34, 32);
+        _copyBtn = _text is null ? default : new McRectLocal(_closeBtn.X - 8 - 92, by, 92, 32);
+        _shelfBtn = _text is null || _toShelf is null ? default : new McRectLocal(_copyBtn.X - 8 - 152, by, 152, 32);
+        void Button(McRectLocal r, string label, bool primary) { b.Color = primary ? new Color4(0.49f, 0.23f, 0.93f, 1) : new Color4(1, 1, 1, 0.14f); c.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF((float)r.X, (float)r.Y, (float)(r.X + r.W), (float)(r.Y + r.H)), RadiusX = 16, RadiusY = 16 }, b); b.Color = new Color4(1, 1, 1, 1); using var l = _dw!.CreateTextLayout(label, _btn!, (float)r.W, (float)r.H); c.DrawTextLayout(new Vector2((float)r.X, (float)r.Y), l, b); }
         if (_text is not null && _toShelf is not null) Button(_shelfBtn, _shelved ? "En la estantería ✓" : "A la estantería", false);
         if (_text is not null) Button(_copyBtn, _copied ? "Copiado ✓" : "Copiar", !_copied);
-        Button(_closeBtn, "Cerrar", false);
+        Button(_closeBtn, "✕", false);
     });
 
     public void Dispose() { _gone = true; _ov?.Dispose(); _ov = null; _title?.Dispose(); _body?.Dispose(); _btn?.Dispose(); _dw?.Dispose(); }

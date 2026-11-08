@@ -155,6 +155,8 @@ public sealed record BarConfig
     public bool LtKeepLineBreaks { get; init; } = true;
     /// <summary>Copiar el texto al portapapeles en cuanto se reconoce (se puede copiar también desde el panel). El historial de la Isla lo recoge como cualquier copia: no hay un historial aparte.</summary>
     public bool LtAutoCopy { get; init; } = true;
+    /// <summary>Live Text: enviar también el texto reconocido a la estantería de la Isla (Shelf+) al reconocerlo. Apagado por defecto: la estantería guarda cosas de forma duradera.</summary>
+    public bool LtAutoShelf { get; init; } = false;
     /// <summary>Idioma de reconocimiento (etiqueta BCP-47, p. ej. «es-ES»). Vacío = los idiomas del perfil del usuario.</summary>
     public string LtLanguage { get; init; } = "";
     /// <summary>Spotlight Actions: registro central de acciones en Spotlight. Activado por defecto (no instala ganchos).</summary>
