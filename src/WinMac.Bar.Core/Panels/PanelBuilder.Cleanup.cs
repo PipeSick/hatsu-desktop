@@ -32,7 +32,10 @@ public static partial class PanelBuilder
                     new StatCard("Seleccionado", CleanupText.Size(v.SelectedBytes), v.SelectedBytes > 0 ? "good" : null),
                 })));
             }
-            foreach (var r in v.Rows)
+            // Solo lo que se puede limpiar: las categorías «solo revisión» (Hatsu no puede borrarlas de forma segura) no se muestran, y tras analizar tampoco las que no tienen nada.
+            var shown = v.Rows.Where(r => r.Category.Kind != CleanupKind.ReviewOnly && !(r.Analyzed && r.Bytes <= 0 && phase is CleanupPhase.Ready or CleanupPhase.Done)).ToList();
+            if (shown.Count == 0 && phase is CleanupPhase.Ready or CleanupPhase.Done) w.Add(new Widget(WidgetKind.Note, "clean-empty", "No hay nada que limpiar ahora: el equipo ya está limpio."));
+            foreach (var r in shown)
             {
                 string size = r.Category.Kind == CleanupKind.ReviewOnly ? "Solo revisión" : r.Analyzed ? (r.Bytes > 0 ? CleanupText.Size(r.Bytes) : "Nada que limpiar") : "…";
                 string reason = r.Category.Kind == CleanupKind.ReviewOnly ? r.Category.WhyNotCleanable ?? "" : r.Category.Reason;
@@ -55,6 +58,6 @@ public static partial class PanelBuilder
             }
         }
 
-        return new PanelModel(PanelKind.Cleanup, "Limpieza", w);
+        return new PanelModel(PanelKind.Cleanup, "Limpieza", w, Width: 380);
     }
 }

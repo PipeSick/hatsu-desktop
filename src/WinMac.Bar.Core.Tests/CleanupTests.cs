@@ -249,9 +249,9 @@ public class CleanupTests
         PanelModel M() => PanelBuilder.CleanupPanel(PanelContext.Initial(new BarConfig(), Now) with { Clean = V() });
         Assert.Contains(M().Widgets, w => w.Id == PanelBuilder.CleanScan); Assert.DoesNotContain(M().Widgets, w => w.Kind == WidgetKind.CleanRow);
         s.Scan(); var ready = M();
-        Assert.Equal(9, ready.Widgets.Count(w => w.Kind == WidgetKind.CleanRow)); Assert.Contains(ready.Widgets, w => w.Id == PanelBuilder.CleanRun && w.Enabled && w.Text.Contains("1,43 MB") is var _ );
+        Assert.Single(ready.Widgets, w => w.Kind == WidgetKind.CleanRow);   // solo lo que se puede limpiar: sin «solo revisión» y sin categorías vacías Assert.Contains(ready.Widgets, w => w.Id == PanelBuilder.CleanRun && w.Enabled && w.Text.Contains("1,43 MB") is var _ );
         var locked = ready.Widgets.Where(w => w.Kind == WidgetKind.CleanRow && ((CleanRowData)w.Data!).Locked).Select(w => ((CleanRowData)w.Data!).CategoryId).ToHashSet();
-        Assert.Contains("orphans", locked); Assert.Contains("setup-leftovers", locked); Assert.Contains("recycle-bin", locked);   // papelera vacía: nada que marcar
+        Assert.DoesNotContain("orphans", locked); Assert.DoesNotContain("setup-leftovers", locked); Assert.DoesNotContain("recycle-bin", locked);   // no se muestran: ni «solo revisión» ni la papelera vacía
         s.Confirm(); s.Clean(); var done = M(); Assert.Contains(done.Widgets, w => w.Id == "clean-summary" && w.Text.Contains("Liberado")); Assert.Contains(done.Widgets, w => w.Id == PanelBuilder.CleanReset);
     }
     [Fact] public void Row_toggle_is_a_click_event_and_keyboard_target_only_when_selectable()
