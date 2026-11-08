@@ -79,7 +79,7 @@ public sealed record BarConfig
     /// <summary>Formato del archivo: Png (sin pérdida, por defecto) o Jpg.</summary>
     public string CaptureFormat { get; init; } = "Png";
     /// <summary>Además de guardar, copiar la imagen al portapapeles.</summary>
-    public bool CaptureCopyToClipboard { get; init; } = false;
+    public bool CaptureCopyToClipboard { get; init; } = true;
     /// <summary>Carpeta de destino; vacía = la de capturas de Windows («Imágenes\Capturas de pantalla»), la misma que lee la galería de la Isla.</summary>
     public string? CaptureFolder { get; init; }
     /// <summary>Modificadores de los atajos de captura (con 3, 4, 5 y 6): CtrlShift (por defecto), CtrlAlt o AltShift.</summary>

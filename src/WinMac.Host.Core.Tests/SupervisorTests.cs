@@ -171,7 +171,7 @@ public class HostConfigTests
             var c = HostConfig.Load(f);
             Assert.Equal("TopLeft", c.Notch!.Position); Assert.True(c.Notch.LyricsEnabled);   // lo que había se conserva (letras incluidas)
             Assert.False(c.Notch.ClipboardPersist); Assert.True(c.Notch.ClipboardSkipSecrets); Assert.Equal(50, c.Notch.ClipboardLimit);   // privacidad por defecto
-            Assert.True(c.Bar!.CaptureHotkeys); Assert.Equal("Png", c.Bar.CaptureFormat); Assert.Null(c.Bar.CaptureFolder); Assert.False(c.Bar.CaptureCopyToClipboard);
+            Assert.True(c.Bar!.CaptureHotkeys); Assert.Equal("Png", c.Bar.CaptureFormat); Assert.Null(c.Bar.CaptureFolder); Assert.True(c.Bar.CaptureCopyToClipboard);   // a pedido del propietario: la captura se copia al portapapeles de inmediato (se puede apagar en Ajustes)
             Assert.Contains("activity", c.Notch.Sections.Select(x => x.Id));                    // pestañas nuevas añadidas al final sin perder el orden guardado
         }
         finally { File.Delete(f); }

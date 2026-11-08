@@ -24,11 +24,12 @@ namespace WinMac.Bar.Win.Capture;
 internal sealed class QuickLookWindow : IDisposable
 {
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_LAYERED = 0x80000;
-    private const int WM_PAINT = 0xF, WM_LBUTTONUP = 0x202, WM_MOUSEMOVE = 0x200, WM_MOUSELEAVE = 0x2A3, WM_KEYDOWN = 0x100, WM_CLOSE = 0x10, WM_RBUTTONUP = 0x205;
+    private const int WM_PAINT = 0xF, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_MOUSEMOVE = 0x200, WM_MOUSELEAVE = 0x2A3, WM_KEYDOWN = 0x100, WM_CLOSE = 0x10, WM_RBUTTONUP = 0x205;
 
     private readonly string _path; private readonly byte[] _px; private readonly int _w, _h; private readonly CaptureMonitor _mon;
     private readonly Action<string, QuickLookWindow> _act; private readonly Action<string> _log; private readonly Action _gone;
     private readonly BarNative.WndProc _thumbProc, _prevProc;
+    private bool _down, _dragging; private int _downX, _downY;
     private IntPtr _thumb, _prev; private CaptureRect _thumbRect; private byte[]? _thumbPx; private bool _hover, _disposed;
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
 
@@ -109,6 +110,20 @@ internal sealed class QuickLookWindow : IDisposable
         double a = QuickLook.Alpha(t, _hover); if (a < 1) UpdateThumb(a);
     }
 
+    /// <summary>Arrastrar la miniatura a otra aplicación: se entrega el archivo guardado. Si se suelta en un destino, la miniatura se retira; si se cancela, se queda.</summary>
+    private void StartDrag(IntPtr h)
+    {
+        _dragging = true; _down = false; _hover = true; _clock.Restart();
+        try
+        {
+            var effect = QuickLookDrag.Start(h, _path, out var err);
+            if (effect is null) { _log("[quicklook] no se pudo arrastrar: " + err); return; }
+            _log("[quicklook] arrastre: " + (effect.Value != 0 ? "soltada en un destino" : "cancelado"));
+            if (effect.Value != 0) { CloseThumb(); if (_prev == IntPtr.Zero) Dispose(); }
+        }
+        finally { _dragging = false; _hover = false; _clock.Restart(); }
+    }
+
     /// <summary>A new capture is starting: the thumbnail is excluded from capture anyway, and it goes away so it never covers what is being captured.</summary>
     public void HideForCapture() { CloseThumb(); if (_prev == IntPtr.Zero) Dispose(); }
 
@@ -120,11 +135,14 @@ internal sealed class QuickLookWindow : IDisposable
         {
             switch ((int)msg)
             {
+                case WM_MOUSEMOVE when _down && !_dragging && ((long)w & 1) != 0 && (Math.Abs((short)((long)l & 0xFFFF) - _downX) > 6 || Math.Abs((short)(((long)l >> 16) & 0xFFFF) - _downY) > 6):
+                    StartDrag(h); return IntPtr.Zero;
                 case WM_MOUSEMOVE:
                     if (!_hover) { _hover = true; UpdateThumb(1); var tme = new TRACKMOUSEEVENT { cbSize = (uint)Marshal.SizeOf<TRACKMOUSEEVENT>(), dwFlags = 2 /* TME_LEAVE */, hwndTrack = h }; TrackMouseEvent(ref tme); }
                     return IntPtr.Zero;
                 case WM_MOUSELEAVE: _hover = false; _clock.Restart(); return IntPtr.Zero;   // a few more seconds after the pointer leaves
-                case WM_LBUTTONUP: OpenPreview(); return IntPtr.Zero;
+                case WM_LBUTTONDOWN: _down = true; _downX = (short)((long)l & 0xFFFF); _downY = (short)(((long)l >> 16) & 0xFFFF); return IntPtr.Zero;
+                case WM_LBUTTONUP: { bool wasDown = _down; _down = false; if (wasDown && !_dragging) OpenPreview(); return IntPtr.Zero; }
                 case WM_RBUTTONUP: CloseThumb(); if (_prev == IntPtr.Zero) Dispose(); return IntPtr.Zero;   // right click dismisses it
             }
         }

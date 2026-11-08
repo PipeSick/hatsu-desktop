@@ -10,6 +10,8 @@ Versión del paquete: **2.0.7** (la Store exige una versión mayor en cada enví
 
 **VPN en la barra** (opcional, *Ajustes › Barra › VPN*): icono de escudo que muestra el estado y abre un panel para conectar o desconectar las VPN de Windows (Configuración › Red › VPN) con las credenciales ya guardadas. No cubre apps de VPN de terceros. Sin validar en Windows real.
 
+**Capturas:** se copian al portapapeles al tomarlas (default; se apaga en Ajustes) y la miniatura se puede arrastrar a otra aplicación.
+
 **Hatsu Notch:** banner de descargas con ancho adaptable; clic en una notificación abre la app que la envió; protección frente al error del fondo translúcido.
 **Dock:** × en cada ventana de la vista previa; «Reservar espacio» y la vista previa se aplican en vivo.
 **Barra:** icono propio de Hatsu; panel de Limpieza rediseñado; las rutas largas de Spotlight se recortan con «…».
