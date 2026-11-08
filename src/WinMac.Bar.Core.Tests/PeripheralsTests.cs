@@ -149,10 +149,13 @@ public class PeripheralsTests
         var view = new PeripheralsView(st.View(T0), 0, false, true, 20);
         var m = PanelBuilder.PeripheralsPanel(PanelContext.Initial(new BarConfig(), T0) with { Periph = view });
         var cards = m.Widgets.Where(w => w.Kind == WidgetKind.DeviceCard).ToDictionary(w => w.Text, w => (DeviceCardData)w.Data!);
-        Assert.Equal("80 %", cards["A"].BatteryText); Assert.Equal("Cargando", cards["A"].Charge); Assert.Equal(0.8, cards["A"].Fraction);
-        Assert.Equal("Batería desconocida", cards["B"].BatteryText); Assert.Null(cards["B"].Fraction); Assert.Null(cards["B"].Charge);
-        Assert.StartsWith("Última lectura: 60 %", cards["C"].BatteryText); Assert.Null(cards["C"].Fraction); Assert.Equal("Desconectado", cards["C"].Status);
-        Assert.Equal("Sin datos de batería", cards["D"].BatteryText);
+        // Solo se muestran los conectados con lectura: A (80 %). B (conectado, sin lectura) va en una línea; C (desconectado) y D (sin datos) no ocupan una tarjeta.
+        Assert.Equal("80 %", cards["A"].BatteryText); Assert.Equal("Cargando", cards["A"].Charge); Assert.Equal(0.8, cards["A"].Fraction); Assert.Equal("", cards["A"].Status);
+        Assert.Single(cards); Assert.DoesNotContain("C", cards.Keys); Assert.DoesNotContain("B", cards.Keys);
+        var nodata = Assert.Single(m.Widgets, w => w.Id == "periph-nodata"); Assert.Contains("B", nodata.Text); Assert.Contains("D", nodata.Text); Assert.DoesNotMatch(@"\bC\b", nodata.Text);
+        var st2 = new PeripheralStore(); st2.Apply(Ok(R("c", 60, name: "C")), T0); st2.Apply(Ok(R("c", 60, connected: false, name: "C")), T0);
+        var none = PanelBuilder.PeripheralsPanel(PanelContext.Initial(new BarConfig(), T0) with { Periph = new PeripheralsView(st2.View(T0), 0, false, false, 20) });
+        Assert.Contains(none.Widgets, w => w.Id == "periph-none");
     }
     [Fact] public void Panel_empty_and_hidden_states_and_hide_event()
     {

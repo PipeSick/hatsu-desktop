@@ -34,13 +34,20 @@ public static partial class PanelBuilder
         }
         else
         {
-            foreach (var d in v.Devices.Where(d => !d.Hidden))
+            // Solo lo que está conectado y tiene datos: los dispositivos desconectados no se muestran (no hay nada que informar), y los conectados sin lectura de batería van juntos en una línea.
+            var connected = v.Devices.Where(d => !d.Hidden && d.Connected).ToList();
+            var withData = connected.Where(d => d.Battery is BatteryStatus.Current or BatteryStatus.Stale).ToList();
+            foreach (var d in withData)
             {
                 string tone = d.Battery == BatteryStatus.Current ? (d.Percent <= 10 ? "bad" : d.Percent <= 20 ? "warn" : "good") : "off";
-                string status = (d.Connected ? "Conectado" : "Desconectado") + (d.ProviderTrouble ? " · el proveedor no responde" : "");
+                string status = d.ProviderTrouble ? "El proveedor no responde" : d.Battery == BatteryStatus.Stale ? "Lectura antigua" : "";   // «Conectado» sobra: todo lo que se ve lo está
                 w.Add(new Widget(WidgetKind.DeviceCard, "dev:" + d.Id, d.Name, Data: new DeviceCardData(d.Id, KindText(d.Kind), ConnectionText(d.Connection), BatteryLine(d, now),
                     d.Battery == BatteryStatus.Current && d.Percent is { } p ? p / 100.0 : null, status, d.ChargeText, tone, d.Note, PeriphHidePrefix + d.Id, "Ocultar")));
             }
+
+            var noData = connected.Except(withData).ToList();
+            if (noData.Count > 0) w.Add(new Widget(WidgetKind.Note, "periph-nodata", "Conectado, sin dato de batería: " + string.Join(", ", noData.Select(d => d.Name)) + "."));
+            if (connected.Count == 0) w.Add(new Widget(WidgetKind.Note, "periph-none", "No hay periféricos conectados ahora."));
         }
 
         if (v is { Busy: true } && v.Devices.Count > 0) w.Add(new Widget(WidgetKind.Note, "periph-busy", "Actualizando…"));

@@ -340,8 +340,8 @@ public sealed partial class PanelPainter : IDisposable
                 bool conn = dc.Status.StartsWith("Conectado", StringComparison.Ordinal);
                 var tone = dc.Tone == "good" ? new Color4(0.20f, 0.78f, 0.35f, 1) : dc.Tone == "warn" ? new Color4(1f, 0.7f, 0.1f, 1) : dc.Tone == "bad" ? new Color4(1f, 0.27f, 0.23f, 1) : Fg(0.4f);
                 Text(dc.BatteryText, _bodyBold, x + 14, y + 48, wd * 0.62, 20, dc.Fraction is null ? Fg(0.7f) : Fg(0.95f));
-                FillCircle(x + wd - 14 - MeasureText(dc.Status, _small) - 10, y + 58, 3.5f, conn ? new Color4(0.20f, 0.78f, 0.35f, 1) : Fg(0.35f));
-                TextAlign(dc.Status, _small, x + wd - 14 - MeasureText(dc.Status, _small) - 4, y + 49, MeasureText(dc.Status, _small) + 6, 18, Fg(0.6f), TextAlignment.Trailing);
+                if (dc.Status.Length > 0) FillCircle(x + wd - 14 - MeasureText(dc.Status, _small) - 10, y + 58, 3.5f, conn ? new Color4(0.20f, 0.78f, 0.35f, 1) : new Color4(1f, 0.7f, 0.1f, 1));
+                if (dc.Status.Length > 0) TextAlign(dc.Status, _small, x + wd - 14 - MeasureText(dc.Status, _small) - 4, y + 49, MeasureText(dc.Status, _small) + 6, 18, Fg(0.6f), TextAlignment.Trailing);
                 double by = y + 72;
                 if (dc.Fraction is { } fr)
                 {
