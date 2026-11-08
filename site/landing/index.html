@@ -68,10 +68,10 @@ footer .wrap{display:grid;gap:.6rem}
 <main>
 <div class="hero"><div class="wrap">
   <img class="logo" src="img/hatsu.png" alt="Logotipo de Hatsu Desktop" width="96" height="96">
-  <div><span class="badge">En desarrollo activo · aún sin versión estable</span></div>
+  <div><span class="badge">Disponible en Microsoft Store · en desarrollo activo</span></div>
   <h1>Un escritorio a medida<br>para <em>Windows 11</em></h1>
   <p class="lead">Barra superior, Dock, Spotlight, Launchpad, una isla informativa y módulos de productividad. Inspirado en la experiencia de macOS, hecho para Windows, de código abierto y sin telemetría.</p>
-  <div class="cta"><a class="btn" href="#instalar">Cómo probarlo</a><a class="btn ghost" href="https://github.com/PipeSick/hatsu-desktop">Ver el código</a></div>
+  <div class="cta"><a class="btn" href="https://apps.microsoft.com/detail/9NJ0XLP6NXVJ">Descargar en Microsoft Store</a><a class="btn ghost" href="#instalar">Más formas de instalar</a><a class="btn ghost" href="https://github.com/PipeSick/hatsu-desktop">Ver el código</a></div>
   <div class="demo" role="img" aria-label="Ilustración de la barra superior, la isla y el Dock de Hatsu Desktop">
     <div class="bar"><b>Hatsu</b><span>Archivo</span><span>Editar</span><span>Ver</span><span class="sp"><span>VPN</span><span>Wi-Fi</span><span>34%</span><span>dom 8 nov 16:08</span></div>
     <div class="body"><div class="isl">♪ Reproduciendo</div>
@@ -110,15 +110,14 @@ footer .wrap{display:grid;gap:.6rem}
 </div></section>
 
 <section id="instalar"><div class="wrap">
-  <h2>Cómo probarlo</h2>
-  <p class="sub">Requiere Windows 11. Todavía no hay una versión estable publicada.</p>
-  <ol class="steps">
-    <li><b>Descarga el paquete de prueba</b><br><span style="color:var(--mut)">Cada versión de desarrollo genera un ZIP portable en la sección Actions del repositorio.</span></li>
-    <li><b>Descomprímelo en una carpeta aparte</b><br><span style="color:var(--mut)">No se instala nada: cierra antes cualquier Hatsu instalado y ejecútalo desde esa carpeta.</span></li>
-    <li><b>Configura lo que quieras</b><br><span style="color:var(--mut)">En Ajustes enciendes o apagas cada pieza. Se cierra desde la bandeja, con «Salir».</span></li>
-  </ol>
-  <div class="note"><b>Aviso:</b> los paquetes de prueba no están firmados. Con <i>Smart App Control</i> activado, Windows puede bloquearlos. Estamos preparando la publicación en Microsoft Store, pero aún no está disponible.</div>
-  <p style="margin-top:1.4rem"><a class="btn" href="https://github.com/PipeSick/hatsu-desktop/actions">Ver los paquetes de prueba</a></p>
+  <h2>Instalar Hatsu Desktop</h2>
+  <p class="sub">Requiere Windows 11.</p>
+  <div class="grid">
+    <div class="card"><span class="tag">Recomendado</span><h3>Microsoft Store</h3><p>La forma más simple: Microsoft firma el paquete y se actualiza solo. Instálalo desde la ficha de la Store.</p><p style="margin-top:.9rem"><a class="btn" href="https://apps.microsoft.com/detail/9NJ0XLP6NXVJ">Abrir en Microsoft Store</a></p></div>
+    <div class="card"><span class="tag">Para probar novedades</span><h3>Paquete portable</h3><p>Cada versión de desarrollo genera un ZIP en la sección Actions del repositorio. Descomprímelo en una carpeta aparte y ejecútalo desde ahí, sin instalar nada.</p><p style="margin-top:.9rem"><a class="btn ghost" href="https://github.com/PipeSick/hatsu-desktop/actions">Ver los paquetes</a></p></div>
+    <div class="card"><span class="tag">Para desarrolladores</span><h3>Compilar desde el código</h3><p>Requiere el SDK de .NET 10. Las instrucciones están en el README del repositorio.</p><p style="margin-top:.9rem"><a class="btn ghost" href="https://github.com/PipeSick/hatsu-desktop#probar-y-compilar">Ver instrucciones</a></p></div>
+  </div>
+  <div class="note"><b>Aviso sobre el paquete portable:</b> los ZIP de desarrollo no están firmados. Con <i>Smart App Control</i> activado, Windows puede bloquearlos; la versión de la Microsoft Store no tiene ese problema porque la firma Microsoft. Las novedades más recientes llegan primero al paquete portable y después a la Store.</div>
 </div></section>
 
 <section id="privacidad" class="alt"><div class="wrap">
