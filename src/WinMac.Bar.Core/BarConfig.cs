@@ -108,6 +108,8 @@ public sealed record BarConfig
     public string PeripheralHidden { get; init; } = "";
     /// <summary>It8: módulo Cleanup (icono de destellos). APAGADO por defecto. Nunca limpia por sí solo.</summary>
     public bool ShowCleanup { get; init; } = false;
+    /// <summary>Periféricos ASUS ROG por el receptor ROG OMNI (docs/64). Envía al receptor la misma consulta que Armoury Crate; por eso es opt-in y viene APAGADO.</summary>
+    public bool PeripheralAsusRog { get; init; } = false;
     /// <summary>Icono de VPN en la barra (conexiones VPN de Windows: ver, conectar y desconectar). APAGADO por defecto.</summary>
     public bool ShowVpn { get; init; } = false;
     /// <summary>It8: mostrar el progreso de Cleanup en la Isla.</summary>

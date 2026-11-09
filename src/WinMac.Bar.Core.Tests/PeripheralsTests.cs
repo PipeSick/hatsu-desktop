@@ -169,3 +169,41 @@ public class PeripheralsTests
         Assert.True(PanelLayout.DeviceHideHit(f, f.X + f.Width - 10, f.Y + 10)); Assert.False(PanelLayout.DeviceHideHit(f, f.X + 10, f.Y + 10));
     }
 }
+
+public class AsusRogProtocolTests
+{
+    private static byte[] Hex(string h) { var b = new byte[64]; var s = Convert.FromHexString(h); Array.Copy(s, b, s.Length); return b; }
+    private static AsusRogProtocol.Query Kb => AsusRogProtocol.OmniQueries.Single(q => q.Role == AsusRogProtocol.Role.Keyboard);
+    private static AsusRogProtocol.Query Mouse => AsusRogProtocol.OmniQueries.Single(q => q.Role == AsusRogProtocol.Role.Mouse);
+
+    [Fact] public void Requests_are_exactly_what_armoury_crate_sent_in_the_capture()
+    {
+        Assert.Equal(Hex("0212010000"), Kb.Request()); Assert.Equal(Hex("0312070000"), Mouse.Request());
+        Assert.Equal(64, Kb.Request().Length); Assert.Equal(0xFF00, Kb.UsagePage); Assert.Equal(0xFF01, Mouse.UsagePage);
+    }
+
+    [Fact] public void Real_responses_from_the_capture_give_the_batteries_shown_by_armoury_crate()
+    {
+        // Teclado Strix Scope II 96: 60 %; ratón Keris II Origin: 97 % (valores de Armoury Crate durante la captura)
+        Assert.Equal(60, AsusRogProtocol.ParsePercent(Kb, Hex("0212010000003C020100143C9F0F")));
+        Assert.Equal(60, AsusRogProtocol.ParsePercent(Kb, Hex("0212010000003C020100143CAA0F")));
+        Assert.Equal(97, AsusRogProtocol.ParsePercent(Mouse, Hex("0312070000610214251000000100")));
+        Assert.Equal(97, AsusRogProtocol.ParsePercent(Mouse, Hex("03120700006102141A1000000100")));
+    }
+
+    [Fact] public void Anything_else_is_rejected_instead_of_guessed()
+    {
+        Assert.Null(AsusRogProtocol.ParsePercent(Kb, null)); Assert.Null(AsusRogProtocol.ParsePercent(Kb, new byte[4]));
+        Assert.Null(AsusRogProtocol.ParsePercent(Kb, Hex("0312070000610214251000000100")));            // respuesta de otra consulta (ratón) recibida por el teclado
+        Assert.Null(AsusRogProtocol.ParsePercent(Mouse, Hex("0212010000003C020100143C9F0F")));
+        Assert.Null(AsusRogProtocol.ParsePercent(Kb, Hex("021201000000" + "00" + "020100143C9F0F")));            // 0 %: no es creíble (dormido o sin dato)
+        Assert.Null(AsusRogProtocol.ParsePercent(Kb, Hex("021201000000" + "FF" + "020100143C9F0F")));            // 255: fuera de 0–100
+        Assert.Null(AsusRogProtocol.ParsePercent(Kb, Hex("0212030000003C020100143C9F0F")));            // otra subconsulta (03 en vez de 01)
+    }
+
+    [Fact] public void Names_and_kinds_do_not_claim_a_model_the_receiver_does_not_report()
+    {
+        Assert.Contains("Teclado ROG", AsusRogProtocol.DisplayName(AsusRogProtocol.Role.Keyboard)); Assert.Equal(DeviceKind.Mouse, AsusRogProtocol.Kind(AsusRogProtocol.Role.Mouse));
+        Assert.False(new BarConfig().PeripheralAsusRog);   // opt-in: manda una consulta al receptor
+    }
+}

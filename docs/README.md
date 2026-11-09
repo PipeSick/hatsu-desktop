@@ -18,7 +18,7 @@ Los números son el orden en que se escribieron los documentos. Los de fases tem
 | Notificaciones | [19](19-notificaciones-propuesta.md) · [20](20-centro-de-notificaciones.md) |
 | Hatsu Notch (la Isla) | [13](13-integracion-winmac-notchwin.md) · [16](16-notchwin-integracion.md) · [21](21-isla-informativa.md) · [25](25-isla-2-centro-de-actividades.md) · [28](28-portapapeles.md) |
 | Capturas, espacios de trabajo, extensiones | [26](26-capturas-editor-grabacion.md) · [29](29-espacios-de-trabajo.md) · [30](30-extensiones.md) |
-| Peripherals y Cleanup | [44](44-iteracion-8-peripherals-cleanup.md) |
+| Peripherals y Cleanup | [44](44-iteracion-8-peripherals-cleanup.md) · ASUS ROG por el receptor OMNI: [64](64-perifericos-asus-rog.md) |
 | Connect (iPhone, llamadas) | [39](39-investigacion-winmac-connect.md) · [40](40-winmac-connect-fases-1-2.md) · [55](55-connect-auditoria-android-llamadas.md)–[62](62-hfp-bloqueo-registro-causa-y-correccion.md) |
 
 ## Distribución

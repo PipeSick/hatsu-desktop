@@ -71,6 +71,7 @@ public static partial class SettingsBuilder
         ("showTaskManager", "Botón del Administrador de tareas", b => b.ShowTaskManager),
         ("showPeripherals", "Icono de Periféricos en la barra", b => b.ShowPeripherals),
         ("peripheralAlerts", "Avisar cuando la batería de un periférico esté baja", b => b.PeripheralAlerts),
+        ("peripheralAsusRog", "Leer la batería de periféricos ASUS ROG (receptor 2,4 GHz)", b => b.PeripheralAsusRog),
         ("showCleanup", "Icono de Limpieza en la barra", b => b.ShowCleanup),
         ("showVpn", "Icono de VPN en la barra (conexiones VPN de Windows)", b => b.ShowVpn),
         ("cleanupIsland", "Mostrar el progreso de la limpieza en Hatsu Notch", b => b.CleanupIsland),
@@ -195,6 +196,7 @@ public static partial class SettingsBuilder
             new("Centro de control", [Bar(13), Bar(14), Bar(15), Bar(16), Bar(17), Bar(18), Bar(19), Bar(20)], "Qué controles aparecen en el panel de la Barra."),
             new("Periféricos", [
                 BarF("showPeripherals", "Batería de ratón, teclado y auriculares que Windows y el propio dispositivo informan (Bluetooth estándar y HID). Apagado: no se lee nada y no queda nada en memoria"),
+                BarF("peripheralAsusRog", "Teclado y ratón ROG con el receptor ROG OMNI. A diferencia de los demás lectores, ESTE ENVÍA al receptor la misma consulta de 64 bytes que Armoury Crate (solo lee la batería). Probado con Strix Scope II 96 y Keris II Origin; otros modelos no están verificados"),
                 BarF("peripheralAlerts", "Una sola vez por dispositivo al bajar del umbral; vuelve a avisar solo tras cargarlo. Sale por las notificaciones de Hatsu Notch"),
                 new(RowKind.Field, "periph.thr", "Umbral de batería baja (%)", "Entre 5 y 50", Text: bar.PeripheralAlertThreshold.ToString(), Placeholder: "20"),
                 new(RowKind.Button, "periph.unhide", "Mostrar los dispositivos ocultos"),
