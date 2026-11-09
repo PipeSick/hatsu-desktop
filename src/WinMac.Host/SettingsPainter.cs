@@ -45,6 +45,15 @@ internal sealed class SettingsPainter : IDisposable
         _round = dev.Factory.CreateStrokeStyle(new StrokeStyleProperties { StartCap = CapStyle.Round, EndCap = CapStyle.Round, LineJoin = LineJoin.Round });
     }
 
+    private void Pill(double x, double y, double w, double h, string text, bool primary = true)
+    {
+        RR(x, y, w, h, h / 2, primary ? Tint : Label(0.10f));
+        Text(text, _small, x, y, w, h, primary ? new Color4(1, 1, 1, 1) : Label(), center: true);
+    }
+
+    /// <summary>El asa ⋮⋮ (dos columnas de tres puntos) para arrastrar un icono de la barra.</summary>
+    private void Grip(double cx, double cy, Color4 c) { for (int i = -1; i <= 1; i++) { Dot(cx - 3, cy + i * 5, 1.5, c); Dot(cx + 3, cy + i * 5, 1.5, c); } }
+
     private void Brush(Color4 c) => _b.Color = c;
     private void RR(double x, double y, double w, double h, double r, Color4 c) { Brush(c); _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = R(x, y, x + w, y + h), RadiusX = (float)r, RadiusY = (float)r }, _b); }
     private void RRStroke(double x, double y, double w, double h, double r, Color4 c, float t = 1f) { Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(x + t / 2, y + t / 2, x + w - t / 2, y + h - t / 2), RadiusX = (float)r, RadiusY = (float)r }, _b, t); }
@@ -101,6 +110,12 @@ internal sealed class SettingsPainter : IDisposable
             _ctx.PushAxisAlignedClip(R(ox, oy, w, h), AntialiasMode.Aliased);
             _ctx.Transform = Matrix3x2.CreateTranslation((float)ox, (float)oy);
             foreach (var g in f.Groups) DrawGroup(g, f, c, edit);
+            if (c.Reordering is { } ro && f.Rows.FirstOrDefault(r => r.Row.Id == ro.Id) is { } dragged)
+            {   // la fila que se arrastra se resalta y una línea azul marca dónde caerá
+                RR(dragged.X + 2, dragged.Y + 2, dragged.W - 4, dragged.H - 4, 8, new Color4(Tint.R, Tint.G, Tint.B, 0.16f));
+                var grips = f.Rows.Where(r => SettingsLayout.HasGrip(r.Row)).ToList(); var tgt = grips[Math.Clamp(ro.To, 0, grips.Count - 1)];
+                double ly = ro.To > ro.From ? tgt.Y + tgt.H : tgt.Y; Ln(tgt.X + 12, ly, tgt.X + tgt.W - 12, ly, Tint, 3f);
+            }
             if (f.MaxScroll > 0.5) { double th = Math.Max(30, SettingsLayout.ViewportH * SettingsLayout.ViewportH / f.ContentHeight), ty = 6 + (SettingsLayout.ViewportH - th - 12) * f.Scroll / f.MaxScroll; RR(cw - 7, ty, 3.5, th, 1.75, Label(0.28f)); }
             DrawSuggestions(c, f);
             _ctx.Transform = Matrix3x2.Identity; _ctx.PopAxisAlignedClip();
@@ -152,14 +167,25 @@ internal sealed class SettingsPainter : IDisposable
         {   // tira con la barra de arriba tal como queda: el nombre, los menús, los iconos en su orden y la hora
             double bx = r.X + 16, by = r.Y + 8, bw = r.W - 32, bh = r.H - 16; var white = new Color4(1, 1, 1, 0.9f);
             RR(bx, by, bw, bh, 10, new Color4(0.06f, 0.04f, 0.12f, 1));
-            Text("Hatsu    Archivo    Editar    Ver", _sub, bx + 14, by, bw * 0.4, bh, white);
-            double ix = bx + bw - 14 - 38; Text("16:08", _sub, ix, by, 40, bh, white);
-            foreach (var name in (row.Options ?? []).Reverse()) { ix -= 26; RR(ix, by + bh / 2 - 8, 18, 16, 5, new Color4(1, 1, 1, 0.28f)); }
+            Text("Hatsu    Archivo", _sub, bx + 14, by, 130, bh, white);
+            var pill = SettingsLayout.PreviewPill(r); Pill(pill.X, pill.Y, pill.W, pill.H, SettingsLayout.CustomizeLabel);
+            double ix = pill.X - 10 - 40; Text("16:08", _sub, ix, by, 40, bh, white);
+            foreach (var name in (row.Options ?? []).Reverse()) { ix -= 20; if (ix < bx + 120) break; RR(ix, by + bh / 2 - 7, 14, 14, 4, new Color4(1, 1, 1, 0.28f)); }
             return;
         }
 
         if (row.Kind == RowKind.Info) { Glyph("info", x + 10, midY, 9, Secondary); Text(row.Title, _sub, x + 30, r.Y + 4, r.W - 62, r.H - 8, Secondary, wrap: true); return; }
+        bool grip = SettingsLayout.HasGrip(row); if (grip) x += SettingsLayout.GripW - 10;
         double tw = r.W - 32 - ControlSpace(row);
+        if (row.Kind == RowKind.Button && row.Options is { Count: > 0 } pills)
+        {   // fila de acción con píldoras azules (Agregar, Cancelar / Guardar)
+            double ptw = r.W - 32 - ControlSpace(row);
+            if (!string.IsNullOrEmpty(row.Subtitle)) { Text(row.Title, _body, x, r.Y + 8, ptw, 22, Label()); Text(row.Subtitle, _sub, x, r.Y + 30, Math.Max(40, ptw), SettingsLayout.SubLineH * SettingsLayout.Lines(row.Subtitle, ptw) + 3, Secondary, wrap: true, top: true); }
+            else Text(row.Title, _body, x, r.Y, ptw, r.H, Label());
+            for (int i = 0; i < pills.Count; i++) { var pr = SettingsLayout.PillRect(r, i); Pill(pr.X, pr.Y, pr.W, pr.H, pills[i], primary: i == pills.Count - 1); }
+            return;
+        }
+
         if (row.Kind == RowKind.Button) { Text(row.Title, _body, x, r.Y, r.W - 60, r.H, row.Enabled ? Tint : Label(0.42f)); if (row.Enabled) Glyph("chevron", r.X + r.W - 20, midY, 6, Secondary); return; }
         if (hasSub) { var sub = SettingsLayout.SubText(row); Text(row.Title, _body, x, r.Y + 8, tw, 22, Label(dim)); Text(sub, _sub, x, r.Y + 30, Math.Max(40, tw), SettingsLayout.SubLineH * SettingsLayout.Lines(sub, tw) + 3, Secondary, wrap: true, top: true); }
         else Text(row.Title, _body, x, r.Y, tw, r.H, Label(dim));
@@ -168,7 +194,8 @@ internal sealed class SettingsPainter : IDisposable
             case RowKind.Toggle:
             {
                 DrawSwitch(SettingsLayout.SwitchRect(r), row.On, dim);
-                if (row.CanUp || row.CanDown) { var u = SettingsLayout.UpRect(r); var d = SettingsLayout.DownRect(r); Glyph("up", u.X + u.W / 2, u.Y + u.H / 2, 7, Label(row.CanUp ? 0.7f : 0.2f)); Glyph("down", d.X + d.W / 2, d.Y + d.H / 2, 7, Label(row.CanDown ? 0.7f : 0.2f)); }
+                if (grip) Grip(r.X + 6 + SettingsLayout.GripW / 2, midY, Label(0.45f));
+                else if (row.CanUp || row.CanDown) { var u = SettingsLayout.UpRect(r); var d = SettingsLayout.DownRect(r); Glyph("up", u.X + u.W / 2, u.Y + u.H / 2, 7, Label(row.CanUp ? 0.7f : 0.2f)); Glyph("down", d.X + d.W / 2, d.Y + d.H / 2, 7, Label(row.CanDown ? 0.7f : 0.2f)); }
                 break;
             }
             case RowKind.Segmented: DrawSegmented(r, dim); break;
@@ -252,7 +279,9 @@ internal sealed class SettingsPainter : IDisposable
             double y = s.Y + 4 + i * SettingsLayout.SuggestRowH; if (i == c.SuggestIndex) RR(s.X + 4, y, s.W - 8, SettingsLayout.SuggestRowH, 8, new Color4(Tint.R, Tint.G, Tint.B, _dark ? 0.35f : 0.16f));
             double off = c.SuggestHasChecks ? 24 : 0;
             if (c.SuggestHasChecks && i == c.SuggestChecked) Text("✓", _small, s.X + 14, y, 18, SettingsLayout.SuggestRowH, new Color4(Tint.R, Tint.G, Tint.B, 1f));
-            Text(c.Suggestions[i], _small, s.X + 16 + off, y, s.W - 32 - off, SettingsLayout.SuggestRowH, Label());
+            bool apps = c.SuggestFor == "gest.find"; double tagW = apps ? 82 : 0;
+            Text(c.Suggestions[i], _small, s.X + 16 + off, y, s.W - 32 - off - tagW, SettingsLayout.SuggestRowH, Label());
+            if (apps) { RRStroke(s.X + s.W - 16 - 70, y + 9, 70, 20, 10, Sep, 0.9f); Text("Instalada", _head, s.X + s.W - 16 - 70, y + 9, 70, 20, Secondary, center: true); }
         }
     }
 

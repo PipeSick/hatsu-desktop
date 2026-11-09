@@ -141,6 +141,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
                 }
                 case "up" when at > 0: (order[at - 1], order[at]) = (order[at], order[at - 1]); break;
                 case "down" when at >= 0 && at < order.Count - 1: (order[at + 1], order[at]) = (order[at], order[at + 1]); break;
+                case "move" when at >= 0 && e.Index != 0: { int to = Math.Clamp(at + e.Index, 0, order.Count - 1); if (to == at) return true; order.RemoveAt(at); order.Insert(to, def.Id); break; }   // arrastrar el asa: Index = cuántos lugares
                 default: return true;
             }
 
@@ -175,6 +176,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             SettingsBuilder.GestNote = null; cfg.ApplyBarPatch(Patch("gestLaunchers", WinMac.Bar.Features.Launchers.Serialize(WinMac.Bar.Features.Launchers.Remove(cur, lid)))); return true;   // Sanitize deja en «Nada» las asignaciones que apuntaban a él al validarse
         }
 
+        if (id == "gest.pick.actions" && e.Kind == "button" && e.Index == 0) { SettingsBuilder.GestPick = null; SettingsBuilder.GestNote = null; return true; }
         if (id == "gest.pick.cancel" && e.Kind == "button") { SettingsBuilder.GestPick = null; SettingsBuilder.GestNote = null; return true; }
         if (id.StartsWith("mod.key:", StringComparison.Ordinal) && e.Kind == "text")
         {

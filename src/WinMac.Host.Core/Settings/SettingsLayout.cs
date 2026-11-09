@@ -15,7 +15,26 @@ public static class SettingsLayout
     public static double ColW => ContentW - 2 * Pad;
 
     /// <summary>Ancho reservado a la derecha para el control de la fila (una sola fuente: el dibujo y el cálculo de alturas).</summary>
-    public static double ControlSpace(SettingsRow r) => r.Kind switch { RowKind.Toggle => r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Segmented => SegmentWidth(r, ColW) + 16, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
+    public static double ControlSpace(SettingsRow r) => r.Kind switch { RowKind.Toggle => HasGrip(r) ? 51 + 24 + GripW : r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Button when r.Options is { Count: > 0 } => PillsWidth(r) + 16, RowKind.Segmented => SegmentWidth(r, ColW) + 16, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
+
+    // ── Piezas del prototipo: asa para arrastrar (⋮⋮) en los iconos de la barra y píldoras azules en las filas de acción
+    public const double GripW = 30, PillH = 28, PillGap = 8;
+    /// <summary>Las filas de los iconos de la barra se reordenan arrastrando su asa; las demás listas (Isla, centro de notificaciones) siguen con flechas.</summary>
+    public static bool HasGrip(SettingsRow r) => r.Kind == RowKind.Toggle && r.Id.StartsWith("baritem:", StringComparison.Ordinal) && (r.CanUp || r.CanDown);
+    public static double PillWidth(string text) => Math.Max(68, text.Length * 7.4 + 28);
+    public static double PillsWidth(SettingsRow r) => r.Options is { Count: > 0 } o ? o.Sum(PillWidth) + PillGap * (o.Count - 1) : 0;
+    /// <summary>Píldora <paramref name="i"/> (de izquierda a derecha) de una fila con opciones de acción, pegada a la derecha.</summary>
+    public static (double X, double Y, double W, double H) PillRect(RowFrame f, int i)
+    {
+        var o = f.Row.Options!; double x = f.X + f.W - 16 - PillsWidth(f.Row);
+        for (int k = 0; k < i; k++) x += PillWidth(o[k]) + PillGap;
+        return (x, f.Y + (f.H - PillH) / 2, PillWidth(o[i]), PillH);
+    }
+
+    public const string CustomizeLabel = "Personalizar iconos…";
+    /// <summary>La píldora azul dentro de la tira de vista previa de la barra.</summary>
+    public static (double X, double Y, double W, double H) PreviewPill(RowFrame f) { double w = PillWidth(CustomizeLabel); return (f.X + f.W - 16 - 10 - w, f.Y + (f.H - PillH) / 2, w, PillH); }
+    public static (double X, double Y, double W, double H) GripRect(RowFrame f) => (f.X + 6, f.Y, GripW, f.H);
 
     /// <summary>Texto secundario que se ve en la fila: el motivo si está desactivada, si no el subtítulo.</summary>
     public static string? SubText(SettingsRow r) => !r.Enabled && !string.IsNullOrEmpty(r.Reason) ? r.Reason : r.Subtitle;
@@ -31,7 +50,7 @@ public static class SettingsLayout
     {
         string? sub = SubText(r);
         if (r.Kind == RowKind.Info) return Math.Max(54, 16 + SubLineH * Lines(r.Title, ColW - 62));
-        if (r.Kind == RowKind.Button) return 48;
+        if (r.Kind == RowKind.Button) return r.Options is { Count: > 0 } ? (string.IsNullOrEmpty(sub) ? 48 : 58 + Math.Max(0, Lines(sub, ColW - 32 - ControlSpace(r)) - 1) * SubLineH) : 48;
         if (r.Kind == RowKind.Preview) return 58;
         if (r.Kind == RowKind.Slider && string.IsNullOrEmpty(sub)) return 54;
         int extra = Math.Max(0, Lines(sub, ColW - 32 - ControlSpace(r)) - 1);
@@ -126,6 +145,7 @@ public static class SettingsLayout
             switch (r.Row.Kind)
             {
                 case RowKind.Toggle:
+                    if (HasGrip(r.Row)) return In(GripRect(r), x, y) ? (r, "grip") : (r, "switch");
                     if (r.Row.CanUp && In(UpRect(r), x, y)) return (r, "up");
                     if (r.Row.CanDown && In(DownRect(r), x, y)) return (r, "down");
                     return (r, "switch");   // toda la fila alterna (como en iOS)
@@ -133,7 +153,16 @@ public static class SettingsLayout
                 { var s = SegmentRect(r); if (In(s, x, y) && x >= s.X) { int n = r.Row.Options?.Count ?? 1; return (r, "seg:" + Math.Clamp((int)((x - s.X) / (s.W / n)), 0, n - 1)); } return (r, "row"); }
                 case RowKind.Field: return In(FieldRect(r), x, y) ? (r, "field") : (r, "row");
                 case RowKind.Slider: { var (a, b, _) = SliderTrack(r); return x >= a - 10 && x <= b + 10 ? (r, "slider") : (r, "row"); }
-                case RowKind.Button: return (r, "button");
+                case RowKind.Button:
+                    if (r.Row.Options is { Count: > 0 } o)
+                    {
+                        if (o.Count == 1) return (r, "pill:0");   // con una sola píldora, toda la fila actúa
+                        for (int i = 0; i < o.Count; i++) if (In(PillRect(r, i), x, y)) return (r, "pill:" + i);
+                        return (r, "row");
+                    }
+
+                    return (r, "button");
+                case RowKind.Preview: return In(PreviewPill(r), x, y) ? (r, "customize") : (r, "row");
                 default: return (r, "row");
             }
         }

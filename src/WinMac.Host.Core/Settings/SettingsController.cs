@@ -9,6 +9,7 @@ public sealed class SettingsController
     private IReadOnlyList<SettingsPage> _pages = [];
     private int _page; private double _scroll;
     private string? _downId, _downPart; private int _downSide = -1; private bool _drag; private double _dragValue;
+    private bool _reorder; private double _reorderY;
     public PageFrame Frame { get; private set; } = new([], [], 0, 0, 0);
     public (string Id, string Part)? Hover { get; private set; }
     public int HoverSide { get; private set; } = -1;
@@ -38,6 +39,25 @@ public sealed class SettingsController
     }
     /// <summary>Valor que se está arrastrando en un deslizador (la configuración se guarda solo al soltar).</summary>
     public (string Id, double Value)? Dragging => _drag && _downId is not null ? (_downId, _dragValue) : null;
+
+    /// <summary>Arrastre de un icono de la barra por su asa: la fila que se mueve, la altura del puntero (coordenadas locales) y la fila destino (índice entre las filas con asa).</summary>
+    public (string Id, double Y, int From, int To)? Reordering
+    {
+        get
+        {
+            if (!_reorder || _downId is null) return null;
+            var grips = Frame.Rows.Where(r => SettingsLayout.HasGrip(r.Row)).ToList(); int from = grips.FindIndex(r => r.Row.Id == _downId); if (from < 0) return null;
+            int to = _reorderY < grips[0].Y ? 0 : _reorderY >= grips[^1].Y + grips[^1].H ? grips.Count - 1 : grips.FindIndex(r => _reorderY >= r.Y && _reorderY < r.Y + r.H);
+            return (_downId, _reorderY, from, Math.Max(0, to));
+        }
+    }
+
+    /// <summary>Desplaza la página hasta el grupo con ese título (lo usa «Personalizar iconos…»). Sin ese grupo, baja hasta el final.</summary>
+    public void ScrollToGroup(string header)
+    {
+        var g = Frame.Groups.FirstOrDefault(x => x.Group.Header == header); double target = g is null ? Frame.MaxScroll : _scroll + g.HeaderY - 4;
+        _scroll = Math.Clamp(target, 0, Frame.MaxScroll); Recompute();
+    }
 
     // ── Sugerencias (autocompletar)
     public string? SuggestFor { get; private set; }
@@ -90,6 +110,7 @@ public sealed class SettingsController
     /// <summary>Devuelve true si algo visible cambió.</summary>
     public bool PointerMove(double x, double y)
     {
+        if (_reorder && _downId is not null) { var (_, ry) = Local(x, y); bool moved = Math.Abs(ry - _reorderY) > 0.5; _reorderY = ry; return moved; }
         if (_drag && _downId is not null && RowOf(_downId) is { } sr) { var (lx, _) = Local(x, y); double v = SettingsLayout.SliderValueAt(sr, lx); bool ch = Math.Abs(v - _dragValue) > 0.4; _dragValue = v; return ch; }
         var old = (Hover, HoverSide, SuggestIndex);
         HoverSide = SideHit(x, y); Hover = null;
@@ -101,7 +122,7 @@ public sealed class SettingsController
     /// <summary>Pulsar: la barra lateral y las filas actúan al SOLTAR sobre lo mismo; el deslizador empieza a arrastrar; una sugerencia se elige al pulsar (antes de que el campo pierda el foco).</summary>
     public SettingsEdit? PointerDown(double x, double y)
     {
-        _downId = null; _downPart = null; _downSide = -1; _drag = false;
+        _downId = null; _downPart = null; _downSide = -1; _drag = false; _reorder = false;
         int sg = SuggestHit(x, y); if (sg >= 0) { var field = SuggestFor!; return new SettingsEdit(field, "suggest", Index: sg); }
         if (SuggestFor is not null) ClearSuggestions();
         { var sf = SearchFrame; var fr = SettingsLayout.FieldRect(sf); if (x >= fr.X && x < fr.X + fr.W && y >= fr.Y && y < fr.Y + fr.H) return new SettingsEdit("search", "focus"); }
@@ -111,12 +132,16 @@ public sealed class SettingsController
         _downId = hit.Row.Row.Id; _downPart = hit.Part;
         if (hit.Part == "slider") { _drag = true; _dragValue = SettingsLayout.SliderValueAt(hit.Row, lx); }
         if (hit.Part == "field") return new SettingsEdit(_downId, "focus");
+        if (hit.Part == "grip") { _reorder = true; _reorderY = ly; }
         return null;
     }
 
     public SettingsEdit? PointerUp(double x, double y)
     {
-        int side = _downSide; string? id = _downId, part = _downPart; bool drag = _drag; _downId = null; _downPart = null; _downSide = -1; _drag = false;
+        int side = _downSide; string? id = _downId, part = _downPart; bool drag = _drag;
+        var re = Reordering; _downId = id; _reorder = false; var moved = re is { } m && m.To != m.From ? new SettingsEdit(m.Id, "move", Index: m.To - m.From) : null;
+        _downId = null; _downPart = null; _downSide = -1; _drag = false;
+        if (re is not null) return moved;
         if (side >= 0) { if (SideHit(x, y) == side) SelectPage(side); return null; }
         if (id is null) return null;
         if (drag) return new SettingsEdit(id, "slider", Number: _dragValue);
@@ -126,6 +151,8 @@ public sealed class SettingsController
         if (part is "up" or "down") return new SettingsEdit(id, part);
         if (part!.StartsWith("seg:", StringComparison.Ordinal)) return new SettingsEdit(id, "segment", Index: int.Parse(part[4..]));
         if (part == "button") return new SettingsEdit(id, "button");
+        if (part == "customize") return new SettingsEdit(id, "button");
+        if (part.StartsWith("pill:", StringComparison.Ordinal)) return new SettingsEdit(id, "button", Index: int.Parse(part[5..]));
         return null;
     }
 }

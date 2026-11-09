@@ -39,9 +39,9 @@ public static partial class SettingsBuilder
         var on = BarIconsInOrder(b);
         var rows = on.Select((d, i) => new SettingsRow(RowKind.Toggle, "baritem:" + d.Id, d.Title, d.Sub, true, CanUp: i > 0, CanDown: i < on.Count - 1)).ToList();
         rows.Insert(0, new SettingsRow(RowKind.Preview, "bar.preview", "Así queda tu barra", Options: on.Select(d => d.Title).ToArray()));
-        yield return new("En la barra", rows, "Arrastra un icono en la barra de arriba para cambiar su orden, o usa las flechas. El reloj y el Centro de control quedan siempre al final.");
+        yield return new("En la barra", rows, "Arrastra el asa ⋮⋮ de un icono para cambiar su orden. El reloj y el Centro de control quedan siempre al final.");
         var off = BarIcons.Where(d => !BarIconOn(b, d)).ToList();
-        if (off.Count > 0) yield return new("Disponibles para agregar", off.Select(d => new SettingsRow(RowKind.Button, "baritem.add:" + d.Id, "Agregar: " + d.Title, d.Sub)).ToList(),
-            "Pulsa «Agregar» y aparece en la barra. Los iconos de las apps en segundo plano de Windows se eligen por separado desde su flecha.");
+        if (off.Count > 0) yield return new("Disponibles para agregar", off.Select(d => new SettingsRow(RowKind.Button, "baritem.add:" + d.Id, d.Title, d.Sub, Options: ["Agregar"])).ToList(),
+            "Pulsa «Agregar» y aparece en la barra. «Personalizar iconos…» te lleva hasta aquí. Los iconos de las apps en segundo plano de Windows se eligen por separado desde su flecha.");
     }
 }

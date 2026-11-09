@@ -223,8 +223,8 @@ public class GestureLauncherSettingsTests
     {
         var (cfg, a) = Make(); SettingsBuilder.GestPick = ("gestCornerTL", "app");
         var rows = SettingsBuilder.Build(new SettingsInput(cfg.Current, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "gestures").Groups.SelectMany(g => g.Rows).ToList();
-        Assert.Contains(rows, r => r.Id == "gest.find" && r.Title.Contains("esquina superior izquierda")); Assert.Contains(rows, r => r.Id == "gest.pick.cancel"); Assert.DoesNotContain(rows, r => r.Id is "gest.addapp" or "gest.addurl");
-        Assert.True(a.Apply(new SettingsEdit("gest.pick.cancel", "button"))); Assert.Null(SettingsBuilder.GestPick);
+        Assert.Contains(rows, r => r.Id == "gest.find" && r.Title.Contains("esquina superior izquierda")); Assert.Contains(rows, r => r.Id == "gest.pick.actions"); Assert.DoesNotContain(rows, r => r.Id is "gest.addapp" or "gest.addurl");
+        Assert.True(a.Apply(new SettingsEdit("gest.pick.actions", "button", Index: 0))); Assert.Null(SettingsBuilder.GestPick);
     }
 
     [Fact] public void Removing_a_launcher_sends_assignments_back_to_none_and_the_limit_is_enforced()

@@ -64,7 +64,7 @@ public static partial class SettingsBuilder
         var ls = WinMac.Bar.Features.Launchers.Parse(b.GestLaunchers);
         if (GestPick is { } pick)
         {   // elegir una aplicación o pegar un enlace para el gesto que se abrió
-            rows.Insert(0, new(RowKind.Button, "gest.pick.cancel", "Cancelar la elección", "Vuelve a la lista de acciones sin cambiar nada"));
+            rows.Insert(0, new(RowKind.Button, "gest.pick.actions", "", Options: pick.Mode == "url" ? ["Cancelar", "Guardar"] : ["Cancelar"]));
             rows.Insert(0, pick.Mode == "app"
                 ? new(RowKind.Field, "gest.find", "Aplicación para " + SlotTitle(pick.Field), "Escribe el nombre y elige de la lista: son las apps instaladas en tu equipo", Text: "", Placeholder: "Buscar aplicación…")
                 : new(RowKind.Field, "gest.url", "Página web para " + SlotTitle(pick.Field), "Pega la dirección completa y pulsa Intro. Se abre en tu navegador predeterminado", Text: "", Placeholder: "https://…"));
