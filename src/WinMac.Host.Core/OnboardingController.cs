@@ -3,7 +3,7 @@ using WinMac.Dock;
 
 namespace WinMac.Host;
 
-public enum OnboardingStep { Welcome, Components, Appearance, Windows, Review, Result }
+public enum OnboardingStep { Welcome, Components, Extras, Icons, Appearance, Windows, Review, Result }
 /// <summary>Fresh: instalación nueva · Resume: quedó a medias · Rerun: reabierto a propósito desde Ajustes (no se puede «omitir»; se puede cancelar sin cambiar nada) · Migration: bienvenida a quien ya tenía WinMac/Hatsu configurado (conservar o revisar; nada se aplica sin confirmar).</summary>
 public enum OnboardingMode { Fresh, Resume, Rerun, Migration }
 public enum OnboardingCommand { None, Skip, Apply, Retry, Accept, Finish, Cancel, Keep }
@@ -39,7 +39,9 @@ public sealed class OnboardingController
         if (mode == OnboardingMode.Resume) Note = "La configuración quedó a medias. Revisa tus elecciones y aplica, o cambia lo que quieras.";
     }
 
-    public static readonly OnboardingStep[] Flow = [OnboardingStep.Welcome, OnboardingStep.Components, OnboardingStep.Appearance, OnboardingStep.Windows, OnboardingStep.Review];
+    public static readonly OnboardingStep[] Flow = [OnboardingStep.Welcome, OnboardingStep.Components, OnboardingStep.Extras, OnboardingStep.Icons, OnboardingStep.Appearance, OnboardingStep.Windows, OnboardingStep.Review];
+    /// <summary>Los pasos que se recorren con las elecciones de ahora: sin la Barra superior no hay iconos que elegir y el paso se salta.</summary>
+    public IReadOnlyList<OnboardingStep> ActiveFlow => Flow.Where(s => s != OnboardingStep.Icons || Choices.Bar).ToList();
 
     // ───────────────────────────── diseño (una sola fuente: OnboardingLayout)
     public IReadOnlyList<OnboardingHit> Hits => OnboardingLayout.Compute(this).Where(x => x.Kind == BoxKind.Control).Select(x => new OnboardingHit(x.Id, x.X, x.Y, x.W, x.H, x.Enabled)).ToList();
@@ -56,6 +58,8 @@ public sealed class OnboardingController
         if (Busy) return OnboardingCommand.None;
         Note = null;
         if (id.StartsWith("c:")) { var (c, n) = OnboardingRules.Toggle(Choices, id[2..], !OnboardingRules.Get(Choices, id[2..])); Choices = c; Note = n; HasUnappliedChanges = true; return OnboardingCommand.None; }
+        if (id.StartsWith("x:")) { string x = id[2..]; if (!OnboardingRules.ExtraAvailable(Choices, x)) { Note = OnboardingRules.ExtraNeedsLong(x); return OnboardingCommand.None; } Choices = OnboardingRules.WithExtra(Choices, x, !OnboardingRules.GetExtra(Choices, x)); HasUnappliedChanges = true; return OnboardingCommand.None; }
+        if (id.StartsWith("i:")) { string i = id[2..]; Choices = OnboardingRules.WithIcon(Choices, i, !OnboardingRules.GetIcon(Choices, i)); HasUnappliedChanges = true; return OnboardingCommand.None; }
         if (id.StartsWith("theme:")) { Choices = Choices with { Theme = (ThemeMode)int.Parse(id[6..]) }; HasUnappliedChanges = true; return OnboardingCommand.None; }
         if (id.StartsWith("size:")) { Choices = Choices with { DockSize = int.Parse(id[5..]) }; HasUnappliedChanges = true; return OnboardingCommand.None; }
         if (id.StartsWith("align:")) { Choices = Choices with { DockAlignment = (DockAlignment)int.Parse(id[6..]) }; HasUnappliedChanges = true; return OnboardingCommand.None; }
@@ -84,8 +88,8 @@ public sealed class OnboardingController
 
     private OnboardingStep NextStep(int d)
     {
-        int i = Array.IndexOf(Flow, Step); if (i < 0) return Step;
-        return Flow[Math.Clamp(i + d, 0, Flow.Length - 1)];
+        var flow = ActiveFlow; int i = flow.ToList().IndexOf(Step); if (i < 0) return Step;
+        return flow[Math.Clamp(i + d, 0, flow.Count - 1)];
     }
 
     private void GoTo(OnboardingStep s) { Step = s; }
@@ -101,7 +105,7 @@ public sealed class OnboardingController
 
     public string StepTitle => Step switch
     {
-        OnboardingStep.Welcome => "Bienvenido a Hatsu Desktop", OnboardingStep.Components => "Elige tus componentes", OnboardingStep.Appearance => "Apariencia",
+        OnboardingStep.Welcome => "Bienvenido a Hatsu Desktop", OnboardingStep.Components => "Elige tus componentes", OnboardingStep.Extras => "Funciones extra", OnboardingStep.Icons => "Iconos de la barra", OnboardingStep.Appearance => "Apariencia",
         OnboardingStep.Windows => "Integración con Windows", OnboardingStep.Review => "Revisa tus elecciones", _ => Busy ? "Aplicando…" : Result is { AllOk: true } ? "Todo listo" : Result is { EssentialFailed: true } ? "No se pudo aplicar" : "Configuración aplicada con incidencias",
     };
 

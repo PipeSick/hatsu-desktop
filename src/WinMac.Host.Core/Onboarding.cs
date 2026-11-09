@@ -42,6 +42,25 @@ public sealed record OnboardingChoices
     /// <summary>Periféricos y Limpieza son funciones de la Barra (no procesos): apagadas, la Barra no lee ni ejecuta nada de ellas.</summary>
     public bool Peripherals { get; init; } = false;
     public bool Cleanup { get; init; } = false;
+    /// <summary>Funciones extra (módulos de productividad): todas apagadas de entrada. Cinco viven en la Barra; Shelf+ es una pestaña de la Isla.</summary>
+    public bool Mission { get; init; } = false;
+    public bool Snap { get; init; } = false;
+    public bool LiveText { get; init; } = false;
+    public bool SpotActions { get; init; } = false;
+    public bool Gestures { get; init; } = false;
+    public bool Shelf { get; init; } = false;
+    /// <summary>Iconos de la barra, uno por uno (los valores de fábrica de la Barra). Periféricos y Limpieza van en sus campos de arriba.</summary>
+    public bool IconVolume { get; init; } = true;
+    public bool IconPerformance { get; init; } = true;
+    public bool IconNetwork { get; init; } = true;
+    public bool IconDisks { get; init; } = true;
+    public bool IconWeather { get; init; } = true;
+    public bool IconWifi { get; init; } = true;
+    public bool IconBluetooth { get; init; } = true;
+    public bool IconBattery { get; init; } = true;
+    public bool IconVpn { get; init; } = false;
+    public bool IconTaskManager { get; init; } = false;
+    public bool IconTray { get; init; } = true;
     /// <summary>Tema del Dock (dock.json). La Barra y la Isla siguen siempre el tema de Windows; el asistente lo dice.</summary>
     public ThemeMode Theme { get; init; } = ThemeMode.System;
     /// <summary>Índice en <see cref="DockSettings.Presets"/>; -1 = no tocar el tamaño actual.</summary>
@@ -59,7 +78,59 @@ public sealed record OnboardingChoices
 public static class OnboardingRules
 {
     public const string ComponentDock = "dock", ComponentBar = "bar", ComponentNotch = "notch", ComponentConnect = "connect", ComponentPeripherals = "peripherals", ComponentCleanup = "cleanup";
-    public static readonly string[] Components = [ComponentDock, ComponentBar, ComponentNotch, ComponentConnect, ComponentPeripherals, ComponentCleanup];
+    /// <summary>Las tarjetas de «Componentes». Periféricos y Limpieza pasaron a «Iconos de la barra» (son iconos de la Barra, no procesos).</summary>
+    public static readonly string[] Components = [ComponentDock, ComponentBar, ComponentNotch, ComponentConnect];
+
+    // ── Funciones extra
+    public static readonly string[] ExtraIds = ["mission", "snap", "livetext", "spotactions", "gestures", "shelf"];
+    public static bool GetExtra(OnboardingChoices c, string id) => id switch { "mission" => c.Mission, "snap" => c.Snap, "livetext" => c.LiveText, "spotactions" => c.SpotActions, "gestures" => c.Gestures, "shelf" => c.Shelf, _ => false };
+    public static OnboardingChoices WithExtra(OnboardingChoices c, string id, bool on) => id switch
+    {
+        "mission" => c with { Mission = on }, "snap" => c with { Snap = on }, "livetext" => c with { LiveText = on }, "spotactions" => c with { SpotActions = on }, "gestures" => c with { Gestures = on }, "shelf" => c with { Shelf = on }, _ => c,
+    };
+    public static string ExtraName(string id) => id switch
+    {
+        "mission" => "Mission Control", "snap" => "Snap", "livetext" => "Live Text", "spotactions" => "Spotlight Actions", "gestures" => "Gestures", "shelf" => "Shelf+", _ => id,
+    };
+    public static string ExtraDescription(string id) => id switch
+    {
+        "mission" => "Vista general de todas tus ventanas y escritorios.",
+        "snap" => "Acomoda ventanas en zonas y distribuciones. Lee el teclado y el mouse mientras arrastras.",
+        "livetext" => "Copia el texto de cualquier imagen o captura. El reconocimiento es local.",
+        "spotactions" => "Acciones rápidas desde la búsqueda de Spotlight.",
+        "gestures" => "Esquinas, botones laterales del mouse y atajos. Lee el mouse y el teclado.",
+        "shelf" => "Estantería de la Isla para archivos, carpetas, texto e imágenes.",
+        _ => "",
+    };
+    /// <summary>Lo que necesita cada extra: cinco viven en la Barra superior y Shelf+ en Hatsu Notch.</summary>
+    public static bool ExtraAvailable(OnboardingChoices c, string id) => id == "shelf" ? c.Notch : c.Bar;
+    public static string ExtraNeedsText(string id) => id == "shelf" ? "Requiere Hatsu Notch" : "Requiere Barra superior";
+    public static string ExtraNeedsLong(string id) => id == "shelf" ? "Hatsu Notch está apagado: actívalo en «Componentes» para usar Shelf+." : "La Barra superior está apagada: actívala en «Componentes» para usar este módulo.";
+
+    // ── Iconos de la barra (uno por uno)
+    public static readonly string[] IconIds = ["volume", "performance", "network", "disks", "weather", "wifi", "bluetooth", "battery", "vpn", "cleanup", "peripherals", "taskmanager", "tray"];
+    public static string IconName(string id) => id switch
+    {
+        "volume" => "Sonido", "performance" => "Rendimiento", "network" => "Red", "disks" => "Discos", "weather" => "Tiempo", "wifi" => "Wi-Fi", "bluetooth" => "Bluetooth", "battery" => "Batería",
+        "vpn" => "VPN", "cleanup" => "Limpieza", "peripherals" => "Periféricos", "taskmanager" => "Administrador de tareas", "tray" => "Apps en segundo plano", _ => id,
+    };
+    public static string IconDescription(string id) => id switch
+    {
+        "volume" => "Volumen y mezclador", "performance" => "CPU, memoria y temperaturas", "network" => "Velocidad y conexiones", "disks" => "Espacio libre y estado", "weather" => "El clima de tus ciudades",
+        "wifi" => "Estado de la conexión", "bluetooth" => "Estado y dispositivos", "battery" => "Porcentaje y carga", "vpn" => "Conectar y desconectar tus VPN", "cleanup" => "Analiza primero; nunca limpia sola",
+        "peripherals" => "Batería de teclado y mouse ASUS ROG; Logitech «probable»", "taskmanager" => "Abre el de Windows", "tray" => "Iconos de la bandeja, dentro de una flecha", _ => "",
+    };
+    public static bool GetIcon(OnboardingChoices c, string id) => id switch
+    {
+        "volume" => c.IconVolume, "performance" => c.IconPerformance, "network" => c.IconNetwork, "disks" => c.IconDisks, "weather" => c.IconWeather, "wifi" => c.IconWifi, "bluetooth" => c.IconBluetooth,
+        "battery" => c.IconBattery, "vpn" => c.IconVpn, "cleanup" => c.Cleanup, "peripherals" => c.Peripherals, "taskmanager" => c.IconTaskManager, "tray" => c.IconTray, _ => false,
+    };
+    public static OnboardingChoices WithIcon(OnboardingChoices c, string id, bool on) => id switch
+    {
+        "volume" => c with { IconVolume = on }, "performance" => c with { IconPerformance = on }, "network" => c with { IconNetwork = on }, "disks" => c with { IconDisks = on }, "weather" => c with { IconWeather = on },
+        "wifi" => c with { IconWifi = on }, "bluetooth" => c with { IconBluetooth = on }, "battery" => c with { IconBattery = on }, "vpn" => c with { IconVpn = on }, "cleanup" => c with { Cleanup = on },
+        "peripherals" => c with { Peripherals = on }, "taskmanager" => c with { IconTaskManager = on }, "tray" => c with { IconTray = on }, _ => c,
+    };
 
     public static bool Get(OnboardingChoices c, string id) => id switch
     {
@@ -108,8 +179,12 @@ public static class OnboardingRules
             case ComponentBar:
                 c = c with { Bar = on };
                 if (!on && (c.Peripherals || c.Cleanup)) { c = c with { Peripherals = false, Cleanup = false }; note = "Periféricos y Limpieza viven en la Barra superior: se desactivaron también."; }
+                if (!on && (c.Mission || c.Snap || c.LiveText || c.SpotActions || c.Gestures)) { c = c with { Mission = false, Snap = false, LiveText = false, SpotActions = false, Gestures = false }; note = "Los módulos de «Funciones extra» viven en la Barra superior: se desactivaron también."; }
                 break;
-            case ComponentNotch: c = c with { Notch = on }; break;
+            case ComponentNotch:
+                c = c with { Notch = on };
+                if (!on && c.Shelf) { c = c with { Shelf = false }; note = "Shelf+ vive en Hatsu Notch: se desactivó también."; }
+                break;
             case ComponentConnect: c = c with { Connect = on }; if (on && !c.Bar) note = "Hatsu Connect funcionará, pero su indicador se muestra en la Barra superior (desactivada)."; break;
             case ComponentPeripherals:
                 c = c with { Peripherals = on }; if (on && !c.Bar) { c = c with { Bar = true }; note = "Periféricos necesita la Barra superior: se activó también."; } break;
@@ -125,6 +200,8 @@ public static class OnboardingRules
         var notes = new List<string>();
         if (!c.Bar && c.Peripherals) { c = c with { Peripherals = false }; notes.Add("Periféricos necesita la Barra superior: se dejó desactivado."); }
         if (!c.Bar && c.Cleanup) { c = c with { Cleanup = false }; notes.Add("Limpieza necesita la Barra superior: se dejó desactivado."); }
+        if (!c.Bar && (c.Mission || c.Snap || c.LiveText || c.SpotActions || c.Gestures)) { c = c with { Mission = false, Snap = false, LiveText = false, SpotActions = false, Gestures = false }; notes.Add("Los módulos extra viven en la Barra superior: se dejaron desactivados."); }
+        if (!c.Notch && c.Shelf) { c = c with { Shelf = false }; notes.Add("Shelf+ vive en Hatsu Notch: se dejó desactivado."); }
         if (!c.Dock && c.HideTaskbar) { c = c with { HideTaskbar = false }; notes.Add("Sin el Dock no se oculta la barra de tareas de Windows: se dejó visible."); }
         if (c.DockSize < -1 || c.DockSize >= DockSettings.Presets.Length) { c = c with { DockSize = 1 }; notes.Add("Tamaño del Dock fuera de rango: se usó «Mediano»."); }
         if (!Enum.IsDefined(c.Theme)) c = c with { Theme = ThemeMode.System };
@@ -139,14 +216,21 @@ public static class OnboardingRules
         bool On(string m) => cfg.Modules.TryGetValue(m, out var mc) ? mc.Enabled : true;
         var bar = cfg.Bar ?? new BarConfig();
         int size = dock is null ? -1 : Array.FindIndex(DockSettings.Presets, p => Math.Abs(p.Size - dock.IconSize) < 0.5);
+        bool shelf = (cfg.Notch ?? NotchSettings.Factory).Sections.Any(sec => sec.Id == "shelf" && sec.Enabled);
         return new OnboardingChoices
         {
             Dock = On("dock"), Bar = On("bar"), Notch = On("notch"), Connect = On("connect"), Peripherals = bar.ShowPeripherals, Cleanup = bar.ShowCleanup,
+            Mission = bar.McEnabled, Snap = bar.SnapEnabled, LiveText = bar.LiveTextEnabled, SpotActions = bar.SpotActionsEnabled, Gestures = bar.GesturesEnabled, Shelf = shelf,
+            IconVolume = bar.ShowVolume, IconPerformance = bar.ShowHub && bar.ShowHubSystem, IconNetwork = bar.ShowHub && bar.ShowHubNetwork, IconDisks = bar.ShowHub && bar.ShowHubDisks, IconWeather = bar.ShowWeather,
+            IconWifi = bar.ShowNetwork, IconBluetooth = bar.ShowBluetooth, IconBattery = bar.ShowBattery, IconVpn = bar.ShowVpn, IconTaskManager = bar.ShowTaskManager, IconTray = bar.ShowTrayIcons,
             Theme = dock?.Theme ?? ThemeMode.System, DockSize = size, DockAlignment = dock?.Alignment ?? DockAlignment.Center, BarBackground = bar.Background, Autostart = autostart, HideTaskbar = cfg.HideTaskbar,
         };
     }
 
     public static readonly string[] ThemeNames = ["Seguir Windows", "Claro", "Oscuro"], AlignmentNames = ["Izquierda", "Centro", "Derecha"], BackgroundNames = ["Vidrio", "Transparente"];
+
+    /// <summary>Hasta tres nombres y «…» si hay más: la línea de la revisión es de una sola línea.</summary>
+    private static string Brief(IReadOnlyList<string> names) => names.Count > 3 ? string.Join(", ", names.Take(3)) + "…" : string.Join(", ", names);
 
     /// <summary>Resumen para la pantalla de revisión: una línea por decisión, con lo que cambia en Windows destacado al final.</summary>
     public static IReadOnlyList<(string Label, string Value)> Review(OnboardingChoices c)
@@ -154,9 +238,11 @@ public static class OnboardingRules
         string Onoff(bool b) => b ? "Activado" : "Desactivado";
         var l = new List<(string, string)>
         {
-            ("Dock", Onoff(c.Dock)), ("Barra superior", Onoff(c.Bar)), ("Hatsu Notch", Onoff(c.Notch)), ("Hatsu Connect", Onoff(c.Connect)), ("Hatsu Peripherals", Onoff(c.Peripherals)), ("Hatsu Cleanup", Onoff(c.Cleanup)),
-            ("Tema del Dock", ThemeNames[(int)c.Theme]),
+            ("Dock", Onoff(c.Dock)), ("Barra superior", Onoff(c.Bar)), ("Hatsu Notch", Onoff(c.Notch)), ("Hatsu Connect", Onoff(c.Connect)),
         };
+        if (c.Bar) { var on = IconIds.Where(i => GetIcon(c, i)).Select(IconName).ToList(); l.Add(("Iconos de la barra", on.Count == 0 ? "Ninguno" : $"{on.Count} de {IconIds.Length}: " + Brief(on))); }
+        var extras = ExtraIds.Where(i => GetExtra(c, i)).Select(ExtraName).ToList(); l.Add(("Funciones extra", extras.Count == 0 ? "Ninguna" : $"{extras.Count}: " + Brief(extras)));
+        l.Add(("Tema del Dock", ThemeNames[(int)c.Theme]));
         if (c.Dock) l.Add(("Tamaño y posición del Dock", $"{(c.DockSize >= 0 ? DockSettings.Presets[c.DockSize].Name : "tamaño actual")} · {AlignmentNames[(int)c.DockAlignment]}"));
         if (c.Bar) l.Add(("Fondo de la Barra", BackgroundNames[c.BarBackground == BarBackground.Glass ? 0 : 1]));
         l.Add(("Iniciar con Windows", c.Autostart ? "Sí: entrada de inicio solo para tu usuario" : "No"));
@@ -201,7 +287,16 @@ public static class OnboardingPlan
         var mods = new Dictionary<string, ModuleConfig>(cfg.Modules);
         void Set(string id, bool on) { mods[id] = (mods.TryGetValue(id, out var m) ? m : new ModuleConfig()) with { Enabled = on }; }
         Set("dock", c.Dock); Set("bar", c.Bar); Set("notch", c.Notch); Set("connect", c.Connect);
-        var bar = (cfg.Bar ?? new BarConfig()) with { ShowPeripherals = c.Peripherals, ShowCleanup = c.Cleanup, Background = c.BarBackground };
+        var bar = (cfg.Bar ?? new BarConfig()) with
+        {
+            ShowPeripherals = c.Peripherals, ShowCleanup = c.Cleanup, Background = c.BarBackground,
+            McEnabled = c.Mission, SnapEnabled = c.Snap, LiveTextEnabled = c.LiveText, SpotActionsEnabled = c.SpotActions, GesturesEnabled = c.Gestures,
+            ShowVolume = c.IconVolume, ShowHubSystem = c.IconPerformance, ShowHubNetwork = c.IconNetwork, ShowHubDisks = c.IconDisks, ShowHub = c.IconPerformance || c.IconNetwork || c.IconDisks,
+            ShowWeather = c.IconWeather, ShowNetwork = c.IconWifi, ShowBluetooth = c.IconBluetooth, ShowBattery = c.IconBattery, ShowVpn = c.IconVpn, ShowTaskManager = c.IconTaskManager, ShowTrayIcons = c.IconTray,
+        };
+        // Shelf+ es la pestaña «shelf» de la Isla: solo se toca si cambia (una instalación nueva sin ajustes de la Isla conserva los de fábrica cuando coinciden)
+        var notch = cfg.Notch ?? NotchSettings.Factory;
+        if (notch.Sections.Any(sec => sec.Id == "shelf" && sec.Enabled != c.Shelf)) cfg = cfg with { Notch = notch with { Sections = notch.Sections.Select(sec => sec.Id == "shelf" ? sec with { Enabled = c.Shelf } : sec).ToList() } };
         // Periféricos sin avisos propios: los avisos son una opción aparte de Ajustes (el asistente no activa nada que escriba notificaciones)
         return cfg with { Modules = mods, Bar = bar.Sanitize(), HideTaskbar = c.HideTaskbar, Autostart = c.Autostart, Onboarding = record };
     }
@@ -305,6 +400,10 @@ public sealed class OnboardingApplier(IOnboardingPorts ports, Action<string>? lo
                     f is null ? "estado del supervisor: " + st : $"{f.Reason}. {f.Advice} [{f.Technical}; estado del supervisor: {st}]", Cause: f?.Kind),
             });
         }
+
+        // Funciones extra: viven en la Barra; aquí solo se informa de lo que quedó activado (su salud se ve en Ajustes › Módulos)
+        var onExtras = OnboardingRules.ExtraIds.Where(i => OnboardingRules.GetExtra(c, i)).Select(OnboardingRules.ExtraName).ToList();
+        if (onExtras.Count > 0) items.Add(new("extras", "Funciones extra", ApplyOutcome.Ok, "Activadas: " + string.Join(", ", onExtras)));
 
         // 6) completado solo si no quedó ningún fallo ni aviso; con avisos queda «en curso» hasta que el usuario reintente o acepte
         if (items.All(i => i.Outcome == ApplyOutcome.Ok))

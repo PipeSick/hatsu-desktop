@@ -24,8 +24,8 @@ public class OnboardingLayoutTests
 
     public static IEnumerable<object[]> Scenarios()
     {
-        var all = OnboardingChoices.Safe with { Connect = true, Peripherals = true, Cleanup = true, Autostart = true, HideTaskbar = true, Theme = ThemeMode.Dark, DockAlignment = DockAlignment.Right, DockSize = 3 };
-        foreach (var step in new[] { OnboardingStep.Welcome, OnboardingStep.Components, OnboardingStep.Appearance, OnboardingStep.Windows, OnboardingStep.Review })
+        var all = OnboardingChoices.Safe with { Connect = true, Peripherals = true, Cleanup = true, Mission = true, Snap = true, LiveText = true, SpotActions = true, Gestures = true, Shelf = true, IconVpn = true, IconTaskManager = true, Autostart = true, HideTaskbar = true, Theme = ThemeMode.Dark, DockAlignment = DockAlignment.Right, DockSize = 3 };
+        foreach (var step in new[] { OnboardingStep.Welcome, OnboardingStep.Components, OnboardingStep.Extras, OnboardingStep.Icons, OnboardingStep.Appearance, OnboardingStep.Windows, OnboardingStep.Review })
         {
             yield return [step, "defecto", OnboardingChoices.Safe, OnboardingMode.Fresh];
             yield return [step, "todo activado", all, OnboardingMode.Fresh];
@@ -36,7 +36,7 @@ public class OnboardingLayoutTests
         }
     }
 
-    private static bool IsContainer(LayoutBox b) => b.Kind == BoxKind.Card || b.Id.StartsWith("c:") || b.Id.StartsWith("t:") || b.Id.EndsWith(".seg") || b.Id == "p.desk";
+    private static bool IsContainer(LayoutBox b) => b.Kind == BoxKind.Card || b.Id.StartsWith("c:") || b.Id.StartsWith("x:") || b.Id.StartsWith("i:") || b.Id.StartsWith("t:") || b.Id.EndsWith(".seg") || b.Id == "p.desk";
     internal static void AssertGeometry(OnboardingController c, string what)
     {
         var boxes = OnboardingLayout.Compute(c);
@@ -94,7 +94,8 @@ public class OnboardingLayoutTests
     [Fact] public void Components_that_need_the_Bar_say_so_on_their_card_and_only_they_do()
     {
         var chips = OnboardingLayout.Compute(At(OnboardingStep.Components)).Where(b => b.Id.StartsWith("cr:")).Select(b => b.Id[3..]).OrderBy(x => x).ToArray();
-        Assert.Equal(["cleanup", "peripherals"], chips); Assert.Equal("Requiere Barra superior", OnboardingRules.RequiresBarText);
+        Assert.Empty(chips);   // Periféricos y Limpieza pasaron a «Iconos de la barra»
+        Assert.Equal("Requiere Barra superior", OnboardingRules.RequiresBarText);
         Assert.True(TextFit.Lines(OnboardingRules.RequiresBarText, 168 - 8, 11.5) == 1, "el texto de la etiqueta cabe en su caja");
         Assert.All(new[] { "dock", "bar", "notch", "connect" }, id => Assert.False(OnboardingRules.RequiresBar(id)));
     }
@@ -119,7 +120,7 @@ public class OnboardingLayoutTests
     [Fact] public void Rounding_to_device_pixels_at_common_scales_never_creates_an_overlap()
     {
         foreach (double scale in new[] { 1.0, 1.25, 1.5, 1.75, 2.0 })
-            foreach (var step in new[] { OnboardingStep.Components, OnboardingStep.Appearance, OnboardingStep.Windows, OnboardingStep.Review })
+            foreach (var step in new[] { OnboardingStep.Components, OnboardingStep.Extras, OnboardingStep.Icons, OnboardingStep.Appearance, OnboardingStep.Windows, OnboardingStep.Review })
             {
                 var leaves = OnboardingLayout.Compute(At(step)).Where(b => !IsContainer(b)).Select(b => b with { X = Math.Round(b.X * scale), Y = Math.Round(b.Y * scale), W = Math.Round(b.Right * scale) - Math.Round(b.X * scale), H = Math.Round(b.Bottom * scale) - Math.Round(b.Y * scale) }).ToList();
                 for (int i = 0; i < leaves.Count; i++) for (int j = i + 1; j < leaves.Count; j++) Assert.False(leaves[i].Overlaps(leaves[j]), $"{step} a {scale}×: {leaves[i].Id} y {leaves[j].Id}");

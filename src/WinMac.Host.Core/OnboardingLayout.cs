@@ -94,6 +94,36 @@ public static class OnboardingLayout
                 Footer(b, "Siguiente");
                 break;
 
+            case OnboardingStep.Extras:
+            {
+                const double rowH = 58; double y = ContentTop + 4;
+                for (int i = 0; i < OnboardingRules.ExtraIds.Length; i++)
+                {
+                    string id = OnboardingRules.ExtraIds[i]; bool en = OnboardingRules.ExtraAvailable(ch, id); double ry = y + i * rowH;
+                    Add("x:" + id, 40, ry, 720, rowH - 4, BoxKind.Control, en);
+                    Add("xn:" + id, 60, ry + 6, id == "shelf" ? 76 : 540, 22, BoxKind.Text); Add("xs:" + id, 690, ry + (rowH - 4 - 26) / 2, 46, 26, BoxKind.Decor);
+                    Add("xd:" + id, 60, ry + 28, 600, 20, BoxKind.Text);
+                    if (id == "shelf") Add("xr:" + id, 142, ry + 8, 150, 18, BoxKind.Text);
+                }
+                if (c.Note is { } xn) Add("note", 40, 452, 720, SmallH(xn, 720), BoxKind.Text);
+                Footer(b, "Siguiente");
+                break;
+            }
+
+            case OnboardingStep.Icons:
+            {
+                Add("i.bar", 40, ContentTop, 720, 30, BoxKind.Decor);
+                const double colW2 = 350, rowH2 = 48; double top = ContentTop + 38;
+                for (int i = 0; i < OnboardingRules.IconIds.Length; i++)
+                {
+                    string id = OnboardingRules.IconIds[i]; bool wide = i == OnboardingRules.IconIds.Length - 1 && i % 2 == 0; double x = 40 + (i % 2) * 370, y = top + (i / 2) * rowH2, w = wide ? 720 : colW2;
+                    Add("i:" + id, x, y, w, rowH2 - 4, BoxKind.Control);
+                    Add("in:" + id, x + 16, y + 4, w - 90, 19, BoxKind.Text); Add("id:" + id, x + 16, y + 24, w - 90, 17, BoxKind.Text); Add("is:" + id, x + w - 62, y + (rowH2 - 4 - 26) / 2, 46, 26, BoxKind.Decor);
+                }
+                Footer(b, "Siguiente");
+                break;
+            }
+
             case OnboardingStep.Appearance:
             {
                 double y = 92; const double colW = 420;
@@ -129,9 +159,9 @@ public static class OnboardingLayout
 
             case OnboardingStep.Review:
             {
-                var rows = OnboardingRules.Review(ch); double lh = 28, ch2 = 24 + rows.Count * lh;
+                var rows = OnboardingRules.Review(ch); double lh = 26, ch2 = 20 + rows.Count * lh;
                 Add("r.card", 40, 92, 720, ch2, BoxKind.Card);
-                for (int i = 0; i < rows.Count; i++) { Add("rl:" + i, 64, 104 + i * lh, 250, lh, BoxKind.Text); Add("rv:" + i, 320, 104 + i * lh, 420, lh, BoxKind.Text); }
+                for (int i = 0; i < rows.Count; i++) { Add("rl:" + i, 64, 102 + i * lh, 250, lh, BoxKind.Text); Add("rv:" + i, 320, 102 + i * lh, 420, lh, BoxKind.Text); }
                 Add("back", 40, FooterY, 120, ButtonH, BoxKind.Control); Add("apply", 540, FooterY, 220, ButtonH, BoxKind.Control); Add("dots", 350, 508, 100, 10, BoxKind.Decor);
                 break;
             }

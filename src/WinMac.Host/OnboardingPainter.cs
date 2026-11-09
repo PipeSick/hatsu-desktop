@@ -98,6 +98,8 @@ internal sealed class OnboardingPainter : IDisposable
             {
                 case OnboardingStep.Welcome: Welcome(c); break;
                 case OnboardingStep.Components: Header(c, "Elige qué quieres usar", "Puedes cambiarlo cuando quieras en Ajustes. Lo desactivado no se inicia."); Components(c); break;
+                case OnboardingStep.Extras: Header(c, "Funciones extra", "Todas empiezan apagadas. Las cambias en Ajustes › Módulos."); Extras(c); break;
+                case OnboardingStep.Icons: Header(c, "Iconos de la barra", "Cada icono se enciende por separado. Los ordenas después en Ajustes."); Icons(c); break;
                 case OnboardingStep.Appearance: Header(c, "Apariencia", "Ajustes reales de Hatsu Desktop; el resto sigue el tema de Windows."); Appearance(c); break;
                 case OnboardingStep.Windows: Header(c, "Integración con Windows", "Nada se cambia en Windows hasta que pulses «Aplicar y comenzar»."); WindowsStep(c); break;
                 case OnboardingStep.Review: Header(c, "Revisa tus elecciones", "Aún no se ha cambiado nada. Puedes volver atrás."); Review(c); break;
@@ -112,8 +114,8 @@ internal sealed class OnboardingPainter : IDisposable
 
     private void Dots(OnboardingController c)
     {
-        var d = L("dots"); int cur = Math.Max(0, Array.IndexOf(OnboardingController.Flow, c.Step));
-        for (int i = 0; i < OnboardingController.Flow.Length; i++) Dot(d.X + 10 + i * 20, d.Y + d.H / 2, i == cur ? 4.5 : 3.2, i <= cur ? Violet : TrackOff);
+        var d = L("dots"); var flow = c.ActiveFlow; int cur = Math.Max(0, flow.ToList().IndexOf(c.Step)); double x0 = d.X + d.W / 2 - flow.Count * 10;
+        for (int i = 0; i < flow.Count; i++) Dot(x0 + 10 + i * 20, d.Y + d.H / 2, i == cur ? 4.5 : 3.2, i <= cur ? Violet : TrackOff);
     }
 
     private void Header(OnboardingController c, string title, string? sub)
@@ -146,6 +148,36 @@ internal sealed class OnboardingPainter : IDisposable
             TextIn("cn:" + id, OnboardingRules.Name(id), _bodyB, Ink); TextIn("cd:" + id, OnboardingRules.Description(id), _small, Muted, wrap: true, top: true);
             var sw = L("cs:" + id); Switch(sw.X, sw.Y, on);
             if (Has("cr:" + id)) { var r = L("cr:" + id); RR(r.X, r.Y, r.W, r.H, 10, new Color4(Violet.R, Violet.G, Violet.B, _dark ? .28f : .14f)); Text(OnboardingRules.RequiresBarText, _chip, r.X, r.Y, r.W, r.H, AccentText, center: true); }
+        }
+        Nav(c);
+    }
+
+    private void Extras(OnboardingController c)
+    {
+        foreach (var h in c.Hits.Where(h => h.Id.StartsWith("x:")))
+        {
+            string id = h.Id[2..]; bool avail = h.Enabled, on = OnboardingRules.GetExtra(c.Choices, id) && avail, hov = c.Hover == h.Id && avail;
+            Card(h.X, h.Y, h.W, h.H, hov);
+            TextIn("xn:" + id, OnboardingRules.ExtraName(id), _bodyB, avail ? Ink : Muted);
+            if (Has("xr:" + id)) { var r = L("xr:" + id); RR(r.X, r.Y, r.W, r.H, 9, new Color4(Violet.R, Violet.G, Violet.B, _dark ? .28f : .14f)); Text(OnboardingRules.ExtraNeedsText(id), _chip, r.X, r.Y, r.W, r.H, AccentText, center: true); }
+            TextIn("xd:" + id, avail ? OnboardingRules.ExtraDescription(id) : OnboardingRules.ExtraNeedsLong(id), _small, Muted);
+            var sw = L("xs:" + id); Switch(sw.X, sw.Y, on, avail);
+        }
+        Nav(c);
+    }
+
+    private void Icons(OnboardingController c)
+    {
+        var bar = L("i.bar"); RR(bar.X, bar.Y, bar.W, bar.H, 10, new Color4(0.05f, 0.03f, 0.1f, .9f)); var white = new Color4(1, 1, 1, .9f);
+        Text("Hatsu    Archivo    Editar", _small, bar.X + 14, bar.Y, 220, bar.H, white);
+        double ix = bar.X + bar.W - 14 - 42; Text("16:08", _small, ix, bar.Y, 42, bar.H, white);
+        foreach (var id in OnboardingRules.IconIds.Reverse().Where(i => OnboardingRules.GetIcon(c.Choices, i))) { ix -= 22; RR(ix, bar.Y + bar.H / 2 - 7, 15, 14, 4, new Color4(1, 1, 1, .32f)); }
+        foreach (var h in c.Hits.Where(h => h.Id.StartsWith("i:")))
+        {
+            string id = h.Id[2..]; bool on = OnboardingRules.GetIcon(c.Choices, id), hov = c.Hover == h.Id;
+            Card(h.X, h.Y, h.W, h.H, hov);
+            TextIn("in:" + id, OnboardingRules.IconName(id), _bodyB, Ink); TextIn("id:" + id, OnboardingRules.IconDescription(id), _small, Muted);
+            var sw = L("is:" + id); Switch(sw.X, sw.Y, on);
         }
         Nav(c);
     }
