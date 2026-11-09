@@ -25,7 +25,7 @@ public class AppleMenuTests
         Assert.Equal(["apple:Sleep", "apple:Restart", "apple:Shutdown", "apple:LogOff", "apple:Lock"], strip.Actions.Select(a => a.Id));
         Assert.DoesNotContain(m.Widgets, w => w.Kind is WidgetKind.MenuItem or WidgetKind.Separator);   // the old menu does not appear underneath
         var links = ((LinkRowData)m.Widgets.Single(w => w.Kind == WidgetKind.LinkRow).Data!).Links;
-        Assert.Equal(["apple:winmac-settings", "apple:About", "apple:ForceQuit"], links.Select(l => l.Id));
+        Assert.Equal(["apple:winmac-settings", "apple:winmac-quit", "apple:About", "apple:ForceQuit"], links.Select(l => l.Id));
         Assert.DoesNotContain(m.Widgets, w => w.Id is "apple:reserve" or "apple:quitbar");   // they are settings: Ajustes › Barra superior / General
         Assert.Equal(PanelKind.AppleMenu, PanelBuilder.Build(PanelKind.AppleMenu, Ctx()).Kind);
     }

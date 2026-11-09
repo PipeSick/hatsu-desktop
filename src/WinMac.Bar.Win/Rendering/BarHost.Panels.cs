@@ -403,6 +403,7 @@ public sealed partial class BarHost : IPanelUi
         _popover?.Hide();
         if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev) && BarNative.IsWindow(prev)) BarNative.SetForegroundWindow(prev);   // la acción se ejecuta con el foco de vuelta en la app que lo tenía
         if (id == "winmac-settings") ((IPanelUi)this).OpenSettings(null);
+        else if (id == "winmac-quit") ((IPanelUi)this).QuitWinMac();
         else if (id == "reserve") SetReserve(!_cfg.ReserveSpace);
         else if (id == "quitbar") _quitting = true;
         else if (Enum.TryParse<SystemActionKind>(id, out var k)) RunSystemAction(k, app);

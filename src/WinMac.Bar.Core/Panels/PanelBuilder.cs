@@ -91,6 +91,7 @@ public static partial class PanelBuilder
             new("apple:LogOff", "logout", "Cerrar sesión"), new("apple:Lock", "lock", "Bloquear")])));
         w.Add(new Widget(WidgetKind.LinkRow, "apple:links", "", Data: new LinkRowData([
             new("apple:winmac-settings", "Ajustes de Hatsu Desktop", true),
+            new("apple:winmac-quit", "Salir de Hatsu Desktop", true),   // el panel con pestañas ya no existe: su «Salir» vive aquí, en el menú de Hatsu
             new("apple:" + SystemActionKind.About, "Acerca de este PC", true),
             new("apple:" + SystemActionKind.ForceQuit, "Forzar salida…", c.ForegroundApp is not null)])));
         Msg(w, c);
