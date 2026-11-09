@@ -43,7 +43,7 @@ public static partial class SettingsBuilder
         Add(modules, "Funciones"); Add(gestures, "Funciones"); Add(Get("spot"), "Funciones", "Búsqueda (Spotlight)");
         Add(both ?? nc, "Contenido"); Add(Get("capture"), "Contenido"); Add(Get("weather"), "Contenido", "Clima");
         Add(connect, "Dispositivos", "iPhone y periféricos", "phone");
-        Add(Get("ext"), "Avanzado", "Extensiones");
+        Add(Get("ext"), "Avanzado", "Extensiones y diagnóstico");
         foreach (var p in pages.Where(p => result.All(r => r.Id != p.Id) && p.Id != "clip")) result.Add(p with { Section = "Avanzado" });   // cualquier página nueva no se pierde
         return result;
     }

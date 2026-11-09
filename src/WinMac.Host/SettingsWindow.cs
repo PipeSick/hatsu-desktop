@@ -253,7 +253,7 @@ internal sealed class SettingsWindow : IDisposable
                 case WM_COMMAND when (int)((long)w & 0xFFFF) == ID_EDIT:
                 {
                     int code = (int)(((long)w >> 16) & 0xFFFF);
-                    if (code == EN_CHANGE && _edit != IntPtr.Zero && Native.GetFocus() == _edit) { _editDirty = true; _caretOn = true; Invalidate(); if (_editId == "hub.city") Native.SetTimer(_hwnd, TimerSuggest, 320, IntPtr.Zero); }
+                    if (code == EN_CHANGE && _edit != IntPtr.Zero && Native.GetFocus() == _edit) { _editDirty = true; _caretOn = true; Invalidate(); if (_editId == "hub.city") Native.SetTimer(_hwnd, TimerSuggest, 320, IntPtr.Zero); else if (_editId == "gest.find") ShowAppSuggestions(); }
                     else if (code == EN_KILLFOCUS && _edit != IntPtr.Zero && _ctl.Suggestions.Count == 0) EndEdit(commit: true);
                     else if (code == EN_KILLFOCUS && _edit != IntPtr.Zero) { /* sigue la lista de sugerencias: el clic en una sugerencia se atiende antes (PointerDown) */ _suggestBlur = true; Native.SetTimer(_hwnd, (UIntPtr)8, 180, IntPtr.Zero); }
                     return IntPtr.Zero;
@@ -274,7 +274,7 @@ internal sealed class SettingsWindow : IDisposable
         switch (e.Kind)
         {
             case "focus": if (_edit != IntPtr.Zero && _editId == e.Id) PlaceCaretFromClick(); else ShowEdit(e.Id); return;
-            case "suggest": if (e.Id.StartsWith("gest.pick:", StringComparison.Ordinal)) ChoosePick(e.Id, e.Index); else ChooseSuggestion(e.Index); return;
+            case "suggest": if (e.Id.StartsWith("gest.pick:", StringComparison.Ordinal)) ChoosePick(e.Id, e.Index); else if (e.Id == "gest.find") ChooseApp(e.Index); else ChooseSuggestion(e.Index); return;
         }
 
         if (e.Kind == "button" && e.Id.StartsWith("gest.pick:", StringComparison.Ordinal)) { EndEdit(commit: true); ShowGestureMenu(e.Id[10..]); return; }
@@ -282,6 +282,22 @@ internal sealed class SettingsWindow : IDisposable
     }
 
     private List<string> _pickIds = [];
+    private IReadOnlyList<(string Id, string Name)> _appResults = [];
+
+    /// <summary>Mientras se escribe en «Buscar aplicación…»: las apps instaladas que coinciden (la misma búsqueda de Launchpad y Spotlight), como lista bajo el campo.</summary>
+    private void ShowAppSuggestions()
+    {
+        string q = EditText().Trim();
+        _appResults = q.Length == 0 ? [] : _actions.FindApps?.Invoke(q) ?? [];
+        _ctl.SetSuggestions("gest.find", _appResults.Select(a => a.Name).ToList()); Invalidate();
+    }
+
+    private void ChooseApp(int index)
+    {
+        if (_ctl.SuggestFor != "gest.find" || SettingsBuilder.GestPick is not { } pick || index < 0 || index >= _appResults.Count) return;
+        var app = _appResults[index]; _editDirty = false; _ctl.ClearSuggestions();
+        _actions.AssignApp(pick.Field, app.Id, app.Name); EndEdit(commit: false); RebuildPages(); Invalidate();
+    }
 
     /// <summary>Desplegable de acciones de Gestures: la misma lista de la ventana que usan las sugerencias de ciudad (mismo estilo), con la acción actual marcada.</summary>
     private void ShowGestureMenu(string field)
@@ -295,6 +311,13 @@ internal sealed class SettingsWindow : IDisposable
     private void ChoosePick(string rowId, int index)
     {
         string field = rowId["gest.pick:".Length..]; _ctl.ClearSuggestions();
+        if (index >= 0 && index < _pickIds.Count && _pickIds[index] is SettingsBuilder.PickApp or SettingsBuilder.PickUrl)
+        {   // «Aplicación…» abre el buscador de apps instaladas; «Página web…», el cuadro para pegar el enlace
+            bool app = _pickIds[index] == SettingsBuilder.PickApp; SettingsBuilder.GestPick = (field, app ? "app" : "url"); SettingsBuilder.GestNote = null;
+            if (app) _ = Task.Run(() => _actions.FindApps?.Invoke("a"));   // se lee la lista de apps mientras se abre el campo, para que escribir sea instantáneo
+            RebuildPages(); Invalidate(); ShowEdit(app ? "gest.find" : "gest.url"); return;
+        }
+
         if (index >= 0 && index < _pickIds.Count) _actions.Apply(new SettingsEdit("gest.set:" + field, "text", Text: _pickIds[index]));
         RebuildPages(); Invalidate();
     }
@@ -347,6 +370,8 @@ internal sealed class SettingsWindow : IDisposable
             case "hub.city": _ = ResolveCityAsync(text); break;
             case "hub.favs": _ = ResolveFavoritesAsync(text); break;
             case "hub.favadd": _ = AddFavoriteAsync(text); break;
+            case "gest.find": break;   // el texto suelto no asigna nada: hay que elegir una app de la lista
+            case "gest.url": if (SettingsBuilder.GestPick is { } up) _actions.AssignUrl(up.Field, text); break;
             default: _actions.Apply(new SettingsEdit(id, "text", Text: text)); break;
         }
     }
@@ -429,6 +454,7 @@ internal sealed class SettingsWindow : IDisposable
 
     private void ChooseSuggestion(int index)
     {
+        if (_ctl.SuggestFor == "gest.find") { ChooseApp(index); return; }   // Intro sobre una app de la lista
         if (index < 0 || index >= _suggestPlaces.Count) return; var p = _suggestPlaces[index];
         _editDirty = false; _ctl.ClearSuggestions(); _suggestCts?.Cancel();
         _cfg.ApplyBarPatch(Patch("weatherCity", p.Serialize())); _weatherStatus = "Ciudad: " + CityResolver.DisplayLabel(p);

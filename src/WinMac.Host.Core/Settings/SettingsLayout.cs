@@ -32,6 +32,7 @@ public static class SettingsLayout
         string? sub = SubText(r);
         if (r.Kind == RowKind.Info) return Math.Max(54, 16 + SubLineH * Lines(r.Title, ColW - 62));
         if (r.Kind == RowKind.Button) return 48;
+        if (r.Kind == RowKind.Preview) return 58;
         if (r.Kind == RowKind.Slider && string.IsNullOrEmpty(sub)) return 54;
         int extra = Math.Max(0, Lines(sub, ColW - 32 - ControlSpace(r)) - 1);
         double baseH = r.Kind switch

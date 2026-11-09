@@ -14,9 +14,15 @@ public class SettingsModelTests
         var pages = Pages(); Assert.Equal(["general", "bar", "dock", "notch", "modules", "gestures", "spot", "nc", "capture", "weather", "connect", "ext"], pages.Select(p => p.Id));   // propuesta A: 12 secciones en 5 grupos
         Assert.Equal([null, "Escritorio", "Escritorio", "Escritorio", "Funciones", "Funciones", "Funciones", "Contenido", "Contenido", "Contenido", "Dispositivos", "Avanzado"], pages.Select(p => p.Section));
         var ids = pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).Select(r => r.Id).ToList(); Assert.Equal(ids.Count, ids.Distinct().Count());
-        foreach (var t in SettingsBuilder.BarToggles.Where(t => t.Field != "weatherAutoLocation")) Assert.Single(ids, i => i == "bar:" + t.Field);   // ningún ajuste de la Barra se pierde en el rediseño
+        // los iconos que se agregan, quitan y ordenan viven en «Personalizar los iconos de la barra» (baritem:); el resto sigue en su sitio
+        var moved = new HashSet<string> { "showNetwork", "showVolume", "showBattery", "showBluetooth", "showTrayIcons", "showTaskManager", "showHubSystem", "showHubNetwork", "showHubDisks" };
+        foreach (var t in SettingsBuilder.BarToggles.Where(t => t.Field != "weatherAutoLocation"))
+        {
+            if (moved.Contains(t.Field)) { var def = SettingsBuilder.BarIcons.Single(d => d.Field == t.Field); Assert.Equal(1, ids.Count(i => i == "baritem:" + def.Id || i == "baritem.add:" + def.Id)); Assert.DoesNotContain("bar:" + t.Field, ids); }
+            else Assert.Single(ids, i => i == "bar:" + t.Field);   // ningún ajuste de la Barra se pierde en el rediseño
+        }
         Assert.Single(ids, i => i == "wx.src");   // WM-015: «Usar mi ubicación» es ahora el selector «Origen» (Automática / Ciudad elegida)
-        Assert.Equal(SettingsBuilder.BarToggles.Length - 1, ids.Count(i => i.StartsWith("bar:", StringComparison.Ordinal)));
+        Assert.Equal(SettingsBuilder.BarToggles.Length - 1 - moved.Count, ids.Count(i => i.StartsWith("bar:", StringComparison.Ordinal)));
         Assert.Equal(NotchSettings.SectionIds.Length, ids.Count(i => i.StartsWith("notch.sec:", StringComparison.Ordinal)));
     }
 

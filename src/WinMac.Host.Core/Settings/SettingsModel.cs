@@ -2,7 +2,7 @@ using WinMac.Bar;
 
 namespace WinMac.Host;
 
-public enum RowKind { Toggle, Segmented, Field, Slider, Button, Info }
+public enum RowKind { Toggle, Segmented, Field, Slider, Button, Info, Preview }
 
 /// <summary>
 /// Una fila de la ventana de Ajustes. No hay controles decorativos: lo que no se puede usar aparece atenuado con su <see cref="Reason"/>.
@@ -186,13 +186,10 @@ public static partial class SettingsBuilder
             new("Apariencia", [
                 new(RowKind.Segmented, "bar.bg", "Fondo", Options: SettingsBuilder.BackgroundNames, Selected: Index(BackgroundValues, bar.Background.ToString())),
             ]),
-            new("Elementos", [Bar(0), Bar(1), Bar(2), Bar(3), Bar(4), Bar(5), Bar(6), Bar(7), Bar(8), Bar(28, "Los de la bandeja de Windows; siguen también en la barra de tareas"),
+            .. BarIconGroups(bar),
+            new("Elementos", [Bar(3), Bar(5), Bar(6), Bar(7), Bar(8),
                 BarF("showPhonePercent", "Si el iPhone está conectado pero Windows no da una lectura reciente, se muestra «—» en vez de un número viejo"),
                 BarF("showPowerWithoutBattery", "Solo si el equipo no tiene batería y está conectado a la corriente; sin porcentaje. Apagado, el módulo de batería no aparece"),
-                BarF("showTaskManager", "Abre el Administrador de tareas de Windows"),
-                BarF("showHubSystem", "Solo se muestra si «Iconos de Rendimiento, Red y Discos» está activado"),
-                BarF("showHubNetwork", "Solo se muestra si «Iconos de Rendimiento, Red y Discos» está activado"),
-                BarF("showHubDisks", "Solo se muestra si «Iconos de Rendimiento, Red y Discos» está activado"),
                 new(RowKind.Button, "bar.orderreset", "Restaurar orden predeterminado", "Arrastra los iconos de la barra para cambiar su orden")]),
             new("Comportamiento", [
                 Bar(9, "Las ventanas maximizadas empiezan debajo de la barra y no quedan tapadas"),

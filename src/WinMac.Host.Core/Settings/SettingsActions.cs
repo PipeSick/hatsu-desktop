@@ -9,30 +9,35 @@ public sealed record SettingsEdit(string Id, string Kind, bool On = false, int I
 /// <summary>Aplica un cambio de Ajustes a la configuración central (que valida, guarda de forma atómica y avisa a los módulos). Puro respecto de la interfaz: se prueba con un ConfigService real sobre un archivo temporal.</summary>
 public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<bool> setAutostart, Action<string>? log = null)
 {
-    /// <summary>Agrega un acceso rápido (app o página) a Gestures. Un texto vacío no hace nada; si no se puede, deja un aviso visible en la tarjeta.</summary>
-    private bool AddLauncher(string kind, string text)
+    /// <summary>Asigna al gesto <paramref name="field"/> una aplicación elegida de la lista (se guarda como acceso rápido si no estaba).</summary>
+    public bool AssignApp(string field, string appId, string appName)
     {
-        SettingsBuilder.GestNote = null; if (text.Length == 0) return true;
+        SettingsBuilder.GestNote = null; SettingsBuilder.GestPick = null;
+        return Assign(field, WinMac.Bar.Features.GestLauncher.App, appName, appId);
+    }
+
+    /// <summary>Asigna al gesto <paramref name="field"/> una página web (la dirección se completa con https:// si hace falta).</summary>
+    public bool AssignUrl(string field, string text)
+    {
+        SettingsBuilder.GestNote = null;
+        var url = WinMac.Bar.Features.Launchers.NormalizeUrl(text);
+        if (url is null) { SettingsBuilder.GestNote = $"«{text}» no parece una dirección web válida (escribe el dominio completo, con su terminación)."; return true; }
+        SettingsBuilder.GestPick = null;
+        return Assign(field, WinMac.Bar.Features.GestLauncher.Url, WinMac.Bar.Features.Launchers.SiteName(url), url);
+    }
+
+    private bool Assign(string field, string kind, string name, string target)
+    {
+        if (!SettingsBuilder.GestFields.Contains(field)) return false;
         var cur = WinMac.Bar.Features.Launchers.Parse(cfg.Bar.GestLaunchers);
-        if (cur.Count >= WinMac.Bar.Features.Launchers.Max) { SettingsBuilder.GestNote = $"Ya hay {WinMac.Bar.Features.Launchers.Max} accesos rápidos: quita uno para agregar otro."; return true; }
-        string name, target;
-        if (kind == WinMac.Bar.Features.GestLauncher.Url)
+        var same = cur.FirstOrDefault(l => l.Kind == kind && string.Equals(l.Target, target, StringComparison.OrdinalIgnoreCase));
+        if (same is null)
         {
-            var url = WinMac.Bar.Features.Launchers.NormalizeUrl(text); if (url is null) { SettingsBuilder.GestNote = $"«{text}» no parece una dirección web válida (escribe el dominio completo, con su terminación)."; return true; }
-            name = WinMac.Bar.Features.Launchers.SiteName(url); target = url;
-        }
-        else
-        {
-            if (FindApps is null) { SettingsBuilder.GestNote = "No se puede buscar aplicaciones ahora."; return true; }
-            var found = FindApps(text);
-            if (found.Count == 0) { SettingsBuilder.GestNote = $"No encontré ninguna aplicación instalada que se llame «{text}». Prueba con otra parte del nombre."; return true; }
-            var best = found.FirstOrDefault(f => string.Equals(f.Name, text, StringComparison.CurrentCultureIgnoreCase)); if (best.Id is null) best = found[0];
-            name = best.Name; target = best.Id;
-            if (found.Count > 1 && !string.Equals(best.Name, text, StringComparison.CurrentCultureIgnoreCase)) SettingsBuilder.GestNote = $"Agregué «{best.Name}». Otras coincidencias: {string.Join(", ", found.Skip(1).Take(3).Select(f => f.Name))}. Si no era esa, quítala y escribe el nombre completo.";
+            if (WinMac.Bar.Features.Launchers.Add(cur, name, kind, target) is not { } added) { SettingsBuilder.GestNote = cur.Count >= WinMac.Bar.Features.Launchers.Max ? $"Ya hay {WinMac.Bar.Features.Launchers.Max} accesos rápidos: quita uno para agregar otro." : "No se pudo agregar."; return true; }
+            same = added.Added; cfg.ApplyBarPatch(Patch("gestLaunchers", WinMac.Bar.Features.Launchers.Serialize(added.List)));
         }
 
-        if (WinMac.Bar.Features.Launchers.Add(cur, name, kind, target) is not { } added) { SettingsBuilder.GestNote ??= $"«{name}» ya está en la lista o no es válido."; return true; }
-        cfg.ApplyBarPatch(Patch("gestLaunchers", WinMac.Bar.Features.Launchers.Serialize(added.List))); return true;
+        cfg.ApplyBarPatch(Patch(field, same.ActionId)); return true;
     }
 
     private static JsonElement Patch(string field, object? value) => JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [field] = value });
@@ -119,6 +124,29 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             cfg.ApplyBarPatch(Patch("ncWidgets", WinMac.Bar.Notifications.NcWidgets.Serialize(list))); return true;
         }
 
+        if (id.StartsWith("baritem:", StringComparison.Ordinal) || id.StartsWith("baritem.add:", StringComparison.Ordinal))
+        {   // Personalizar los iconos de la barra: encender/apagar y subir/bajar. Para los de Rendimiento, Red y Discos también se enciende el interruptor general.
+            bool add = id.StartsWith("baritem.add:", StringComparison.Ordinal); var def = SettingsBuilder.BarIcons.FirstOrDefault(d => d.Id == id[(add ? 12 : 8)..]); if (def is null) return false;
+            if (add) e = e with { Kind = "toggle", On = true };
+            var bar = cfg.Current.Bar ?? new BarConfig(); var order = SettingsBuilder.BarIconsInOrder(bar).Select(d => d.Id).ToList(); int at = order.IndexOf(def.Id);
+            switch (e.Kind)
+            {
+                case "toggle":
+                {
+                    var patch = new Dictionary<string, object?> { [def.Field] = e.On };
+                    if (e.On) foreach (var f in def.AlsoSet ?? []) patch[f] = true;
+                    if (e.On && at < 0) order.Add(def.Id); else if (!e.On && at >= 0) order.RemoveAt(at);
+                    patch["barOrder"] = WinMac.Bar.BarOrdering.Serialize(order);
+                    cfg.ApplyBarPatch(JsonSerializer.SerializeToElement(patch)); return true;
+                }
+                case "up" when at > 0: (order[at - 1], order[at]) = (order[at], order[at - 1]); break;
+                case "down" when at >= 0 && at < order.Count - 1: (order[at + 1], order[at]) = (order[at], order[at + 1]); break;
+                default: return true;
+            }
+
+            cfg.ApplyBarPatch(Patch("barOrder", WinMac.Bar.BarOrdering.Serialize(order))); return true;
+        }
+
         if (id.StartsWith("wx.fav:", StringComparison.Ordinal) && int.TryParse(id[7..], out int fi))
         {
             var favs = WinMac.Bar.Hub.GeoPoint.ParseList((cfg.Current.Bar ?? new BarConfig()).WeatherFavorites).ToList();
@@ -147,8 +175,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             SettingsBuilder.GestNote = null; cfg.ApplyBarPatch(Patch("gestLaunchers", WinMac.Bar.Features.Launchers.Serialize(WinMac.Bar.Features.Launchers.Remove(cur, lid)))); return true;   // Sanitize deja en «Nada» las asignaciones que apuntaban a él al validarse
         }
 
-        if (id == "gest.addapp" && e.Kind == "text") return AddLauncher(WinMac.Bar.Features.GestLauncher.App, (e.Text ?? "").Trim());
-        if (id == "gest.addurl" && e.Kind == "text") return AddLauncher(WinMac.Bar.Features.GestLauncher.Url, (e.Text ?? "").Trim());
+        if (id == "gest.pick.cancel" && e.Kind == "button") { SettingsBuilder.GestPick = null; SettingsBuilder.GestNote = null; return true; }
         if (id.StartsWith("mod.key:", StringComparison.Ordinal) && e.Kind == "text")
         {
             string f = id[8..]; if (!SettingsBuilder.HotkeyFields.Contains(f)) return false;

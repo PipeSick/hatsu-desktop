@@ -38,7 +38,17 @@ public static partial class SettingsBuilder
     ];
 
     /// <summary>Mensaje de la última acción sobre los accesos rápidos (p. ej. «no encontré esa app»). Se muestra en la tarjeta y se borra con la siguiente acción.</summary>
+    public const string PickApp = "pick:app", PickUrl = "pick:url";
     public static string? GestNote { get; set; }
+
+    /// <summary>Elección en curso de una aplicación o una página para un gesto: qué campo se está asignando y si se busca una app (<c>app</c>) o se pega un enlace (<c>url</c>). Null = ninguna.</summary>
+    public static (string Field, string Mode)? GestPick { get; set; }
+
+    private static string SlotTitle(string field) => field switch
+    {
+        "gestCornerTL" => "la esquina superior izquierda", "gestCornerTR" => "la esquina superior derecha", "gestCornerBL" => "la esquina inferior izquierda", "gestCornerBR" => "la esquina inferior derecha",
+        "gestMouseX1" => "el botón lateral «atrás»", "gestMouseX2" => "el botón lateral «adelante»", "gestKey1Action" => "el atajo 1", _ => "el atajo 2",
+    };
 
     private static List<SettingsRow> GestRows(BarConfig b)
     {
@@ -52,14 +62,18 @@ public static partial class SettingsBuilder
             HotkeyRow("gestKey2", "Atajo 2", b.GestKey2), GestRow("gestKey2Action", "Acción del atajo 2", b.GestKey2Action, b),
         };
         var ls = WinMac.Bar.Features.Launchers.Parse(b.GestLaunchers);
-        rows.Add(new(RowKind.Info, "gest.l.intro", ls.Count == 0
-            ? "Accesos rápidos: agrega aplicaciones instaladas o páginas web y asígnalas arriba como acción (aparecen en la lista como «Abrir: …»)."
-            : $"Accesos rápidos ({ls.Count} de {WinMac.Bar.Features.Launchers.Max}): asígnalos arriba como acción de una esquina, un botón o un atajo."));
-        foreach (var l in ls) rows.Add(new(RowKind.Button, "gest.rm:" + l.Id, "Quitar: " + WinMac.Bar.Features.Launchers.DisplayName(l), "Clic para quitar este acceso rápido (las asignaciones que lo usaban pasan a «Nada»)"));
-        if (ls.Count < WinMac.Bar.Features.Launchers.Max)
+        if (GestPick is { } pick)
+        {   // elegir una aplicación o pegar un enlace para el gesto que se abrió
+            rows.Insert(0, new(RowKind.Button, "gest.pick.cancel", "Cancelar la elección", "Vuelve a la lista de acciones sin cambiar nada"));
+            rows.Insert(0, pick.Mode == "app"
+                ? new(RowKind.Field, "gest.find", "Aplicación para " + SlotTitle(pick.Field), "Escribe el nombre y elige de la lista: son las apps instaladas en tu equipo", Text: "", Placeholder: "Buscar aplicación…")
+                : new(RowKind.Field, "gest.url", "Página web para " + SlotTitle(pick.Field), "Pega la dirección completa y pulsa Intro. Se abre en tu navegador predeterminado", Text: "", Placeholder: "https://…"));
+        }
+
+        if (ls.Count > 0)
         {
-            rows.Add(new(RowKind.Field, "gest.addapp", "Agregar una aplicación", "Escribe parte del nombre (por ejemplo Spotify) y pulsa Intro. Se busca entre las apps instaladas", Text: "", Placeholder: "nombre de la app"));
-            rows.Add(new(RowKind.Field, "gest.addurl", "Agregar una página web", "Escribe la dirección de la página y pulsa Intro. Se abre en tu navegador predeterminado", Text: "", Placeholder: "dirección de la página"));
+            rows.Add(new(RowKind.Info, "gest.l.intro", $"Accesos rápidos guardados ({ls.Count} de {WinMac.Bar.Features.Launchers.Max}). Se eligen en la lista de acciones de cada gesto, con «Aplicación…» y «Página web…»."));
+            foreach (var l in ls) rows.Add(new(RowKind.Button, "gest.rm:" + l.Id, "Quitar: " + WinMac.Bar.Features.Launchers.DisplayName(l), "Las asignaciones que lo usaban pasan a «Nada»"));
         }
 
         if (GestNote is { Length: > 0 } n) rows.Add(new(RowKind.Info, "gest.note", n));
@@ -88,6 +102,7 @@ public static partial class SettingsBuilder
         if (!GestFields.Contains(field)) return null;
         string cur = GestValue(b, field);
         var list = WinMac.Bar.Features.GestureActions.All.Where(a => a.Id == "none" || WinMac.Bar.Features.GestureRules.IsAvailable(a.Id, b)).Select(a => (a.Id, a.Name, a.Id == cur)).ToList();
+        if (WinMac.Bar.Features.Launchers.Parse(b.GestLaunchers).Count < WinMac.Bar.Features.Launchers.Max) { list.Add((PickApp, "Aplicación…", false)); list.Add((PickUrl, "Página web…", false)); }   // abren el selector de aplicaciones y el cuadro del enlace
         foreach (var l in WinMac.Bar.Features.Launchers.Parse(b.GestLaunchers)) list.Add((l.ActionId, WinMac.Bar.Features.Launchers.DisplayName(l), l.ActionId == cur));
         return list;
     }

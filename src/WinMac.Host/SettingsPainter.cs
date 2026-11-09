@@ -145,6 +145,16 @@ internal sealed class SettingsPainter : IDisposable
     {
         var row = r.Row; float dim = row.Enabled ? 1f : 0.42f; double x = r.X + 16, midY = r.Y + r.H / 2;
         bool hasSub = !string.IsNullOrEmpty(row.Subtitle) || (!row.Enabled && !string.IsNullOrEmpty(row.Reason));
+        if (row.Kind == RowKind.Preview)
+        {   // tira con la barra de arriba tal como queda: el nombre, los menús, los iconos en su orden y la hora
+            double bx = r.X + 16, by = r.Y + 8, bw = r.W - 32, bh = r.H - 16; var white = new Color4(1, 1, 1, 0.9f);
+            RR(bx, by, bw, bh, 10, new Color4(0.06f, 0.04f, 0.12f, 1));
+            Text("Hatsu    Archivo    Editar    Ver", _sub, bx + 14, by, bw * 0.4, bh, white);
+            double ix = bx + bw - 14 - 38; Text("16:08", _sub, ix, by, 40, bh, white);
+            foreach (var name in (row.Options ?? []).Reverse()) { ix -= 26; RR(ix, by + bh / 2 - 8, 18, 16, 5, new Color4(1, 1, 1, 0.28f)); }
+            return;
+        }
+
         if (row.Kind == RowKind.Info) { Glyph("info", x + 10, midY, 9, Secondary); Text(row.Title, _sub, x + 30, r.Y + 4, r.W - 62, r.H - 8, Secondary, wrap: true); return; }
         double tw = r.W - 32 - ControlSpace(row);
         if (row.Kind == RowKind.Button) { Text(row.Title, _body, x, r.Y, r.W - 60, r.H, row.Enabled ? Tint : Label(0.42f)); if (row.Enabled) Glyph("chevron", r.X + r.W - 20, midY, 6, Secondary); return; }
