@@ -7,7 +7,7 @@ namespace WinMac.Host;
 public sealed record ModuleConfig
 {
     public bool Enabled { get; init; } = true;
-    /// <summary>Ruta del ejecutable; null = el de fábrica junto a WinMac.exe (solo se cambia en pruebas).</summary>
+    /// <summary>Ruta del ejecutable; null = el de fábrica junto a HatsuDesktop.exe (solo se cambia en pruebas).</summary>
     public string? Path { get; init; }
     public List<string>? Args { get; init; }
 }
@@ -18,11 +18,14 @@ public sealed record ModuleConfig
 /// </summary>
 public sealed record HostConfig
 {
-    public int Version { get; init; } = 2;
+    public int Version { get; init; } = BetaMigration.Version;
     public bool Autostart { get; init; } = false;
+    /// <summary>WM-034: ocultar la barra de tareas de Windows mientras WinMac está abierto. APAGADO por defecto; se restaura al desactivarlo, al salir y, si WinMac falla, desde el guardián.</summary>
+    public bool HideTaskbar { get; init; } = false;
     public Dictionary<string, ModuleConfig> Modules { get; init; } = new()
     {
-        ["bar"] = new ModuleConfig(), ["dock"] = new ModuleConfig(), ["notch"] = new ModuleConfig(),   // habilitada por defecto cuando viene incluida; si falta el ejecutable el host la marca «no instalada» y sigue
+        ["bar"] = new ModuleConfig(), ["dock"] = new ModuleConfig(), ["notch"] = new ModuleConfig(),
+        ["connect"] = new ModuleConfig { Enabled = false },   // WinMac Connect (docs/39): APAGADO por defecto; se activa en Ajustes › General   // habilitada por defecto cuando viene incluida; si falta el ejecutable el host la marca «no instalada» y sigue
     };
 
     /// <summary>Ajustes de la Isla. Null = aún no hay (se importan una vez de NotchWin o se usan los de fábrica).</summary>
@@ -31,8 +34,14 @@ public sealed record HostConfig
     /// <summary>Ajustes de la Barra superior. Null = aún no hay (se importa una vez de bar.json o se usan los de fábrica).</summary>
     public BarConfig? Bar { get; init; }
 
-    /// <summary>Orden de arranque y ejecutables de fábrica (junto a WinMac.exe).</summary>
-    public static readonly (string Id, string Exe, bool Optional)[] Known = [("bar", "WinMac.Bar.App.exe", false), ("dock", "WinMac.Dock.App.exe", false), ("notch", @"NotchWin\NotchWin.App.exe", true)];
+    /// <summary>Ajustes de WinMac Connect (batería y notificaciones del iPhone). Null = los de fábrica.</summary>
+    public WinMac.Connect.ConnectSettings? Connect { get; init; }
+
+    /// <summary>Fase 3: estado del asistente de primera ejecución. Null = configuración anterior al asistente (WinMac o Hatsu Desktop previo): se trata como usuario existente y no se le fuerza nada. Las versiones antiguas ignoran esta sección.</summary>
+    public OnboardingRecord? Onboarding { get; init; }
+
+    /// <summary>Orden de arranque y ejecutables de fábrica (junto a HatsuDesktop.exe).</summary>
+    public static readonly (string Id, string Exe, bool Optional)[] Known = [("bar", "HatsuDesktop.Bar.exe", false), ("dock", "HatsuDesktop.Dock.exe", false), ("notch", @"NotchWin\NotchWin.App.exe", true), ("connect", "HatsuDesktop.Connect.exe", true)];
 
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNameCaseInsensitive = true, Converters = { new JsonStringEnumConverter() } };
 
@@ -43,7 +52,7 @@ public sealed record HostConfig
             if (!File.Exists(path)) return new HostConfig();
             var c = JsonSerializer.Deserialize<HostConfig>(File.ReadAllText(path), Json) ?? new HostConfig();
             var mods = new Dictionary<string, ModuleConfig>(new HostConfig().Modules); foreach (var (k, v) in c.Modules) mods[k.ToLowerInvariant()] = v;   // lo no indicado conserva el valor de fábrica
-            return c with { Modules = mods, Notch = c.Notch?.Sanitize(), Bar = c.Bar?.Sanitize() };
+            return c with { Modules = mods, Notch = c.Notch?.Sanitize(), Bar = c.Bar?.Sanitize(), Connect = c.Connect?.Sanitize() };
         }
         catch (Exception) { return new HostConfig(); }
     }

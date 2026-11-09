@@ -21,7 +21,7 @@ public sealed class DockHost : IDisposable
     private const int WM_DESTROY = 2, WM_SETTINGCHANGE = 0x1A, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_NCHITTEST = 0x84, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_MOUSEMOVE = 0x200, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
 
-    private DockController _ctl; private DockConfig _cfg; private DockMetrics _m; private readonly GlassStyle _glass;
+    private DockController _ctl; private DockConfig _cfg; private DockMetrics _m; private GlassStyle _glass;
     private readonly WindowTracker? _tracker; private readonly WindowActions? _actions; private readonly DockModelBuilder _builder;
     private readonly IIconSource _icons; private readonly AppIconSource? _appIcons; private readonly WindowThumbnails? _thumbs;
     private bool _pressPreview;
@@ -39,6 +39,14 @@ public sealed class DockHost : IDisposable
 
     public string Diagnostics { get; private set; } = "";
 
+    private readonly Native.RECT? _screen; private bool _monitorGone;
+
+    /// <summary>Los monitores activos (px de pantalla), sin repetir los espejos: uno por Dock.</summary>
+    public static IReadOnlyList<(int Left, int Top, int Right, int Bottom)> Monitors() => Native.MonitorRects().Select(r => (r.Left, r.Top, r.Right, r.Bottom)).ToList();
+    private static int _classCounter;
+    /// <summary>El monitor de este Dock ya no existe (se desconectó o cambió la distribución): su bucle termina y el coordinador crea los que hagan falta.</summary>
+    public bool MonitorGone => _monitorGone;
+
     /// <summary>Pide el cierre normal del dock (lo usa el host de WinMac vía <c>--hosted</c>). Seguro desde otro hilo: el bucle lo atiende en ≤ 50 ms.</summary>
     public void RequestQuit() => _quitting = true;
 
@@ -47,17 +55,19 @@ public sealed class DockHost : IDisposable
     public bool Responsive => _modal || Environment.TickCount64 - Volatile.Read(ref _lastTickMs) < 10_000;
 
     /// <param name="configPath">Si se indica, las apps ancladas y su orden se guardan aquí (escritura atómica, con retardo) y se recargan si el archivo cambia desde fuera.</param>
-    public DockHost(DockConfig cfg, DockMetrics m, GlassStyle glass, bool demo, Action<string> log, string? configPath = null)
+    /// <param name="monitor">Monitor de este Dock (px de pantalla). null = el principal. Con varias pantallas hay un Dock por monitor, cada uno en su hilo.</param>
+    public DockHost(DockConfig cfg, DockMetrics m, GlassStyle glass, bool demo, Action<string> log, string? configPath = null, (int Left, int Top, int Right, int Bottom)? monitor = null)
     {
         _cfg = cfg; _glass = glass; _demo = demo; _log = log; _proc = WndProcImpl; _cfgPath = demo ? null : configPath;
+        _screen = monitor is { } mm ? new Native.RECT { Left = mm.Left, Top = mm.Top, Right = mm.Right, Bottom = mm.Bottom } : null;
         // Vista previa de ventanas: la ventana crece hacia arriba y a los lados (zona transparente que deja pasar el ratón); la barra sigue igual y centrada.
-        _m = Compose(m, cfg); _appliedLayout = DockSettings.LayoutKey(cfg);
+        _m = Compose(m, cfg); _appliedLayout = DockSettings.LayoutKey(cfg); _appliedPreviews = cfg.PreviewsEnabled;
         _ctl = new DockController(_m, cfg);
         _builder = new DockModelBuilder(cfg, DockDefaults.Title);
         if (demo) _icons = new NoIconSource();        // los íconos de demostración (letras) son solo para pruebas automatizadas y --demo
         else
         {
-            _appIcons = new AppIconSource(); _icons = _appIcons;
+            _appIcons = new AppIconSource(log: _log); _icons = _appIcons;
             _thumbs = new WindowThumbnails { Log = log }; _ctl.ThumbAspect = _thumbs.Aspect;
             _tracker = new WindowTracker(); _actions = new WindowActions(_tracker) { Log = log }; _tracker.Changed += RefreshItems;
             try { _quit = new EventWaitHandle(false, EventResetMode.ManualReset, DockDefaults.QuitEventName); } catch (Exception e) { log("No se pudo crear el evento de cierre: " + e.Message); }
@@ -78,10 +88,11 @@ public sealed class DockHost : IDisposable
             _tracker?.Pump();
             PollInputs();
             Housekeeping();
-            if (_quitting) return 0;
+            if (_quitting || _monitorGone) return 0;
             if (selfTest) { _force = true; if (clock.Elapsed.TotalSeconds > 10) throw new TimeoutException("selftest: no se alcanzaron los frames en 10 s"); }
             double now = clock.Elapsed.TotalSeconds, dt = Math.Min(now - last, 0.1); last = now;
             _view = _ctl.Step(dt);
+            UpdateHitRegion();
             PrefetchThumbnails();
             bool animating = _view.NeedsFrames;
             if (animating || _wasAnimating || _force) { Render(); _force = false; frames++; }
@@ -101,16 +112,53 @@ public sealed class DockHost : IDisposable
         if (_thumbs.TakeDirty()) _force = true;
     }
 
-    private static double ScreenWidthDip() => Native2.GetSystemMetrics(0 /* SM_CXSCREEN */) / (Native2.GetDpiForSystem() / 96.0);
+    private double ScreenWidthDip() => (_screen is { } t ? t.Width : Native2.GetSystemMetrics(0 /* SM_CXSCREEN */)) / (Native2.GetDpiForSystem() / 96.0);
+
+    /// <summary>
+    /// It8: el material del Dock sigue el tema de aplicaciones de Windows EN CALIENTE (antes se resolvía una sola vez al arrancar y el tinte, además, apenas se notaba).
+    /// Solo cambia el material (pincel, tinte, desenfoque, marcas): ni la posición, ni las animaciones, ni la autoocultación, ni la configuración guardada.
+    /// </summary>
+    private void ApplySystemTheme()
+    {
+        try
+        {
+            if (!DockThemeTracker.NeedsRestyle(_cfg.Theme, SystemTheme.Current(), _glass.Theme, out var target)) return;
+            _glass = GlassStyle.For(target);
+            var old = _painter; _painter = new DockPainter(_dev, _m, _glass, _icons, _thumbs); old.Dispose();
+            BuildBackdrop(); _force = true;
+            _log($"[dock] tema del sistema: {target}; material actualizado en caliente.");
+        }
+        catch (Exception e) { _log("[dock] no se pudo actualizar el tema: " + e.GetType().Name + ": " + e.Message); }
+    }
+
+    // Launchpad abierto en este monitor (lo avisa el proceso del Dock desde otro hilo): se lee aquí, en el hilo de esta ventana.
+    private long _lpSeq, _lpSeenSeq; private int _lpOpen; private long _lpRaisedAt;
+    public void SetLaunchpad(bool open) { Volatile.Write(ref _lpOpen, open ? 1 : 0); Interlocked.Increment(ref _lpSeq); }
+
+    private void ApplyLaunchpadPin()
+    {
+        long s = Volatile.Read(ref _lpSeq);
+        if (s != _lpSeenSeq) { _lpSeenSeq = s; bool o = Volatile.Read(ref _lpOpen) == 1; _ctl.SetLaunchpadOpen(o); if (o) _lpRaisedAt = 0; }
+        // Launchpad es una ventana superior a pantalla completa creada DESPUÉS que el Dock: se vuelve a poner el Dock por encima (sin activarlo ni moverlo; no roba el foco)
+        if (_ctl.LaunchpadPinned && _hwnd != IntPtr.Zero && Environment.TickCount64 - _lpRaisedAt > 1000)
+        { _lpRaisedAt = Environment.TickCount64; Native2.SetWindowPos(_hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0001u | 0x0002u | 0x0010u /* NOSIZE | NOMOVE | NOACTIVATE */); }
+    }
 
     private void PollInputs()
     {
+        ApplyLaunchpadPin();
         if (!Native.GetCursorPos(out var p)) return;
         double sx = (p.X - _winLeftPx) / _scale, sy = (p.Y - _winTopPx) / _scale;
         bool inWin = p.X >= _winLeftPx && p.X < _winLeftPx + _winWpx && p.Y >= _winTopPx && p.Y < _winTopPx + _winHpx;
         _ctl.SetPointer(inWin ? new PointerSample(sx, sy) : null);
-        _ctl.SetEdgeHot(p.Y >= _monitor.Bottom - 2 && p.X >= _winLeftPx && p.X < _winLeftPx + _winWpx);
+        _pointerOver = inWin && _view is not null && (InteractiveAt(sx, sy) || _view.HoverIndex >= 0);
+        _ctl.SetEdgeHot(DockSettings.EdgeHot(p.X, p.Y, _monitor.Bottom, _winLeftPx, _winWpx, _winTopPx + _winHpx, screenEdgeFree: !_taskbarBelow));
         if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000) { _lastFs = DateTime.UtcNow; _ctl.SetSuppressed(FullscreenWatcher.ShouldSuppress()); }
+        if ((DateTime.UtcNow - _lastWorkCheck).TotalSeconds >= 2) {
+            _lastWorkCheck = DateTime.UtcNow; ApplySystemTheme(); var top = TaskbarTopOn(_monitor); bool changed = (top is null) != (_taskbarTop is null); _taskbarTop = top; _taskbarBelow = top is not null;
+            if (changed && _hwnd != IntPtr.Zero) { _log($"[dock] la barra de tareas de Windows {(top is null ? "ya no se ve" : "volvió")}: el Dock se recoloca"); PlaceWindow(show: false); _force = true; }
+            else RecheckWorkArea(null);
+        }   // por si Windows no avisó (barata: una consulta)
     }
 
     private void UpdateVisibility()
@@ -122,13 +170,23 @@ public sealed class DockHost : IDisposable
     /// <summary>Añade a las métricas la holgura de la vista previa (la ventana crece hacia arriba y a los lados; la barra no cambia).</summary>
     private DockMetrics Compose(DockMetrics m, DockConfig cfg) => !_demo && cfg.PreviewsEnabled ? m with { PreviewHeadroom = PreviewSpec.Headroom(m), PreviewMaxWidth = Math.Min(PreviewSpec.MaxPanelWidth, Math.Max(PreviewSpec.MinPanelW + 40, ScreenWidthDip() - 2 * m.ShadowMargin - 24)) } : m;
 
-    private (double, DockAlignment, double, double) _appliedLayout;
+    private (double, DockAlignment, double, double) _appliedLayout; private bool _appliedPreviews;
 
     /// <summary>Aplica en vivo un cambio de tamaño, alineación o altura: el tamaño reconstruye controlador y painter con las métricas nuevas; lo demás solo recoloca la ventana.</summary>
     private void ApplyLayoutChange()
     {
-        var key = DockSettings.LayoutKey(_cfg); if (key == _appliedLayout) return;
-        bool sizeChanged = key.Item1 != _appliedLayout.Item1; _appliedLayout = key;
+        var key = DockSettings.LayoutKey(_cfg);
+        // Activar o desactivar la vista previa cambia la holgura de la ventana (Compose): antes solo se aplicaba al reiniciar el Dock
+        bool previewsChanged = _cfg.PreviewsEnabled != _appliedPreviews;
+        if (key == _appliedLayout && !previewsChanged)
+        {
+            // WM-033: a change that is not size/position (auto-hide, magnification, previews…) must reach the controller too. It did not: with «Ocultar
+            // automáticamente» on, the controller never hid the Dock while the window was re-placed — the Dock «went up and stayed visible».
+            _ctl.Config = _cfg;
+            if ((_cfg.ReserveSpace && !_cfg.AutoHide) != _reserving && _hwnd != IntPtr.Zero) PlaceWindow(show: false);   // only the reservation changed
+            return;
+        }
+        bool sizeChanged = key.Item1 != _appliedLayout.Item1 || previewsChanged; _appliedLayout = key; _appliedPreviews = _cfg.PreviewsEnabled;
         if (_hwnd == IntPtr.Zero) { _ctl.Config = _cfg; return; }
         _pressed = -1; _pressDrag = false;
         if (sizeChanged)
@@ -158,9 +216,13 @@ public sealed class DockHost : IDisposable
     // ------------------------------------------------------------------ ventana
     private void Create()
     {
-        var cls = new WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = Native2.GetModuleHandle(null), lpszClassName = "WinMacDock", hCursor = Native2.LoadCursor(IntPtr.Zero, 32512) };
+        // Una clase por Dock: la clase de ventana guarda el procedimiento de quien la registra, y con varios Docks en el proceso (uno por monitor) los mensajes
+        // de todos acabarían en el primero.
+        string clsName = "WinMacDock" + (Interlocked.Increment(ref _classCounter) == 1 ? "" : _classCounter.ToString());
+        var cls = new WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = Native2.GetModuleHandle(null), lpszClassName = clsName, hCursor = Native2.LoadCursor(IntPtr.Zero, 32512) };
         Native2.RegisterClassEx(ref cls);
-        _hwnd = Native2.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "WinMacDock", "WinMac Dock", WS_POPUP, 0, 0, 100, 100, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
+        int ox = _screen?.Left ?? 0, oy = _screen?.Top ?? 0;   // nace en SU monitor: así su DPI es el de ese monitor
+        _hwnd = Native2.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, clsName, "Hatsu Desktop Dock", WS_POPUP, ox, oy, 100, 100, IntPtr.Zero, IntPtr.Zero, cls.hInstance, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
         _dev = new D2DDevice(); Diagnostics = _dev.Description;
         _scale = Native.GetDpiForWindow(_hwnd) / 96.0; _dev.SetDpi(_scale);
@@ -172,22 +234,90 @@ public sealed class DockHost : IDisposable
         LogSizes("inicio");
     }
 
+    private DateTime _lastWorkCheck; private Native.RECT _lastWork; private bool _taskbarBelow = true; private int? _taskbarTop;
+
+    /// <summary>
+    /// Borde superior de la barra de tareas de Explorer VISIBLE en el borde inferior de este monitor, o null (WM-043). «Visible» = ventana visible y con más de
+    /// <see cref="DockSettings.TaskbarSliverPx"/> px dentro del monitor: oculta por WinMac, o autoocultada (solo asoma 1–2 px) → null.
+    /// Solo ventanas de Explorer: la Barra de WinMac tiene una ventana propia de la misma clase, invisible.
+    /// </summary>
+    private static int? TaskbarTopOn(Native.RECT mon)
+    {
+        var shell = Native2.GetShellWindow(); if (shell == IntPtr.Zero) return null;
+        Native2.GetWindowThreadProcessId(shell, out uint shellPid); int? best = null;
+        var monitor = new PxRect(mon.Left, mon.Top, mon.Right, mon.Bottom);
+        foreach (var cls in new[] { "Shell_TrayWnd", "Shell_SecondaryTrayWnd" })
+        {
+            IntPtr h = IntPtr.Zero;
+            while ((h = Native2.FindWindowExW(IntPtr.Zero, h, cls, null)) != IntPtr.Zero)
+            {
+                Native2.GetWindowThreadProcessId(h, out uint pid);
+                if (pid != shellPid || !Native2.GetWindowRect(h, out var r)) continue;
+                if (DockSettings.VisibleTaskbarTop(monitor, r.Left, r.Top, r.Right, r.Bottom, Native2.IsWindowVisible(h)) is { } top) best = best is null ? top : Math.Min(best.Value, top);
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// WM-043/WM-044: si el área de trabajo de este monitor cambió (la barra de tareas de Windows se ocultó o volvió, otra AppBar se fue), el Dock se recoloca contra el
+    /// borde nuevo. Mientras el Dock reserva su propia franja, el aviso es de su propio AppBar y lo resuelve ABN_POSCHANGED (no se entra en bucle).
+    /// </summary>
+    private void RecheckWorkArea(string? why)
+    {
+        if (_hwnd == IntPtr.Zero || _reserving || _monitorGone) return;
+        var pt = new Native.POINT { X = _monitor.Left + (_monitor.Right - _monitor.Left) / 2, Y = _monitor.Top + (_monitor.Bottom - _monitor.Top) / 2 };
+        var mi = new Native.MONITORINFO { cbSize = (uint)Marshal.SizeOf<Native.MONITORINFO>() };
+        if (!Native.GetMonitorInfo(Native.MonitorFromPoint(pt, Native.MONITOR_DEFAULTTOPRIMARY), ref mi)) return;
+        var wk = mi.rcWork;
+        if (wk.Left == _lastWork.Left && wk.Top == _lastWork.Top && wk.Right == _lastWork.Right && wk.Bottom == _lastWork.Bottom) return;
+        bool first = _lastWork.Right == 0 && _lastWork.Bottom == 0; _lastWork = wk;
+        if (first) return;
+        _log($"[dock] el área de trabajo cambió (abajo: {wk.Bottom}, pantalla: {mi.rcMonitor.Bottom}{(why is null ? "" : ", " + why)}): el Dock se recoloca");
+        PlaceWindow(show: false); _force = true;
+    }
+
     private void PlaceWindow(bool show)
     {
-        var pt = new Native.POINT { X = 0, Y = 0 };
+        var pt = _screen is { } t ? new Native.POINT { X = t.Left + t.Width / 2, Y = t.Top + t.Height / 2 } : new Native.POINT { X = 0, Y = 0 };
         var mi = new Native.MONITORINFO { cbSize = (uint)Marshal.SizeOf<Native.MONITORINFO>() };
         Native.GetMonitorInfo(Native.MonitorFromPoint(pt, Native.MONITOR_DEFAULTTOPRIMARY), ref mi);
+        if (_screen is { } want && (mi.rcMonitor.Left != want.Left || mi.rcMonitor.Top != want.Top || mi.rcMonitor.Right != want.Right || mi.rcMonitor.Bottom != want.Bottom))
+        {
+            _monitorGone = true; _log($"[dock] el monitor ({want.Left},{want.Top} {want.Width}x{want.Height}) ya no existe: este Dock se cierra"); return;
+        }
         _monitor = mi.rcMonitor;
         _winWpx = (int)Math.Ceiling(_ctl.WindowWidth * _scale); _winHpx = (int)Math.Ceiling(_ctl.WindowHeight * _scale);
+        // WM-001: reserve the Dock's strip (AppBar) so maximized windows end above it; with auto-hide or the option off, nothing is reserved
+        _appBar ??= new DockAppBar(_hwnd, WM_APPBAR, _log);
+        _taskbarTop = TaskbarTopOn(mi.rcMonitor); _taskbarBelow = _taskbarTop is not null; bool freeEdge = _taskbarTop is null;   // WM-043: sin barra visible, el borde físico manda
+        if (_cfg.ReserveSpace && !_cfg.AutoHide && !_demo)
+        {
+            int band = (int)Math.Ceiling((_m.BarHeight + 6 + DockSettings.ClampBottom(_cfg.BottomOffset)) * _scale);
+            _everReserved = true; int bottom = _appBar.Reserve(mi.rcMonitor, band, flushWithEdge: freeEdge);
+            mi.rcWork.Bottom = bottom;   // place the Dock on its own strip, not above it
+        }
+        else if (_appBar.Registered || _everReserved)
+        {
+            // WM-033: the work area read above still excluded the Dock's own strip; after freeing it, read it again or the Dock is placed one strip too high
+            _appBar.Remove(force: true); _everReserved = false;
+            Native.GetMonitorInfo(Native.MonitorFromPoint(pt, Native.MONITOR_DEFAULTTOPRIMARY), ref mi);
+        }
+        _reserving = _appBar.Registered;
         // Posición según la alineación y la altura elegidas (centro + altura normal = la de siempre: centrada justo sobre la barra de tareas).
-        (_winLeftPx, _winTopPx) = DockSettings.Place(new PxRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom), new PxRect(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom), _winWpx, _winHpx, _scale, _m, _cfg);
+        var monRect = new PxRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom); var workRect = new PxRect(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom);
+        int baseBottom = DockSettings.Baseline(monRect, workRect, _taskbarTop);
+        if (baseBottom != workRect.Bottom) _log($"[dock] base del Dock: {baseBottom} px (área de trabajo: {workRect.Bottom}, pantalla: {monRect.Bottom}, barra de Windows {(_taskbarTop is { } tt ? "visible desde " + tt : "no visible")})");
+        (_winLeftPx, _winTopPx) = DockSettings.Place(monRect, new PxRect(workRect.Left, workRect.Top, workRect.Right, baseBottom), _winWpx, _winHpx, _scale, _m, _cfg, freeEdge);
         Native2.SetWindowPos(_hwnd, new IntPtr(-1), _winLeftPx, _winTopPx, _winWpx, _winHpx, show ? 0x0010u | 0x0040u /* NOACTIVATE | SHOWWINDOW */ : 0x0010u);
+        _lastWork = mi.rcWork;
     }
 
     private void ResizeWindow()
     {
         _blurred?.Dispose(); _blurred = null; _painter.SetBackdrop(null);
-        _bmp?.Dispose(); _bmp = null; _dev.Context.Target = null;
+        _bmp?.Dispose(); _bmp = null; _dev.Context.Target = null; _regionKey = "";   // región nueva para el tamaño nuevo
         PlaceWindow(show: false);
         // Se recrea la superficie completa en vez de ResizeBuffers: su resultado no se comprobaba y, si fallaba, el búfer conservaba el ancho
         // anterior y la barra quedaba recortada por la derecha cuando cambiaba el número de apps.
@@ -260,8 +390,15 @@ public sealed class DockHost : IDisposable
     }
 
     // ------------------------------------------------------------------ mensajes
+    private DockAppBar? _appBar; private bool _reserving, _everReserved;
+    private const int WM_APPBAR = 0x8000 + 0x51;   // WM_APP + 0x51: AppBar notifications
+    private uint _taskbarCreated;
+
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
     {
+        if (_taskbarCreated == 0) _taskbarCreated = Native2.RegisterWindowMessageW("TaskbarCreated");
+        if (msg == _taskbarCreated && _taskbarCreated != 0) { _appBar?.Forget(); PlaceWindow(show: false); return IntPtr.Zero; }   // Explorer restarted
+        if (msg == WM_APPBAR) { if ((long)w == 1 /* ABN_POSCHANGED */) PlaceWindow(show: false); return IntPtr.Zero; }
         switch ((int)msg)
         {
             case WM_MOUSEACTIVATE: return (IntPtr)3; // MA_NOACTIVATE: un clic en el dock no roba el foco a la app activa
@@ -317,7 +454,11 @@ public sealed class DockHost : IDisposable
             }
             case WM_DPICHANGED: _scale = (int)((long)w & 0xFFFF) / 96.0; _dev.SetDpi(_scale); ResizeWindow(); return IntPtr.Zero;
             case WM_DISPLAYCHANGE: ResizeWindow(); return IntPtr.Zero;
-            case WM_SETTINGCHANGE: if ((long)w == 0x14 /* SPI_SETDESKWALLPAPER */) { BuildBackdrop(); _force = true; } return IntPtr.Zero;
+            case WM_SETTINGCHANGE:
+                if ((long)w == 0x14 /* SPI_SETDESKWALLPAPER */) { BuildBackdrop(); _force = true; }
+                else if (l != IntPtr.Zero && System.Runtime.InteropServices.Marshal.PtrToStringUni(l) == "ImmersiveColorSet") ApplySystemTheme();   // It8: Windows cambió el modo claro/oscuro
+                else if ((long)w == 0x2F /* SPI_SETWORKAREA */) RecheckWorkArea("aviso de Windows");   // WM-043: la barra de tareas se ocultó o volvió
+                return IntPtr.Zero;
             case WM_DESTROY: Native2.PostQuitMessage(0); return IntPtr.Zero;
         }
         return Native2.DefWindowProc(h, msg, w, l);
@@ -390,8 +531,25 @@ public sealed class DockHost : IDisposable
         }
     }
 
-    /// <summary>Menú contextual NATIVO de Windows (accesible, con el estilo del sistema), con submenús y marcas de selección. Devuelve la acción elegida o null.</summary>
+    /// <summary>WM-017: el menú oscuro de WinMac (mismas entradas y acciones); el nativo de Windows queda solo como respaldo si el oscuro no se puede crear.</summary>
     private DockAction? ShowMenu(IReadOnlyList<MenuEntry> entries)
+    {
+        try
+        {
+            Native.GetCursorPos(out var cp); _modal = true;
+            var r = DarkMenuWindow.Show(entries, cp.X, cp.Y, _scale, _log);
+            return r;
+        }
+        catch (Exception e) { _log("Menú oscuro no disponible, se usa el de Windows: " + e.GetType().Name + ": " + e.Message); }
+        finally { _modal = false; }
+        return ShowNativeMenu(entries);
+    }
+
+
+
+
+    /// <summary>Menú contextual NATIVO de Windows (respaldo), con submenús y marcas de selección. Devuelve la acción elegida o null.</summary>
+    private DockAction? ShowNativeMenu(IReadOnlyList<MenuEntry> entries)
     {
         var actions = new List<DockAction?>();   // el id de cada comando del menú es su posición + 1
         IntPtr Build(IReadOnlyList<MenuEntry> list)
@@ -421,6 +579,25 @@ public sealed class DockHost : IDisposable
         finally { _modal = false; if (menu != IntPtr.Zero) Native2.DestroyMenu(menu); }   // DestroyMenu destruye también los submenús
     }
 
+    private bool _pointerOver; private string _regionKey = "";
+
+    /// <summary>
+    /// Limita la ventana, para el ratón, a la barra y lo que de verdad se dibuja (<see cref="DockHitRegion"/>): fuera de esa región Windows entrega el clic a la app de debajo.
+    /// Solo se llama a SetWindowRgn cuando la región cambia (al pasar el puntero, al ocultarse o con la vista previa), no en cada fotograma.
+    /// </summary>
+    private void UpdateHitRegion()
+    {
+        if (_view is null || _hwnd == IntPtr.Zero) return;
+        var rects = DockHitRegion.Compute(_view, _m, _pointerOver, _ctl.IsDragging);
+        var px = rects.Select(r => (L: (int)Math.Floor(r.X * _scale), T: (int)Math.Floor(r.Y * _scale), R: (int)Math.Ceiling(r.Right * _scale), B: (int)Math.Ceiling(r.Bottom * _scale))).ToList();
+        string key = string.Join(";", px);
+        if (key == _regionKey) return;
+        _regionKey = key;
+        IntPtr rgn = Native2.CreateRectRgn(0, 0, 0, 0);
+        foreach (var (l, t, r, b) in px) { var part = Native2.CreateRectRgn(l, t, r, b); Native2.CombineRgn(rgn, rgn, part, 2 /* RGN_OR */); Native2.DeleteObject(part); }
+        if (Native2.SetWindowRgn(_hwnd, rgn, true) == 0) Native2.DeleteObject(rgn);   // si Windows la acepta, pasa a ser suya
+    }
+
     /// <summary>Solo la barra (y los íconos ampliados) capturan el ratón; el resto de la ventana, transparente, lo deja pasar a las apps de abajo.</summary>
     private bool InteractiveAt(double x, double y)
     {
@@ -436,6 +613,7 @@ public sealed class DockHost : IDisposable
     public void Dispose()
     {
         if (_saveDue is not null && _cfgPath is not null) _cfg.TrySave(_cfgPath);   // guarda lo pendiente al cerrar
+        try { _appBar?.Remove(); } catch (Exception) { }   // WM-001: give the work area back
         _tracker?.Dispose(); _thumbs?.Dispose(); _appIcons?.Dispose(); _quit?.Dispose(); _blurred?.Dispose(); _wall.Dispose(); _painter?.Dispose(); _bmp?.Dispose(); _swap?.Dispose(); _dev?.Dispose();
         if (_hwnd != IntPtr.Zero) Native2.DestroyWindow(_hwnd);
     }
@@ -448,8 +626,18 @@ public sealed class DockHost : IDisposable
     private static class Native2
     {
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern ushort RegisterClassEx(ref WNDCLASSEX c);
+        [DllImport("gdi32.dll")] public static extern IntPtr CreateRectRgn(int l, int t, int r, int b);
+        [DllImport("user32.dll")] public static extern IntPtr GetShellWindow();
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string cls, string? title);
+        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+        [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Native.RECT r);
+        [DllImport("gdi32.dll")] public static extern int CombineRgn(IntPtr dest, IntPtr a, IntPtr b, int mode);
+        [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr o);
+        [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr h, IntPtr rgn, bool redraw);
         [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr inst, IntPtr p);
-        [DllImport("user32.dll")] public static extern IntPtr DefWindowProc(IntPtr h, uint m, IntPtr w, IntPtr l);
+        [DllImport("user32.dll", EntryPoint = "DefWindowProcW")] public static extern IntPtr DefWindowProc(IntPtr h, uint m, IntPtr w, IntPtr l);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern uint RegisterWindowMessageW(string name);
         [DllImport("user32.dll")] public static extern bool DestroyWindow(IntPtr h);
         [DllImport("user32.dll")] public static extern void PostQuitMessage(int c);
         [DllImport("user32.dll")] public static extern bool PeekMessage(out MSG m, IntPtr h, uint a, uint b, uint remove);

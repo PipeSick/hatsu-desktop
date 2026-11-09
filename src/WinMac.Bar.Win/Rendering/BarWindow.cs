@@ -17,7 +17,7 @@ namespace WinMac.Bar.Win.Rendering;
 /// </summary>
 internal sealed class BarWindow : IWndTarget, IDisposable
 {
-    private const int WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_MOUSEMOVE = 0x200, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_DPICHANGED = 0x2E0, WM_APP_BAR = 0x8001;
+    private const int WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_CAPTURECHANGED = 0x215, WM_RBUTTONUP = 0x205, WM_DPICHANGED = 0x2E0, WM_APP_BAR = 0x8001;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
     public const string ClassName = "WinMacBar";
 
@@ -29,6 +29,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     private BarPainter _painter = null!; private readonly WallpaperSource _wall = new(); private BarView? _view;
     private bool _force = true, _registered, _hiddenForFullscreen, _zOrdered, _resizing, _disposed; private uint _taskbarCreated; private BarTheme _theme;
     private DateTime _lastFs = DateTime.MinValue; private double? _px, _py;
+    private BarTooltip? _tooltip; private string? _tipKey; private DateTime _tipSince; private bool _tipShown; private bool _mouseDown; private string? _pressId;
 
     public BarWindow(BarHost host, MonitorSnapshot snap, BarConfig cfg, BarState initial, Action<string> log)
     {
@@ -55,9 +56,10 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     public void Create()
     {
         WndRouter.EnsureClass(ClassName);
-        Hwnd = BarNative.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, ClassName, "WinMac Barra superior", WS_POPUP, _monitor.Left, _monitor.Top, 100, 30, IntPtr.Zero, IntPtr.Zero, BarNative.GetModuleHandle(null), IntPtr.Zero);
+        Hwnd = BarNative.CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, ClassName, "Hatsu Desktop Barra superior", WS_POPUP, _monitor.Left, _monitor.Top, 100, 30, IntPtr.Zero, IntPtr.Zero, BarNative.GetModuleHandle(null), IntPtr.Zero);
         if (Hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
         WndRouter.Register(Hwnd, this);
+        _tooltip = new BarTooltip(Hwnd, _log);
         _taskbarCreated = BarNative.RegisterWindowMessageW("TaskbarCreated");   // Explorer se reinició: hay que volver a registrar el AppBar
         _dev = new D2DDevice(); Diagnostics = _dev.Description;
         uint dpi = BarNative.GetDpiForWindow(Hwnd); _scale = dpi >= 48 ? dpi / 96.0 : Info.Scale; _dev.SetDpi(_scale);   // la ventana nace en el origen de SU monitor: su DPI es el de ese monitor
@@ -79,6 +81,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     {
         if (_disposed) return; _disposed = true;
         try { AppBarRemove(); } catch (Exception) { /* la ventana se destruye igual */ }
+        try { _tooltip?.Dispose(); } catch (Exception) { /* la ventana se destruye igual */ }
         if (Hwnd != IntPtr.Zero) { WndRouter.Unregister(Hwnd); BarNative.SetWindowRgn(Hwnd, IntPtr.Zero, false); }
         try { if (_dev is not null) _dev.Context.Target = null; } catch (Exception) { /* dispositivo ya perdido */ }
         _blurred?.Dispose(); _wall.Dispose(); _painter?.Dispose(); _bmp?.Dispose(); _visual?.Dispose(); _target?.Dispose(); _dcomp?.Dispose(); _swap?.Dispose(); _dev?.Dispose();
@@ -98,7 +101,9 @@ internal sealed class BarWindow : IWndTarget, IDisposable
         _zOrdered = true; ApplyYield();   // la ventana se movió o cambió de tamaño: volver a recortar
     }
 
-    private void AppBarSetPos()
+    private void AppBarSetPos() => _host.RunAppBarOp(AppBarSetPosCore);
+
+    private void AppBarSetPosCore()
     {
         var abd = new BarNative.APPBARDATA { cbSize = (uint)Marshal.SizeOf<BarNative.APPBARDATA>(), hWnd = Hwnd, uCallbackMessage = WM_APP_BAR };
         if (!_registered) { _registered = BarNative.SHAppBarMessage(BarNative.ABM_NEW, ref abd) != 0; if (!_registered) { _log($"[bar] ABM_NEW falló en {Info.Id}: la barra se muestra superpuesta, sin reservar espacio."); return; } }
@@ -107,12 +112,37 @@ internal sealed class BarWindow : IWndTarget, IDisposable
         abd.rc.Bottom = abd.rc.Top + _winHpx;   // QUERYPOS ajusta el borde; la altura la fijamos nosotros
         BarNative.SHAppBarMessage(BarNative.ABM_SETPOS, ref abd);
         _winLeftPx = abd.rc.Left; _winTopPx = abd.rc.Top; _winWpx = abd.rc.Width;
+        _workGuard.Placed(_guardClock.Elapsed.TotalSeconds);
         _log($"[bar] AppBar reservado en {Info.Id}: ({abd.rc.Left},{abd.rc.Top})-({abd.rc.Right},{abd.rc.Bottom}) px");
     }
 
-    private void AppBarRemove()
+    private readonly WorkAreaGuard _workGuard = new(); private static readonly System.Diagnostics.Stopwatch _guardClock = System.Diagnostics.Stopwatch.StartNew(); private bool _reportedUnreserved;
+
+    /// <summary>
+    /// WM-003: la reserva pedida a Windows se comprueba contra el área de trabajo real del monitor. Si no está (Explorer no estaba listo al primer arranque,
+    /// otra AppBar la desplazó…), se vuelve a pedir con espera creciente. Las ventanas maximizadas las recoloca Windows al cambiar el área de trabajo.
+    /// </summary>
+    private void CheckReservation()
     {
-        if (!_registered || Hwnd == IntPtr.Zero) return;
+        if (!_host.Config.ReserveSpace || _hiddenForFullscreen || Hwnd == IntPtr.Zero) return;
+        var h = BarNative.MonitorFromWindow(Hwnd, BarNative.MONITOR_DEFAULTTONEAREST); if (h == IntPtr.Zero) return;
+        var mi = new BarNative.MONITORINFO { cbSize = (uint)Marshal.SizeOf<BarNative.MONITORINFO>() };
+        if (!BarNative.GetMonitorInfo(h, ref mi)) return;
+        bool ok = _registered && WorkAreaGuard.Reserved(mi.rcWork.Top, mi.rcWork.Bottom, _winTopPx, _winTopPx + _winHpx);
+        if (ok && _reportedUnreserved) { _reportedUnreserved = false; _log($"[bar] reserva confirmada en {Info.Id}: área de trabajo desde {mi.rcWork.Top} px"); }
+        if (_workGuard.Due(_guardClock.Elapsed.TotalSeconds, ok))
+        {
+            if (!_reportedUnreserved || _workGuard.Failures % 10 == 0) _log($"[bar] el área de trabajo de {Info.Id} no excluye la barra (empieza en {mi.rcWork.Top} px, barra hasta {_winTopPx + _winHpx} px; registrada: {(_registered ? "sí" : "no")}): se vuelve a pedir la reserva (intento {_workGuard.Failures})");
+            _reportedUnreserved = true;
+            if (_registered) AppBarRemove();
+            PlaceWindow(); _force = true;
+        }
+    }
+
+    private void AppBarRemove() { if (!_registered || Hwnd == IntPtr.Zero) return; _host.RunAppBarOp(AppBarRemoveCore); }
+
+    private void AppBarRemoveCore()
+    {
         var abd = new BarNative.APPBARDATA { cbSize = (uint)Marshal.SizeOf<BarNative.APPBARDATA>(), hWnd = Hwnd };
         BarNative.SHAppBarMessage(BarNative.ABM_REMOVE, ref abd); _registered = false; _log($"[bar] AppBar liberado en {Info.Id}.");
     }
@@ -215,6 +245,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
             double? x = inside ? (p.X - _winLeftPx) / _scale : null, y = inside ? (p.Y - _winTopPx) / _scale : null;
             if (x != _px || y != _py) { _px = x; _py = y; Ctl.SetPointer(x, y); }
         }
+        UpdateTip();
 
         if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000)
         {
@@ -222,8 +253,22 @@ internal sealed class BarWindow : IWndTarget, IDisposable
             // Una app a pantalla completa en OTRO monitor no debe esconder esta barra: solo se oculta si la app en primer plano está en este monitor.
             bool fs = FullscreenWatcher.ShouldSuppress() && ForegroundIsOnThisMonitor();
             if (fs != _hiddenForFullscreen) { _hiddenForFullscreen = fs; BarNative.ShowWindow(Hwnd, fs ? 0 : 4 /* SW_SHOWNOACTIVATE */); _force = true; }
+            CheckReservation();
         }
     }
+
+    /// <summary>Sugerencia del módulo bajo el puntero: aparece tras una pausa y se oculta al salir, pulsar o arrastrar.</summary>
+    private void UpdateTip()
+    {
+        if (_tooltip is null) return;
+        BarItemFrame? item = _px is double x && !_mouseDown && !Ctl.Dragging ? Ctl.ItemAt(x) : null;
+        string? tip = item?.Item.Tip; string? key = tip is null ? null : item!.Item.Id + "|" + tip;
+        if (key != _tipKey) { _tipKey = key; _tipSince = DateTime.UtcNow; if (_tipShown) { _tooltip.Hide(); _tipShown = false; } return; }
+        if (key is null || _tipShown || (DateTime.UtcNow - _tipSince).TotalMilliseconds < 500) return;
+        _tooltip.Show(tip!, _winLeftPx + (int)Math.Round((item!.X + item.W / 2) * _scale), _winTopPx + _winHpx + 2); _tipShown = true;
+    }
+
+    private void HideTip() { _tipKey = null; if (_tipShown) { _tooltip?.Hide(); _tipShown = false; } }
 
     /// <summary>¿La ventana en primer plano está en ESTE monitor? Se compara por rectángulo, no por HMONITOR (que Windows puede renovar al suspender o reconectar).</summary>
     private bool ForegroundIsOnThisMonitor()
@@ -259,12 +304,23 @@ internal sealed class BarWindow : IWndTarget, IDisposable
             switch ((int)msg)
             {
                 case WM_MOUSEACTIVATE: return (IntPtr)3;   // MA_NOACTIVATE: un clic en la barra no roba el foco a la app activa
-                case WM_MOUSEMOVE: { double x = (short)((long)l & 0xFFFF) / _scale, y = (short)(((long)l >> 16) & 0xFFFF) / _scale; _px = x; _py = y; Ctl.SetPointer(x, y); return IntPtr.Zero; }
-                case WM_LBUTTONUP: { double x = (short)((long)l & 0xFFFF) / _scale; _host.OnBarAction(this, Ctl.OnClick(x), Ctl.ItemAt(x)); _force = true; return IntPtr.Zero; }
+                case WM_MOUSEMOVE: { double x = (short)((long)l & 0xFFFF) / _scale, y = (short)(((long)l >> 16) & 0xFFFF) / _scale; _px = x; _py = y; Ctl.SetPointer(x, y); if (_mouseDown && Ctl.DragTo(x)) _force = true; return IntPtr.Zero; }
+                case WM_LBUTTONDOWN: { double x = (short)((long)l & 0xFFFF) / _scale; HideTip(); Ctl.PressAt(x); _pressId = Ctl.ItemAt(x)?.Item.Id; _mouseDown = true; BarNative.SetCapture(Hwnd); return IntPtr.Zero; }
+                case WM_LBUTTONUP:
+                {
+                    double x = (short)((long)l & 0xFFFF) / _scale;
+                    bool wasDown = _mouseDown; _mouseDown = false;
+                    string? order = Ctl.Release(x, out bool wasDrag); BarNative.ReleaseCapture(); _force = true;
+                    if (wasDrag) { if (order is not null) _host.OnBarOrderChangedInternal(order); return IntPtr.Zero; }   // un arrastre nunca cuenta como clic
+                    var it = Ctl.ItemAt(x);
+                    if (wasDown && (it is null || it.Item.Id != _pressId)) return IntPtr.Zero;   // se pulsó en un módulo y se soltó en otro: no es un clic en ninguno
+                    _host.OnBarAction(this, Ctl.OnClick(x), it); return IntPtr.Zero;
+                }
+                case WM_CAPTURECHANGED: if (_mouseDown) { _mouseDown = false; Ctl.CancelDrag(); _force = true; } return IntPtr.Zero;
                 case WM_RBUTTONUP: _host.OnBarAction(this, new BarAction(BarActionKind.ShowMenu), null); _force = true; return IntPtr.Zero;
                 case WM_APP_BAR:
                     if ((long)w == BarNative.ABN_POSCHANGED && _registered) { PlaceWindow(); _force = true; }
-                    else if ((long)w == BarNative.ABN_FULLSCREENAPP) BarNative.SetWindowPos(Hwnd, (long)l != 0 ? new IntPtr(1) /* HWND_BOTTOM */ : new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE|NOMOVE|NOACTIVATE */);
+                    else if ((long)w == BarNative.ABN_FULLSCREENAPP) BarNative.SetWindowPos(Hwnd, ((long)l != 0 && FullscreenWatcher.ForegroundCoversMonitor()) ? new IntPtr(1) /* HWND_BOTTOM */ : new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE|NOMOVE|NOACTIVATE */);
                     return IntPtr.Zero;
                 case WM_DPICHANGED: if (!_resizing) { _scale = (int)((long)w & 0xFFFF) / 96.0; _dev.SetDpi(_scale); ResizeWindow(); } return IntPtr.Zero;
                 case WM_DISPLAYCHANGE: _host.NotifyDisplayChange(); return IntPtr.Zero;   // el anfitrión espera a que Windows termine de acomodar las pantallas y reconcilia

@@ -41,17 +41,16 @@ public sealed class WindowTracker : IDisposable
 
     public bool HasPending => _dirty;
 
-    /// <summary>Heurística de «ventana de app» (similar a Alt+Tab). Hipótesis a validar en Windows real (spike S1).</summary>
-    internal static bool IsAppWindow(IntPtr h)
+    /// <summary>Lee lo necesario de una ventana para <see cref="AppWindowRules"/> (la regla, pura y con pruebas, vive en Dock.Core).</summary>
+    internal static WindowFacts Facts(IntPtr h, out string title)
     {
-        if (!Native.IsWindowVisible(h)) return false;
-        if (Native.DwmGetWindowAttribute(h, 14 /* DWMWA_CLOAKED */, out int cloaked, 4) == 0 && cloaked != 0) return false;
-        long ex = Native.GetWindowLongPtr(h, -20).ToInt64();
-        if ((ex & 0x80) != 0 && (ex & 0x40000) == 0) return false;                    // TOOLWINDOW sin APPWINDOW
-        if (Native.GetWindow(h, 4 /* GW_OWNER */) != IntPtr.Zero && (ex & 0x40000) == 0) return false;
-        var c = new StringBuilder(256); Native.GetClassNameW(h, c, 256);
-        return c.ToString() is not ("Progman" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "WorkerW" or "Windows.UI.Core.CoreWindow");
+        var t = new StringBuilder(256); bool hasTitle = Native.GetWindowTextW(h, t, 256) > 0; title = t.ToString();
+        bool cloaked = Native.DwmGetWindowAttribute(h, 14 /* DWMWA_CLOAKED */, out int c, 4) == 0 && c != 0;
+        var cls = new StringBuilder(256); Native.GetClassNameW(h, cls, 256);
+        return new WindowFacts(Native.IsWindowVisible(h), cloaked, Native.IsIconic(h), Native.GetWindowLongPtr(h, -20).ToInt64(), Native.GetWindow(h, 4 /* GW_OWNER */) != IntPtr.Zero, cls.ToString(), hasTitle);
     }
+
+    internal static bool IsAppWindow(IntPtr h) => AppWindowRules.IsAppWindow(Facts(h, out _));
 
     /// <summary>Instantánea de apps en ejecución con ventanas de app, agrupadas por IDENTIDAD estable (AUMID para apps empaquetadas, ejecutable para Win32). Excluye al propio dock. El orden de ventanas es el Z-order (la superior primero).</summary>
     public IReadOnlyList<RunningApp> Snapshot()
@@ -62,20 +61,14 @@ public sealed class WindowTracker : IDisposable
         {
             try
             {
-                bool minimized = Native.IsIconic(h);
-                if (!minimized && !IsAppWindow(h)) return true;
-                if (minimized)
-                {   // Las minimizadas dejan de ser «visibles» según el estilo; se aceptan si cumplen el resto de criterios.
-                    long ex = Native.GetWindowLongPtr(h, -20).ToInt64();
-                    if (((ex & 0x80) != 0 && (ex & 0x40000) == 0) || (Native.GetWindow(h, 4) != IntPtr.Zero && (ex & 0x40000) == 0)) return true;
-                }
-                var t = new StringBuilder(256); if (Native.GetWindowTextW(h, t, 256) == 0) return true;
+                var facts = Facts(h, out var title); bool minimized = facts.Minimized;
+                if (!AppWindowRules.IsAppWindow(facts)) return true;   // también las minimizadas deben ser visibles (antes no: se colaban ventanas ocultas del sistema)
                 Native.GetWindowThreadProcessId(h, out uint pid);
                 if (!pathOf.TryGetValue(pid, out var path)) pathOf[pid] = path = Native.ProcessPath(pid);
                 if (path is null || string.Equals(path, _self, StringComparison.OrdinalIgnoreCase)) return true;
                 var id = WindowIdentityResolver.Resolve(h, pid, path); if (id is null) return true;   // p. ej. marco de ApplicationFrameHost sin AUMID
                 if (!groups.TryGetValue(id.Id, out var g)) groups[id.Id] = g = (id, pid, new List<WindowInfo>());
-                g.W.Add(new WindowInfo(h.ToInt64(), t.ToString(), minimized, h == fg));
+                g.W.Add(new WindowInfo(h.ToInt64(), title, minimized, h == fg));
             }
             catch (Exception) { /* una ventana problemática no debe romper el dock */ }
             return true;

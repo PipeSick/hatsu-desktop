@@ -62,7 +62,7 @@ public class NotchSettingsTests
     [Fact]
     public void Move_and_toggle_are_pure_and_safe_at_the_edges()
     {
-        var n = new NotchSettings(); var m = n.MoveSection(0, 1); Assert.Equal("agents", m.Sections[0].Id); Assert.Equal("music", n.Sections[0].Id);   // el original no cambia
+        var n = new NotchSettings(); var m = n.MoveSection(0, 1); Assert.Equal(NotchSettings.SectionIds[1], m.Sections[0].Id); Assert.Equal(NotchSettings.SectionIds[0], n.Sections[0].Id);   // el original no cambia
         Assert.Same(n, n.MoveSection(0, -1)); Assert.Same(n, n.MoveSection(99, 1)); Assert.Same(n, n.ToggleSection(-1));
         Assert.False(n.ToggleSection(0).Sections[0].Enabled);
     }
@@ -71,7 +71,7 @@ public class NotchSettingsTests
     public void The_wire_format_is_camelCase_and_roundtrips_through_a_patch()
     {
         var n = new NotchSettings { GlassLevel = 41, LyricsInPill = true, Position = "TopRight" }.MoveSection(2, -2);
-        string json = JsonSerializer.Serialize(n.ToWire()); Assert.Contains("\"glassLevel\":41", json); Assert.Contains("\"sections\":[{\"id\":\"timer\"", json);
+        string json = JsonSerializer.Serialize(n.ToWire()); Assert.Contains("\"glassLevel\":41", json); Assert.Contains("\"sections\":[{\"id\":\"" + NotchSettings.SectionIds[2] + "\"", json);
         Assert.True(ConfigService.SameNotch(n, new NotchSettings().ApplyPatch(J(json))));
     }
 
@@ -148,7 +148,7 @@ public class HostControllerTests
     [Fact]
     public void Start_publishes_the_current_notch_settings_as_retained_state()
     {
-        var (f, _, h, file) = Make(); try { h.Start(); lock (f.Bus.Published) { Assert.Equal(2, f.Bus.Published.Count); Assert.Equal(NotchSettings.Topic, f.Bus.Published[0].Topic); Assert.Equal(HostController.BarTopic, f.Bus.Published[1].Topic); } } finally { File.Delete(file); }
+        var (f, _, h, file) = Make(); try { h.Start(); lock (f.Bus.Published) { Assert.Equal(3, f.Bus.Published.Count); Assert.Equal(NotchSettings.Topic, f.Bus.Published[0].Topic); Assert.Equal(HostController.BarTopic, f.Bus.Published[1].Topic); Assert.Equal(WinMac.Connect.ConnectTopics.Config, f.Bus.Published[2].Topic); } } finally { File.Delete(file); }
     }
 
     [Fact]
@@ -522,5 +522,38 @@ public class BarCommandTests
         var f = new Fixture().With(("bar", true), ("dock", true), ("notch", true)); var file = Path.Combine(Path.GetTempPath(), "winmac-cmd-" + Guid.NewGuid().ToString("N") + ".json");
         try { _ = new HostController(new ConfigService(file, new HostConfig()), f.Sup, f.Bus); f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"quit\"}"); f.Bus.RaiseEvent("bar", HostController.CommandTopic, "{\"cmd\":\"settings\"}"); }
         finally { File.Delete(file); }
+    }
+}
+
+public class NotchPillSettingsTests
+{
+    private static JsonElement J(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+    [Fact]
+    public void Pill_options_default_on_travel_on_the_wire_and_are_clamped()
+    {
+        var n = new NotchSettings(); Assert.True(n.PillVolume && n.PillBrightness && n.PillNotifications && n.PillAnimations); Assert.Equal(2, n.PillHudSeconds); Assert.Equal(5, n.PillNotifySeconds);
+        var p = n.ApplyPatch(J("{\"pillVolume\":false,\"pillHudSeconds\":60,\"pillNotifySeconds\":1,\"pillAnimations\":\"no\"}"));
+        Assert.False(p.PillVolume); Assert.Equal(10, p.PillHudSeconds); Assert.Equal(2, p.PillNotifySeconds); Assert.True(p.PillAnimations);
+        var wire = JsonDocument.Parse(JsonSerializer.Serialize(p.ToWire())).RootElement;
+        Assert.False(wire.GetProperty("pillVolume").GetBoolean()); Assert.Equal(10, wire.GetProperty("pillHudSeconds").GetInt32()); Assert.True(wire.GetProperty("pillNotifications").GetBoolean());
+        Assert.False(WinMac.Host.ConfigService.SameNotch(n, p));   // a change here is published to the notch
+    }
+
+    [Fact]
+    public void Settings_page_has_the_closed_notch_group_and_its_edits_are_saved()
+    {
+        string f = Path.Combine(Path.GetTempPath(), "winmac-pill-" + Guid.NewGuid().ToString("N") + ".json"); var cfg = new ConfigService(f, new HostConfig());
+        try
+        {
+            var a = new SettingsActions(cfg, () => { }, _ => { });
+            var group = SettingsBuilder.Build(new SettingsInput(cfg.Current, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "notch").Groups.Single(g => g.Header == "Notch cerrado");
+            Assert.Equal(["notch.pillvol", "notch.pillbright", "notch.pillnotif", "notch.hudsec", "notch.notifsec", "notch.pillanim"], group.Rows.Select(r => r.Id));
+            Assert.True(a.Apply(new SettingsEdit("notch.pillnotif", "toggle", On: false))); Assert.False(cfg.Current.Notch!.PillNotifications);
+            Assert.True(a.Apply(new SettingsEdit("notch.hudsec", "text", Text: " 4 "))); Assert.Equal(4, cfg.Current.Notch!.PillHudSeconds);
+            Assert.True(a.Apply(new SettingsEdit("notch.notifsec", "text", Text: "abc"))); Assert.Equal(5, cfg.Current.Notch!.PillNotifySeconds);
+            Assert.True(a.Apply(new SettingsEdit("notch.pillanim", "toggle", On: false))); Assert.False(cfg.Current.Notch!.PillAnimations);
+        }
+        finally { File.Delete(f); }
     }
 }

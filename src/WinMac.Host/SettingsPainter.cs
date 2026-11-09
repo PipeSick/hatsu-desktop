@@ -45,6 +45,15 @@ internal sealed class SettingsPainter : IDisposable
         _round = dev.Factory.CreateStrokeStyle(new StrokeStyleProperties { StartCap = CapStyle.Round, EndCap = CapStyle.Round, LineJoin = LineJoin.Round });
     }
 
+    private void Pill(double x, double y, double w, double h, string text, bool primary = true)
+    {
+        RR(x, y, w, h, h / 2, primary ? Tint : Label(0.10f));
+        Text(text, _small, x, y, w, h, primary ? new Color4(1, 1, 1, 1) : Label(), center: true);
+    }
+
+    /// <summary>El asa ⋮⋮ (dos columnas de tres puntos) para arrastrar un icono de la barra.</summary>
+    private void Grip(double cx, double cy, Color4 c) { for (int i = -1; i <= 1; i++) { Dot(cx - 3, cy + i * 5, 1.5, c); Dot(cx + 3, cy + i * 5, 1.5, c); } }
+
     private void Brush(Color4 c) => _b.Color = c;
     private void RR(double x, double y, double w, double h, double r, Color4 c) { Brush(c); _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = R(x, y, x + w, y + h), RadiusX = (float)r, RadiusY = (float)r }, _b); }
     private void RRStroke(double x, double y, double w, double h, double r, Color4 c, float t = 1f) { Brush(c); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = R(x + t / 2, y + t / 2, x + w - t / 2, y + h - t / 2), RadiusX = (float)r, RadiusY = (float)r }, _b, t); }
@@ -71,6 +80,13 @@ internal sealed class SettingsPainter : IDisposable
             case "bar": RRStroke(cx - s, cy - s * .62, s * 2, s * 1.24, 3, c, 1.6f); Ln(cx - s * .7, cy - s * .22, cx + s * .7, cy - s * .22, c, 1.6f); break;
             case "globe": Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), (float)s, (float)s), _b, 1.5f); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)cy), (float)(s * .42), (float)s), _b, 1.3f); Ln(cx - s, cy, cx + s, cy, c, 1.3f); break;
             case "island": RR(cx - s * .95, cy - s * .38, s * 1.9, s * .76, s * .38, c); break;
+            case "phone": RRStroke(cx - s * .5, cy - s * .9, s, s * 1.8, s * .22, c, 1.6f); Dot(cx, cy + s * .62, 1.6, c); break;
+            case "puzzle": RRStroke(cx - s * .7, cy - s * .55, s * 1.25, s * 1.25, s * .2, c, 1.6f); Dot(cx + s * .7, cy + s * .08, 2.4, c); Dot(cx - s * .08, cy - s * .7, 2.4, c); break;
+            case "dock": RRStroke(cx - s, cy + s * .05, s * 2, s * .62, s * .2, c, 1.6f); for (int i = -1; i <= 1; i++) RR(cx + i * s * .55 - s * .18, cy - s * .55, s * .36, s * .36, s * .1, c); break;
+            case "camera": RRStroke(cx - s, cy - s * .55, s * 2, s * 1.3, s * .25, c, 1.6f); Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)(cy + s * .1)), (float)(s * .38), (float)(s * .38)), _b, 1.5f); break;
+            case "search": Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)(cx - s * .18), (float)(cy - s * .18)), (float)(s * .58), (float)(s * .58)), _b, 1.7f); Ln(cx + s * .25, cy + s * .25, cx + s * .85, cy + s * .85, c, 2f); break;
+            case "clipboard": RRStroke(cx - s * .72, cy - s * .7, s * 1.44, s * 1.6, s * .2, c, 1.6f); RR(cx - s * .35, cy - s * .9, s * .7, s * .34, s * .1, c); break;
+            case "bell": RRStroke(cx - s * .62, cy - s * .78, s * 1.24, s * 1.3, s * .55, c, 1.6f); Ln(cx - s * .9, cy + s * .5, cx + s * .9, cy + s * .5, c, 1.6f); Dot(cx, cy + s * .82, 1.4, c); break;
             case "chevron": Ln(cx - s * .3, cy - s * .62, cx + s * .3, cy, c, 1.8f); Ln(cx + s * .3, cy, cx - s * .3, cy + s * .62, c, 1.8f); break;
             case "up": Ln(cx - s * .55, cy + s * .25, cx, cy - s * .3, c, 1.8f); Ln(cx, cy - s * .3, cx + s * .55, cy + s * .25, c, 1.8f); break;
             case "down": Ln(cx - s * .55, cy - s * .25, cx, cy + s * .3, c, 1.8f); Ln(cx, cy + s * .3, cx + s * .55, cy - s * .25, c, 1.8f); break;
@@ -85,6 +101,7 @@ internal sealed class SettingsPainter : IDisposable
     public void Paint(SettingsController c, double w, double h, EditView? edit, bool clear = true)
     {
         _ctx.BeginDraw(); if (clear) _ctx.Clear(Bg);
+        _searchEdit = edit is { Id: "search" } ? edit : null;
         DrawSidebar(c, h);
         double ox = SettingsLayout.SidebarW, oy = SettingsLayout.TitleH, cw = SettingsLayout.ContentW;
         if (c.Page is { } page)
@@ -93,6 +110,12 @@ internal sealed class SettingsPainter : IDisposable
             _ctx.PushAxisAlignedClip(R(ox, oy, w, h), AntialiasMode.Aliased);
             _ctx.Transform = Matrix3x2.CreateTranslation((float)ox, (float)oy);
             foreach (var g in f.Groups) DrawGroup(g, f, c, edit);
+            if (c.Reordering is { } ro && f.Rows.FirstOrDefault(r => r.Row.Id == ro.Id) is { } dragged)
+            {   // la fila que se arrastra se resalta y una línea azul marca dónde caerá
+                RR(dragged.X + 2, dragged.Y + 2, dragged.W - 4, dragged.H - 4, 8, new Color4(Tint.R, Tint.G, Tint.B, 0.16f));
+                var grips = f.Rows.Where(r => SettingsLayout.HasGrip(r.Row)).ToList(); var tgt = grips[Math.Clamp(ro.To, 0, grips.Count - 1)];
+                double ly = ro.To > ro.From ? tgt.Y + tgt.H : tgt.Y; Ln(tgt.X + 12, ly, tgt.X + tgt.W - 12, ly, Tint, 3f);
+            }
             if (f.MaxScroll > 0.5) { double th = Math.Max(30, SettingsLayout.ViewportH * SettingsLayout.ViewportH / f.ContentHeight), ty = 6 + (SettingsLayout.ViewportH - th - 12) * f.Scroll / f.MaxScroll; RR(cw - 7, ty, 3.5, th, 1.75, Label(0.28f)); }
             DrawSuggestions(c, f);
             _ctx.Transform = Matrix3x2.Identity; _ctx.PopAxisAlignedClip();
@@ -103,16 +126,19 @@ internal sealed class SettingsPainter : IDisposable
         _ctx.EndDraw();
     }
 
+    private EditView? _searchEdit;
     private void DrawSidebar(SettingsController c, double h)
     {
         Brush(Side); _ctx.FillRectangle(R(0, 0, SettingsLayout.SidebarW, h), _b); Ln(SettingsLayout.SidebarW - 0.5, 0, SettingsLayout.SidebarW - 0.5, h, Sep, 1f);
-        Text("Ajustes", _title, 20, 18, SettingsLayout.SidebarW - 32, 44, Label());
-        for (int i = 0; i < c.Pages.Count; i++)
+        Text("Ajustes", _title, 20, 8, SettingsLayout.SidebarW - 32, 44, Label());
+        DrawField(c.SearchFrame, _searchEdit, 1f); Glyph("search", SettingsLayout.FieldRect(c.SearchFrame).X + SettingsLayout.FieldRect(c.SearchFrame).W - 18, SettingsLayout.FieldRect(c.SearchFrame).Y + 16, 6.5, Secondary);
+        foreach (var e in SettingsLayout.SideEntries(c.Pages))
         {
-            var r = SettingsLayout.SideItemRect(i); bool sel = i == c.PageIndex, hov = i == c.HoverSide && !sel;
+            int i = e.PageIndex; var r = e.Rect; bool sel = i == c.PageIndex, hov = i == c.HoverSide && !sel;
+            if (e.Header is { } hd) Text(hd.ToUpperInvariant(), _head, r.X + 10, e.HeaderY, r.W - 12, SettingsLayout.SideHeaderH, Secondary);
             if (sel) RR(r.X, r.Y, r.W, r.H, 10, new Color4(Tint.R, Tint.G, Tint.B, _dark ? 0.28f : 0.16f)); else if (hov) RR(r.X, r.Y, r.W, r.H, 10, Label(0.06f));
-            RR(r.X + 8, r.Y + 6, 28, 28, 7, C(IconColors[i % IconColors.Length])); Glyph(c.Pages[i].Glyph, r.X + 22, r.Y + 20, 8.5, new Color4(1, 1, 1, 1));
-            Text(c.Pages[i].Title, sel ? _sideSel : _side, r.X + 46, r.Y, r.W - 52, r.H, sel ? Tint : Label());
+            RR(r.X + 8, r.Y + 4, 24, 24, 6, C(IconColors[i % IconColors.Length])); Glyph(c.Pages[i].Glyph, r.X + 20, r.Y + 16, 7.5, new Color4(1, 1, 1, 1));
+            Text(c.Pages[i].Title, sel ? _sideSel : _side, r.X + 42, r.Y, r.W - 48, r.H, sel ? Tint : Label());
         }
     }
 
@@ -137,17 +163,39 @@ internal sealed class SettingsPainter : IDisposable
     {
         var row = r.Row; float dim = row.Enabled ? 1f : 0.42f; double x = r.X + 16, midY = r.Y + r.H / 2;
         bool hasSub = !string.IsNullOrEmpty(row.Subtitle) || (!row.Enabled && !string.IsNullOrEmpty(row.Reason));
+        if (row.Kind == RowKind.Preview)
+        {   // tira con la barra de arriba tal como queda: el nombre, los menús, los iconos en su orden y la hora
+            double bx = r.X + 16, by = r.Y + 8, bw = r.W - 32, bh = r.H - 16; var white = new Color4(1, 1, 1, 0.9f);
+            RR(bx, by, bw, bh, 10, new Color4(0.06f, 0.04f, 0.12f, 1));
+            Text("Hatsu    Archivo", _sub, bx + 14, by, 130, bh, white);
+            var pill = SettingsLayout.PreviewPill(r); Pill(pill.X, pill.Y, pill.W, pill.H, SettingsLayout.CustomizeLabel);
+            double ix = pill.X - 10 - 40; Text("16:08", _sub, ix, by, 40, bh, white);
+            foreach (var name in (row.Options ?? []).Reverse()) { ix -= 20; if (ix < bx + 120) break; RR(ix, by + bh / 2 - 7, 14, 14, 4, new Color4(1, 1, 1, 0.28f)); }
+            return;
+        }
+
         if (row.Kind == RowKind.Info) { Glyph("info", x + 10, midY, 9, Secondary); Text(row.Title, _sub, x + 30, r.Y + 4, r.W - 62, r.H - 8, Secondary, wrap: true); return; }
+        bool grip = SettingsLayout.HasGrip(row); if (grip) x += SettingsLayout.GripW - 10;
         double tw = r.W - 32 - ControlSpace(row);
+        if (row.Kind == RowKind.Button && row.Options is { Count: > 0 } pills)
+        {   // fila de acción con píldoras azules (Agregar, Cancelar / Guardar)
+            double ptw = r.W - 32 - ControlSpace(row);
+            if (!string.IsNullOrEmpty(row.Subtitle)) { Text(row.Title, _body, x, r.Y + 8, ptw, 22, Label()); Text(row.Subtitle, _sub, x, r.Y + 30, Math.Max(40, ptw), SettingsLayout.SubLineH * SettingsLayout.Lines(row.Subtitle, ptw) + 3, Secondary, wrap: true, top: true); }
+            else Text(row.Title, _body, x, r.Y, ptw, r.H, Label());
+            for (int i = 0; i < pills.Count; i++) { var pr = SettingsLayout.PillRect(r, i); Pill(pr.X, pr.Y, pr.W, pr.H, pills[i], primary: i == pills.Count - 1); }
+            return;
+        }
+
         if (row.Kind == RowKind.Button) { Text(row.Title, _body, x, r.Y, r.W - 60, r.H, row.Enabled ? Tint : Label(0.42f)); if (row.Enabled) Glyph("chevron", r.X + r.W - 20, midY, 6, Secondary); return; }
-        if (hasSub) { Text(row.Title, _body, x, r.Y + 8, tw, 22, Label(dim)); Text(!row.Enabled && !string.IsNullOrEmpty(row.Reason) ? row.Reason : row.Subtitle, _sub, x, r.Y + 30, Math.Max(40, tw), 20, Secondary, top: true); }
+        if (hasSub) { var sub = SettingsLayout.SubText(row); Text(row.Title, _body, x, r.Y + 8, tw, 22, Label(dim)); Text(sub, _sub, x, r.Y + 30, Math.Max(40, tw), SettingsLayout.SubLineH * SettingsLayout.Lines(sub, tw) + 3, Secondary, wrap: true, top: true); }
         else Text(row.Title, _body, x, r.Y, tw, r.H, Label(dim));
         switch (row.Kind)
         {
             case RowKind.Toggle:
             {
                 DrawSwitch(SettingsLayout.SwitchRect(r), row.On, dim);
-                if (row.CanUp || row.CanDown) { var u = SettingsLayout.UpRect(r); var d = SettingsLayout.DownRect(r); Glyph("up", u.X + u.W / 2, u.Y + u.H / 2, 7, Label(row.CanUp ? 0.7f : 0.2f)); Glyph("down", d.X + d.W / 2, d.Y + d.H / 2, 7, Label(row.CanDown ? 0.7f : 0.2f)); }
+                if (grip) Grip(r.X + 6 + SettingsLayout.GripW / 2, midY, Label(0.45f));
+                else if (row.CanUp || row.CanDown) { var u = SettingsLayout.UpRect(r); var d = SettingsLayout.DownRect(r); Glyph("up", u.X + u.W / 2, u.Y + u.H / 2, 7, Label(row.CanUp ? 0.7f : 0.2f)); Glyph("down", d.X + d.W / 2, d.Y + d.H / 2, 7, Label(row.CanDown ? 0.7f : 0.2f)); }
                 break;
             }
             case RowKind.Segmented: DrawSegmented(r, dim); break;
@@ -157,12 +205,12 @@ internal sealed class SettingsPainter : IDisposable
                 var (x0, x1, cy) = SettingsLayout.SliderTrack(r); double v = c.Dragging is { } dg && dg.Id == row.Id ? dg.Value : row.Value, px = x0 + (x1 - x0) * v / 100;
                 RR(x0, cy - 2, x1 - x0, 4, 2, Off); RR(x0, cy - 2, px - x0, 4, 2, new Color4(Tint.R, Tint.G, Tint.B, dim));
                 Dot(px, cy + 1, 13, new Color4(0, 0, 0, 0.18f)); Dot(px, cy, 12, new Color4(1, 1, 1, dim)); RRStroke(px - 12, cy - 12, 24, 24, 12, new Color4(0, 0, 0, _dark ? 0.35f : 0.12f), 0.8f);
-                Text(((int)Math.Round(v)).ToString(), _small, x1 + 8, r.Y, 36, r.H, Secondary, right: true); break;
+                Text(row.SliderLabel(v), _small, x1 + 2, r.Y, 44, r.H, Secondary, right: true); break;
             }
         }
     }
 
-    private static double ControlSpace(SettingsRow r) => r.Kind switch { RowKind.Toggle => r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Segmented => 200, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
+    private static double ControlSpace(SettingsRow r) => SettingsLayout.ControlSpace(r);
 
     private void DrawSwitch((double X, double Y, double W, double H) s, bool on, float dim)
     {
@@ -229,7 +277,11 @@ internal sealed class SettingsPainter : IDisposable
         for (int i = 0; i < c.Suggestions.Count; i++)
         {
             double y = s.Y + 4 + i * SettingsLayout.SuggestRowH; if (i == c.SuggestIndex) RR(s.X + 4, y, s.W - 8, SettingsLayout.SuggestRowH, 8, new Color4(Tint.R, Tint.G, Tint.B, _dark ? 0.35f : 0.16f));
-            Text(c.Suggestions[i], _small, s.X + 16, y, s.W - 32, SettingsLayout.SuggestRowH, Label());
+            double off = c.SuggestHasChecks ? 24 : 0;
+            if (c.SuggestHasChecks && i == c.SuggestChecked) Text("✓", _small, s.X + 14, y, 18, SettingsLayout.SuggestRowH, new Color4(Tint.R, Tint.G, Tint.B, 1f));
+            bool apps = c.SuggestFor == "gest.find"; double tagW = apps ? 82 : 0;
+            Text(c.Suggestions[i], _small, s.X + 16 + off, y, s.W - 32 - off - tagW, SettingsLayout.SuggestRowH, Label());
+            if (apps) { RRStroke(s.X + s.W - 16 - 70, y + 9, 70, 20, 10, Sep, 0.9f); Text("Instalada", _head, s.X + s.W - 16 - 70, y + 9, 70, 20, Secondary, center: true); }
         }
     }
 

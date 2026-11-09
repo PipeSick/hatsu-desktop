@@ -1,0 +1,95 @@
+{
+  "files": {
+    "HatsuDesktop.ico": {
+      "bytes": 129055,
+      "sha256": "fe54f1471a779f4127198b86377e554dd371e72be6fb1b4f4b8f05fa9bf603d4"
+    },
+    "embedded/hatsu-flux-128.bgra": {
+      "bytes": 65536,
+      "sha256": "9427dc3f69babe9e8ab269737399960efbd303052bf14f4ac82b88e69c6e7bdf"
+    },
+    "embedded/hatsu-flux-32.bgra": {
+      "bytes": 4096,
+      "sha256": "37d225bbab183a1ea555becb82b17b37bea48e55d71faece8b2be9eba544c4c9"
+    },
+    "hatsu-flux-1024.png": {
+      "bytes": 897358,
+      "sha256": "11d255032f307af5fe471d165b15e896a405f16648294605b4f7b69bf70e1463"
+    },
+    "hatsu-flux-128.png": {
+      "bytes": 25904,
+      "sha256": "626753b58dcbaa7a6553cfdbfe18e43c420fda91e5cf03ffe65d571709a365a6"
+    },
+    "hatsu-flux-16.png": {
+      "bytes": 920,
+      "sha256": "06236e1a1d7c73aa5d39b5d7112695f3c6fe7195d780ca5c5df3b19a0fa42dc5"
+    },
+    "hatsu-flux-20.png": {
+      "bytes": 1314,
+      "sha256": "0076cb6b5e826ab4a19de958f65b7833385a401bb0061f5d3b98d9d63987e0d0"
+    },
+    "hatsu-flux-24.png": {
+      "bytes": 1788,
+      "sha256": "c262f095c0c54c39829b3d51462746e64aeca0cc90a19e45af2a7cba6e304d5c"
+    },
+    "hatsu-flux-256.png": {
+      "bytes": 76942,
+      "sha256": "9d6b797d86aed67883cfa9ff7598d092554e058f5e818553ca1fb21897bb2e6d"
+    },
+    "hatsu-flux-32.png": {
+      "bytes": 3064,
+      "sha256": "46645ae53c8af51076027cb387f0e3dbcc9d2f141b2fadff00e8badd1baa8f7f"
+    },
+    "hatsu-flux-40.png": {
+      "bytes": 4311,
+      "sha256": "0fe35ae4a9b477ecad5f4fff73bf59e150d598c7fa021ff9036ca0da78af2110"
+    },
+    "hatsu-flux-48.png": {
+      "bytes": 5683,
+      "sha256": "1bb42815d580fb2961395b971307b8c04ec694a8fafc9caa8ea396dd87098e96"
+    },
+    "hatsu-flux-512.png": {
+      "bytes": 266573,
+      "sha256": "383c09a62be765cff7a1466bec244e3dd1e8239c38f9563a315d012a663857f3"
+    },
+    "hatsu-flux-64.png": {
+      "bytes": 8979,
+      "sha256": "5793c95930d1d02fc28a493531995cc8a209faf08d60ccdb74f1bf2a95a8f49d"
+    },
+    "previews/sizes-on-dark.png": {
+      "bytes": 73297,
+      "sha256": "9f0e40093ed9f9ff14d08e6039191454f9fa5561f21a3e8ec82ccccc3af1424a"
+    },
+    "previews/sizes-on-light.png": {
+      "bytes": 72219,
+      "sha256": "7fbe4895998a26cc46aac78893514ea349377bb2be0730c5eca1782ef4c79313"
+    }
+  },
+  "fit": {
+    "aspect": 1.0129,
+    "bbox": [
+      3,
+      5,
+      1021,
+      1010
+    ],
+    "height": 1005,
+    "points": 2880,
+    "width": 1018
+  },
+  "ico_frames": [
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64,
+    128,
+    256
+  ],
+  "source": {
+    "file": "source/flux-master-1024.original.png",
+    "sha256": "8282ae0ea441f4e02b1fa159d812088617c163bcc05d24d213f20655a0b98989"
+  }
+}

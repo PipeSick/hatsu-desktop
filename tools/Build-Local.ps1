@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-  Construye WinMac (host + Barra superior + Dock) en UNA carpeta para probarlo en tu PC: dist\WinMac\WinMac.exe.
+  Construye Hatsu Desktop (antes WinMac; host + Barra superior + Dock) en UNA carpeta para probarlo en tu PC: dist\WinMac\HatsuDesktop.exe.
 .DESCRIPTION
   Requiere el SDK de .NET 10 (el mismo que ya usaste para el Dock). No instala nada, no toca el registro, no necesita administrador.
-  Publica framework-dependiente (usa el runtime de .NET 10 instalado). Los tres ejecutables comparten carpeta: WinMac.exe los encuentra por su nombre.
+  Publica AUTOCONTENIDO (incluye el runtime de .NET 10: el PC que lo use no necesita instalar nada). Los tres ejecutables comparten carpeta y runtime.
   Uso:   pwsh tools\Build-Local.ps1            (o  powershell -File tools\Build-Local.ps1)
-         dist\WinMac\WinMac.exe                inicia el host con la Barra superior y el Dock
-         dist\WinMac\WinMac.exe --quit         lo cierra (cierra también sus módulos)
+         dist\WinMac\HatsuDesktop.exe                inicia el host con la Barra superior y el Dock
+         dist\WinMac\HatsuDesktop.exe --quit         lo cierra (cierra también sus módulos)
   La Isla (NotchWin) se incluye si hay un clon suyo en -NotchPath (por defecto C:\nw, ruta CORTA: el compilador XAML falla en silencio con rutas largas) con el submódulo
-  external\winmac inicializado (git submodule update --init). Sin él, WinMac funciona igual y la Isla aparece como «no instalada».
+  external\winmac inicializado (git submodule update --init). Sin él, Hatsu Desktop funciona igual y la Isla aparece como «no instalada». (Los archivos se siguen llamando WinMac*.exe en esta fase.)
 #>
 param([string]$Out = 'dist\WinMac', [string]$Configuration = 'Release', [string]$NotchPath = 'C:\nw')
 $ErrorActionPreference = 'Stop'
@@ -16,22 +16,32 @@ $root = Resolve-Path (Join-Path $PSScriptRoot '..'); Set-Location $root
 $dest = Join-Path $root $Out
 if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
-foreach ($p in @('src/WinMac.Host/WinMac.Host.csproj', 'src/WinMac.Bar.App/WinMac.Bar.App.csproj', 'src/WinMac.Dock.App/WinMac.Dock.App.csproj')) {
+foreach ($p in @('src/WinMac.Host/WinMac.Host.csproj', 'src/WinMac.Bar.App/WinMac.Bar.App.csproj', 'src/WinMac.Dock.App/WinMac.Dock.App.csproj', 'src/WinMac.Connect.App/WinMac.Connect.App.csproj')) {
   Write-Host "Publicando $p …"
-  & dotnet publish $p -c $Configuration -r win-x64 --self-contained false -o $dest
+  # Autocontenido (docs/36): la beta pedía instalar .NET a mano. Los tres comparten carpeta y la misma versión del runtime (los archivos son idénticos).
+  & dotnet publish $p -c $Configuration -r win-x64 --self-contained true -o $dest
   if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de $p" }
 }
+# Extensiones de demostración (docs/30): se distribuyen en «extensions\<id>» para instalarlas desde Ajustes › Extensiones (no se activan solas)
+$extTmp = Join-Path $dest '_ext-build'
+& dotnet publish 'src/WinMac.Ext.Demos/WinMac.Ext.Demos.csproj' -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o $extTmp
+if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de las extensiones de demostración" }
+foreach ($id in 'pomodoro', 'uptime') {
+  $to = Join-Path $dest "extensions\$id"; New-Item -ItemType Directory -Force -Path $to | Out-Null
+  Copy-Item (Join-Path $extTmp '*') $to -Recurse -Force; Copy-Item "extensions/$id/extension.json" $to -Force
+}
+Remove-Item -Recurse -Force $extTmp
 $notchProj = Join-Path $NotchPath 'src\NotchWin.App\NotchWin.App.csproj'
 if (Test-Path $notchProj) {
   Write-Host "Publicando NotchWin ($NotchPath) …"
   & dotnet publish $notchProj -c $Configuration -p:Platform=x64 -r win-x64 --self-contained true -o (Join-Path $dest 'NotchWin')
   if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de NotchWin" }
-} else { Write-Host "NotchWin no incluido (no hay clon en $NotchPath): WinMac funciona sin la Isla." -ForegroundColor Yellow }
-$exes = 'WinMac.exe', 'WinMac.Bar.App.exe', 'WinMac.Dock.App.exe'
+} else { Write-Host "NotchWin no incluido (no hay clon en $NotchPath): Hatsu Desktop funciona sin la Isla." -ForegroundColor Yellow }
+$exes = 'HatsuDesktop.exe', 'HatsuDesktop.Bar.exe', 'HatsuDesktop.Dock.exe', 'HatsuDesktop.Connect.exe'
 $missing = $exes | Where-Object { -not (Test-Path (Join-Path $dest $_)) }
 if ($missing) { throw "Faltan en $dest : $($missing -join ', ')" }
 Write-Host ""
 Write-Host "Listo: $dest" -ForegroundColor Green
-Write-Host "  Iniciar:  $dest\WinMac.exe"
-Write-Host "  Cerrar:   $dest\WinMac.exe --quit"
+Write-Host "  Iniciar:  $dest\HatsuDesktop.exe"
+Write-Host "  Cerrar:   $dest\HatsuDesktop.exe --quit"
 Write-Host "  Registros: %LOCALAPPDATA%\WinMac\logs\host.log (host), bar.log, dock.log"

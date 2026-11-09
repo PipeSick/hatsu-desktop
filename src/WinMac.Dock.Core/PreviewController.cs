@@ -3,7 +3,7 @@ using WinMac.Apps;
 namespace WinMac.Dock;
 
 /// <summary>Lo que el render dibuja de la vista previa. <see cref="Windows"/> son las ventanas mostradas (máximo <see cref="PreviewSpec.MaxCards"/>); <see cref="Extra"/> las que no caben.</summary>
-public sealed record PreviewView(string ItemId, int ItemIndex, DockItemModel Item, IReadOnlyList<WindowInfo> Windows, int Extra, PreviewFrame Frame, int HoverCard, double Alpha);
+public sealed record PreviewView(string ItemId, int ItemIndex, DockItemModel Item, IReadOnlyList<WindowInfo> Windows, int Extra, PreviewFrame Frame, int HoverCard, double Alpha, bool HoverClose = false);
 
 /// <summary>
 /// Comportamiento de la vista previa (lógica pura, sin Windows): aparece tras un retardo al pasar sobre una app con ventanas, cambia al instante entre apps,
@@ -89,7 +89,8 @@ public sealed class PreviewController
         var fr = Layout(cur, v, count, restCenters);
         int hover = -1;
         if (ptr is PointerSample p) for (int i = 0; i < fr.Cards.Length; i++) if (fr.Cards[i].Pill.Contains(p.X, p.Y) || fr.Cards[i].Thumb.Contains(p.X, p.Y) || BetweenPillAndThumb(fr.Cards[i], p)) { hover = i; break; }
-        return new PreviewView(cur.Model.Id, cur.Index, cur.Model, wins.Take(count).ToList(), wins.Count - count, fr, hover, _alpha);
+        bool onClose = hover >= 0 && ptr is PointerSample pc && fr.Cards[hover].Close.Inflate(3).Contains(pc.X, pc.Y);
+        return new PreviewView(cur.Model.Id, cur.Index, cur.Model, wins.Take(count).ToList(), wins.Count - count, fr, hover, _alpha, onClose);
     }
 
     private static bool BetweenPillAndThumb(PreviewCardFrame c, PointerSample p) => p.X >= c.Pill.X && p.X <= c.Pill.Right && p.Y >= c.Pill.Bottom && p.Y <= c.Thumb.Y;
@@ -98,7 +99,10 @@ public sealed class PreviewController
     public DockAction? Click(PreviewView? pv)
     {
         if (pv is null || pv.Alpha < 0.5 || pv.HoverCard < 0 || pv.HoverCard >= pv.Windows.Count) return null;
-        var w = pv.Windows[pv.HoverCard]; Dismiss();
+        var w = pv.Windows[pv.HoverCard];
+        // La «×» de la tarjeta cierra ESA ventana (cierre cooperativo, WM_CLOSE) y deja la vista previa abierta: al cambiar la lista de ventanas se actualiza sola.
+        if (pv.HoverClose) return new DockAction(DockActionKind.CloseWindow, pv.ItemId, null, w.Hwnd, pv.Item.Identity);
+        Dismiss();
         return new DockAction(DockActionKind.ActivateWindow, pv.ItemId, null, w.Hwnd, pv.Item.Identity);
     }
 }

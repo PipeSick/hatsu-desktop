@@ -12,6 +12,11 @@
     <PackageReference Include="Vortice.DirectComposition" Version="3.8.3" />
     <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Hatsu Desktop (Flux): UNA fuente de marca (assets/brand, generada por source/make_brand.py). BGRA premultiplicado para dibujar con Direct2D sin decodificar PNG. -->
+    <EmbeddedResource Include="..\..\assets\brand\embedded\hatsu-flux-32.bgra" LogicalName="brand.hatsu-flux-32.bgra" />
+    <EmbeddedResource Include="..\..\assets\brand\embedded\hatsu-flux-128.bgra" LogicalName="brand.hatsu-flux-128.bgra" />
+  </ItemGroup>
   <ItemGroup><ProjectReference Include="..\WinMac.Dock.Core\WinMac.Dock.Core.csproj" />
     <ProjectReference Include="..\WinMac.Apps.Win\WinMac.Apps.Win.csproj" /></ItemGroup>
 </Project>

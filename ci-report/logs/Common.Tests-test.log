@@ -1,8 +1,0 @@
-Test run for /home/user/win11-macos/spikes/Common.Tests/bin/Release/net10.0-windows/Common.Tests.dll (.NETCoreApp,Version=v10.0)
-VSTest version 18.0.2 (x64)
-
-Starting test execution, please wait...
-A total of 1 test files matched the specified pattern.
-Results File: /home/user/win11-macos/ci-report/trx/Common.Tests.trx
-
-Passed!  - Failed:     0, Passed:    12, Skipped:     0, Total:    12, Duration: 12 s - Common.Tests.dll (net10.0)

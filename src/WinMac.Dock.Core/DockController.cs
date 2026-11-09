@@ -117,6 +117,11 @@ public sealed class DockController
     public void SetEdgeHot(bool hot) => _edgeHot = hot;
     /// <summary>Un juego/app a pantalla completa pide que el dock se aparte; no se vuelve a mostrar hasta que se libere.</summary>
     public void SetSuppressed(bool s) => _suppressed = s;
+
+    private readonly LaunchpadPin _lp = new();
+    /// <summary>Launchpad se abrió o cerró en el monitor de este Dock (ver <see cref="LaunchpadPin"/>). No cambia la configuración.</summary>
+    public void SetLaunchpadOpen(bool open) => _lp.Apply(open);
+    public bool LaunchpadPinned => _lp.Active;
     public void Bounce(string id) => _anim.Bounce(id);
 
     private double BarTop => _m.WindowHeight - _m.ShadowMargin - _m.BarHeight;
@@ -137,7 +142,9 @@ public sealed class DockController
         _anim.SetTargets(_items, DockLayout.TargetScales(_m, _items, restX));
 
         // Ocultamiento automático
-        if (_suppressed) _hiddenTarget = true;
+        _lp.Step(dt);
+        if (_lp.Active) { _hiddenTarget = false; _outside = 0; _edge = 0; }   // Launchpad abierto en este monitor: el Dock se ve (también si estaba oculto o suprimido); al cerrarse, la cuenta de ocultar parte de cero
+        else if (_suppressed) _hiddenTarget = true;
         else if (_cfg.AutoHide)
         {
             if (_hiddenTarget)
@@ -172,7 +179,7 @@ public sealed class DockController
         var baseView = new DockView(views, _windowWidth, _m.WindowHeight, left, frame.BarWidth, _m.BarHeight, _anim.HideT, hover, false, _suppressed, dragIndex);
         var restFrame = DockLayout.Compute(_m, _items, null); double restL = BarLeftFor(restFrame.BarWidth);
         Preview = _preview.Step(dt, baseView, _pointer, _dragId is not null, restFrame.Items.Select(f => restL + f.X + f.Size / 2).ToArray());
-        bool needs = !_anim.IsSettled || inZone || (_cfg.AutoHide && !_hiddenTarget) || _dragId is not null || Preview is not null || _preview.IsActive;
+        bool needs = !_anim.IsSettled || _lp.Active || inZone || (_cfg.AutoHide && !_hiddenTarget) || _dragId is not null || Preview is not null || _preview.IsActive;
         return baseView with { NeedsFrames = needs, Preview = Preview };
     }
 

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- WinMac Connect (docs/39): módulo opcional, un proceso supervisado por el host como la Barra y el Dock. Bluetooth LE con la API pública de Windows (WinRT). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- Se compila contra el SDK 26100 para poder LLAMAR a PhoneCall/PhoneLine.GetAllActivePhoneCalls/AudioRoutingStatus (docs/59); el sistema mínimo sigue siendo 19041 y cada llamada a esas API va protegida (try/catch): en un Windows sin ellas el diagnóstico lo informa. -->
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <RootNamespace>WinMac.Connect.App</RootNamespace>
+    <AssemblyName>HatsuDesktop.Connect</AssemblyName>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- It9 (Hatsu Desktop): lo que el Administrador de tareas y las propiedades del archivo muestran. Fase 2: el ejecutable público ya se llama HatsuDesktop*.exe; los espacios de nombres, el IPC, los mutex y las clases de ventana conservan «WinMac» por compatibilidad. -->
+    <AssemblyTitle>Hatsu Desktop — Connect</AssemblyTitle>
+    <ApplicationIcon>..\..\assets\brand\HatsuDesktop.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinMac.Connect.Core\WinMac.Connect.Core.csproj" />
+    <ProjectReference Include="..\WinMac.Ipc\WinMac.Ipc.csproj" />
+  </ItemGroup>
+</Project>

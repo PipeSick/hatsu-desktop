@@ -31,16 +31,17 @@ internal sealed class DiskMonitor : IDiskMonitor, IDisposable
         try
         {
             var (smart, smartWhy) = ReadReliability(ns);
+            IReadOnlyDictionary<int, DiskIncidents> incidents; try { incidents = DiskEventReader.Read().Map; } catch (Exception) { incidents = new Dictionary<int, DiskIncidents>(); }   // errores que Windows registró de cada disco (7 días)
             foreach (var o in Wmi.Query(ns, "SELECT DeviceId, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"))
             {
                 int number = Wmi.I32(o["DeviceId"]); if (number < 0) continue;
                 int hs = Wmi.I32(o["HealthStatus"], 5); string? health = hs switch { 0 => "Saludable", 1 => "Advertencia", 2 => "Con fallos", _ => null };
                 var rel = smart.GetValueOrDefault(number); string bus = BusName(Wmi.I32(o["BusType"]));
-                var sq = rel?.Temp is null || rel.Hours is null ? StorageQuery.Read(number, bus == "NVMe") : null;   // lo que WMI no entrega, se le pide al propio disco
-                double? temp = rel?.Temp ?? sq?.TempC, wear = rel?.Wear ?? sq?.WearPercent; long? hours = rel?.Hours ?? sq?.Hours;
+                var sq = rel?.Temp is null || rel.Hours is null || rel.Wear is null ? StorageQuery.Read(number, bus == "NVMe") : null;   // lo que WMI no entrega, se le pide al propio disco
+                double? temp = rel?.Temp ?? sq?.TempC, wear = sq?.WearPercent ?? rel?.Wear; long? hours = rel?.Hours ?? sq?.Hours;   // desgaste: manda el registro del propio disco (WMI puede dar «0» sin dato real)
                 string? why = temp is null && hours is null && wear is null ? (sq?.Why ?? smartWhy) : null;
                 physical.Add(new PhysicalRec(number, Wmi.Str(o["FriendlyName"]), Wmi.I32(o["MediaType"]) switch { 3 => "HDD", 4 => "SSD", _ => null }, bus, Wmi.U64(o["Size"]),
-                    new SmartInfo(health, temp, hours, wear, sq?.ReadBytes, sq?.WrittenBytes, why)));
+                    new SmartInfo(health, temp, hours, wear, sq?.ReadBytes, sq?.WrittenBytes, why, incidents.GetValueOrDefault(number))));
             }
 
             foreach (var o in Wmi.Query(ns, "SELECT DiskNumber, DriveLetter FROM MSFT_Partition"))
@@ -93,12 +94,13 @@ internal sealed class DiskMonitor : IDiskMonitor, IDisposable
             {
                 int n = Wmi.I32(o["DeviceId"]); if (n < 0) continue;
                 double? temp = o["Temperature"] is { } t && Wmi.I64(t) > 0 ? Wmi.I64(t) : null; long? hours = o["PowerOnHours"] is { } h ? Wmi.I64(h) : null; double? wear = o["Wear"] is { } w ? Wmi.I64(w) : null;
+                if (temp is null && hours is null && wear == 0) wear = null;   // fila vacía (temperatura 0, sin horas): su «desgaste 0» no es un dato
                 map[n] = new Reliability(temp, hours, wear);
             }
 
             if (map.Count == 0) why = "Windows no entrega temperatura, desgaste ni horas de este disco";
         }
-        catch (System.Management.ManagementException e) when (e.ErrorCode == System.Management.ManagementStatus.AccessDenied) { why = "Temperatura, desgaste y horas requieren abrir WinMac como administrador"; }
+        catch (System.Management.ManagementException e) when (e.ErrorCode == System.Management.ManagementStatus.AccessDenied) { why = "Temperatura, desgaste y horas requieren abrir Hatsu Desktop como administrador"; }
         catch (Exception e) { why = "No se pudieron leer temperatura, desgaste y horas (" + e.GetType().Name + ")"; }
         return (map, why);
     }

@@ -1,2 +1,4 @@
-# Commit de PipeSick/notch-win (rama claude/winmac-integration) que el CI de WinMac compila para validar la integración. Actualizar al publicar cambios de NotchWin.
-eaad276d2f9a1f8de66294f9df914dd1c9ec9ce1
+# Commit de PipeSick/notch-win que el CI de Hatsu Desktop compila para validar la integración.
+# RAMA DE TRABAJO feat/hatsu-shelf-plus (49db871): sobre feat/hatsu-calls (e98863c) añade Shelf+ (estantería de la Isla con archivos, carpetas, texto e imágenes, límite, vaciar y comandos shelf-open / shelf-add-text), banner de descargas adaptable, clic en notificación abre la app, protección del fondo translúcido y sin el monitor de agentes de IA.
+# Solo vale para esta rama de Hatsu Desktop; el pin de Stable (42d61c9) NO se cambia hasta que el propietario autorice la fusión y se valide en un PC real.
+49db8716333a877a0cc72e736f9455f4e5212dbe

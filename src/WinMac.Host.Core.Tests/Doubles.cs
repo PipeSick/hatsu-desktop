@@ -44,10 +44,11 @@ internal sealed class FakeProcess(int id) : IModuleProcess
 
 internal sealed class FakeLauncher : IProcessLauncher
 {
-    public readonly List<(string Id, FakeProcess Proc)> Started = []; private int _pid = 1000; public HashSet<string> Missing = [];
+    public readonly List<(string Id, FakeProcess Proc)> Started = []; private int _pid = 1000; public HashSet<string> Missing = []; public Dictionary<string, Exception> Blocked = [];
     public IModuleProcess Start(ModuleSpec spec, string pipeName, string token)
     {
         if (Missing.Contains(spec.Id)) throw new FileNotFoundException("no existe", spec.ExePath);
+        if (Blocked.TryGetValue(spec.Id, out var blocked)) throw blocked;
         var p = new FakeProcess(++_pid); lock (Started) Started.Add((spec.Id, p)); return p;
     }
     public int Count(string id) { lock (Started) return Started.Count(s => s.Id == id); }

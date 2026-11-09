@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generado por tools/signing/New-ArtifactConfiguration.ps1 (Installer). No se ha enviado a ningún servicio. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <msi-file>
+    <authenticode-sign />
+  </msi-file>
+</artifact-configuration>

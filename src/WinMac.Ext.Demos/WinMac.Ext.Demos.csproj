@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Extensiones de demostración (docs/30): usan la API real; sin red ni credenciales. Ventana: ninguna (WinExe). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinMac.Ext.Demos</RootNamespace>
+    <AssemblyName>WinMac.Ext.Demos</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\WinMac.Extensions.Sdk\WinMac.Extensions.Sdk.csproj" /></ItemGroup>
+</Project>

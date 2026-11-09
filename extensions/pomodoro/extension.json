@@ -1,0 +1,10 @@
+{
+  "id": "pomodoro",
+  "name": "Pomodoro",
+  "version": "1.0.0",
+  "api": 1,
+  "entry": "WinMac.Ext.Demos.exe",
+  "args": ["pomodoro"],
+  "permissions": ["activity", "notify"],
+  "description": "Demostración: temporizador de concentración en la Isla con aviso al terminar."
+}

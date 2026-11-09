@@ -31,6 +31,9 @@ public sealed class IconService : IDisposable
     /// <summary>Se produce en un hilo de fondo cuando un icono queda disponible.</summary>
     public event Action<IconRequest>? Loaded;
 
+    /// <summary>Un icono no se pudo obtener: la petición y el motivo («tiempo agotado», «error: …», «rechazado: …»). Para el registro; el Dock usa el mosaico de reemplazo.</summary>
+    public event Action<IconRequest, string>? Failed;
+
     public IconService(IIconProvider provider, IconCache cache, TimeSpan? loadTimeout = null, TimeSpan? retryAfter = null, int workers = 2, Func<DateTime>? clock = null)
     {
         _provider = provider; _cache = cache; _timeout = loadTimeout ?? TimeSpan.FromSeconds(4); _retry = retryAfter ?? TimeSpan.FromMinutes(5); _now = clock ?? (() => DateTime.UtcNow);
@@ -69,7 +72,7 @@ public sealed class IconService : IDisposable
 
     private async Task Worker(CancellationToken ct)
     {
-        try { await foreach (var (req, e) in _queue.Reader.ReadAllAsync(ct)) { try { await Process(req, e, ct); } catch (OperationCanceledException) { throw; } catch (Exception) { Fail(e, ref _failed); } finally { Interlocked.Decrement(ref _pending); lock (e) e.Queued = false; } } }
+        try { await foreach (var (req, e) in _queue.Reader.ReadAllAsync(ct)) { try { await Process(req, e, ct); } catch (OperationCanceledException) { throw; } catch (Exception x) { Fail(req, e, ref _failed, "error: " + x.GetType().Name); } finally { Interlocked.Decrement(ref _pending); lock (e) e.Queued = false; } } }
         catch (OperationCanceledException) { }
     }
 
@@ -82,11 +85,11 @@ public sealed class IconService : IDisposable
         var work = Task.Run(() => _provider.Load(req), ct);
         IconBitmap? bmp;
         try { bmp = await work.WaitAsync(_timeout, ct); }
-        catch (TimeoutException) { Fail(e, ref _timedOut); return; }          // el Shell puede quedarse colgado (red, disco): se abandona
+        catch (TimeoutException) { Fail(req, e, ref _timedOut, $"tiempo agotado ({_timeout.TotalSeconds:0} s)", soon: true); return; }   // el Shell puede quedarse colgado (red, disco, arranque de sesión): se reintenta pronto
         catch (OperationCanceledException) { throw; }
-        catch (Exception) { Fail(e, ref _failed); return; }
+        catch (Exception x) { Fail(req, e, ref _failed, "error: " + x.GetType().Name + ": " + x.Message); return; }
 
-        if (IconValidator.Reject(bmp) is not null) { Fail(e, ref _rejected); return; }
+        if (IconValidator.Reject(bmp) is { } why) { Fail(req, e, ref _rejected, "rechazado: " + why); return; }
         _cache.PutDisk(req.Key, stamp, bmp!); Succeed(req, e, bmp!);
     }
 
@@ -96,9 +99,13 @@ public sealed class IconService : IDisposable
         try { Loaded?.Invoke(req); } catch (Exception) { }
     }
 
-    private void Fail(Entry e, ref int counter)
+    /// <summary>Reintento tras un tiempo agotado: el Shell suele estar solo lento (p. ej. al iniciar sesión), y 5 min sin icono es demasiado.</summary>
+    public static readonly TimeSpan TimeoutRetry = TimeSpan.FromSeconds(30);
+
+    private void Fail(IconRequest req, Entry e, ref int counter, string why, bool soon = false)
     {
-        Interlocked.Increment(ref counter); e.Failed = true; e.RetryAt = _now() + _retry; e.Done.TrySetResult(null);
+        Interlocked.Increment(ref counter); e.Failed = true; e.RetryAt = _now() + (soon && TimeoutRetry < _retry ? TimeoutRetry : _retry); e.Done.TrySetResult(null);
+        try { Failed?.Invoke(req, why); } catch (Exception) { }
     }
 
     public void Dispose() { _cts.Cancel(); _queue.Writer.TryComplete(); }

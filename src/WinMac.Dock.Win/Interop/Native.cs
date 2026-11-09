@@ -36,7 +36,23 @@ internal static class Native
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT p, uint flags);
+    [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
     [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr hMon, ref MONITORINFO mi);
+    public delegate bool MonitorEnumProc(IntPtr hMon, IntPtr hdc, IntPtr rect, IntPtr data);
+    [DllImport("user32.dll")] public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
+
+    /// <summary>Rectángulo de cada monitor activo (px de pantalla), sin repetir los que muestran lo mismo (espejo / duplicar).</summary>
+    public static List<RECT> MonitorRects()
+    {
+        var list = new List<RECT>();
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (h, _, _, _) =>
+        {
+            var mi = new MONITORINFO { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFO>() };
+            if (GetMonitorInfo(h, ref mi) && mi.rcMonitor.Width > 0 && mi.rcMonitor.Height > 0 && !list.Any(r => r.Left == mi.rcMonitor.Left && r.Top == mi.rcMonitor.Top && r.Right == mi.rcMonitor.Right && r.Bottom == mi.rcMonitor.Bottom)) list.Add(mi.rcMonitor);
+            return true;
+        }, IntPtr.Zero);
+        return list;
+    }
     [DllImport("user32.dll")] public static extern int MsgWaitForMultipleObjectsEx(uint n, IntPtr[]? handles, uint ms, uint mask, uint flags);
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int value, int size);
     [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int value, int size);

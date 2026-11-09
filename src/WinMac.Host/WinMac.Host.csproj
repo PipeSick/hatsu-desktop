@@ -1,11 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- WinMac.exe: host/supervisor. Lanza Barra y Dock como procesos hijos dentro de un Job Object, los vigila y los cierra en orden. Sin interfaz propia salvo el icono de la bandeja. -->
+  <!-- HatsuDesktop.exe (antes WinMac.exe): host/supervisor. Lanza Barra y Dock como procesos hijos dentro de un Job Object, los vigila y los cierra en orden. Sin interfaz propia salvo el icono de la bandeja. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>WinMac.Host.App</RootNamespace>
-    <AssemblyName>WinMac</AssemblyName>
+    <AssemblyName>HatsuDesktop</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- It9 (Hatsu Desktop): lo que el Administrador de tareas y las propiedades del archivo muestran. Fase 2: el ejecutable público ya se llama HatsuDesktop*.exe; los espacios de nombres, el IPC, los mutex y las clases de ventana conservan «WinMac» por compatibilidad. -->
+    <AssemblyTitle>Hatsu Desktop</AssemblyTitle>
+    <ApplicationIcon>..\..\assets\brand\HatsuDesktop.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinMac.Host.Core\WinMac.Host.Core.csproj" />

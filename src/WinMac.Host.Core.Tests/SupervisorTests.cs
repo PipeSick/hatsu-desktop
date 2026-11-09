@@ -161,9 +161,26 @@ public class HostConfigTests
     private static string Tmp() => Path.Combine(Path.GetTempPath(), "winmac-host-" + Guid.NewGuid().ToString("N") + ".json");
 
     [Fact]
+    public void A_config_from_before_WinMac_2_loads_with_safe_defaults_for_every_new_option()
+    {
+        // winmac.json escrito por una versión anterior: sin capturas, portapapeles ni extensiones (configuración unificada, docs/31)
+        var f = Tmp();
+        try
+        {
+            File.WriteAllText(f, """{ "version": 2, "modules": { "bar": { "enabled": true } }, "notch": { "position": "TopLeft", "glassLevel": 40, "lyricsEnabled": true }, "bar": { "Clock": true } }""");
+            var c = HostConfig.Load(f);
+            Assert.Equal("TopLeft", c.Notch!.Position); Assert.True(c.Notch.LyricsEnabled);   // lo que había se conserva (letras incluidas)
+            Assert.False(c.Notch.ClipboardPersist); Assert.True(c.Notch.ClipboardSkipSecrets); Assert.Equal(50, c.Notch.ClipboardLimit);   // privacidad por defecto
+            Assert.True(c.Bar!.CaptureHotkeys); Assert.Equal("Png", c.Bar.CaptureFormat); Assert.Null(c.Bar.CaptureFolder); Assert.True(c.Bar.CaptureCopyToClipboard);   // a pedido del propietario: la captura se copia al portapapeles de inmediato (se puede apagar en Ajustes)
+            Assert.Contains("activity", c.Notch.Sections.Select(x => x.Id));                    // pestañas nuevas añadidas al final sin perder el orden guardado
+        }
+        finally { File.Delete(f); }
+    }
+
+    [Fact]
     public void Defaults_start_every_module_including_the_notch_and_autostart_is_off()
     {
-        var c = new HostConfig(); Assert.True(c.Modules["bar"].Enabled && c.Modules["dock"].Enabled && c.Modules["notch"].Enabled); Assert.False(c.Autostart); Assert.Equal(2, c.Version);
+        var c = new HostConfig(); Assert.True(c.Modules["bar"].Enabled && c.Modules["dock"].Enabled && c.Modules["notch"].Enabled); Assert.False(c.Autostart); Assert.Equal(3, c.Version);
     }
 
     [Fact]
@@ -185,8 +202,8 @@ public class HostConfigTests
     {
         var c = new HostConfig { Modules = new HostConfig().Modules.ToDictionary(k => k.Key, v => v.Value) }; c.Modules["bar"] = new ModuleConfig { Path = "/otro/bar", Args = ["--x"] };
         var r = c.Resolve("/app").ToList();
-        Assert.Equal(["bar", "dock", "notch"], r.Select(x => x.Spec.Id)); Assert.Equal("/otro/bar", r[0].Spec.ExePath); Assert.Equal(["--x"], r[0].Spec.Args);
-        Assert.EndsWith("WinMac.Dock.App.exe", r[1].Spec.ExePath); Assert.StartsWith("/app", r[1].Spec.ExePath); Assert.True(r[2].Enabled);
+        Assert.Equal(["bar", "dock", "notch", "connect"], r.Select(x => x.Spec.Id)); Assert.False(r[3].Enabled); Assert.Equal("/otro/bar", r[0].Spec.ExePath); Assert.Equal(["--x"], r[0].Spec.Args);
+        Assert.EndsWith("HatsuDesktop.Dock.exe", r[1].Spec.ExePath); Assert.StartsWith("/app", r[1].Spec.ExePath); Assert.True(r[2].Enabled);
         Assert.EndsWith("NotchWin.App.exe", r[2].Spec.ExePath);
     }
 

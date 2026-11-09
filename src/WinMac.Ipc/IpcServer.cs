@@ -13,6 +13,13 @@ public sealed record ServerOptions(string PipeName, string Token)
     public Func<uint, bool>? PeerValidator { get; init; }
     public TimeSpan HandshakeTimeout { get; init; } = TimeSpan.FromSeconds(3);
     public int DataQueueCapacity { get; init; } = 64;
+    /// <summary>
+    /// Opcional: valida cada <c>hello</c> por (módulo, token, PID del cliente) en lugar del token único. Lo usa el canal de EXTENSIONES: un token por extensión,
+    /// ligado al proceso que lanzó el host, para que ninguna pueda hacerse pasar por otra.
+    /// </summary>
+    public Func<string, string, uint?, bool>? HelloValidator { get; init; }
+    /// <summary>false: los mensajes de un cliente NO se reenvían a los demás (solo llegan al host). Canal de extensiones: no se hablan entre ellas.</summary>
+    public bool Relay { get; init; } = true;
 }
 
 /// <summary>
@@ -85,7 +92,13 @@ public sealed class IpcServer : IAsyncDisposable
                 var first = await Protocol.ReadAsync(pipe, hs.Token).ConfigureAwait(false);
                 if (first is not { T: MsgType.Hello, Data: not null }) return;                         // cierre silencioso
                 var hello = first.Data.Value.Deserialize<HelloData>(Protocol.Json);
-                if (hello is null || !TokenOk(hello.Token)) return;                                      // token incorrecto: sin respuesta
+                if (hello is null) return;
+                if (_opt.HelloValidator is { } hv)
+                {
+                    uint? cpid = OperatingSystem.IsWindows() ? PeerInfo.ClientPid(pipe) : null;
+                    if (!hv(hello.Module, hello.Token, cpid)) { await Task.Delay(300, hs.Token).ConfigureAwait(false); if (!hv(hello.Module, hello.Token, cpid)) return; }
+                }
+                else if (!TokenOk(hello.Token)) return;                                                  // token incorrecto: sin respuesta
                 if (_opt.PeerValidator is { } validate && OperatingSystem.IsWindows())
                 {
                     uint? pid = PeerInfo.ClientPid(pipe);
@@ -129,8 +142,8 @@ public sealed class IpcServer : IAsyncDisposable
                     if (_retained.TryGetValue(t, out var last)) s.Out.Enqueue(last, control: false);
                     break;
                 case MsgType.Unsub when e.Topic is { Length: > 0 } t: lock (s.Subs) s.Subs.Remove(t); break;
-                case MsgType.Pub when e.Topic is { Length: > 0 }: Distribute(e, s.Module, retain: true); break;
-                case MsgType.Evt when e.Topic is { Length: > 0 }: Distribute(e, s.Module, retain: false); break;
+                case MsgType.Pub when e.Topic is { Length: > 0 } && _opt.Relay: Distribute(e, s.Module, retain: true); break;
+                case MsgType.Evt when e.Topic is { Length: > 0 } && _opt.Relay: Distribute(e, s.Module, retain: false); break;
                 case MsgType.Ping: s.Out.Enqueue(new Envelope { T = MsgType.Pong }, control: true); break;
                 default: break;   // los tipos desconocidos se ignoran (compatibilidad hacia delante)
             }

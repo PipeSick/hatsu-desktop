@@ -69,6 +69,11 @@ public sealed partial class BarHost : IDisposable
     public int Run(int maxFrames = int.MaxValue, bool selfTest = false)
     {
         CreateHub();
+        StartTray();
+        StartLauncher();
+        StartSpotlight();
+        StartCapture();
+        StartFeatures();
         Reconcile(initial: true);
         ApplyPendingConfig();   // una configuración que llegó del host antes de que existieran las ventanas
         var clock = Stopwatch.StartNew(); double last = 0; int frames = 0;
@@ -84,7 +89,7 @@ public sealed partial class BarHost : IDisposable
             foreach (var w in _wins.ToArray()) { Guard(w, () => rendered |= w.Frame(dt, selfTest)); needs |= w.NeedsFrames; }
             if (rendered) frames++;
             if (frames >= maxFrames) return 0;
-            if (!needs && !selfTest) BarNative.MsgWaitForMultipleObjectsEx(0, null, 50, BarNative.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);
+            if (!needs && !selfTest) BarNative.MsgWaitForMultipleObjectsEx(0, null, _popover?.Animating == true || LauncherAnimating ? 8u : 50u, BarNative.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);   // entrada/salida del panel lateral: pasos cortos solo mientras dura
         }
     }
 
@@ -108,7 +113,8 @@ public sealed partial class BarHost : IDisposable
         }
     }
 
-    private BarTheme ResolveTheme() => _cfg.Theme switch { BarThemeMode.Dark => BarTheme.Dark, BarThemeMode.Light => BarTheme.Light, _ => SystemTheme.Current() == DockTheme.Dark ? BarTheme.Dark : BarTheme.Light };
+    /// <summary>It7: siempre el tema de aplicaciones de Windows (AppsUseLightTheme); ya no hay selector manual (el campo Theme de bar.json se conserva solo por compatibilidad y se ignora).</summary>
+    private BarTheme ResolveTheme() => SystemTheme.Current() == DockTheme.Dark ? BarTheme.Dark : BarTheme.Light;
 
     // ------------------------------------------------------------------ monitores
     /// <summary>Una barra por monitor activo; el modo espejo (mismos límites) cuenta como UN monitor. Crea, recoloca o libera las que hagan falta.</summary>
@@ -231,7 +237,7 @@ public sealed partial class BarHost : IDisposable
     {
         if (_hubHwnd != IntPtr.Zero) return;
         WndRouter.EnsureClass("WinMacBarHub");
-        var h = BarNative.CreateWindowEx(0, "WinMacBarHub", "WinMac Barra (servicio)", 0, 0, 0, 0, 0, new IntPtr(-3) /* HWND_MESSAGE */, IntPtr.Zero, BarNative.GetModuleHandle(null), IntPtr.Zero);
+        var h = BarNative.CreateWindowEx(0, "WinMacBarHub", "Hatsu Desktop Barra (servicio)", 0, 0, 0, 0, 0, new IntPtr(-3) /* HWND_MESSAGE */, IntPtr.Zero, BarNative.GetModuleHandle(null), IntPtr.Zero);
         if (h == IntPtr.Zero) throw new InvalidOperationException("No se pudo crear la ventana de servicio de la barra.");
         _hubTarget = new HubTarget(this); WndRouter.Register(h, _hubTarget); _hubHwnd = h;
     }
@@ -251,15 +257,37 @@ public sealed partial class BarHost : IDisposable
                 case BarActionKind.ShowMenu: ShowAppleMenu(src, item); break;
                 case BarActionKind.OpenPanel: OpenPanelFromBar(src, a, item); break;
                 case BarActionKind.ShowAppMenu: ShowAppMenu(src, a.Index, item); break;
+                case BarActionKind.OpenTaskManager: OpenTaskManager(); break;
             }
         }
         catch (Exception e) { _log($"Acción {a.Kind} falló: {e.GetType().Name}: {e.Message}"); }
+    }
+
+    /// <summary>It7: guarda el orden elegido arrastrando (compartido por todas las barras y persistido en la configuración central).</summary>
+    internal void OnBarOrderChangedInternal(string order) => ((IPanelUi)this).PatchConfig(new { barOrder = order });
+
+    /// <summary>It7: abre el Administrador de tareas de Windows con el shell (no necesita derechos de administrador propios; si Windows pide elevar, lo gestiona él). Cancelar el aviso de UAC no es un error.</summary>
+    private void OpenTaskManager()
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("taskmgr.exe") { UseShellExecute = true }); }
+        catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223) { /* el usuario canceló la elevación */ }
+        catch (Exception e)
+        {
+            _log($"[bar] no se pudo abrir el Administrador de tareas: {e.GetType().Name}: {e.Message}");
+            ShowInfo("Administrador de tareas", "Windows no pudo abrir el Administrador de tareas. Puedes abrirlo con Ctrl+Mayús+Esc.");
+        }
     }
 
     public string Report() => $"{Diagnostics}; {_wins.Count} barra(s): {string.Join(" | ", _wins.Select(w => w.Report()))}; tema={_theme}; batería={_battery.Present}; volumen={_hub.Snapshot.Audio.Available}; red={_network.Kind}";
 
     public void Dispose()
     {
+        StopNotchFeed();
+        StopFeatures();
+        StopCapture();
+        StopSpotlight();
+        StopLauncher();
+        StopTray();
         DisposePanels();
         foreach (var w in _wins) { try { w.Dispose(); } catch (Exception) { /* seguimos liberando las demás */ } }
         _wins.Clear();

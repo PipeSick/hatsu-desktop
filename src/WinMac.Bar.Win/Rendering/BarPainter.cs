@@ -20,6 +20,14 @@ public sealed class BarPainter : IDisposable
     public BarTheme Theme { get; set; } = BarTheme.Dark;
     public BarBackground Background { get; set; } = BarBackground.Glass;
 
+    /// <summary>Botón de las apps en segundo plano: flecha hacia ABAJO (abre el desplegable hacia abajo); con el desplegable abierto, hacia ARRIBA (lo oculta).</summary>
+    private void DrawTrayMenu(float x, float cy, bool open)
+    {
+        Brush(Fg()); float cx = x + 8, d = open ? -1 : 1;   // abajo: la punta abajo; arriba: la punta arriba
+        _ctx.DrawLine(new Vector2(cx - 4.5f, cy - 2.2f * d), new Vector2(cx, cy + 2.4f * d), _solid, 1.6f, _round);
+        _ctx.DrawLine(new Vector2(cx, cy + 2.4f * d), new Vector2(cx + 4.5f, cy - 2.2f * d), _solid, 1.6f, _round);
+    }
+
     public BarPainter(D2DDevice dev, BarMetrics m)
     {
         _dev = dev; _ctx = dev.Context; _m = m;
@@ -54,6 +62,7 @@ public sealed class BarPainter : IDisposable
         for (int i = 0; i < v.Frame.Items.Count; i++)
         {
             var f = v.Frame.Items[i]; double a = i < v.HoverAlpha.Count ? v.HoverAlpha[i] : 0;
+            if (v.DragId is not null && f.Item.Id == v.DragId) a = 1;   // el módulo que se arrastra queda resaltado
             if (a > 0.005 && BarModel.IsClickable(f.Item.Kind))
             {
                 Brush(Theme == BarTheme.Dark ? new Color4(1, 1, 1, (float)(0.20 * a)) : new Color4(0, 0, 0, (float)(0.11 * a)));
@@ -61,6 +70,11 @@ public sealed class BarPainter : IDisposable
                 ctx.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF((float)f.X, iy, (float)(f.X + f.W), h - iy), RadiusX = r, RadiusY = r }, _solid);
             }
             DrawItem(f, v.State, h);
+        }
+        if (v.DropX is double dx)
+        {   // indicador de inserción: línea fina con el color de acento de Windows (neutro si no hay)
+            Brush(Theme == BarTheme.Dark ? new Color4(0.40f, 0.70f, 1f, 1f) : new Color4(0.0f, 0.40f, 0.85f, 1f));
+            ctx.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF((float)dx - 1f, 5f, (float)dx + 1f, h - 5f), RadiusX = 1f, RadiusY = 1f }, _solid);
         }
         ctx.EndDraw();
     }
@@ -100,6 +114,16 @@ public sealed class BarPainter : IDisposable
                 case BarItemKind.Weather: DrawWeatherGlyph(x + 8, cy, s.Weather.IconKey); break;
                 case BarItemKind.Volume: DrawVolume(x, cy, s.Volume); break;
                 case BarItemKind.Battery: DrawBattery(x, cy, s.Battery); break;
+                case BarItemKind.TrayMenu: DrawTrayMenu(x, cy, s.TrayOpen); break;
+                case BarItemKind.Phone: DrawPhone(x, cy, f.Item.Look); break;
+                case BarItemKind.TaskManager: DrawActivity(x, cy); break;
+                case BarItemKind.PowerPlug: DrawPlug(x + 8, cy); break;
+                case BarItemKind.Peripherals: DrawMouse(x + 8, cy); break;
+                case BarItemKind.Cleanup: DrawSparkles(x + 8, cy); break;
+                case BarItemKind.Vpn: DrawShield(x + 8, cy, f.Item.Look == BarItemLook.Normal); break;
+                case BarItemKind.HubSystem: DrawChip(x + 8, cy); break;
+                case BarItemKind.HubNetwork: DrawGlobe(x + 8, cy); break;
+                case BarItemKind.HubDisks: DrawDisk(x + 8, cy); break;
             }
             x += (float)(f.Item.GlyphWidth + (string.IsNullOrEmpty(f.Item.Text) ? 0 : _m.GlyphTextGap));
         }
@@ -135,11 +159,11 @@ public sealed class BarPainter : IDisposable
     /// <summary>El icono único de la aplicación (planeta con anillo, como el logotipo del panel). La identidad es provisional: este dibujo es lo único que cambia al cambiar el logotipo.</summary>
     private void DrawHubIcon(float cx, float cy)
     {
-        _ctx.Transform = Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy));
-        using (var back = Arc(cx, cy, 7.4f, Math.PI, Math.PI * 2)) { var sc = new Matrix3x2(1, 0, 0, 0.28f, 0, cy * (1 - 0.28f)); _ctx.Transform = sc * Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy)); Stroke(back, 1.5f); }
-        _ctx.Transform = Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy)); Brush(Fg()); _ctx.FillEllipse(new Ellipse(new Vector2(cx, cy), 4.3f, 4.3f), _solid);
-        using (var front = Arc(cx, cy, 7.4f, 0, Math.PI)) { _ctx.Transform = new Matrix3x2(1, 0, 0, 0.28f, 0, cy * (1 - 0.28f)) * Matrix3x2.CreateRotation(-0.38f, new Vector2(cx, cy)); Stroke(front, 1.5f); }
-        _ctx.Transform = Matrix3x2.Identity;
+        // Marca de Hatsu: una «H» redondeada con la barra inclinada en cinta (monocroma, tomando el color de la barra)
+        Brush(Fg());
+        _ctx.DrawLine(new Vector2(cx - 4.6f, cy - 6.4f), new Vector2(cx - 4.6f, cy + 6.4f), _solid, 2.1f, _round);
+        _ctx.DrawLine(new Vector2(cx + 4.6f, cy - 6.4f), new Vector2(cx + 4.6f, cy + 6.4f), _solid, 2.1f, _round);
+        _ctx.DrawLine(new Vector2(cx - 4.6f, cy + 1.6f), new Vector2(cx + 4.6f, cy - 1.6f), _solid, 2.1f, _round);
     }
 
     /// <summary>Icono del Tiempo en la barra: pequeño y reconocible (sol, luna, nube, lluvia…), con los mismos códigos que el panel.</summary>
@@ -166,11 +190,17 @@ public sealed class BarPainter : IDisposable
         }
     }
 
+    private ID2D1Bitmap? _brand32, _brand128; private bool _brandTried;
+
     private void DrawLogo(float x, float cy)
     {
+        // Hatsu Desktop (Flux): el icono de la marca, 16 DIP; si el recurso no está, el contorno con la «H» de siempre
+        if (!_brandTried) { _brandTried = true; _brand32 = BrandIcon.Create(_ctx, 32); _brand128 = BrandIcon.Create(_ctx, 128); }
+        var bmp = BrandIcon.PickSize(16 * _ctx.Dpi.Width / 96.0) == 32 ? _brand32 : _brand128;
+        if (bmp is not null) { _ctx.DrawBitmap(bmp, new RawRectF(x - 0.5f, cy - 8f, x + 15.5f, cy + 8f), 1f, BitmapInterpolationMode.Linear, null); return; }
         var rr = new RoundedRectangle { Rect = new RawRectF(x, cy - 7.5f, x + 15, cy + 7.5f), RadiusX = 4.5f, RadiusY = 4.5f };
         Brush(Fg()); _ctx.DrawRoundedRectangle(rr, _solid, 1.3f);
-        using var l = _dw.CreateTextLayout("W", _logo, 15, 15); l.TextAlignment = TextAlignment.Center; l.ParagraphAlignment = ParagraphAlignment.Center;
+        using var l = _dw.CreateTextLayout("H", _logo, 15, 15); l.TextAlignment = TextAlignment.Center; l.ParagraphAlignment = ParagraphAlignment.Center;
         _ctx.DrawTextLayout(new Vector2(x, cy - 7.5f), l, _solid);
     }
 
@@ -191,6 +221,12 @@ public sealed class BarPainter : IDisposable
                 s.EndFigure(FigureEnd.Closed); s.Close();
             }
             Brush(Theme == BarTheme.Dark ? new Color4(0, 0, 0, 0.75f) : new Color4(1, 1, 1, 0.9f)); _ctx.FillGeometry(g, _solid);
+        }
+        else if (b.Plugged)
+        {   // con corriente pero sin cargar (Windows lo distingue): enchufe pequeño en lugar del rayo
+            float bx = x + bw / 2f; Brush(Theme == BarTheme.Dark ? new Color4(0, 0, 0, 0.75f) : new Color4(1, 1, 1, 0.9f));
+            _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(bx - 2.4f, cy - 0.9f, bx + 2.4f, cy + 2.6f), RadiusX = 1f, RadiusY = 1f }, _solid);
+            _ctx.DrawLine(new Vector2(bx - 1.1f, cy - 3.2f), new Vector2(bx - 1.1f, cy - 0.9f), _solid, 1f); _ctx.DrawLine(new Vector2(bx + 1.1f, cy - 3.2f), new Vector2(bx + 1.1f, cy - 0.9f), _solid, 1f);
         }
     }
 
@@ -231,6 +267,112 @@ public sealed class BarPainter : IDisposable
         if (off) { Brush(Fg()); _ctx.DrawLine(new Vector2(x + 2, cy - 6), new Vector2(x + 14, cy + 6.5f), _solid, 1.5f, _round); }
     }
 
+    /// <summary>WinMac Connect: un iPhone de perfil (contorno redondeado con la isla arriba). Atenuado al conectar; tachado sin conexión.</summary>
+    private void DrawPhone(float x, float cy, BarItemLook look)
+    {
+        float cx = x + 8, a = look == BarItemLook.Normal ? 1f : look == BarItemLook.Dim ? 0.45f : 0.6f; Brush(Fg(a));
+        _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.2f, cy - 7.2f, cx + 4.2f, cy + 7.2f), RadiusX = 2.2f, RadiusY = 2.2f }, _solid, 1.3f);
+        _ctx.DrawLine(new Vector2(cx - 1.4f, cy - 5.1f), new Vector2(cx + 1.4f, cy - 5.1f), _solid, 1.3f, _round);
+        if (look == BarItemLook.Slashed) { Brush(Fg()); _ctx.DrawLine(new Vector2(x + 2, cy - 6.5f), new Vector2(x + 14, cy + 6.5f), _solid, 1.5f, _round); }
+    }
+
+    /// <summary>Administrador de tareas: icono de actividad (pulso).</summary>
+    private void DrawActivity(float x, float cy)
+    {
+        Brush(Fg());
+        using var g = _dev.Factory.CreatePathGeometry(); using (var s = g.Open())
+        {
+            s.BeginFigure(new Vector2(x + 0.8f, cy), FigureBegin.Hollow);
+            foreach (var p in new[] { new Vector2(x + 4.2f, cy), new Vector2(x + 6.6f, cy - 6.2f), new Vector2(x + 9.6f, cy + 6.2f), new Vector2(x + 11.8f, cy), new Vector2(x + 15.2f, cy) }) s.AddLine(p);
+            s.EndFigure(FigureEnd.Open); s.Close();
+        }
+        _ctx.DrawGeometry(g, _solid, 1.4f, _round);
+    }
+
+    /// <summary>Periféricos: un ratón de perfil.</summary>
+    private void DrawMouse(float cx, float cy)
+    {
+        Brush(Fg());
+        _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.6f, cy - 7f, cx + 4.6f, cy + 7f), RadiusX = 4.6f, RadiusY = 4.6f }, _solid, 1.3f);
+        _ctx.DrawLine(new Vector2(cx, cy - 7f), new Vector2(cx, cy - 1.5f), _solid, 1.2f, _round); _ctx.DrawLine(new Vector2(cx - 4.6f, cy - 1.5f), new Vector2(cx + 4.6f, cy - 1.5f), _solid, 1.2f, _round);
+    }
+
+    /// <summary>Rendimiento: un chip (cuadrado con patitas).</summary>
+    private void DrawChip(float cx, float cy)
+    {
+        Brush(Fg());
+        _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.6f, cy - 4.6f, cx + 4.6f, cy + 4.6f), RadiusX = 1.6f, RadiusY = 1.6f }, _solid, 1.5f);
+        _ctx.FillRectangle(new RawRectF(cx - 1.8f, cy - 1.8f, cx + 1.8f, cy + 1.8f), _solid);
+        for (int i = -1; i <= 1; i++)
+        {
+            float o = i * 3f;
+            _ctx.DrawLine(new Vector2(cx + o, cy - 7.4f), new Vector2(cx + o, cy - 4.6f), _solid, 1.2f, _round); _ctx.DrawLine(new Vector2(cx + o, cy + 4.6f), new Vector2(cx + o, cy + 7.4f), _solid, 1.2f, _round);
+            _ctx.DrawLine(new Vector2(cx - 7.4f, cy + o), new Vector2(cx - 4.6f, cy + o), _solid, 1.2f, _round); _ctx.DrawLine(new Vector2(cx + 4.6f, cy + o), new Vector2(cx + 7.4f, cy + o), _solid, 1.2f, _round);
+        }
+    }
+
+    /// <summary>Red: un globo (círculo con meridiano y ecuador).</summary>
+    private void DrawGlobe(float cx, float cy)
+    {
+        Brush(Fg()); _ctx.DrawEllipse(new Ellipse(new Vector2(cx, cy), 6.6f, 6.6f), _solid, 1.5f);
+        _ctx.DrawEllipse(new Ellipse(new Vector2(cx, cy), 2.8f, 6.6f), _solid, 1.2f);
+        _ctx.DrawLine(new Vector2(cx - 6.6f, cy), new Vector2(cx + 6.6f, cy), _solid, 1.2f, _round);
+    }
+
+    /// <summary>Discos: una unidad (rectángulo redondeado con una luz).</summary>
+    private void DrawDisk(float cx, float cy)
+    {
+        Brush(Fg()); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 7f, cy - 4.2f, cx + 7f, cy + 4.2f), RadiusX = 2.4f, RadiusY = 2.4f }, _solid, 1.5f);
+        _ctx.DrawLine(new Vector2(cx - 7f, cy + 0.4f), new Vector2(cx + 7f, cy + 0.4f), _solid, 1.2f, _round);
+        _ctx.FillEllipse(new Ellipse(new Vector2(cx + 4.2f, cy + 2.4f), 0.9f, 0.9f), _solid);
+    }
+
+    /// <summary>VPN: escudo; relleno con una marca cuando hay una conexión activa, solo contorno cuando no.</summary>
+    private void DrawShield(float cx, float cy, bool on)
+    {
+        using var g = _dev.Factory.CreatePathGeometry(); using (var s = g.Open())
+        {
+            s.BeginFigure(new Vector2(cx, cy - 7.2f), FigureBegin.Filled);
+            s.AddLine(new Vector2(cx + 6.2f, cy - 4.6f)); s.AddLine(new Vector2(cx + 6.2f, cy + 0.6f));
+            s.AddBezier(new BezierSegment { Point1 = new Vector2(cx + 6.2f, cy + 4.2f), Point2 = new Vector2(cx + 3f, cy + 6.2f), Point3 = new Vector2(cx, cy + 7.4f) });
+            s.AddBezier(new BezierSegment { Point1 = new Vector2(cx - 3f, cy + 6.2f), Point2 = new Vector2(cx - 6.2f, cy + 4.2f), Point3 = new Vector2(cx - 6.2f, cy + 0.6f) });
+            s.AddLine(new Vector2(cx - 6.2f, cy - 4.6f)); s.EndFigure(FigureEnd.Closed); s.Close();
+        }
+
+        Brush(Fg());
+        if (on)
+        {
+            _ctx.FillGeometry(g, _solid);
+            Brush(new Color4(0.13f, 0.13f, 0.15f, 1f)); _ctx.DrawLine(new Vector2(cx - 2.6f, cy + 0.2f), new Vector2(cx - 0.6f, cy + 2.4f), _solid, 1.7f, _round); _ctx.DrawLine(new Vector2(cx - 0.6f, cy + 2.4f), new Vector2(cx + 3f, cy - 2.2f), _solid, 1.7f, _round);
+        }
+        else _ctx.DrawGeometry(g, _solid, 1.5f);
+    }
+
+    /// <summary>Cleanup: destellos (una estrella de cuatro puntas grande y una pequeña).</summary>
+    private void DrawSparkles(float cx, float cy)
+    {
+        void Star(float sx, float sy, float r)
+        {
+            using var g = _dev.Factory.CreatePathGeometry(); using (var s = g.Open())
+            {
+                s.BeginFigure(new Vector2(sx, sy - r), FigureBegin.Filled);
+                foreach (var p in new[] { new Vector2(sx + r * .28f, sy - r * .28f), new Vector2(sx + r, sy), new Vector2(sx + r * .28f, sy + r * .28f), new Vector2(sx, sy + r), new Vector2(sx - r * .28f, sy + r * .28f), new Vector2(sx - r, sy), new Vector2(sx - r * .28f, sy - r * .28f) }) s.AddLine(p);
+                s.EndFigure(FigureEnd.Closed); s.Close();
+            }
+            Brush(Fg()); _ctx.FillGeometry(g, _solid);
+        }
+        Star(cx - 1.5f, cy + 1.5f, 6.2f); Star(cx + 5.2f, cy - 5f, 2.8f);
+    }
+
+    /// <summary>Enchufe (equipo sin batería conectado a la corriente).</summary>
+    private void DrawPlug(float cx, float cy)
+    {
+        Brush(Fg());
+        _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.2f, cy - 2.2f, cx + 4.2f, cy + 3.4f), RadiusX = 2f, RadiusY = 2f }, _solid, 1.3f);
+        _ctx.DrawLine(new Vector2(cx - 2f, cy - 2.2f), new Vector2(cx - 2f, cy - 6.4f), _solid, 1.3f, _round); _ctx.DrawLine(new Vector2(cx + 2f, cy - 2.2f), new Vector2(cx + 2f, cy - 6.4f), _solid, 1.3f, _round);
+        _ctx.DrawLine(new Vector2(cx, cy + 3.4f), new Vector2(cx, cy + 7f), _solid, 1.3f, _round);
+    }
+
     private void DrawBluetooth(float x, float cy, bool on)
     {
         float cx = x + 8, a = on ? 1f : 0.4f; Brush(Fg(a));
@@ -248,5 +390,5 @@ public sealed class BarPainter : IDisposable
         _ctx.FillEllipse(new Ellipse(new Vector2(x + 4.5f, cy + 3.5f), 1.9f, 1.9f), _solid);
     }
 
-    public void Dispose() { _solid.Dispose(); _round.Dispose(); _regular.Dispose(); _bold.Dispose(); _logo.Dispose(); _dw.Dispose(); }
+    public void Dispose() { _brand32?.Dispose(); _brand128?.Dispose(); _solid.Dispose(); _round.Dispose(); _regular.Dispose(); _bold.Dispose(); _logo.Dispose(); _dw.Dispose(); }
 }

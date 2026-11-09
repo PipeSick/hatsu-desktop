@@ -25,7 +25,7 @@ internal static class SettingsOffscreen
     {
         var cfg = new HostConfig { Bar = new WinMac.Bar.BarConfig { WeatherCity = "Molina|-35.1167|-71.2833", WeatherFavorites = "Santiago|-33.45|-70.67;Valparaíso|-33.05|-71.62", ShowSeconds = false }, Notch = new NotchSettings { GlassLevel = 60, LyricsEnabled = true } };
         var states = noNotch ? new Dictionary<string, ModuleState> { ["notch"] = ModuleState.NotInstalled } : new Dictionary<string, ModuleState>();
-        var ctl = new SettingsController(); ctl.SetPages(SettingsBuilder.Build(new SettingsInput(cfg, states, true, suggest ? "" : "Ciudad: Molina, Maule, Chile. Otras: Región de Murcia, España. Para elegir, escribe «Molina, país»"))); ctl.SelectPage(pageId);
+        var ctl = new SettingsController(); ctl.SetPages(SettingsBuilder.Build(new SettingsInput(cfg, states, true, suggest ? "" : "Ciudad: Molina, Maule, Chile. Otras: Región de Murcia, España. Para elegir, escribe «Molina, país»") { Dock = WinMac.Dock.DockSettings.Sanitize(WinMac.Dock.Win.Shell.DockDefaults.Create()), LocationPermission = "Permitido" })); ctl.SelectPage(pageId);
         if (scroll > 0) ctl.Scroll(scroll);
         if (suggest) ctl.SetSuggestions("hub.city", ["Molina, Maule, Chile", "Molina de Segura, Región de Murcia, España", "Molina de Aragón, Castilla-La Mancha, España", "Molina, Cataluña, España"]);
         int pw = (int)Math.Ceiling(SettingsLayout.WinW * scale), ph = (int)Math.Ceiling(SettingsLayout.WinH * scale);

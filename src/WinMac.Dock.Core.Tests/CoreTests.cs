@@ -193,6 +193,57 @@ public class ControllerTests
     }
 
     [Fact]
+    public void Wm033_turning_autohide_on_live_hides_the_dock_downwards_and_off_shows_it()
+    {
+        var c = Make(new DockConfig()); Run(c, 1); Assert.True(c.Step(0).HideT < 0.01);
+        c.Config = c.Config with { AutoHide = true, HideDelaySeconds = 0.3 };   // what the reload of dock.json now does (it did not reach the controller)
+        Run(c, 2); var v = c.Step(0); Assert.True(v.HideT > 0.95);
+        var m = DockMetrics.ForIconSize(DockSettings.DefaultIconSize);
+        Assert.True(v.HideT * m.HideDistance > m.BarHeight + m.ShadowMargin);   // the layer moves DOWN (positive Y) past the window's bottom edge: fully out of sight
+        c.Config = c.Config with { AutoHide = false }; Run(c, 1.5); Assert.True(c.Step(0).HideT < 0.05);
+    }
+
+    [Fact]
+    public void Wm033_the_wake_strip_is_the_edge_the_dock_hides_behind()
+    {
+        // taskbar hidden: the Dock window reaches the screen bottom (1080) → the last 3 px of the screen
+        Assert.True(DockSettings.EdgeHot(960, 1079, 1080, 400, 1120, 1084)); Assert.False(DockSettings.EdgeHot(960, 1070, 1080, 400, 1120, 1084));
+        // taskbar shown (48 px): the Dock window ends at 1036 → just above the taskbar, never on it
+        Assert.True(DockSettings.EdgeHot(960, 1035, 1080, 400, 1120, 1036)); Assert.False(DockSettings.EdgeHot(960, 1079, 1080, 400, 1120, 1036));
+        Assert.False(DockSettings.EdgeHot(100, 1079, 1080, 400, 1120, 1084));   // outside the Dock's width
+        // 150 %: same rule with physical pixels
+        Assert.True(DockSettings.EdgeHot(1500, 1619, 1620, 600, 1680, 1626));
+    }
+
+    [Fact]
+    public void Wm043_with_the_windows_taskbar_hidden_the_screen_bottom_always_wakes_the_dock()
+    {
+        // el Dock quedó colocado sobre el hueco de la barra (ventana hasta 1036): sin barra visible, el borde real (1079) lo despierta
+        Assert.True(DockSettings.EdgeHot(960, 1079, 1080, 400, 1120, 1036, screenEdgeFree: true));
+        Assert.True(DockSettings.EdgeHot(960, 1078, 1080, 400, 1120, 1036, screenEdgeFree: true));
+        Assert.False(DockSettings.EdgeHot(960, 1079, 1080, 400, 1120, 1036, screenEdgeFree: false));   // con la barra visible debajo: WM-033 (no estorbar su uso)
+        Assert.False(DockSettings.EdgeHot(100, 1079, 1080, 400, 1120, 1036, screenEdgeFree: true));    // fuera del ancho del Dock: los clics en las esquinas no se tocan
+        Assert.True(DockSettings.EdgeHot(1500, 1619, 1620, 600, 1680, 1560, screenEdgeFree: true));    // 150 % (píxeles físicos)
+        // las cuatro combinaciones de «ocultar barra de Windows» × «Dock autoocultable»: el Dock siempre es alcanzable
+        foreach (bool taskbarHidden in new[] { false, true })
+        {
+            int winBottom = taskbarHidden ? 1084 : 1036;   // con la barra visible, el Dock termina justo sobre ella
+            int y = taskbarHidden ? 1079 : 1035;
+            Assert.True(DockSettings.EdgeHot(960, y, 1080, 400, 1120, winBottom, screenEdgeFree: taskbarHidden));
+        }
+    }
+
+    [Fact]
+    public void Wm044_the_dock_is_placed_against_the_current_work_area_so_it_follows_the_hidden_taskbar()
+    {
+        var m = new DockMetrics(); var c = new DockConfig();
+        var mon = new PxRect(0, 0, 1920, 1080);
+        var (_, topWithTaskbar) = DockSettings.Place(mon, new PxRect(0, 0, 1920, 1032), 1120, 120, 1, m, c);
+        var (_, topWithout) = DockSettings.Place(mon, mon, 1120, 120, 1, m, c);
+        Assert.Equal(48, topWithout - topWithTaskbar);   // al ocultar la barra (área de trabajo hasta 1080) el Dock baja al borde real
+    }
+
+    [Fact]
     public void Autohide_does_not_hide_while_pointer_is_over_dock()
     {
         var c = Make(new DockConfig { AutoHide = true, HideDelaySeconds = 0.3 }); Run(c, 0.1);
@@ -450,11 +501,10 @@ public class CalibrationTests
         => Assert.True(ShadowMath.Cumulative(ShadowMath.LayerAlphas(12, new GlassStyle().ShadowAlpha), 1) < 0.07);
 
     [Fact]
-    public void Calibrated_material_has_no_saturation_boost_and_no_inner_rim()
+    public void Material_never_boosts_saturation_and_has_no_inner_rim()
     {
+        // It8: la calibración de la referencia 1 (tinte gris α 0,40) se sustituye por un material por tema (ver DockThemeTests); lo que se conserva: sin realce de saturación ni filete interior
         foreach (var t in new[] { DockTheme.Light, DockTheme.Dark })
-        { var g = GlassStyle.For(t); Assert.Equal(1.0, g.Saturation); Assert.Equal(0.0, g.InnerRimAlpha); Assert.InRange(g.RimTopAlpha, 0.2, 0.4); }
-        var d = GlassStyle.For(DockTheme.Dark);   // k = 1 − α ≈ 0,6 y término aditivo ≈ 31 (medido)
-        Assert.InRange(1 - d.TintAlpha, 0.55, 0.65); Assert.InRange(255 * d.TintAlpha * d.TintR, 25, 38);
+        { var g = GlassStyle.For(t); Assert.InRange(g.Saturation, 0.5, 1.0); Assert.Equal(0.0, g.InnerRimAlpha); Assert.InRange(g.RimTopAlpha, 0.2, 0.65); }
     }
 }

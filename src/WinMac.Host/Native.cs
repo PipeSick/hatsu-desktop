@@ -5,6 +5,8 @@ namespace WinMac.Host.App;
 /// <summary>P/Invoke del host. Solo APIs documentadas (user32, shell32, kernel32).</summary>
 internal static class Native
 {
+    /// <summary>SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX: un fallo de carga o de apertura devuelve el error en vez de abrir un cuadro modal del sistema que bloquearía al host.</summary>
+    [DllImport("kernel32.dll")] public static extern uint SetErrorMode(uint mode);
     public delegate IntPtr WndProc(IntPtr h, uint msg, IntPtr w, IntPtr l);
     public delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
 
@@ -31,7 +33,7 @@ internal static class Native
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern ushort RegisterClassEx(ref WNDCLASSEX c);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr inst, IntPtr p);
-    [DllImport("user32.dll")] public static extern IntPtr DefWindowProc(IntPtr h, uint m, IntPtr w, IntPtr l);
+    [DllImport("user32.dll", EntryPoint = "DefWindowProcW")] public static extern IntPtr DefWindowProc(IntPtr h, uint m, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern bool DestroyWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern bool PeekMessage(out MSG m, IntPtr h, uint a, uint b, uint remove);
     [DllImport("user32.dll")] public static extern bool TranslateMessage(ref MSG m);
@@ -44,6 +46,7 @@ internal static class Native
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern IntPtr CreatePopupMenu();
     [DllImport("user32.dll")] public static extern bool DestroyMenu(IntPtr m);
+    [DllImport("user32.dll")] public static extern short GetKeyState(int vk);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool AppendMenuW(IntPtr m, uint flags, UIntPtr id, string? text);
     [DllImport("user32.dll")] public static extern int TrackPopupMenuEx(IntPtr m, uint flags, int x, int y, IntPtr hwnd, IntPtr tpm);
     [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc proc, IntPtr lParam);

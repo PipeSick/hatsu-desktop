@@ -38,12 +38,14 @@ public static partial class PanelBuilder
         }
 
         if (!string.IsNullOrWhiteSpace(c.Message)) content.Add(Note("msg", c.Message!));
-        var w = new List<Widget>
+        var w = new List<Widget>();
+        if (!c.HubFocused)   // abierto desde su propio icono: sin logotipo ni pestañas (cada pestaña ya es un icono de la barra)
         {
-            new(WidgetKind.Header, "logo", AppIdentity.Current.Name, Glyph: "logo", Data: AppIdentity.Current.LogoKey),
-            new(WidgetKind.Tabs, "tabs", "", Data: new TabsData(HubTabs.All, HubTabs.IndexOf(tab))),
-            new(WidgetKind.TabHeader, "settings:" + tab, SectionTitle(tab)),
-        };
+            w.Add(new(WidgetKind.Header, "logo", AppIdentity.Current.Name, Glyph: "logo", Data: AppIdentity.Current.LogoKey));
+            w.Add(new(WidgetKind.Tabs, "tabs", "", Data: new TabsData(HubTabs.All, HubTabs.IndexOf(tab))));
+        }
+
+        w.Add(new(WidgetKind.TabHeader, "settings:" + tab, SectionTitle(tab)));
         int from = w.Count; w.AddRange(content); int to = w.Count - 1;
         w.Add(new Widget(WidgetKind.Button, "hub:settings", "Ajustes", Col: 0, Glyph: "gear"));
         w.Add(new Widget(WidgetKind.Button, "hub:quit", "Salir", Col: 1, Glyph: "power"));
@@ -218,7 +220,12 @@ public static partial class PanelBuilder
             w.Add(KV("smart-hours", "Horas encendido", sm.PowerOnHours is { } h ? h.ToString("N0", new System.Globalization.CultureInfo("es-CL")) : "No disponible", dim: sm.PowerOnHours is null));
             if (sm.TotalWrittenBytes is { } tw) w.Add(KV("smart-written", "Total escrito", Units.FormatSize(tw)));
             if (sm.TotalReadBytes is { } tr) w.Add(KV("smart-read", "Total leído", Units.FormatSize(tr)));
-            if (sm.Reason is not null && !sm.HasAny) w.Add(Note("smart-why", sm.Reason)); else if (sm.Reason is not null) w.Add(Note("smart-why", sm.Reason));
+            if (sm.Reason is not null) w.Add(Note("smart-why", sm.Reason));
+            if (sm.Incidents is { Total: > 0 } inc)
+            {
+                w.Add(KV("smart-events", "Errores (7 días)", inc.Summary(), "dot-red"));
+                w.Add(Note("smart-events-why", "Windows registró estos errores de este disco en el registro del sistema, aunque su estado diga «Saludable». Haz una copia de lo importante antes de nada."));
+            }
         }
 
         w.Add(Sep("sep-4"));
@@ -239,7 +246,7 @@ public static partial class PanelBuilder
         var w = new List<Widget>(); var st = c.Hub?.Weather ?? WeatherState.NoCity; bool f = c.Cfg.WeatherFahrenheit, h24 = c.Hub?.Use24h ?? c.Cfg.Use24Hour;
         if (st.Status == WeatherStatus.NoCity)
         {
-            w.Add(new Widget(WidgetKind.Header, "title", "Tiempo")); w.Add(Note("nocity", "Elige una ciudad en los ajustes de WinMac para ver el tiempo."));
+            w.Add(new Widget(WidgetKind.Header, "title", "Tiempo")); w.Add(Note("nocity", "Elige una ciudad en los ajustes de Hatsu Desktop para ver el tiempo."));
             w.Add(new Widget(WidgetKind.Button, "hub:settings-weather", "Abrir ajustes del Tiempo", Glyph: "gear"));
         }
         else if (st.Snapshot is null)

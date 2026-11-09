@@ -37,6 +37,10 @@ internal static class Program
     {
         try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }
         try { var dir = Path.Combine(DataDir, "logs"); Directory.CreateDirectory(dir); _log = new StreamWriter(Path.Combine(dir, "bar.log"), true); } catch { }
+        // Un cierre inesperado deja su causa en bar.log (solo la excepción y su pila; nada del usuario).
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => { try { Log("CIERRE INESPERADO: " + e.ExceptionObject); } catch { } };
+        // El canal con el host (latido) corre en el grupo de hilos: un mínimo holgado evita que trabajos que bloquean hilos (iconos del Shell, WMI) lo dejen sin hilo.
+        ThreadPool.GetMinThreads(out int wt, out int io); ThreadPool.SetMinThreads(Math.Max(wt, 16), Math.Max(io, 8));
         try
         {
             if (Arg(args, "--render-png") is string png)
@@ -47,6 +51,16 @@ internal static class Program
                 int hover = int.TryParse(Arg(args, "--hover"), out var h) ? h : -1;
                 Log("PNG: " + BarOffscreen.Render(png, theme, bg, scale, hoverItem: hover)); return 0;
             }
+            if (args.Contains("--render-about"))   // It7 (CI): «Acerca de este PC» con datos de MUESTRA
+            {
+                bool dk = Arg(args, "--theme")?.ToLowerInvariant() != "light"; double asc = double.TryParse(Arg(args, "--scale"), System.Globalization.CultureInfo.InvariantCulture, out var asv) ? asv : 2.0;
+                Log("PNG: " + AboutOffscreen.Render(Arg(args, "--out") ?? "about.png", dk, asc, args.Contains("--expanded"))); return 0;
+            }
+            if (Arg(args, "--render-dialog") is string dkind)   // It7 (CI): diálogos de confirmación con datos reales de cada acción, en ambos temas
+            {
+                bool dark = Arg(args, "--theme")?.ToLowerInvariant() != "light"; double ds = double.TryParse(Arg(args, "--scale"), System.Globalization.CultureInfo.InvariantCulture, out var dsc) ? dsc : 2.0;
+                Log("PNG: " + DialogOffscreen.Render(Arg(args, "--out") ?? "dialog.png", dkind.ToLowerInvariant(), dark, ds)); return 0;
+            }
             if (Arg(args, "--render-panel") is string kind)
             {
                 var theme = Arg(args, "--theme")?.ToLowerInvariant() == "light" ? BarTheme.Light : BarTheme.Dark; double scale = double.TryParse(Arg(args, "--scale"), System.Globalization.CultureInfo.InvariantCulture, out var sc2) ? sc2 : 2.0;
@@ -55,7 +69,19 @@ internal static class Program
                 Log("PNG: " + PanelOffscreen.Render(Arg(args, "--out") ?? "panel.png", kind.ToLowerInvariant(), tab, theme, scale, maxH, scrollTo, bands: args.Contains("--bands"))); return 0;
             }
             if (args.Contains("--status")) return Status();
+            if (args.Contains("--audio-route")) return AudioRoute(args);   // WM-035: proceso auxiliar (experimental), lo lanza la barra
             if (args.Contains("--quit")) return Quit();
+            if (args.Contains("--launchpad")) return Signal(WinMac.Bar.Win.Rendering.BarHost.LaunchpadEventName, "Launchpad");
+            if (args.Contains("--spotlight")) return Signal(WinMac.Bar.Win.Rendering.BarHost.SpotlightEventName, "Spotlight");
+            if (Arg(args, "--edit") is string ep)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(BarHost.EditRequestFile)!); File.WriteAllText(BarHost.EditRequestFile, Path.GetFullPath(ep));
+                return Signal(BarHost.EditEventName, "Editar captura");
+            }
+            if (Arg(args, "--workspace") is string wm) return Signal(WinMac.Bar.Win.Rendering.BarHost.CaptureEventName("ws-" + wm.ToLowerInvariant()), "Espacio de trabajo " + wm);
+            if (Arg(args, "--diag") is "gc") return Signal(WinMac.Bar.Win.Rendering.BarHost.CaptureEventName("diag-gc"), "Diagnóstico GC");
+            if (Arg(args, "--record") is string rm) return Signal(WinMac.Bar.Win.Rendering.BarHost.CaptureEventName("record-" + rm.ToLowerInvariant()), "Grabación " + rm);
+            if (Arg(args, "--capture") is string cm) return Signal(WinMac.Bar.Win.Rendering.BarHost.CaptureEventName(cm.ToLowerInvariant()), "Captura " + cm);
             if (args.Contains("--selftest-system")) return SystemProbe();
             if (args.Contains("--selftest-monitors")) return MonitorProbe();
             if (args.Contains("--selftest")) return SelfTest(appBar: false);
@@ -63,6 +89,41 @@ internal static class Program
             return RunBar(args);
         }
         catch (Exception e) { Log("ERROR: " + e); return 1; }
+    }
+
+    /// <summary>
+    /// WM-035: salida de audio por aplicación en un proceso aparte. Una línea JSON por la salida estándar. «probe» no cambia nada; «get» solo lee; «set» aplica y comprueba.
+    /// </summary>
+    private static int AudioRoute(string[] args)
+    {
+        int i = Array.IndexOf(args, "--audio-route"); string op = i + 1 < args.Length ? args[i + 1] : "probe";
+        static void Out(object o) { Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(o)); Console.Out.Flush(); }
+        var f = WinMac.SystemControl.Win.AudioPolicyRouting.Factory(out var why);
+        if (f == IntPtr.Zero) { Out(new { ok = false, why }); return 0; }
+        try
+        {
+            switch (op)
+            {
+                case "probe": Out(new { ok = true }); return 0;
+                case "get":
+                {
+                    var map = new Dictionary<string, string?>();
+                    foreach (var part in (i + 2 < args.Length ? args[i + 2] : "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        if (int.TryParse(part, out int pid)) { try { map[pid.ToString()] = WinMac.SystemControl.Win.AudioPolicyRouting.Get(f, pid); } catch (Exception) { } }
+                    Out(new { ok = true, outputs = map }); return 0;
+                }
+                case "set":
+                {
+                    if (i + 3 >= args.Length || !int.TryParse(args[i + 2], out int pid)) { Out(new { ok = false, why = "faltan datos" }); return 0; }
+                    string? dev = args[i + 3] == "default" ? null : args[i + 3];
+                    var err = WinMac.SystemControl.Win.AudioPolicyRouting.Set(f, pid, dev);
+                    Out(new { ok = err is null, why = err }); return 0;
+                }
+                default: Out(new { ok = false, why = "orden desconocida" }); return 0;
+            }
+        }
+        catch (Exception e) { Out(new { ok = false, why = e.GetType().Name + (e is System.Runtime.InteropServices.COMException c ? $" 0x{c.HResult:X8}" : "") }); return 0; }
+        finally { WinMac.SystemControl.Win.AudioPolicyRouting.Release(f); }
     }
 
     private static int RunBar(string[] args)
@@ -81,9 +142,23 @@ internal static class Program
             // Ajustes centrales: el host es la única fuente de verdad. Llegan retenidos al conectar y tras cada cambio; los cambios hechos desde la barra se piden al host.
             link.Subscribe("config.bar", d => { try { if (d is { } e && System.Text.Json.JsonSerializer.Deserialize<BarConfig>(e.GetRawText(), BarConfig.Wire) is { } c) host.ApplyConfig(c.Sanitize()); } catch (Exception ex) { Log("Ajustes de la barra ilegibles: " + ex.Message); } });
             host.PersistPatch = patch => link.Event("config.bar.set", patch);
+            // La Isla (NotchWin): la barra le cuenta los cambios de volumen y brillo y las notificaciones nuevas, según lo que pida en sus ajustes centrales.
+            link.Subscribe("capture.edit", d => { if (d is { ValueKind: System.Text.Json.JsonValueKind.Object } e && e.TryGetProperty("path", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.String) host.RequestEdit(p.GetString()); });
+            link.Subscribe("config.notch", d => host.ApplyNotchOptions(WinMac.Bar.Notch.NotchFeedOptions.Parse(d)));
+            host.NotchEvent = payload => link.Event(WinMac.Bar.Notch.NotchFeed.Topic, payload);
+            // WinMac Connect (opcional): estado, lista y avisos del iPhone. Sin el módulo no llega nada.
+            link.Subscribe(WinMac.Connect.ConnectTopics.Config, d => host.ApplyConnectConfig(WinMac.Connect.ConnectSettings.Parse(d)));
+            link.Subscribe(WinMac.Connect.ConnectTopics.State, d => host.ApplyPhoneState(WinMac.Connect.ConnectWire.ParseState(d)));
+            link.Subscribe(WinMac.Connect.ConnectTopics.Notifications, d => host.ApplyPhoneList(WinMac.Connect.ConnectWire.ParseList(d)));
+            link.Subscribe(WinMac.Connect.ConnectTopics.Alert, d => { if (WinMac.Connect.ConnectWire.ParseItem(d) is { } it) host.OnPhoneAlert(it); });
+            link.Subscribe(WinMac.Connect.ConnectTopics.Call, d => host.ApplyPhoneCall(WinMac.Connect.ConnectWire.ParseCall(d)));
+            host.NotchActivity = payload => link.Event("notch.activity", payload);
+            host.NotchCommand = payload => link.Event("notch.cmd", payload);
+            host.ModuleEvent = (topic, payload) => link.Event(topic, payload);
+            link.Subscribe("clip.results", d => { if (d is { } e) host.OnClipResults(e); });   // p. ej. cerrar la Isla abierta antes de capturar   // API interna de actividades de la Isla (docs/25)
             host.HostCommand = (cmd, section) => link.Event("host.cmd", new { cmd, section });   // «Ajustes» y «Salir» del panel: las ejecuta el host (cierre ordenado)
-            link.Start(); Log("Modo hosted: enlazada con WinMac.exe."); }
-        Log("Barra superior iniciada. Cierra con «WinMac.Bar.App --quit» o desde su menú (clic derecho).");
+            link.Start(); Log("Modo hosted: enlazada con HatsuDesktop.exe."); }
+        Log("Barra superior iniciada. Cierra con «HatsuDesktop.Bar --quit» o desde su menú (clic derecho).");
         int rc = host.Run(); Log("Barra superior cerrada. " + host.Report());
         if (link is not null) { if (rc == 0) link.ByeAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult(); link.DisposeAsync().AsTask().GetAwaiter().GetResult(); }   // «bye» = cierre voluntario: el host no nos reinicia
         return rc;
@@ -95,15 +170,48 @@ internal static class Program
         var lines = WinMac.SystemControl.Win.SystemServicesFactory.Probe(WinMac.SystemControl.Win.SystemServicesFactory.CreateReal());
         foreach (var l in lines) Log("  " + l);
         HubProbe();
+        NotificationProbe();
+        TrayProbe();
         int bad = lines.Count(l => l.StartsWith("[FALLO]"));
         Log(bad == 0 ? "Ningún servicio lanzó excepciones (un servicio «no disponible» es un resultado válido)." : $"{bad} servicio(s) lanzaron excepciones: es un error.");
         return bad == 0 ? 0 : 1;
     }
 
+    /// <summary>Bandeja: ¿encuentra Windows la ventana de bandeja de WinMac (y no la de Explorer)? ¿cuántos iconos llegan al pedir a las apps que los registren? Explorer sigue recibiéndolo todo.</summary>
+    private static void TrayProbe()
+    {
+        Log("Iconos de apps en segundo plano (bandeja; se reenvía todo a Explorer, no se quita nada):");
+        var store = new WinMac.Bar.Tray.TrayIconStore(); var gate = new object();
+        using var tray = new WinMac.Bar.Win.Shell.Tray.TrayHost(_ => { });
+        tray.Message += m => { lock (gate) store.Apply(m); };
+        tray.Start(); Thread.Sleep(3000);
+        lock (gate) Log($"  ventana de bandeja: {(tray.IsPrimary ? "las apps la encuentran" : "las apps encuentran antes la de Explorer")} · Explorer {(tray.ExplorerFound ? "encontrado" : "NO encontrado")} · {tray.MessagesSeen} mensaje(s) · {store.Visible.Count} icono(s) visibles de {store.Count}");
+    }
+
+    /// <summary>
+    /// Centro de Notificaciones en ESTE equipo: permiso, si Windows envía el evento de cambios a WinMac y CUÁNTAS notificaciones y apps hay (solo con el permiso ya concedido).
+    /// No pide permiso, no muestra títulos ni textos y no elimina nada.
+    /// </summary>
+    private static void NotificationProbe()
+    {
+        Log("Centro de Notificaciones (UserNotificationListener; no se pide permiso, no se muestra contenido y no se elimina nada):");
+        using var src = new WinMac.Bar.Win.Shell.Notifications.WinNotificationSource(_ => { });
+        var (access, why) = src.GetAccess(); Log("  permiso: " + access + (why is null ? "" : " · " + why));
+        if (access != WinMac.Bar.Notifications.NotificationAccess.Allowed) { Log("  (sin permiso concedido no se lee nada; el panel ofrece pedirlo)"); return; }
+        try
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew(); var list = src.Read();
+            Log($"  lectura: {list.Count} notificación(es) de {list.Select(n => n.GroupKey).Distinct().Count()} app(s) · {list.Count(n => n.HasIcon)} con icono · {list.Count(n => n.Title is null && n.Body is null)} sin texto · {sw.ElapsedMilliseconds} ms");
+        }
+        catch (Exception e) { Log($"  [FALLO] lectura: {e.GetType().Name} (0x{e.HResult:X8}): {e.Message}"); }
+        bool live = src.StartWatching(() => { }, out var whyNot); src.StopWatching();
+        Log("  evento de cambios: " + (live ? "disponible (el panel se actualiza al llegar una notificación)" : "NO disponible: " + whyNot + " (el panel relee cada 4 s solo mientras está abierto)"));
+    }
+
     /// <summary>Qué leen de verdad los monitores del panel en ESTE equipo (discos, memoria, temperaturas): para diagnosticar con datos reales, sin cambiar nada.</summary>
     private static void HubProbe()
     {
-        Log("Panel de WinMac (lecturas reales de este equipo):");
+        Log("Panel de Hatsu Desktop (lecturas reales de este equipo):");
         var (svc, owner) = WinMac.Bar.Win.Shell.Hub.HubServicesFactory.CreateReal();
         try
         {
@@ -118,7 +226,7 @@ internal static class Program
             {
                 var d = svc.Disks.ReadCatalog();
                 Log($"  Discos físicos: {d.Disks.Count} · volúmenes: {d.Volumes.Count}" + (d.Reason is null ? "" : " · motivo: " + d.Reason));
-                foreach (var v in d.Volumes) { var disk = d.DiskOf(v); Log($"    {v.Letter} «{v.Label}» → " + (disk is null ? "SIN disco físico asociado" : $"disco {disk.Number} {disk.Model} ({disk.Media}) estado {disk.Smart.Health ?? "n/d"}, temp {(disk.Smart.TemperatureC is { } t ? t + " °C" : "n/d")}, desgaste {(disk.Smart.WearPercent is { } w ? w + " %" : "n/d")}, horas {disk.Smart.PowerOnHours?.ToString() ?? "n/d"}" + (disk.Smart.Reason is null ? "" : " [" + disk.Smart.Reason + "]"))); }
+                foreach (var v in d.Volumes) { var disk = d.DiskOf(v); Log($"    {v.Letter} «{v.Label}» → " + (disk is null ? "SIN disco físico asociado" : $"disco {disk.Number} {disk.Model} ({disk.Media}) estado {disk.Smart.Health ?? "n/d"}, temp {(disk.Smart.TemperatureC is { } t ? t.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + " °C" : "n/d")}, desgaste {(disk.Smart.WearPercent is { } w ? w + " %" : "n/d")}, horas {disk.Smart.PowerOnHours?.ToString() ?? "n/d"}" + (disk.Smart.Incidents is { } inc ? ", errores registrados por Windows (7 días): " + inc.Summary() : ", sin errores registrados por Windows (7 días)") + (disk.Smart.Reason is null ? "" : " [" + disk.Smart.Reason + "]"))); }
             }
             catch (Exception e) { Log("  [FALLO] discos: " + e.GetType().Name + ": " + e.Message); }
             Log("  Lo que Windows dice de los discos:"); foreach (var l in WinMac.Bar.Win.Shell.Hub.HubServicesFactory.DiskDiagnostics()) Log("    " + l);
@@ -134,6 +242,13 @@ internal static class Program
         Log("Monitores (no se cambia nada):");
         foreach (var l in BarHost.DescribeMonitors()) Log(l);
         return 0;
+    }
+
+    /// <summary>Pide a la barra en ejecución que abra (o cierre) Launchpad, como la tecla Windows. Sirve para atajos propios, el Dock o las pruebas.</summary>
+    private static int Signal(string name, string what)
+    {
+        try { AllowSetForegroundWindow(-1); using var ev = EventWaitHandle.OpenExisting(name); ev.Set(); Log(what + ": señal enviada."); return 0; }   // quien lo pide (un atajo, el Dock) cede el primer plano a la barra
+        catch (WaitHandleCannotBeOpenedException) { Log("No hay ninguna barra en ejecución."); return 2; }
     }
 
     private static int Quit()
@@ -183,4 +298,5 @@ internal static class Program
         Log(failures == 0 ? "SELFTEST: todo OK" : $"SELFTEST: {failures} fallo(s)");
         return failures == 0 ? 0 : 1;
     }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool AllowSetForegroundWindow(int processId);
 }

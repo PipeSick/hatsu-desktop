@@ -21,13 +21,14 @@ public static class Win32Errors
         21 => "21 ERROR_NOT_READY (el dispositivo no está listo o no tiene medio)",
         31 => "31 ERROR_GEN_FAILURE (fallo general del dispositivo)",
         32 => "32 ERROR_SHARING_VIOLATION (otro proceso lo tiene abierto en exclusiva)",
+        55 => "55 ERROR_DEV_NOT_EXIST (el controlador dice que el dispositivo no está disponible para esta solicitud)",
         50 => "50 ERROR_NOT_SUPPORTED (la solicitud no está soportada)",
         87 => "87 ERROR_INVALID_PARAMETER (el controlador rechazó los parámetros de la solicitud)",
         122 => "122 ERROR_INSUFFICIENT_BUFFER",
         234 => "234 ERROR_MORE_DATA (la respuesta no cabe en el búfer)",
         1117 => "1117 ERROR_IO_DEVICE (error de E/S del dispositivo)",
         1167 => "1167 ERROR_DEVICE_NOT_CONNECTED",
-        _ => code.ToString(CultureInfo.InvariantCulture) + " (código sin descripción en WinMac: búscalo como «System Error Code»)",
+        _ => code.ToString(CultureInfo.InvariantCulture) + " (código sin descripción en Hatsu Desktop: búscalo como «System Error Code»)",
     };
 }
 

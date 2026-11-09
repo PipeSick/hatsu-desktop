@@ -395,6 +395,13 @@ public sealed class DockPainter : IDisposable
         if (hovered) { Solid(1, 1, 1, 0.10f); _ctx.FillRoundedRectangle(rr, _solid); }
         Solid(1, 1, 1, hovered ? 0.85f : 0.30f); _ctx.DrawRoundedRectangle(rr, _solid, hovered ? 2f : 1f);
 
+        if (hovered)
+        {
+            var X = c.Close; float cx = (float)(X.X + X.W / 2), cy = (float)(X.Y + X.H / 2); bool hot = pv.HoverClose;
+            if (hot) Solid(0.95f, 0.27f, 0.25f, 0.96f); else Solid(0, 0, 0, 0.55f); _ctx.FillEllipse(new Ellipse(new Vector2(cx, cy), (float)X.W / 2, (float)X.H / 2), _solid);
+            Solid(1, 1, 1, 0.95f); _ctx.DrawLine(new Vector2(cx - 4, cy - 4), new Vector2(cx + 4, cy + 4), _solid, 1.6f); _ctx.DrawLine(new Vector2(cx + 4, cy - 4), new Vector2(cx - 4, cy + 4), _solid, 1.6f);
+        }
+
         // píldoras: «Minimizada» (opcional) + título de la ventana
         var P = c.Pill; float x = (float)P.X, right = (float)P.Right; string title = string.IsNullOrWhiteSpace(w.Title) ? pv.Item.Title : w.Title;
         if (w.Minimized) x += DrawPill("Minimizada", x, (float)P.Y, (float)P.H, right - x, 0.34f) + 6;

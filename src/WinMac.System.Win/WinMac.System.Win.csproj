@@ -4,8 +4,11 @@
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>WinMac.SystemControl.Win</RootNamespace>
     <Platforms>AnyCPU</Platforms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>   <!-- WM-035: llamada por tabla virtual a la interfaz interna de Audio Policy (solo en el proceso auxiliar) -->
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinMac.System.Core\WinMac.System.Core.csproj" />
+    <!-- WM-016: WMI del panel interno (WmiMonitorBrightness) con la API de Microsoft en vez de COM tardío (dynamic), que no dejaba enumerar ni dar motivos claros -->
+    <PackageReference Include="System.Management" Version="9.0.0" />
   </ItemGroup>
 </Project>

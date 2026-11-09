@@ -9,13 +9,33 @@ namespace WinMac.Bar.Win.Shell;
 /// <summary>Lecturas del sistema para la barra. Cada proveedor está aislado: ante cualquier fallo devuelve «no disponible» y nunca lanza.</summary>
 public static class SystemProviders
 {
+    private static DateTime _devicesAt = DateTime.MinValue; private static bool? _hasInternalBattery;
+
+    /// <summary>¿Hay una batería DEL EQUIPO? (no un SAI). Null = no se pudo saber. Se vuelve a mirar cada 30 s (se enchufa/desenchufa un SAI o una batería extraíble).</summary>
+    private static bool? HasInternalBattery()
+    {
+        if (DateTime.UtcNow - _devicesAt < TimeSpan.FromSeconds(30)) return _hasInternalBattery;
+        _devicesAt = DateTime.UtcNow;
+        try { _hasInternalBattery = BatteryDetailsProvider.DevicePaths() is { } paths ? BatteryDeviceClass.HasInternal(paths) : null; }
+        catch (Exception) { _hasInternalBattery = null; }
+        return _hasInternalBattery;
+    }
+
+    /// <summary>
+    /// It7: energía del PC con la API real de Windows (GetSystemPowerStatus) más la clasificación de dispositivos: un SAI/UPS conectado a un sobremesa
+    /// hace que Windows informe «batería» (y un 100 % que no es del PC); aquí solo cuenta una batería del equipo. Sin ella, Present = false (y Plugged = línea de corriente).
+    /// Limitación: portátil CON SAI conectado → Windows mezcla ambas; se usa su cifra.
+    /// </summary>
     public static BatteryInfo Battery()
     {
         try
         {
             if (!BarNative.GetSystemPowerStatus(out var s)) return BatteryInfo.None;
-            bool present = (s.BatteryFlag & 128) == 0 && s.BatteryFlag != 255 && s.BatteryLifePercent <= 100;   // 128 = sin batería; 255 = desconocido
-            return present ? new BatteryInfo(true, s.BatteryLifePercent, (s.BatteryFlag & 8) != 0, s.ACLineStatus == 1) : BatteryInfo.None;
+            bool ac = s.ACLineStatus == 1;   // 0 = batería, 1 = corriente, 255 = desconocido
+            bool flagsSayBattery = (s.BatteryFlag & 128) == 0 && s.BatteryFlag != 255 && s.BatteryLifePercent <= 100;   // 128 = sin batería; 255 = desconocido
+            bool present = flagsSayBattery && HasInternalBattery() != false;
+            if (!present) return ac ? BatteryInfo.NoBatteryOnAc : BatteryInfo.None;
+            return new BatteryInfo(true, s.BatteryLifePercent, (s.BatteryFlag & 8) != 0, ac, s.BatteryLifeTime is > 0 and < 0x7FFFFFFF ? (int)s.BatteryLifeTime : null);   // 0xFFFFFFFF = Windows does not know
         }
         catch (Exception) { return BatteryInfo.None; }
     }

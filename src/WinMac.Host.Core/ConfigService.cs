@@ -13,7 +13,10 @@ public sealed class ConfigService
     public ConfigService(string path, HostConfig initial, Action<string>? log = null) { _path = path; _cfg = initial; _log = log ?? (_ => { }); }
 
     public HostConfig Current { get { lock (_l) return _cfg; } }
-    public NotchSettings Notch => Current.Notch ?? new NotchSettings();
+    /// <summary>Error del último guardado en disco (null = se guardó bien). Lo usa el asistente para no dar por aplicado lo que solo vive en memoria.</summary>
+    public string? LastSaveError { get { lock (_l) return _lastSaveError; } }
+    private string? _lastSaveError;
+    public NotchSettings Notch => Current.Notch ?? NotchSettings.Factory;
     public bool IsEnabled(string module) => Current.Modules.TryGetValue(module, out var m) ? m.Enabled : true;
     /// <summary>Se dispara tras cada cambio efectivo (anterior, nuevo), fuera del cerrojo.</summary>
     public event Action<HostConfig, HostConfig>? Changed;
@@ -23,9 +26,9 @@ public sealed class ConfigService
         HostConfig old, @new;
         lock (_l)
         {
-            old = _cfg; @new = change(old); if (Equals(old, @new) && SameModules(old, @new)) return false;
+            old = _cfg; _lastSaveError = null; @new = change(old); if (Equals(old, @new) && SameModules(old, @new)) return false;
             _cfg = @new;
-            try { HostConfig.Save(_path, @new); } catch (Exception e) { _log("[config] no se pudo guardar winmac.json: " + e.Message + " (el cambio sigue vigente en memoria)"); }
+            try { HostConfig.Save(_path, @new); _lastSaveError = null; } catch (Exception e) { _lastSaveError = e.Message; _log("[config] no se pudo guardar winmac.json: " + e.Message + " (el cambio sigue vigente en memoria)"); }
         }
         try { Changed?.Invoke(old, @new); } catch (Exception e) { _log("[config] un suscriptor falló: " + e.Message); }
         return true;
@@ -34,7 +37,7 @@ public sealed class ConfigService
 
     public bool UpdateNotch(Func<NotchSettings, NotchSettings> change) => Update(c =>
     {
-        var cur = c.Notch ?? new NotchSettings(); var n = change(cur).Sanitize();
+        var cur = c.Notch ?? NotchSettings.Factory; var n = change(cur).Sanitize();
         return SameNotch(cur, n) && c.Notch is not null ? c : c with { Notch = n };
     });
     /// <summary>Comparación por valor (los records comparan la lista de pestañas por referencia).</summary>
@@ -58,6 +61,13 @@ public sealed class ConfigService
     });
 
     public bool SetAutostartFlag(bool on) => Update(c => c.Autostart == on ? c : c with { Autostart = on });
+    public WinMac.Connect.ConnectSettings Connect => Current.Connect ?? new WinMac.Connect.ConnectSettings();
+    public bool UpdateConnect(Func<WinMac.Connect.ConnectSettings, WinMac.Connect.ConnectSettings> change) => Update(c =>
+    {
+        var cur = c.Connect ?? new WinMac.Connect.ConnectSettings(); var n = change(cur).Sanitize();
+        return n == cur ? c : c with { Connect = n };
+    });
+    public bool SetHideTaskbar(bool on) => Update(c => c.HideTaskbar == on ? c : c with { HideTaskbar = on });
 }
 
 /// <summary>
@@ -80,6 +90,7 @@ public sealed class HostController
     private void OnModuleState(string module, ModuleState state)
     {
         if (module == "notch" && state is ModuleState.Crashed or ModuleState.Failed or ModuleState.Stopped or ModuleState.Stopping or ModuleState.Disabled or ModuleState.NotInstalled) ReleaseNotchSpace();
+        if (module == "connect" && state is ModuleState.Failed or ModuleState.Stopped or ModuleState.Disabled) ConnectOff();   // un estado viejo del iPhone no se muestra como actual
     }
 
     private void ReleaseNotchSpace() => _bus.Publish(NotchSettings.RectsTopic, new { rects = Array.Empty<object>() });
@@ -90,10 +101,21 @@ public sealed class HostController
     public static readonly string[] SettingsSections = ["sound", "system", "network", "disks", "weather"];
     /// <summary>Cierre ordenado de WinMac completo (lo ejecuta el anfitrión en su hilo de interfaz).</summary>
     public Action? QuitRequested { get; set; }
+    /// <summary>La Barra (gesto o atajo de Gestures) pide mostrar u ocultar automáticamente el Dock: el host cambia su configuración (dock.json), que el Dock vuelve a leer.</summary>
+    public Action? DockAutoHideToggleRequested { get; set; }
+    /// <summary>The bar reported the real state of its shortcuts (Settings redraws).</summary>
+    public Action? HotkeysChanged { get; set; }
+    /// <summary>Estado del control de llamadas del módulo Connect ({state, reason}); lo muestra Ajustes › Hatsu Connect.</summary>
+    public Action<JsonElement>? CallStatusReceived { get; set; }
     /// <summary>Abrir la ventana de Ajustes, en una sección o null.</summary>
     public Action<string?>? SettingsRequested { get; set; }
 
-    public void Start() { _bus.Publish(NotchSettings.Topic, _cfg.Notch.ToWire()); _bus.Publish(BarTopic, BarWire(_cfg.Bar)); }
+    public void Start() { _bus.Publish(NotchSettings.Topic, _cfg.Notch.ToWire()); _bus.Publish(BarTopic, BarWire(_cfg.Bar)); _bus.Publish(WinMac.Connect.ConnectTopics.Config, ConnectWire(_cfg.Connect)); }
+
+    /// <summary>WinMac Connect se apagó (o se detuvo): el estado y la lista retenidos dejan de valer y la barra deja de mostrar el iPhone.</summary>
+    public void ConnectOff() { _bus.Publish(WinMac.Connect.ConnectTopics.State, WinMac.Connect.ConnectWire.Off); _bus.Publish(WinMac.Connect.ConnectTopics.Notifications, new { items = Array.Empty<object>() }); }
+
+    private static object ConnectWire(WinMac.Connect.ConnectSettings c) => JsonSerializer.SerializeToElement(c, WinMac.Connect.ConnectSettings.Wire);
 
     /// <summary>La configuración de la Barra tal como viaja (camelCase, enums como texto).</summary>
     private static object BarWire(BarConfig b) => JsonDocument.Parse(b.ToWireJson()).RootElement.Clone();
@@ -107,6 +129,9 @@ public sealed class HostController
         // cada módulo cambia SOLO sus propios ajustes y solo por su tópico
         if (module == "notch" && topic == NotchSettings.SetTopic) { try { _cfg.ApplyNotchPatch(d); } catch (Exception e) { _log("[config] parche de la Isla descartado: " + e.Message); } }
         else if (module == "bar" && topic == CommandTopic) { try { RunCommand(d); } catch (Exception e) { _log("[host] orden de la Barra descartada: " + e.Message); } }
+        else if (module == "connect" && topic == WinMac.Connect.ConnectTopics.CallStatus) { try { CallStatusReceived?.Invoke(d); } catch (Exception) { } }   // estado del control de llamadas → Ajustes
+        else if (module == "bar" && topic == "bar.hotkeys") { HotkeyStatus.Set(d); HotkeysChanged?.Invoke(); }
+        else if (module == "bar" && topic == "bar.features") { FeatureStatusStore.Set(d); HotkeysChanged?.Invoke(); }
         else if (module == "bar" && topic == BarSetTopic) { try { _cfg.ApplyBarPatch(d); } catch (Exception e) { _log("[config] parche de la Barra descartado: " + e.Message); } }
     }
 
@@ -117,20 +142,71 @@ public sealed class HostController
         string? section = d.ValueKind == JsonValueKind.Object && d.TryGetProperty("section", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null;
         switch (cmd)
         {
-            case "quit": _log("[host] la Barra pidió cerrar WinMac"); QuitRequested?.Invoke(); break;
+            case "quit": _log("[host] la Barra pidió cerrar Hatsu Desktop"); QuitRequested?.Invoke(); break;
+            case "dock.autohide.toggle": DockAutoHideToggleRequested?.Invoke(); break;
             case "settings": SettingsRequested?.Invoke(section is not null && SettingsSections.Contains(section) ? section : null); break;
         }
     }
 
     private void OnChanged(HostConfig old, HostConfig @new)
     {
-        if (!ConfigService.SameNotch(old.Notch ?? new NotchSettings(), @new.Notch ?? new NotchSettings()) || old.Notch is null != @new.Notch is null) _bus.Publish(NotchSettings.Topic, (@new.Notch ?? new NotchSettings()).ToWire());
+        if (!ConfigService.SameNotch(old.Notch ?? NotchSettings.Factory, @new.Notch ?? NotchSettings.Factory) || old.Notch is null != @new.Notch is null) _bus.Publish(NotchSettings.Topic, (@new.Notch ?? NotchSettings.Factory).ToWire());
         if ((old.Bar ?? new BarConfig()) != (@new.Bar ?? new BarConfig()) || old.Bar is null != @new.Bar is null) _bus.Publish(BarTopic, BarWire(@new.Bar ?? new BarConfig()));
+        if ((old.Connect ?? new()) != (@new.Connect ?? new())) _bus.Publish(WinMac.Connect.ConnectTopics.Config, ConnectWire(@new.Connect ?? new()));
+        if (old.Modules.TryGetValue("connect", out var oc) && oc.Enabled && @new.Modules.TryGetValue("connect", out var nc2) && !nc2.Enabled) ConnectOff();
         foreach (var (id, m) in @new.Modules)
             if (!old.Modules.TryGetValue(id, out var o) || o.Enabled != m.Enabled)
             {
                 var (mid, en) = (id, m.Enabled);
                 _ = Task.Run(async () => { try { await _sup.SetEnabledAsync(mid, en).ConfigureAwait(false); } catch (Exception e) { _log($"[config] no se pudo {(en ? "activar" : "desactivar")} {mid}: {e.Message}"); } });
             }
+    }
+}
+
+/// <summary>Last state of WinMac's global shortcuts as the bar reported it (keys, purpose, module, accepted by Windows, problem). Thread-safe.</summary>
+public static class HotkeyStatus
+{
+    public sealed record Item(string Keys, string Purpose, string Module, bool Registered, string? Problem);
+    private static IReadOnlyList<Item> _items = [];
+    private static readonly object Gate = new();
+
+    public static IReadOnlyList<Item> Items { get { lock (Gate) return _items; } }
+
+    public static void Set(JsonElement d)
+    {
+        var list = new List<Item>();
+        if (d.ValueKind == JsonValueKind.Object && d.TryGetProperty("items", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            foreach (var e in arr.EnumerateArray().Take(32))
+            {
+                string? S(string n) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+                if (S("keys") is { Length: > 0 and <= 40 } k && S("purpose") is { Length: <= 60 } p)
+                    list.Add(new Item(k, p, S("module") ?? "", e.TryGetProperty("registered", out var r) && r.ValueKind == JsonValueKind.True, S("problem") is { Length: <= 200 } pr ? pr : null));
+            }
+        lock (Gate) _items = list;
+    }
+}
+
+
+/// <summary>Estado de salud de los módulos de productividad tal como lo informa la Barra (Ajustes › Módulos). Thread-safe. Lo que la Barra no ha informado aparece como «Sin informar».</summary>
+public static class FeatureStatusStore
+{
+    public sealed record Item(string Id, string State, string? Detail, int Faults);
+    private static IReadOnlyDictionary<string, Item> _items = new Dictionary<string, Item>();
+    private static readonly object Gate = new();
+
+    public static Item? Get(string id) { lock (Gate) return _items.TryGetValue(id, out var i) ? i : null; }
+    public static void Clear() { lock (Gate) _items = new Dictionary<string, Item>(); }
+
+    public static void Set(JsonElement d)
+    {
+        var map = new Dictionary<string, Item>();
+        if (d.ValueKind == JsonValueKind.Object && d.TryGetProperty("items", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            foreach (var e in arr.EnumerateArray().Take(16))
+            {
+                string? S(string n) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+                if (S("id") is { Length: > 0 and <= 24 } id && S("state") is { Length: > 0 and <= 16 } st)
+                    map[id] = new Item(id, st, S("detail") is { Length: <= 300 } de ? de : null, e.TryGetProperty("faults", out var f) && f.ValueKind == JsonValueKind.Number ? f.GetInt32() : 0);
+            }
+        lock (Gate) _items = map;
     }
 }

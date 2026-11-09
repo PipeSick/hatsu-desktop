@@ -1,5 +1,5 @@
 <#
-  Pruebas AUTOMÁTICAS del host (WinMac.exe) en el runner de Windows, con módulos de mentira (WinMac.FakeModule). No usa Dock ni Barra reales, no registra AppBar
+  Pruebas AUTOMÁTICAS del host (HatsuDesktop.exe) en el runner de Windows, con módulos de mentira (WinMac.FakeModule). No usa Dock ni Barra reales, no registra AppBar
   y solo toca el registro con un nombre de prueba (WinMacCiTest). Cada comprobación imprime PASS/FAIL; el script sale con código 1 si alguna falla.
   Cubre los criterios B1–B8 y A6 de docs/14. Las comprobaciones con ventanas reales (AppBar, Dock en pantalla) son MANUALES (docs/15).
 #>
@@ -7,7 +7,7 @@ param([string]$PublishDir = 'ci-publish', [string]$OutDir = 'smoke')
 $ErrorActionPreference = 'Continue'
 $PublishDir = (Resolve-Path $PublishDir).Path
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
-$hostExe = Join-Path $PublishDir 'Host/WinMac.exe'; $fakeExe = Join-Path $PublishDir 'FakeModule/WinMac.FakeModule.exe'
+$hostExe = Join-Path $PublishDir 'Host/HatsuDesktop.exe'; $fakeExe = Join-Path $PublishDir 'FakeModule/WinMac.FakeModule.exe'
 $base = Join-Path ([IO.Path]::GetTempPath()) ("winmac-host-test-" + [Guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $base | Out-Null
 $script:fails = 0; $script:rows = @()
 
@@ -27,8 +27,8 @@ function NewRoom([string]$name, [string]$barMode = 'normal', [string]$dockMode =
   $cfg | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
   return [pscustomobject]@{ Dir = $d; Cfg = Join-Path $d 'winmac.json'; Log = Join-Path $d 'host.log' }
 }
-function HostArgs($room, [switch]$Tray, [string]$BarJson = '') { $a = @('--fast', '--notchwin-settings', "`"$(Join-Path $room.Dir 'sin-notchwin.json')`"", '--bar-json', "`"$(if ($BarJson) { $BarJson } else { Join-Path $room.Dir 'sin-bar.json' })`"", '--config', "`"$($room.Cfg)`"", '--log', "`"$($room.Log)`""); if (-not $Tray) { $a = @('--no-tray') + $a }; $a }
-function StartHost($room, [switch]$Tray, [string]$BarJson = '') { $p = Start-Process -FilePath $hostExe -ArgumentList (HostArgs $room -Tray:$Tray -BarJson $BarJson) -PassThru -WindowStyle Hidden; $null = $p.Handle; $p }   # .Handle: sin él, ExitCode puede quedar vacío
+function HostArgs($room, [switch]$Tray, [string]$BarJson = '', [switch]$Onboarding, [string]$Auto = '') { $a = @('--fast', '--notchwin-settings', "`"$(Join-Path $room.Dir 'sin-notchwin.json')`"", '--bar-json', "`"$(if ($BarJson) { $BarJson } else { Join-Path $room.Dir 'sin-bar.json' })`"", '--config', "`"$($room.Cfg)`"", '--log', "`"$($room.Log)`""); if (-not $Tray) { $a = @('--no-tray') + $a }; if (-not $Onboarding) { $a = @('--no-onboarding') + $a }; if ($Auto) { $a = @('--onboarding-auto', $Auto) + $a }; $a }
+function StartHost($room, [switch]$Tray, [string]$BarJson = '', [switch]$Onboarding, [string]$Auto = '') { $p = Start-Process -FilePath $hostExe -ArgumentList (HostArgs $room -Tray:$Tray -BarJson $BarJson -Onboarding:$Onboarding -Auto $Auto) -PassThru -WindowStyle Hidden; $null = $p.Handle; $p }   # .Handle: sin él, ExitCode puede quedar vacío
 function LogHas($room, [string]$text) { (Test-Path $room.Log) -and (Select-String -Path $room.Log -SimpleMatch -Pattern $text -Quiet) }
 function ModLog($room, [string]$id) { $f = Join-Path $room.Dir "$id.log"; if (Test-Path $f) { Get-Content $f } else { @() } }
 function Starts($room, [string]$id) { @(ModLog $room $id | Where-Object { $_ -match ' started$' }).Count }
@@ -36,9 +36,9 @@ function Pids($room, [string]$id) { [int[]]$r = @(ModLog $room $id | Where-Objec
 function AnyAlive([int[]]$pids) { foreach ($p in $pids) { if (Get-Process -Id $p -ErrorAction SilentlyContinue) { return $true } }; return $false }
 function Ports { (Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique) -join ',' }
 function Quit($room, $proc) { Start-Process -FilePath $hostExe -ArgumentList '--quit' -Wait -WindowStyle Hidden | Out-Null; if ($proc) { [void]$proc.WaitForExit(30000) } }
-function Cleanup { Get-Process -Name 'WinMac', 'WinMac.FakeModule', 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300 }
+function Cleanup { Get-Process -Name 'HatsuDesktop', 'WinMac', 'WinMac.FakeModule', 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300 }
 
-if (-not (Test-Path $hostExe) -or -not (Test-Path $fakeExe)) { Write-Host "::error title=Host::faltan WinMac.exe o WinMac.FakeModule.exe en $PublishDir"; exit 1 }
+if (-not (Test-Path $hostExe) -or -not (Test-Path $fakeExe)) { Write-Host "::error title=Host::faltan HatsuDesktop.exe o WinMac.FakeModule.exe en $PublishDir"; exit 1 }
 Cleanup; $portsBefore = Ports
 
 # ── 1. Arranque normal: ambos módulos listos, la isla (desactivada) no se lanza; ningún puerto TCP nuevo (A6)
@@ -51,7 +51,7 @@ Check 'A6 el host no abre puertos TCP en escucha' ((Ports) -eq $portsBefore) ("a
 
 # ── 2. Instancia única (B1)
 $h2 = StartHost $r1; $exited = $h2.WaitForExit(8000)
-Check 'B1 un segundo WinMac.exe sale solo y sin error' ($exited -and $h2.ExitCode -eq 0) ("salió={0} código={1}" -f $exited, $(if ($exited) { $h2.ExitCode } else { 'n/a' }))
+Check 'B1 un segundo HatsuDesktop.exe sale solo y sin error' ($exited -and $h2.ExitCode -eq 0) ("salió={0} código={1}" -f $exited, $(if ($exited) { $h2.ExitCode } else { 'n/a' }))
 Check 'B1 no se duplicaron los módulos' ((Starts $r1 'bar') -eq 1 -and (Starts $r1 'dock') -eq 1)
 
 # ── 3. Cierre ordenado (B3): --quit → módulos cierran por su camino normal y no queda nada
@@ -60,6 +60,79 @@ Quit $r1 $h1
 Check 'B3 el host termina tras --quit' ($h1.HasExited -and $h1.ExitCode -eq 0)
 Check 'B3 los módulos cerraron por su camino normal (shutdown → bye)' ((ModLog $r1 'bar') -match ' bye$' -and (ModLog $r1 'dock') -match ' bye$')
 Check 'B3 no queda ningún proceso de módulo' (($pids.Count -eq 2) -and -not (AnyAlive $pids)) ("pids: $($pids -join ',')")
+
+# ── 3a. Hatsu Desktop: --replace-running cierra de forma ordenada la instancia en ejecución y continúa. Los nombres de instancia única y de cierre son los de WinMac, así que también
+#        sirve para sustituir una instancia de la versión anterior (SIMULADO en el runner: ambas son esta misma versión; una instancia WinMac real se valida a mano).
+$rr = NewRoom 'reemplazo'; $hA = StartHost $rr
+$ok = WaitFor { (LogHas $rr '[bar] Running') -and (LogHas $rr '[dock] Running') } 30
+Check 'B1b la primera instancia arranca' $ok
+$hB = Start-Process -FilePath $hostExe -ArgumentList ((HostArgs $rr) + @('--replace-running')) -PassThru -WindowStyle Hidden; $null = $hB.Handle
+$closedA = $hA.WaitForExit(40000)
+Check 'B1b --replace-running: la instancia anterior se cierra sola y sin error' ($closedA -and $hA.ExitCode -eq 0) ("salió={0}" -f $closedA)
+Check 'B1b la nueva instancia sigue en marcha (no se duplicó)' ((WaitFor { -not $hB.HasExited -and (Starts $rr 'bar') -ge 2 } 30)) ("bar arrancó {0} veces" -f (Starts $rr 'bar'))
+Quit $rr $hB
+Check 'B1b la nueva instancia también cierra con --quit' ($hB.HasExited)
+
+# ── 3c. Fase 3 · asistente de primera ejecución, de verdad contra el host y el supervisor (sin ventana: --no-tray / --onboarding-auto)
+# (1) instalación nueva (sin winmac.json): ningún módulo arranca hasta que el usuario decida; el estado queda anotado
+$rf = Join-Path $base 'onb-fresh'; New-Item -ItemType Directory -Force -Path $rf | Out-Null
+$roomF = [pscustomobject]@{ Dir = $rf; Cfg = Join-Path $rf 'winmac.json'; Log = Join-Path $rf 'host.log' }
+$hF = StartHost $roomF -Onboarding; $okF = WaitFor { LogHas $roomF 'instalación nueva' } 20; Start-Sleep 3
+Check 'ONB1 instalación nueva: el host detecta que debe mostrar el asistente' $okF
+$jf = if (Test-Path $roomF.Cfg) { Get-Content $roomF.Cfg -Raw | ConvertFrom-Json } else { $null }
+Check 'ONB1 queda anotado «NotStarted» y TODOS los módulos esperan (desactivados)' ($jf -and $jf.onboarding.status -eq 'NotStarted' -and -not ($jf.modules.PSObject.Properties | Where-Object { $_.Value.enabled })) ($jf.onboarding.status)
+Check 'ONB1 no se lanzó ningún proceso de módulo antes de decidir' (-not (Get-Process -Name 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'HatsuDesktop.Connect', 'NotchWin.App' -ErrorAction SilentlyContinue))
+Quit $roomF $hF; Check 'ONB1 cierra con --quit' ($hF.HasExited)
+# (2) configuración «pendiente» con módulos de mentira + omitir (valores seguros) sin ventana: el supervisor arranca lo elegido y SOLO eso
+$ro = NewRoom 'onb-skip'; $oc = Get-Content $ro.Cfg -Raw | ConvertFrom-Json
+$oc.modules.bar.enabled = $false; $oc.modules.dock.enabled = $false; $oc | Add-Member -NotePropertyName onboarding -NotePropertyValue ([pscustomobject]@{ status = 'NotStarted'; origin = 'fresh' }) -Force
+$oc.modules | Add-Member -NotePropertyName connect -NotePropertyValue ([pscustomobject]@{ enabled = $false; path = $fakeExe; args = @('--id', 'connect', '--mode', 'ok', '--out', $ro.Dir) }) -Force
+$oc | ConvertTo-Json -Depth 8 | Set-Content $ro.Cfg -Encoding UTF8
+$hO = StartHost $ro -Onboarding -Auto 'skip'
+$okO = WaitFor { (LogHas $ro '[bar] Running') -and (LogHas $ro '[dock] Running') } 30
+Check 'ONB2 omitir aplica los valores seguros: la Barra y el Dock arrancan por el supervisor' $okO ("bar={0} dock={1}" -f (Starts $ro 'bar'), (Starts $ro 'dock'))
+Check 'ONB2 Hatsu Connect (desactivado por defecto) NO se lanza' ((Starts $ro 'connect') -eq 0)
+Check 'ONB2 el asistente anotó su resultado en el registro' (WaitFor { LogHas $ro '[asistente]' } 10)
+Quit $ro $hO
+$jo = Get-Content $ro.Cfg -Raw | ConvertFrom-Json
+Check 'ONB2 la configuración guardada tiene Dock, Barra e Isla activados y nada más; sin inicio automático ni barra de tareas oculta' ($jo.modules.bar.enabled -and $jo.modules.dock.enabled -and -not $jo.modules.connect.enabled -and -not $jo.hideTaskbar -and -not $jo.autostart)
+Check 'ONB2 omitir NO crea el inicio automático de Windows (valor Run\WinMac ausente)' (-not (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WinMac' -ErrorAction SilentlyContinue))
+Check 'ONB2 el estado del asistente no queda «NotStarted»' ($jo.onboarding.status -ne 'NotStarted') ($jo.onboarding.status)
+# (3) un winmac.json que ya existía (WinMac o Hatsu anterior): no se fuerza el asistente; los módulos arrancan como siempre y solo se anota «Existing»
+$re = NewRoom 'onb-existing'; $hE = StartHost $re -Onboarding
+$okE = WaitFor { (LogHas $re '[bar] Running') -and (LogHas $re '[dock] Running') } 30
+Check 'ONB3 usuario existente: arranca como siempre, sin asistente de por medio' $okE
+Quit $re $hE; $je = Get-Content $re.Cfg -Raw | ConvertFrom-Json
+Check 'ONB3 se anota «Existing» y los módulos y rutas siguen como estaban' (($je.onboarding.status -eq 'Existing') -and $je.modules.bar.enabled -and $je.modules.dock.enabled -and $je.modules.bar.path -eq $fakeExe) ($je.onboarding.status)
+Check 'ONB3 el registro dice que se conserva la configuración y que se ofrece una bienvenida de migración (una vez)' ((LogHas $re 'configuración existente') -and (LogHas $re 'bienvenida de migración'))
+Check 'ONB3 sin ventana (--no-tray) no se marca la bienvenida como mostrada (se ofrecerá en un arranque interactivo)' ($null -eq $je.onboarding.welcomeShownUtc)
+
+# ── 3d. Fase 3.1 · un módulo que NO se puede iniciar: causa real, sin reintentos infinitos, los demás siguen, informe local de solo lectura
+$rb = NewRoom 'f31-badexe'; $badExe = Join-Path $rb.Dir 'HatsuDesktop.Dock.exe'; 'esto no es un ejecutable de Windows' | Set-Content $badExe -Encoding ASCII
+$cb = Get-Content $rb.Cfg -Raw | ConvertFrom-Json; $cb.modules.dock.path = $badExe; $cb.modules.dock.args = @(); $cb | ConvertTo-Json -Depth 8 | Set-Content $rb.Cfg -Encoding UTF8
+$hb = StartHost $rb; $okB = WaitFor { (LogHas $rb '[dock] Failed') -and (LogHas $rb '[bar] Running') } 40
+if (-not $okB) { Write-Host '--- registro del host (F31-1), últimas líneas:'; if (Test-Path $rb.Log) { Get-Content $rb.Log -Tail 40 | ForEach-Object { Write-Host "    $_" } }; Write-Host '--- configuración:'; Get-Content $rb.Cfg -Raw | Write-Host }
+Check 'F31-1 un módulo que no se puede lanzar acaba en Failed y la Barra sigue en marcha' $okB ("dock Failed={0} bar Running={1}" -f (LogHas $rb '[dock] Failed'), (LogHas $rb '[bar] Running'))
+$tries = @(Get-Content $rb.Log | Where-Object { $_ -match '\[dock\] no se pudo lanzar' }).Count
+Check 'F31-2 no hay reintentos infinitos (a lo sumo 5 intentos)' ($tries -ge 1 -and $tries -le 5) ("intentos: $tries")
+$firstTry = (Get-Content $rb.Log | Where-Object { $_ -match '\[dock\] no se pudo lanzar' } | Select-Object -First 1); Write-Host "INFO  F31-3 línea real del registro: $firstTry"
+Check 'F31-3 el registro da el CÓDIGO REAL de Windows ([error N]) del intento fallido, no una suposición' ($firstTry -match '\[error \d+\]')
+Check 'F31-4 el registro NO culpa a Smart App Control de un archivo que simplemente no es un ejecutable' (-not (Select-String -Path $rb.Log -Pattern '\[dock\] no se pudo lanzar.*Smart App Control' -Quiet))
+$repFile = Join-Path $rb.Dir 'diagnostico.txt'
+$dp = Start-Process $hostExe -ArgumentList @('--diagnose', '--quiet', '--config', "`"$($rb.Cfg)`"", '--log', "`"$($rb.Log)`"", '--notchwin-settings', "`"$(Join-Path $rb.Dir 'sin-notchwin.json')`"", '--out', "`"$repFile`"") -Wait -PassThru -WindowStyle Hidden
+$rep = if (Test-Path $repFile) { Get-Content $repFile -Raw } else { '' }
+Check 'F31-5 HatsuDesktop.exe --diagnose termina bien y escribe el informe local' ($dp.ExitCode -eq 0 -and $rep.Length -gt 500)
+Check 'F31-6 el informe dice que el Dock NO está en ejecución y por qué, y que la Barra sí' ($rep -match 'Dock: elegido=sí · NO está en ejecución' -and $rep -match 'causa registrada: .*\[error \d+\]' -and $rep -match 'Barra superior: elegido=sí')
+Check 'F31-7 el informe es de solo lectura, local y sin datos personales ni telemetría' ($rep -match 'NO se envía a ningún sitio' -and -not $rep.Contains($env:USERPROFILE) -and -not ($rep -match 'WeatherCity|Molina'))
+Quit $rb $hb; Cleanup
+# (b) «Dock inaccesible»: permisos denegados sobre el ejecutable (si el entorno no lo permite, se informa y no se falla: depende de las ACL del runner)
+$rd = NewRoom 'f31-denied'; $denyExe = Join-Path $rd.Dir 'HatsuDesktop.Dock.exe'; Copy-Item $fakeExe $denyExe -Force
+$aclOk = $false; try { & icacls.exe $denyExe /deny '*S-1-1-0:(RX)' | Out-Null; $aclOk = ($LASTEXITCODE -eq 0) } catch { }
+$cd = Get-Content $rd.Cfg -Raw | ConvertFrom-Json; $cd.modules.dock.path = $denyExe; $cd.modules.dock.args = @(); $cd | ConvertTo-Json -Depth 8 | Set-Content $rd.Cfg -Encoding UTF8
+$hd = StartHost $rd; $okD = WaitFor { (LogHas $rd '[dock] Failed') -and (LogHas $rd '[bar] Running') } 40
+if ($aclOk -and $okD) { Check 'F31-8 un ejecutable sin permiso de ejecución: Failed, los demás siguen y la causa es «acceso denegado»' ((LogHas $rd '[error 5]')) ((Select-String -Path $rd.Log -Pattern '\[dock\] no se pudo lanzar' | Select-Object -First 1).Line) }
+else { Write-Host "INFO  F31-8 no concluyente en este runner (icacls=$aclOk, Failed=$okD): las ACL del runner no permiten reproducirlo; el caso está cubierto por las pruebas unitarias de clasificación" }
+Quit $rd $hd; & icacls.exe $denyExe /remove:d '*S-1-1-0' 2>&1 | Out-Null; Cleanup
 
 # ── 3b. Migración de los ajustes de la Barra (bar.json → winmac.json): una sola vez, sin tocar el original
 $r3b = NewRoom 'migracion'; $barJson = Join-Path $r3b.Dir 'bar.json'
@@ -118,7 +191,7 @@ function RunNames { $k = Get-Item $runKey -ErrorAction SilentlyContinue; if ($k)
 $namesBefore = RunNames
 Start-Process -FilePath $hostExe -ArgumentList @('--install-autostart', '--autostart-name', $name) -Wait -WindowStyle Hidden | Out-Null
 $val = (Get-ItemProperty $runKey -Name $name -ErrorAction SilentlyContinue).$name
-Check 'B8 --install-autostart crea una clave con --background' ($val -like '*WinMac.exe*--background*') ("valor: $val")
+Check 'B8 --install-autostart crea una clave con --background' ($val -like '*HatsuDesktop.exe*--background*') ("valor: $val")
 $namesMid = RunNames
 Check 'B8 solo se añadió esa clave' (($namesMid.Count -eq $namesBefore.Count + 1) -and ($namesMid -contains $name))
 Start-Process -FilePath $hostExe -ArgumentList @('--remove-autostart', '--autostart-name', $name) -Wait -WindowStyle Hidden | Out-Null
@@ -134,14 +207,14 @@ Quit $r9 $h9; Check 'M2 (info) con bandeja el cierre termina limpio' ($h9.HasExi
 Cleanup
 
 # ── 10–11. Barra y Dock REALES bajo el host (--hosted): conectan, llegan a Running, se cierran en orden y mueren con el host
-$barExe = Join-Path $PublishDir 'Bar.App/WinMac.Bar.App.exe'; $dockExe = Join-Path $PublishDir 'Dock.App/WinMac.Dock.App.exe'
+$barExe = Join-Path $PublishDir 'Bar.App/HatsuDesktop.Bar.exe'; $dockExe = Join-Path $PublishDir 'Dock.App/HatsuDesktop.Dock.exe'
 function NewRealRoom([string]$name) {
   $d = Join-Path $base $name; New-Item -ItemType Directory -Force -Path $d | Out-Null
   @{ modules = @{ bar = @{ enabled = $true; path = $barExe; args = @('--no-config', '--no-reserve') }; dock = @{ enabled = $true; path = $dockExe; args = @('--no-config') }; notch = @{ enabled = $false } } } |
     ConvertTo-Json -Depth 6 | Set-Content (Join-Path $d 'winmac.json') -Encoding UTF8
   [pscustomobject]@{ Dir = $d; Cfg = Join-Path $d 'winmac.json'; Log = Join-Path $d 'host.log' }
 }
-function RealPids { @(Get-Process -Name 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }) }
+function RealPids { @(Get-Process -Name 'HatsuDesktop.Bar', 'HatsuDesktop.Dock', 'WinMac.Bar.App', 'WinMac.Dock.App' -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }) }
 if ((Test-Path $barExe) -and (Test-Path $dockExe)) {
   $rr = NewRealRoom 'real-quit'; $hr = StartHost $rr
   $up = WaitFor { (LogHas $rr '[bar] Running') -and (LogHas $rr '[dock] Running') } 45

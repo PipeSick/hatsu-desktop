@@ -8,21 +8,60 @@ public sealed record PageFrame(IReadOnlyList<GroupFrame> Groups, IReadOnlyList<R
 /// <summary>Reparto de la ventana de Ajustes (DIP, estilo «lista agrupada» de iOS). Coordenadas LOCALES al área de contenido (origen = esquina del área a la derecha de la barra lateral, bajo el título). Puro.</summary>
 public static class SettingsLayout
 {
-    public const double WinW = 820, WinH = 580, SidebarW = 212, TitleH = 76, Pad = 28, GroupGap = 22, HeaderH = 30, Radius = 12;
+    public const double WinW = 860, WinH = 700, SidebarW = 240, TitleH = 76, Pad = 28, GroupGap = 22, HeaderH = 30, Radius = 12;
     public const double SwitchW = 51, SwitchH = 31, ControlH = 32, ArrowW = 30;
     public static double ContentW => WinW - SidebarW;
     public static double ViewportH => WinH - TitleH;
     public static double ColW => ContentW - 2 * Pad;
 
-    public static double RowHeight(SettingsRow r) => r.Kind switch
+    /// <summary>Ancho reservado a la derecha para el control de la fila (una sola fuente: el dibujo y el cálculo de alturas).</summary>
+    public static double ControlSpace(SettingsRow r) => r.Kind switch { RowKind.Toggle => HasGrip(r) ? 51 + 24 + GripW : r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Button when r.Options is { Count: > 0 } => PillsWidth(r) + 16, RowKind.Segmented => SegmentWidth(r, ColW) + 16, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
+
+    // ── Piezas del prototipo: asa para arrastrar (⋮⋮) en los iconos de la barra y píldoras azules en las filas de acción
+    public const double GripW = 30, PillH = 28, PillGap = 8;
+    /// <summary>Las filas de los iconos de la barra se reordenan arrastrando su asa; las demás listas (Isla, centro de notificaciones) siguen con flechas.</summary>
+    public static bool HasGrip(SettingsRow r) => r.Kind == RowKind.Toggle && r.Id.StartsWith("baritem:", StringComparison.Ordinal) && (r.CanUp || r.CanDown);
+    public static double PillWidth(string text) => Math.Max(68, text.Length * 7.4 + 28);
+    public static double PillsWidth(SettingsRow r) => r.Options is { Count: > 0 } o ? o.Sum(PillWidth) + PillGap * (o.Count - 1) : 0;
+    /// <summary>Píldora <paramref name="i"/> (de izquierda a derecha) de una fila con opciones de acción, pegada a la derecha.</summary>
+    public static (double X, double Y, double W, double H) PillRect(RowFrame f, int i)
     {
-        RowKind.Toggle => string.IsNullOrEmpty(r.Subtitle) && (r.Enabled || string.IsNullOrEmpty(r.Reason)) ? 46 : 58,
-        RowKind.Segmented or RowKind.Field => string.IsNullOrEmpty(r.Subtitle) && (r.Enabled || string.IsNullOrEmpty(r.Reason)) ? 52 : 62,
-        RowKind.Slider => 54,
-        RowKind.Button => 48,
-        RowKind.Info => 54,
-        _ => 46,
-    };
+        var o = f.Row.Options!; double x = f.X + f.W - 16 - PillsWidth(f.Row);
+        for (int k = 0; k < i; k++) x += PillWidth(o[k]) + PillGap;
+        return (x, f.Y + (f.H - PillH) / 2, PillWidth(o[i]), PillH);
+    }
+
+    public const string CustomizeLabel = "Personalizar iconos…";
+    /// <summary>La píldora azul dentro de la tira de vista previa de la barra.</summary>
+    public static (double X, double Y, double W, double H) PreviewPill(RowFrame f) { double w = PillWidth(CustomizeLabel); return (f.X + f.W - 16 - 10 - w, f.Y + (f.H - PillH) / 2, w, PillH); }
+    public static (double X, double Y, double W, double H) GripRect(RowFrame f) => (f.X + 6, f.Y, GripW, f.H);
+
+    /// <summary>Texto secundario que se ve en la fila: el motivo si está desactivada, si no el subtítulo.</summary>
+    public static string? SubText(SettingsRow r) => !r.Enabled && !string.IsNullOrEmpty(r.Reason) ? r.Reason : r.Subtitle;
+
+    /// <summary>
+    /// WM-013: los subtítulos ya no se recortan con «…»: se parten en líneas y la fila crece. Estimación conservadora del ancho medio de carácter de la letra
+    /// secundaria (12 px Segoe UI ≈ 6,4 DIP) para que el cálculo puro coincida con lo que DirectWrite pinta.
+    /// </summary>
+    public static int Lines(string? text, double width) => string.IsNullOrEmpty(text) ? 0 : Math.Max(1, (int)Math.Ceiling(text.Length * 6.4 / Math.Max(60, width)));
+    public const double SubLineH = 17;
+
+    public static double RowHeight(SettingsRow r)
+    {
+        string? sub = SubText(r);
+        if (r.Kind == RowKind.Info) return Math.Max(54, 16 + SubLineH * Lines(r.Title, ColW - 62));
+        if (r.Kind == RowKind.Button) return r.Options is { Count: > 0 } ? (string.IsNullOrEmpty(sub) ? 48 : 58 + Math.Max(0, Lines(sub, ColW - 32 - ControlSpace(r)) - 1) * SubLineH) : 48;
+        if (r.Kind == RowKind.Preview) return 58;
+        if (r.Kind == RowKind.Slider && string.IsNullOrEmpty(sub)) return 54;
+        int extra = Math.Max(0, Lines(sub, ColW - 32 - ControlSpace(r)) - 1);
+        double baseH = r.Kind switch
+        {
+            RowKind.Toggle => string.IsNullOrEmpty(sub) ? 46 : 58,
+            RowKind.Segmented or RowKind.Field or RowKind.Slider => string.IsNullOrEmpty(sub) ? 52 : 62,
+            _ => 46,
+        };
+        return baseH + extra * SubLineH;
+    }
 
     public static double FooterHeight(string? footer) => string.IsNullOrWhiteSpace(footer) ? 0 : 8 + 17 * Math.Max(1, Math.Ceiling(footer.Length / 74.0));
 
@@ -48,18 +87,53 @@ public static class SettingsLayout
     public static (double X, double Y, double W, double H) SwitchRect(RowFrame f) => (f.X + f.W - 16 - SwitchW, f.Y + (f.H - SwitchH) / 2, SwitchW, SwitchH);
     public static (double X, double Y, double W, double H) DownRect(RowFrame f) { var s = SwitchRect(f); return (s.X - 10 - ArrowW, f.Y + (f.H - ControlH) / 2, ArrowW, ControlH); }
     public static (double X, double Y, double W, double H) UpRect(RowFrame f) { var d = DownRect(f); return (d.X - 4 - ArrowW, d.Y, ArrowW, ControlH); }
-    public static (double X, double Y, double W, double H) SegmentRect(RowFrame f) { int n = Math.Max(1, f.Row.Options?.Count ?? 1); double w = Math.Min(f.W * 0.62, 84.0 * n); return (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
+    /// <summary>Equal segments wide enough for the longest label (WM-013: «Ciudad elegida» was cut), at most 62 % of the row.</summary>
+    public static double SegmentWidth(SettingsRow r, double rowW)
+    {
+        int n = Math.Max(1, r.Options?.Count ?? 1); int longest = r.Options is { Count: > 0 } o ? o.Max(t => t.Length) : 4;
+        return Math.Min(rowW * 0.62, n * Math.Max(84.0, longest * 7.4 + 24));
+    }
+
+    public static (double X, double Y, double W, double H) SegmentRect(RowFrame f) { double w = SegmentWidth(f.Row, f.W); return (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
     public static (double X, double Y, double W, double H) FieldRect(RowFrame f) { double w = Math.Min(f.W * 0.56, 290); return (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
     public static (double X0, double X1, double Cy) SliderTrack(RowFrame f) => (f.X + f.W - 16 - 250, f.X + f.W - 16 - 46, f.Y + f.H / 2);
     public static double SliderValueAt(RowFrame f, double x) { var (x0, x1, _) = SliderTrack(f); return Math.Clamp((x - x0) / (x1 - x0) * 100, 0, 100); }
 
     // ── Barra lateral
-    public const double SideItemH = 40, SideTop = 96;
-    public static (double X, double Y, double W, double H) SideItemRect(int i) => (12, SideTop + i * (SideItemH + 4), SidebarW - 24, SideItemH);
+    public const double SideItemH = 32, SideTop = 96, SideHeaderH = 24, SideHeaderGap = 8;   // doce secciones y cinco grupos caben sin desplazar la barra lateral
+    /// <summary>La caja «Buscar ajuste…» bajo el título de la barra lateral.</summary>
+    public static RowFrame SearchFrame(string text) { double w = SidebarW - 24, rowW = w / 0.56; return new RowFrame(new SettingsRow(RowKind.Field, "search", "Buscar ajuste", Text: text, Placeholder: "Buscar ajuste…"), 12 - rowW + 16 + w, 54, rowW, ControlH, true, true); }
+    public sealed record SideEntry(int PageIndex, (double X, double Y, double W, double H) Rect, string? Header, double HeaderY);
+
+    /// <summary>Posición de cada sección en la barra lateral; el nombre del grupo se dibuja encima de la primera sección de cada grupo.</summary>
+    public static IReadOnlyList<SideEntry> SideEntries(IReadOnlyList<SettingsPage> pages)
+    {
+        var list = new List<SideEntry>(); double y = SideTop; string? last = null;
+        for (int i = 0; i < pages.Count; i++)
+        {
+            string? header = null; double hy = 0;
+            if (!string.IsNullOrEmpty(pages[i].Section) && pages[i].Section != last) { y += SideHeaderGap; hy = y; header = pages[i].Section; y += SideHeaderH; }
+            last = pages[i].Section;
+            list.Add(new SideEntry(i, (12, y, SidebarW - 24, SideItemH), header, hy)); y += SideItemH + 2;
+        }
+
+        return list;
+    }
+
+    public static (double X, double Y, double W, double H) SideItemRect(IReadOnlyList<SettingsPage> pages, int i) => SideEntries(pages)[i].Rect;
 
     // ── Lista de sugerencias bajo un campo (coordenadas locales)
     public const double SuggestRowH = 38;
-    public static (double X, double Y, double W, double H) SuggestRect(RowFrame field, int count) { var f = FieldRect(field); double w = Math.Max(f.W, 300); return (f.X + f.W - w, f.Y + f.H + 4, w, count * SuggestRowH + 8); }
+    public static (double X, double Y, double W, double H) SuggestRect(RowFrame field, int count)
+    {
+        var f = FieldRect(field); double w = Math.Max(f.W, 300), h = count * SuggestRowH + 8, y = f.Y + f.H + 4;
+        if (y + h > ViewportH - 6)                                  // no cabe debajo: se abre hacia arriba, y si tampoco cabe, se pega al borde visible
+        {
+            double up = f.Y - 4 - h; y = up >= 6 ? up : Math.Max(6, ViewportH - h - 6);
+        }
+
+        return (f.X + f.W - w, y, w, h);
+    }
 
     /// <summary>Qué hay bajo el punto (coordenadas locales): fila y parte («switch», «seg:i», «field», «slider», «up», «down», «row»).</summary>
     public static (RowFrame Row, string Part)? Hit(PageFrame f, double x, double y)
@@ -71,6 +145,7 @@ public static class SettingsLayout
             switch (r.Row.Kind)
             {
                 case RowKind.Toggle:
+                    if (HasGrip(r.Row)) return In(GripRect(r), x, y) ? (r, "grip") : (r, "switch");
                     if (r.Row.CanUp && In(UpRect(r), x, y)) return (r, "up");
                     if (r.Row.CanDown && In(DownRect(r), x, y)) return (r, "down");
                     return (r, "switch");   // toda la fila alterna (como en iOS)
@@ -78,7 +153,16 @@ public static class SettingsLayout
                 { var s = SegmentRect(r); if (In(s, x, y) && x >= s.X) { int n = r.Row.Options?.Count ?? 1; return (r, "seg:" + Math.Clamp((int)((x - s.X) / (s.W / n)), 0, n - 1)); } return (r, "row"); }
                 case RowKind.Field: return In(FieldRect(r), x, y) ? (r, "field") : (r, "row");
                 case RowKind.Slider: { var (a, b, _) = SliderTrack(r); return x >= a - 10 && x <= b + 10 ? (r, "slider") : (r, "row"); }
-                case RowKind.Button: return (r, "button");
+                case RowKind.Button:
+                    if (r.Row.Options is { Count: > 0 } o)
+                    {
+                        if (o.Count == 1) return (r, "pill:0");   // con una sola píldora, toda la fila actúa
+                        for (int i = 0; i < o.Count; i++) if (In(PillRect(r, i), x, y)) return (r, "pill:" + i);
+                        return (r, "row");
+                    }
+
+                    return (r, "button");
+                case RowKind.Preview: return In(PreviewPill(r), x, y) ? (r, "customize") : (r, "row");
                 default: return (r, "row");
             }
         }

@@ -1,5 +1,7 @@
 using WinMac.Bar.Win.Interop;
 using WinMac.Bar.Hub;
+using WinMac.Bar.Notifications;
+using WinMac.Bar.Win.Shell.Notifications;
 using WinMac.Bar.Win.Shell;
 using WinMac.Bar.Win.Shell.Hub;
 using WinMac.Calendar;
@@ -25,6 +27,10 @@ public sealed partial class BarHost : IPanelUi
     private readonly Queue<Action> _uiQueue = new(); private readonly object _cfgLock = new(); private BarConfig? _pendingCfg;
     private IReadOnlyList<AppMenuTop> _appMenuTops = []; private IReadOnlyList<string>? _appMenuLabels; private IntPtr _appMenuWindow;
     private DateTime _lastPanelRefresh = DateTime.MinValue, _lastEvents = DateTime.MinValue; private int _panelTicks;
+    // ── Centro de Notificaciones (una sola fuente y un solo almacén por proceso de barra, compartidos por todos los monitores)
+    private NotificationStore _nc = null!; private WinNotificationSource? _ncSrc; private DateTime _lastNcPoll = DateTime.MinValue;
+    /// <summary>Cada cuánto se relee con el panel abierto cuando Windows no envía el evento de cambios.</summary>
+    private static readonly TimeSpan NcPollEvery = TimeSpan.FromSeconds(4);
 
     /// <summary>Envía un cambio de ajustes al host (modo integrado). null = modo independiente: se guarda en bar.json.</summary>
     public Action<object>? PersistPatch { get; set; }
@@ -34,18 +40,28 @@ public sealed partial class BarHost : IPanelUi
 
     private void InitPanels(SystemServices? services, HubServices? hubServices)
     {
-        _hub = new SystemHub(services ?? SystemServicesFactory.CreateReal(), Post, _log);
+        _hub = new SystemHub(services ?? SystemServicesFactory.CreateReal() with { Routing = new WinMac.Bar.Win.Shell.AppAudioRoutingClient(_log) }, Post, _log);
         if (hubServices is null) { var (s, owner) = HubServicesFactory.CreateReal(); _hubSvc = s; _hubOwner = owner; } else _hubSvc = hubServices;
         void Bg(Action a) => Task.Run(a);
         _hubMon = new HubMonitor(_hubSvc, Bg, Post, _log, () => DateTime.UtcNow); _speed = new SpeedTestRunner(_hubSvc.SpeedTest, Bg, Post);
         string cache = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "weather-cache.json");
         _weather = new WeatherService(_hubSvc.Weather, new WeatherCache(cache), () => DateTime.UtcNow, Bg, Post, _log); _rt = new HubRuntime(_hubMon, _speed, _weather);
-        _hub.Changed += OnHubChanged; _ops = new PanelOperations(_hub, this, _log, rt: _rt);
+        try { _ncSrc = new WinNotificationSource(_log); } catch (Exception e) { _log("[notificaciones] fuente no disponible: " + e.GetType().Name + ": " + e.Message); }
+        _nc = new NotificationStore(_ncSrc, Bg, Post, _log, () => DateTime.UtcNow); _nc.SetEnabled(_cfg.NotificationsFromWindows); _nc.Changed += OnNcChanged;
+        _hub.Changed += OnHubChanged; _ops = new PanelOperations(_hub, this, _log, rt: _rt, nc: _nc) { Phone = _phone };
         _hubMon.Changed += OnHubPanelDataChanged; _speed.Changed += OnHubPanelDataChanged; _weather.Changed += () => { SetStateAll(); OnHubPanelDataChanged(); };
         ConfigureWeather();
     }
 
-    private void OnHubPanelDataChanged() { if (_popover is { IsOpen: true } && _pkind is PanelKind.Hub or PanelKind.Weather) RebuildPanel(); }
+    private void OnHubPanelDataChanged() { if (_popover is { IsOpen: true } && _pkind is PanelKind.Hub or PanelKind.Weather or PanelKind.Notifications) RebuildPanel(); }
+    private void OnNcChanged() { if (_popover is { IsOpen: true } && _pkind == PanelKind.Notifications) RebuildPanel(); }
+
+    /// <summary>Iconos del panel: los de las apps de las notificaciones (en memoria, los entregó Windows al leer) y los de ejecutables (multifunción).</summary>
+    private byte[]? PanelIcon(string key) =>
+        key.StartsWith("user-picture:", StringComparison.Ordinal) ? _userPicture
+        : key.StartsWith(PanelBuilder.NcIconPrefix, StringComparison.Ordinal) ? _ncSrc?.CachedIcon(key[PanelBuilder.NcIconPrefix.Length..])
+        : key.StartsWith(PanelBuilder.TrayIconPrefix, StringComparison.Ordinal) ? TrayIconBgra(key)
+        : _hubSvc.Icons.GetBgra(key, 32);
 
     /// <summary>Ciudad y adicionales desde la configuración central. La ubicación automática es OPT-IN: solo si el usuario la activó, se pide una vez por activación, y si Windows no la da se usa la ciudad elegida.</summary>
     private void ConfigureWeather()
@@ -105,35 +121,42 @@ public sealed partial class BarHost : IPanelUi
         var net = _network.Kind == NetKind.Wifi && s.Wifi.Available && s.Wifi.Connected ? _network with { Ssid = s.Wifi.Ssid, Bars = s.Wifi.Bars } : _network;
         var bt = s.Bluetooth.Available ? new BluetoothInfo(true, s.Bluetooth.RadioOn, s.Bluetooth.ConnectedCount) : BluetoothInfo.None;
         var wx = _weather.Current(); var wbar = wx.Snapshot is { } sn ? new WeatherBarInfo(WeatherCodes.Icon(sn.Main.Code, sn.Main.IsDay), TempFormat.Bar(sn.Main.TempC, _cfg.WeatherFahrenheit)) : WeatherBarInfo.None;
-        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar);
+        return new BarState(DateTime.Now, _app?.Name, _battery, vol, net, bt, _appMenuLabels, wbar, _cfg.ShowTrayIcons ? _trayStore.Visible : null, TrayOpen: _popover is { IsOpen: true } && _pkind == PanelKind.Tray, Phone: _phone.State, VpnConnected: _cfg.ShowVpn && _vpn.Available ? _vpn.AnyConnected : null, VpnTip: _cfg.ShowVpn ? Vpn.VpnText.Tip(_vpn) : null);
     }
 
     private void OnHubChanged() { SetStateAll(); if (_popover is { IsOpen: true }) RebuildPanel(); }
 
     private void PanelsTick()
     {
-        _popover?.Pump(); HubTick();
+        _popover?.Pump(); HubTick(); TrayTick(); NotchTick(); PeripheralsTick(); CleanupTick(); VpnTick(); LauncherTick(); SpotlightTick(); CaptureTick(); MenuDiag();
         if (_popover is not { IsOpen: true }) return;
-        var now = DateTime.UtcNow; if ((now - _lastPanelRefresh).TotalSeconds < 2.5) return;
+        var now = DateTime.UtcNow;
+        if (_pkind == PanelKind.Notifications && _nc.NeedsPolling && now - _lastNcPoll >= NcPollEvery) { _lastNcPoll = now; _nc.Refresh(); }   // sin evento de Windows: relectura suave, solo con el panel abierto
+        if ((now - _lastPanelRefresh).TotalSeconds < 2.5) return;
         _lastPanelRefresh = now; _panelTicks++;
         switch (_pkind)
         {
             case PanelKind.Wifi: _hub.RefreshWifi(scan: _panelTicks % 2 == 0); break;   // el escaneo de Windows se pide cada ~5 s
             case PanelKind.Bluetooth: _hub.RefreshBluetooth(true); break;
-            case PanelKind.Sound or PanelKind.ControlCenter: _hub.RefreshAudio(); break;
-            case PanelKind.Battery: _battery = SystemProviders.Battery(); _hub.RefreshSlow(); break;
+            case PanelKind.Sound: _hub.RefreshAudio(); if (_cfg.SoundMixer) { _hub.RefreshInput(); _hub.RefreshSessions(); if (_cfg.AppOutputRouting && _panelTicks % 4 == 0) _hub.RefreshRouting(); } break;   // mezclador: micrófono y apps solo con el menú abierto; la salida por app (proceso aparte) cada ~10 s
+            case PanelKind.ControlCenter or PanelKind.AppleMenu: _hub.RefreshAudio(); break;
+            case PanelKind.Battery: _battery = SystemProviders.Battery(); _hub.RefreshSlow(); if (_panelTicks % 8 == 0) ReadBatteryDetails(); break;
         }
 
-        if (_pkind == PanelKind.Calendar && (now - _lastEvents).TotalSeconds > 60) LoadEvents();
+        if (_pkind is PanelKind.Calendar or PanelKind.Notifications && (now - _lastEvents).TotalSeconds > 60) LoadEvents();
         RebuildPanel();
     }
 
     // ───────────────────────────── paneles
+    private Hub.HubTab? _openTab;
+
     private void OpenPanelFromBar(BarWindow src, BarAction a, BarItemFrame? item)
     {
         if (a.Panel is not PanelKind kind) { if (a.Uri is not null) BarNative.ShellExecuteW(IntPtr.Zero, "open", a.Uri, null, null, 1); return; }
-        if (_popover is { IsOpen: true } && _pkind == kind && ReferenceEquals(_popSource, src)) { _popover.Hide(); return; }   // segundo clic en el mismo icono de la misma barra = cerrar; en otra barra = abrirlo ahí
+        var wantTab = kind == PanelKind.Hub && a.Index > 0 ? (Hub.HubTab?)(Hub.HubTab)(a.Index - 1) : null;
+        if (_popover is { IsOpen: true } && _pkind == kind && ReferenceEquals(_popSource, src) && wantTab == _openTab) { _popover.Hide(); return; }   // segundo clic en el mismo icono de la misma barra = cerrar; en otra barra = abrirlo ahí
         int cx = item is null ? src.Left + src.MonitorRect.W / 2 : src.Left + (int)((item.X + item.W / 2) * src.Scale);
+        _openTab = kind == PanelKind.Hub && a.Index > 0 ? (Hub.HubTab)(a.Index - 1) : null;   // el icono de Rendimiento, Red o Discos abre su pestaña
         try { OpenPanel(src, kind, cx, alignRight: kind == PanelKind.ControlCenter); }
         catch (Exception e)
         {
@@ -144,41 +167,115 @@ public sealed partial class BarHost : IPanelUi
 
     private void OpenPanel(BarWindow src, PanelKind kind, int anchorX, bool alignRight)
     {
-        _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, p => _hubSvc.Icons.GetBgra(p, 32));
+        _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
         _popSource = src; _pkind = kind; _anchorX = anchorX; _alignRight = alignRight; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
-        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab }; _pctx = _pctx with { Hub = MakeHubData() };
+        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _openTab ?? _cfg.HubTab, HubFocused = _openTab is not null, Tray = _trayStore.Visible }; _pctx = WithModules(_pctx with { Hub = MakeHubData() });
+        if (kind == PanelKind.Notifications) { OpenNotificationCenter(src); return; }
         var model = PanelBuilder.Build(kind, _pctx);
         _popover.Show(model, anchorX, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight);   // se abre en el monitor donde se hizo clic, escalado a SU DPI
+        if (kind == PanelKind.Tray) SetStateAll();   // la flecha pasa a apuntar arriba
         RefreshFor(kind, firstOpen: true);
+    }
+
+    /// <summary>
+    /// Centro de Notificaciones: panel lateral en el borde derecho del monitor de la barra pulsada, a SU DPI, entre la barra y el final del área de trabajo (no tapa la barra ni la de tareas).
+    /// Al abrirse se lee una vez (y se escucha el evento de Windows si existe); el Tiempo usa el servicio compartido (respeta su caché de 15 min: no hay consultas extra a Open-Meteo).
+    /// </summary>
+    private void OpenNotificationCenter(BarWindow src)
+    {
+        _battery = SystemProviders.Battery();
+        double widthDip = NcGeometry.Width(src.MonitorRect.W / src.Scale);
+        var rect = NcGeometry.Place(src.Top + src.Height, src.MonitorRect, src.Info.Work, src.Scale, widthDip);
+        _pctx = WithPhone(_pctx with { Battery = _battery, Nc = new NcView(_nc.State, new HashSet<string>(StringComparer.OrdinalIgnoreCase), widthDip) });
+        _popover!.ShowSide(PanelBuilder.Build(PanelKind.Notifications, _pctx), rect, src.MonitorRect, src.Scale, _theme, _cfg.Background == BarBackground.Glass);
+        _lastNcPoll = DateTime.UtcNow; _nc.Activate(); _weather.Refresh(); LoadEvents();
     }
 
     private void NavigatePanel(PanelKind kind)
     {
         if (_popover is not { IsOpen: true }) return;
+        if (kind == PanelKind.Notifications && _popSource is { } from && _pkind != PanelKind.Notifications)   // desde el Control Center: se reabre como panel lateral en el mismo monitor
+        {
+            _popover.Hide(); OpenPanel(from, PanelKind.Notifications, 0, alignRight: true); return;
+        }
+
         _pkind = kind; _pctx = _pctx with { Message = null, Busy = new Dictionary<string, string>() };
-        _popover.SetModel(PanelBuilder.Build(kind, _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now })); RefreshFor(kind, firstOpen: false);
+        _popover.SetModel(PanelBuilder.Build(kind, WithModules(_pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now }))); RefreshFor(kind, firstOpen: false);
     }
 
     private void RefreshFor(PanelKind kind, bool firstOpen)
     {
+        if (kind == PanelKind.Peripherals) { RefreshPeripherals(force: false); return; }
+        if (kind == PanelKind.Cleanup) { EnsureClean(); return; }
+        if (kind == PanelKind.Vpn) { _vpnMsg = null; RefreshVpn(); return; }
         if (kind == PanelKind.Weather) { _weather.Refresh(); return; }
         if (kind == PanelKind.Hub) { _hubMon.StartSession(); _hubTicks = 0; _lastHubTick = DateTime.UtcNow; RefreshHubTab(first: true); return; }
         _hub.RefreshAudio();
+        if (kind == PanelKind.Sound && _cfg.SoundMixer) { _hub.RefreshInput(); _hub.RefreshSessions(); if (_cfg.AppOutputRouting) _hub.RefreshRouting(); }
         if (kind is PanelKind.ControlCenter or PanelKind.Wifi) _hub.RefreshWifi(scan: true);
         if (kind is PanelKind.ControlCenter or PanelKind.Bluetooth) _hub.RefreshBluetooth(true);
         if (kind is PanelKind.ControlCenter or PanelKind.Sound or PanelKind.Battery) _hub.RefreshSlow();
+        if (kind == PanelKind.Battery) ReadBatteryDetails();
         if (kind == PanelKind.Calendar) LoadEvents();
         _ = firstOpen;
     }
 
+    /// <summary>WM-010: capacities and cycles straight from the battery, off the UI thread; the panel shows only what came back.</summary>
+    private void ReadBatteryDetails()
+    {
+        Task.Run(() =>
+        {
+            var d = Shell.BatteryDetailsProvider.Read();
+            Post(() => { _pctx = _pctx with { BatteryDetail = d }; if (MenuDiagOn) _log($"[batería] detalles: diseño {d.DesignMWh?.ToString() ?? "—"} mWh, plena carga {d.FullMWh?.ToString() ?? "—"} mWh, ciclos {d.Cycles?.ToString() ?? "—"}"); RebuildPanel(); });
+        });
+    }
+
+    /// <summary>WM-009: the signed-in user's display name (GetUserNameEx NameDisplay), or the account name; the machine name; WM-029: the account picture.</summary>
+    private SessionUser SessionUserInfo()
+    {
+        string name = Environment.UserName;
+        try { var sb = new System.Text.StringBuilder(256); uint n = 256; if (GetUserNameExW(3 /* NameDisplay */, sb, ref n) && sb.Length > 0) name = sb.ToString(); } catch (Exception) { }
+        RefreshUserPicture();
+        return new SessionUser(name, Environment.MachineName, _userPicture is null ? null : "user-picture:" + _userPictureStamp);
+    }
+
+    private byte[]? _userPicture; private int _userPictureStamp; private bool _userPictureLoading;
+
+    /// <summary>
+    /// WM-029: reads the account picture off the bar thread each time the W panel opens (so a new picture shows next time); when it arrives or changes, the
+    /// panel is rebuilt with a new key (the painter's cache is per key). Initials stay when Windows gives nothing.
+    /// </summary>
+    private void RefreshUserPicture()
+    {
+        if (_userPictureLoading) return; _userPictureLoading = true;
+        Task.Run(async () =>
+        {
+            byte[]? px = null;
+            try { px = await Shell.AccountPicture.LoadAsync(64).ConfigureAwait(false); } catch (Exception e) { _log("[cuenta] sin foto: " + e.GetType().Name); }
+            Post(() =>
+            {
+                _userPictureLoading = false;
+                int stamp = px is null ? 0 : px.Aggregate(17, (h, b) => unchecked(h * 31 + b));
+                if (stamp == _userPictureStamp && (px is null) == (_userPicture is null)) return;
+                _userPicture = px; _userPictureStamp = stamp;
+                if (_popover is { IsOpen: true } && _pkind == PanelKind.AppleMenu) { _pctx = _pctx with { User = _pctx.User is { } u ? u with { PictureKey = px is null ? null : "user-picture:" + stamp } : null }; RebuildPanel(); }
+            });
+        });
+    }
+
+    [System.Runtime.InteropServices.DllImport("secur32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] private static extern bool GetUserNameExW(int format, System.Text.StringBuilder name, ref uint size);
+
     private void RebuildPanel()
     {
         if (_popover is not { IsOpen: true }) return;
-        _pctx = _pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData() };
+        // El menú de una app no sale de PanelBuilder ni usa el contexto de los paneles (que puede no existir aún): se rehace desde su propio árbol.
+        // Antes caía aquí, _pctx era null → NullReferenceException en el bucle de la barra → la barra se cerraba y el host la reiniciaba (P1, visto en el CI).
+        if (_pkind == PanelKind.AppMenu) { if (_amTop is not null) _popover.SetModel(WinMac.Bar.Menus.AppMenuPanel.Build(_amTop, _amPath)); return; }
+        _pctx = WithModules(_pctx with { Sys = _hub.Snapshot, Battery = _battery, Now = DateTime.Now, Cfg = _cfg, Hub = MakeHubData(), Nc = _pctx.Nc is { } v ? v with { State = _nc.State } : null, Tray = _trayStore.Visible });
         _popover.SetModel(PanelBuilder.Build(_pkind, _pctx));
     }
 
-    private void OnPanelClosed() { _popSource = null; foreach (var w in _wins) w.Redraw(); }
+    private void OnPanelClosed() { if (_pkind == PanelKind.Notifications) _nc.Deactivate(); _popSource = null; SetStateAll(); foreach (var w in _wins) w.Redraw(); }   // la flecha de las apps en segundo plano vuelve a apuntar abajo
 
     private void LoadEvents()
     {
@@ -200,12 +297,12 @@ public sealed partial class BarHost : IPanelUi
     void IPanelUi.ShowInfo(string title, string? text) => ShowInfo(title, text);
     void IPanelUi.OpenUri(string uri) => BarNative.ShellExecuteW(IntPtr.Zero, "open", uri, null, null, 1);
     void IPanelUi.TabChanged(HubTab tab) { _hubTicks = 0; _lastHubTick = DateTime.UtcNow; RefreshHubTab(first: true); }
-    bool IPanelUi.Confirm(string title, string text) => Confirm(title, text);
+    bool IPanelUi.Confirm(string title, string text, string action, bool danger, ConfirmIcon icon) => Confirm(title, text, action, danger, icon);
 
     void IPanelUi.OpenSettings(string? section)
     {
         _popover?.Hide();
-        if (HostCommand is { } hc) hc("settings", section); else ShowInfo("Ajustes", "Los ajustes de WinMac se abren desde WinMac.exe (esta barra se ejecutó por separado).");
+        if (HostCommand is { } hc) hc("settings", section); else ShowInfo("Ajustes", "Los ajustes de Hatsu Desktop se abren desde HatsuDesktop.exe (esta barra se ejecutó por separado).");
     }
 
     /// <summary>«Salir» cierra WinMac COMPLETO por el cierre ordenado del host (que cierra Barra, Dock e Isla). Si la barra corre sola, no hay nada más que cerrar que ella misma.</summary>
@@ -222,73 +319,115 @@ public sealed partial class BarHost : IPanelUi
         catch (Exception e) { _log("[bar] no se pudo guardar el ajuste: " + e.GetType().Name + ": " + e.Message); }
     }
 
-    /// <summary>Menú nativo de selección junto al puntero (dispositivos de audio…). El panel no se cierra mientras está abierto.</summary>
+    /// <summary>
+    /// Desplegable de selección (dispositivos de audio, salida por aplicación). WM-035 (iteración 6): menú propio con el tema del panel, colocado contra el control que lo abrió,
+    /// con los nombres completos y siempre dentro de la pantalla (<see cref="WinMac.Dock.ChoiceMenuLayout"/>); antes era el menú nativo blanco de Windows en la posición del puntero.
+    /// El panel no se cierra mientras está abierto. Sin control de origen conocido, se ancla al puntero.
+    /// </summary>
     void IPanelUi.ShowChoices(string title, IReadOnlyList<Choice> choices, Action<string> onPick)
     {
         if (choices.Count == 0 || _popover is null) return;
-        IntPtr menu = BarNative.CreatePopupMenu(); int cmd = 0; IntPtr owner = _popover.Hwnd;
+        IntPtr owner = _popover.Hwnd; string? picked = null;
+        BarNative.GetCursorPos(out var p);
+        var a = _popover.AnchorPx();
+        var anchor = a is { } r ? new WinMac.Dock.PxRect(r.L, r.T, r.R, r.B) : new WinMac.Dock.PxRect(p.X - 4, p.Y - 4, p.X + 4, p.Y + 4);
         try
         {
-            for (int i = 0; i < choices.Count; i++) BarNative.AppendMenuW(menu, choices[i].Checked ? 0x8u /* MF_CHECKED */ : 0u, (UIntPtr)(uint)(i + 1), choices[i].Text);
-            BarNative.GetCursorPos(out var p); _popover.KeepOpen = true; _modal = true; BarNative.SetForegroundWindow(owner);
-            cmd = BarNative.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, p.X, p.Y, owner, IntPtr.Zero);
+            _popover.KeepOpen = true; _modal = true;
+            picked = WinMac.Dock.Win.Rendering.DarkChoiceMenu.Show(choices.Select(c => new WinMac.Dock.Win.Rendering.ChoiceMenuItem(c.Id, c.Text, c.Checked)).ToList(), anchor, _popover.Scale, _popover.IsDark, _log);
         }
-        finally { _modal = false; _popover.KeepOpen = false; BarNative.DestroyMenu(menu); }
+        finally { _modal = false; _popover.KeepOpen = false; }
         BarNative.SetForegroundWindow(owner);
-        if (cmd > 0 && cmd <= choices.Count) onPick(choices[cmd - 1].Id);
+        if (picked is not null) onPick(picked);
     }
 
-    private void OnPanelEvent(PanelEvent e) => _ops.Handle(e);
+    private void OnPanelEvent(PanelEvent e)
+    {
+        if (_pkind == PanelKind.AppleMenu && e.Id.StartsWith("apple:", StringComparison.Ordinal)) { AppleAction(e); return; }   // WM-009: tiles and sliders of the panel go to the same operations as the Control Center
+        if (_pkind == PanelKind.Tray) { TrayPanelAction(e); return; }
+        if (_pkind == PanelKind.Peripherals) { PeripheralsAction(e); return; }
+        if (_pkind == PanelKind.Cleanup) { CleanupAction(e); return; }
+        if (_pkind == PanelKind.Vpn) { VpnAction(e); return; }
+        if (e.Kind == PanelEventKind.Click && e.Id == "bat:details") { _pctx = _pctx with { BatteryDetailsOpen = !_pctx.BatteryDetailsOpen }; RebuildPanel(); return; }   // WM-027
+        if (_pkind == PanelKind.AppMenu) { AppMenuAction(e); return; }
+        _ops.Handle(e);
+    }
 
     // ───────────────────────────── cuadros de diálogo propios
-    private void ShowInfo(string title, string? text) { if (string.IsNullOrWhiteSpace(text)) return; ModalBox(title, text!, 0x40 /* ICONINFORMATION | OK */); }
-
-    private bool Confirm(string title, string text) => ModalBox(title, text, 0x4 | 0x30 | 0x100) == 6;   // YESNO | ICONWARNING | DEFBUTTON2 (por defecto «No»)
-
-    private int ModalBox(string title, string text, uint flags)
+    private void ShowInfo(string title, string? text)
     {
+        if (string.IsNullOrWhiteSpace(text)) return;
         if (_popover is not null) _popover.KeepOpen = true; _modal = true;
-        try { return BarNative.MessageBoxW(_actionSource?.Hwnd ?? (_wins.Count > 0 ? _wins[0].Hwnd : IntPtr.Zero), text, title, flags | 0x40000 /* TOPMOST */ | 0x10000 /* SETFOREGROUND */); }
+        try { WinMac.Dock.Win.Rendering.DarkDialog.Tell(title, text!, _log); }   // WM-024: WinMac's own dialog, not the white MessageBox
         finally { _modal = false; if (_popover is not null) _popover.KeepOpen = false; }
     }
 
+    /// <summary>WM-024: WinMac's own dark dialog (Cancelar by default) instead of the white MessageBox; same modal guard as before so the host does not think the bar hung.</summary>
+    private bool Confirm(string title, string text, string action = "Continuar", bool danger = false, ConfirmIcon icon = ConfirmIcon.Warning)
+    {
+        if (_popover is not null) _popover.KeepOpen = true; _modal = true;
+        try { return WinMac.Dock.Win.Rendering.DarkDialog.Ask(title, text, action, danger, _log, Enum.Parse<WinMac.Dock.ConfirmKind>(icon.ToString())); }
+        finally { _modal = false; if (_popover is not null) _popover.KeepOpen = false; }
+    }
+
+
     // ───────────────────────────── menú Apple
+    private IntPtr _appleReturn;
+
+    /// <summary>
+    /// Menú de la manzana con el aspecto de macOS (panel propio de WinMac en vez del menú nativo de Windows), pegado al icono y en el monitor de la barra pulsada.
+    /// Al elegir una opción, el foco vuelve a la app que lo tenía y la acción se ejecuta sobre ella (Forzar salida, confirmaciones).
+    /// </summary>
     private void ShowAppleMenu(BarWindow src, BarItemFrame? item)
     {
-        IntPtr menu = BarNative.CreatePopupMenu(); IntPtr prev = BarNative.GetForegroundWindow();
-        string? appName = SessionService.ForegroundProcessName();
         try
         {
-            _popover?.Hide();
-            const uint Grayed = 0x1, Sep = 0x800;
-            void Add(SystemActionKind k, bool enabled = true, string? label = null) => BarNative.AppendMenuW(menu, enabled ? 0u : Grayed, (UIntPtr)(2000 + (int)k), label ?? SystemActions.Get(k).Label);
-            void Line() => BarNative.AppendMenuW(menu, Sep, UIntPtr.Zero, null);
-            Add(SystemActionKind.About); Line();
-            Add(SystemActionKind.Settings); Add(SystemActionKind.Store); Line();
-            Add(SystemActionKind.ForceQuit, appName is not null, appName is null ? "Forzar salida (no hay una app que se pueda cerrar)" : $"Forzar salida de «{appName}»…"); Line();
-            Add(SystemActionKind.Sleep); Add(SystemActionKind.Restart); Add(SystemActionKind.Shutdown); Line();
-            Add(SystemActionKind.Lock); Add(SystemActionKind.LogOff); Line();
-            BarNative.AppendMenuW(menu, _cfg.ReserveSpace ? 0x8u : 0u, (UIntPtr)1, "Reservar espacio arriba");
-            BarNative.AppendMenuW(menu, 0, (UIntPtr)2, "Salir de la barra superior");
-            int x = src.Left + (int)((item?.X ?? 0) * src.Scale), y = src.Top + src.Height;   // el menú nace bajo la barra pulsada; Windows lo mantiene dentro de ese monitor
-            BarNative.SetForegroundWindow(src.Hwnd);
-            _modal = true; int cmd;
-            try { cmd = BarNative.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x2 /* RETURNCMD|NONOTIFY|RIGHTBUTTON */, x, y, src.Hwnd, IntPtr.Zero); } finally { _modal = false; }
-            BarNative.PostMessage(src.Hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
-            if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev)) BarNative.SetForegroundWindow(prev);   // la acción se ejecuta con el foco de vuelta en la app que lo tenía
-            if (cmd == 1) SetReserve(!_cfg.ReserveSpace);
-            else if (cmd == 2) _quitting = true;
-            else if (cmd >= 2000) RunSystemAction((SystemActionKind)(cmd - 2000), appName);
+            if (_popover is { IsOpen: true } && _pkind == PanelKind.AppleMenu && ReferenceEquals(_popSource, src)) { _popover.Hide(); return; }   // segundo clic: cerrar
+            _appleReturn = BarNative.GetForegroundWindow();
+            _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
+            _popSource = src; _pkind = PanelKind.AppleMenu;
+            _pctx = WithPhone(PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, ForegroundApp = SessionService.ForegroundProcessName(), User = SessionUserInfo() });
+            _anchorX = 0; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
+            var model = PanelBuilder.AppleMenu(_pctx);
+            int left = src.Left + (int)((item?.X ?? 0) * src.Scale), anchor = left + (int)Math.Round(model.Width * src.Scale / 2);   // el borde izquierdo del menú bajo el icono
+            _popover.Show(model, anchor, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight: false);
+            _hub.RefreshAudio(); _hub.RefreshWifi(scan: false); _hub.RefreshBluetooth(true); _hub.RefreshSlow();   // live state for the tiles and sliders
         }
         catch (Exception e) { _log("Menú falló: " + e.Message); }
-        finally { BarNative.DestroyMenu(menu); }
+    }
+
+    private void AppleAction(PanelEvent e)
+    {
+        if (e.Kind != PanelEventKind.Click || !e.Id.StartsWith("apple:", StringComparison.Ordinal)) return;
+        string id = e.Id[6..]; var prev = _appleReturn; string? app = _pctx.ForegroundApp; _appleReturn = IntPtr.Zero;
+        _popover?.Hide();
+        if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev) && BarNative.IsWindow(prev)) BarNative.SetForegroundWindow(prev);   // la acción se ejecuta con el foco de vuelta en la app que lo tenía
+        if (id == "winmac-settings") ((IPanelUi)this).OpenSettings(null);
+        else if (id == "winmac-quit") ((IPanelUi)this).QuitWinMac();
+        else if (id == "reserve") SetReserve(!_cfg.ReserveSpace);
+        else if (id == "quitbar") _quitting = true;
+        else if (Enum.TryParse<SystemActionKind>(id, out var k)) RunSystemAction(k, app);
     }
 
     private void RunSystemAction(SystemActionKind k, string? appName)
     {
         var info = SystemActions.Get(k);
-        if (SystemActions.NeedsConfirmation(k, _cfg.ConfirmDestructive) && !Confirm(info.ConfirmTitle ?? info.Label, string.Format(info.ConfirmText ?? "¿Continuar?", appName ?? "la app activa"))) return;
+        if (k == SystemActionKind.About) { ShowAboutThisPc(info); return; }   // It7: ventana propia; «Información de Windows…» abre la original (ms-settings:about)
+        if (SystemActions.NeedsConfirmation(k, _cfg.ConfirmDestructive) && !Confirm(info.ConfirmTitle ?? info.Label, string.Format(info.ConfirmText ?? "¿Continuar?", appName ?? "la app activa"), info.Label.TrimEnd('…', '.'), danger: true, ConfirmIcons.ForAction(k))) return;
         _hub.Run(() => _hub.Services.Session.Run(k), r => { if (!r.IsOk) ShowInfo(info.Label, r.Message); });
+    }
+
+    /// <summary>It7: «Acerca de este PC». Los datos se leen en un hilo de trabajo (WMI tarda); si algo falla, se abre la pantalla de Windows de siempre en vez de no mostrar nada.</summary>
+    private void ShowAboutThisPc(SystemActionInfo info)
+    {
+        AboutRaw? raw = null;
+        _hub.Run(() => { raw = AboutPcReader.Read(); return ServiceResult.Ok; }, r =>
+        {
+            if (!r.IsOk || raw is null) { _hub.Run(() => _hub.Services.Session.Run(SystemActionKind.About), _ => { }); return; }
+            if (_popover is not null) _popover.KeepOpen = true; _modal = true;
+            try { AboutWindow.Show(AboutFormatter.Build(raw), () => BarNative.ShellExecuteW(IntPtr.Zero, "open", info.SettingsUri ?? "ms-settings:about", null, null, 1), _log); }
+            finally { _modal = false; if (_popover is not null) _popover.KeepOpen = false; }
+        });
     }
 
     private void SetReserve(bool on)
@@ -298,25 +437,116 @@ public sealed partial class BarHost : IPanelUi
         lock (_cfgLock) _pendingCfg = n; ApplyPendingConfig();   // se aplica ya; si el host la devuelve igual, no hay cambio
     }
 
-    // ───────────────────────────── menús de la app activa (EXPERIMENTAL)
+    // ───────────────────────────── menús de la app activa (Global Menu, opción A; docs/23)
+    // Se leen FUERA del hilo de la barra (una app colgada no la congela) y se guardan por ventana unos segundos. Los menús originales siguen en la app.
+    private WinMac.Bar.Menus.AppMenus _appMenus = WinMac.Bar.Menus.AppMenus.Empty; private int _appMenuGen; private string? _appMenuName;
+    private WinMac.Bar.Menus.AppMenuEntry? _amTop; private IReadOnlyList<int> _amPath = []; private int _amTopIndex = -1;
+    private readonly Dictionary<IntPtr, (DateTime At, WinMac.Bar.Menus.AppMenus Menus)> _appMenuCache = [];
+
     private void RefreshAppMenus()
     {
-        if (!_cfg.AppMenus) { _appMenuTops = []; _appMenuLabels = null; return; }
+        if (!_cfg.AppMenus) { ClearAppMenus(); return; }
         var h = BarNative.GetForegroundWindow(); if (h == IntPtr.Zero) return;
         BarNative.GetWindowThreadProcessId(h, out uint pid); if (pid == (uint)Environment.ProcessId) return;   // un clic en la propia barra no cambia los menús
         var cls = AppMenuService.ClassOf(h);
-        if (cls is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd") { _appMenuTops = []; _appMenuLabels = null; return; }
-        var tops = AppMenuService.Read(h); _appMenuTops = tops; _appMenuWindow = h; _appMenuLabels = tops.Count > 0 ? tops.Select(t => t.Text).ToList() : null;
+        if (cls is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd") { ClearAppMenus(); return; }
+        _appMenuWindow = h; int gen = ++_appMenuGen;
+        if (_appMenuCache.TryGetValue(h, out var c) && DateTime.UtcNow - c.At < TimeSpan.FromSeconds(8)) { SetAppMenus(c.Menus); return; }
+        var tops = AppMenuService.Read(h);   // solo lectura de la barra de menús Win32 (rápida, sin mensajes a la app)
+        if (tops.Count > 0) { SetAppMenus(Cache(h, new(WinMac.Bar.Menus.AppMenuSource.Win32, tops.Select(t => new WinMac.Bar.Menus.AppMenuEntry(t.Text, 0, Children: null)).ToList()))); return; }
+        SetAppMenus(WinMac.Bar.Menus.AppMenus.Empty);
+        Task.Run(() =>   // UI Automation puede tardar (árboles grandes): en segundo plano, con tope
+        {
+            var t = Task.Run(() => WinMac.Bar.Win.Menus.AppMenuReader.ReadAutomation(h));
+            var names = t.Wait(TimeSpan.FromSeconds(2)) ? t.Result : [];
+            Post(() =>
+            {
+                var menus = names.Count == 0 ? WinMac.Bar.Menus.AppMenus.Empty : new WinMac.Bar.Menus.AppMenus(WinMac.Bar.Menus.AppMenuSource.Automation, names.Select(n => new WinMac.Bar.Menus.AppMenuEntry(n, 0)).ToList());
+                Cache(h, menus);
+                if (gen == _appMenuGen) { SetAppMenus(menus); UpdateState(force: true); }
+            });
+        });
     }
+
+    private WinMac.Bar.Menus.AppMenus Cache(IntPtr h, WinMac.Bar.Menus.AppMenus m)
+    {
+        if (_appMenuCache.Count > 64) _appMenuCache.Clear();
+        _appMenuCache[h] = (DateTime.UtcNow, m); return m;
+    }
+
+    private void SetAppMenus(WinMac.Bar.Menus.AppMenus m)
+    {
+        _appMenus = m; _appMenuTops = m.Source == WinMac.Bar.Menus.AppMenuSource.Win32 ? AppMenuService.Read(_appMenuWindow) : []; _appMenuLabels = m.Labels;
+        string name = _app?.Name ?? "";
+        if (name != _appMenuName || m.Tops.Count > 0) { _appMenuName = name; _log($"[menús] {name}: {(m.Tops.Count == 0 ? "sin menús" : $"{m.Tops.Count} menús ({m.Source}): " + string.Join(", ", m.Tops.Select(t => t.Text)))}"); }
+    }
+
+    private void ClearAppMenus() { _appMenus = WinMac.Bar.Menus.AppMenus.Empty; _appMenuTops = []; _appMenuLabels = null; }
 
     private void ShowAppMenu(BarWindow src, int index, BarItemFrame? item)
     {
-        if (index < 0 || index >= _appMenuTops.Count || _appMenuWindow == IntPtr.Zero) return;
+        if (MenuDiagOn) _log($"[menús] clic en el menú {index} (hay {_appMenus.Tops.Count}, Win32 {_appMenuTops.Count}, ventana {(_appMenuWindow == IntPtr.Zero ? "ninguna" : "sí")}, panel abierto {_popover?.IsOpen == true} {_pkind})");
+        if (index < 0 || index >= _appMenus.Tops.Count || _appMenuWindow == IntPtr.Zero) return;
+        if (_popover is { IsOpen: true } && _pkind == PanelKind.AppMenu && _amTopIndex == index) { _popover.Hide(); return; }   // segundo clic: cerrar
         _popover?.Hide();
-        int x = src.Left + (int)((item?.X ?? 0) * src.Scale), y = src.Top + src.Height; IntPtr prev = BarNative.GetForegroundWindow();
-        _modal = true;
-        try { var r = AppMenuService.Show(src.Hwnd, _appMenuWindow, _appMenuTops[index], x, y); if (!r.IsOk) _log("[bar] menú de la app: " + r.Message); }
-        finally { _modal = false; if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev)) BarNative.SetForegroundWindow(prev); }
+        int x = src.Left + (int)((item?.X ?? 0) * src.Scale), y = src.Top + src.Height; var app = _appMenuWindow; var top = _appMenus.Tops[index];
+        if (_appMenus.Source == WinMac.Bar.Menus.AppMenuSource.Automation)
+        {
+            Task.Run(() => { if (!WinMac.Bar.Win.Menus.AppMenuReader.ExpandAutomation(app, index, top.Text)) _log("[menús] la app no abrió su menú «" + top.Text + "»"); });
+            return;
+        }
+
+        if (index >= _appMenuTops.Count) return;
+        var tree = WinMac.Bar.Win.Menus.AppMenuReader.ReadWin32(app, _appMenuTops[index].SubMenu, _appMenuTops[index].Index, top.Text);
+        if (tree is null)
+        {
+            if (MenuDiagOn) _log($"[menús] «{top.Text}»: árbol ilegible → menú nativo de la app");
+            // La app dibuja sus menús o no respondió a tiempo: se usa SU menú nativo (el mismo de su ventana), que sí sabe dibujarse.
+            IntPtr prev = BarNative.GetForegroundWindow(); _modal = true;
+            try { var r = AppMenuService.Show(src.Hwnd, app, _appMenuTops[index], x, y); if (!r.IsOk) _log("[bar] menú de la app: " + r.Message); }
+            finally { _modal = false; if (prev != IntPtr.Zero && !_wins.Any(w => w.Hwnd == prev)) BarNative.SetForegroundWindow(prev); }
+            return;
+        }
+
+        _amTop = tree; _amPath = []; _amTopIndex = index;
+        _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
+        if (MenuDiagOn) { _popover.FocusDiag = _log; _log($"[menús] abrir «{top.Text}»: árbol con {tree.Children?.Count ?? 0} entradas"); }
+        _popSource = src; _pkind = PanelKind.AppMenu;
+        var model = WinMac.Bar.Menus.AppMenuPanel.Build(tree, _amPath);
+        _popover.Show(model, x + (int)Math.Round(model.Width * src.Scale / 2), y, src.MonitorRect, src.Scale, _theme, alignRight: false);
+    }
+
+    /// <summary>
+    /// SOLO CI (WINMAC_MENU_DIAG=1): dónde están en la pantalla las etiquetas de los menús de la app y, con un menú abierto, sus filas; así la auditoría visual pulsa
+    /// con el ratón como un usuario. Sin la variable no se registra nada.
+    /// </summary>
+    private static readonly bool MenuDiagOn = Environment.GetEnvironmentVariable("WINMAC_MENU_DIAG") == "1";
+    private void InitMenuDiag() { if (MenuDiagOn) WinMac.Bar.Win.Menus.AppMenuReader.Diag = _log; }
+    private string? _menuDiagLast; private DateTime _menuDiagAt;
+    private void MenuDiag()
+    {
+        if (!MenuDiagOn || DateTime.UtcNow - _menuDiagAt < TimeSpan.FromMilliseconds(400)) return;
+        _menuDiagAt = DateTime.UtcNow;
+        var parts = new List<string>();
+        foreach (var w in _wins)
+            foreach (var f in w.Ctl.Frame.Items.Where(i => i.Item.Kind is BarItemKind.AppMenu or BarItemKind.AppName))
+                parts.Add($"{f.Item.Kind}:{f.Item.Text}@{w.Left + (int)((f.X + f.W / 2) * w.Scale)},{w.Top + w.Height / 2}");
+        if (_popover is { IsOpen: true } && _pkind == PanelKind.AppMenu)
+            foreach (var r in _popover.DiagRows()) parts.Add($"fila:{r.Id}:{r.Text}@{r.X},{r.Y}");
+        var line = string.Join(" | ", parts);
+        if (line != _menuDiagLast) { _menuDiagLast = line; _log("[menús] diag " + line); }
+    }
+
+    private void AppMenuAction(PanelEvent e)
+    {
+        if (_amTop is null || _popover is null) return;
+        if (e.Id == "back") { if (_amPath.Count > 0) { _amPath = _amPath.Take(_amPath.Count - 1).ToList(); _popover.SetModel(WinMac.Bar.Menus.AppMenuPanel.Build(_amTop, _amPath)); } return; }
+        var (cmd, open) = WinMac.Bar.Menus.AppMenuPanel.Click(_amTop, _amPath, e.Id);
+        if (open is not null) { _amPath = open; _popover.SetModel(WinMac.Bar.Menus.AppMenuPanel.Build(_amTop, _amPath)); return; }
+        if (cmd <= 0) return;
+        var app = _appMenuWindow; _popover.Hide(); _amTopIndex = -1;
+        WinMac.Bar.Win.Menus.AppMenuReader.Run(app, cmd);
+        _log("[menús] orden " + cmd + " enviada a la app");
     }
 
     // ───────────────────────────── configuración central en vivo
@@ -330,12 +560,18 @@ public sealed partial class BarHost : IPanelUi
         var old = _cfg; _cfg = c;
         foreach (var w in _wins) w.ApplyConfig(old, c);   // todas las barras comparten la configuración central y la aplican en vivo
         if (old.Theme != c.Theme) SetThemeAll(ResolveTheme());
-        if (old.AppMenus != c.AppMenus) { if (c.AppMenus) RefreshAppMenus(); else { _appMenuTops = []; _appMenuLabels = null; } }
+        if (old.AppMenus != c.AppMenus) { if (c.AppMenus) RefreshAppMenus(); else ClearAppMenus(); }
         if (old.WeatherCity != c.WeatherCity || old.WeatherFavorites != c.WeatherFavorites || old.WeatherAutoLocation != c.WeatherAutoLocation) { ConfigureWeather(); _weather.Refresh(); }
-        if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind == PanelKind.Calendar && _popover is { IsOpen: true }) LoadEvents();
+        if (old.CalendarIcsPath != c.CalendarIcsPath && _pkind is PanelKind.Calendar or PanelKind.Notifications && _popover is { IsOpen: true }) LoadEvents();
+        if (old.LaunchpadOnWinKey != c.LaunchpadOnWinKey) ApplyLauncherConfig();
+        if (old.SpotlightHotkey != c.SpotlightHotkey) ApplySpotlightConfig();
+        if (old.CaptureHotkeys != c.CaptureHotkeys || old.CaptureModifiers != c.CaptureModifiers) ApplyCaptureConfig();
+        ApplyFeatures(old, c);
+        if (old.ShowTrayIcons != c.ShowTrayIcons) { if (c.ShowTrayIcons) StartTray(); else StopTray(); }
+        if (old.NotificationsFromWindows != c.NotificationsFromWindows) { _nc.SetEnabled(c.NotificationsFromWindows); if (c.NotificationsFromWindows && _popover is { IsOpen: true } && _pkind == PanelKind.Notifications && !_nc.Active) _nc.Activate(); }
         _nextClock = DateTime.MinValue; UpdateState(force: false);
         if (_popover is { IsOpen: true }) RebuildPanel();
     }
 
-    private void DisposePanels() { _popover?.Dispose(); _popover = null; _hubOwner?.Dispose(); _hubOwner = null; }
+    private void DisposePanels() { _nc?.Deactivate(); _ncSrc?.Dispose(); _ncSrc = null; _popover?.Dispose(); _popover = null; _hubOwner?.Dispose(); _hubOwner = null; }
 }

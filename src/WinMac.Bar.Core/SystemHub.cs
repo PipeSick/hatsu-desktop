@@ -36,7 +36,8 @@ public sealed class SystemHub
     private static string Key(SystemSnapshot s) =>
         $"{s.Audio.Available}|{s.Audio.Volume}|{s.Audio.Muted}|{string.Join(",", s.Audio.Outputs.Select(o => o.Id + o.IsDefault))}|{s.Wifi.Available}|{s.Wifi.Connected}|{s.Wifi.Ssid}|{s.Wifi.Bars}|{s.Wifi.RadioOn}|{string.Join(",", s.Wifi.Networks.Select(n => n.Ssid + n.Bars + n.Connected))}"
         + $"|{s.Mic.Available}|{s.Mic.Volume}|{s.Mic.Muted}|{string.Join(",", s.Mic.Devices.Select(d => d.Id + d.IsDefault))}|{string.Join(",", s.AppSessions.Sessions.Select(a => a.Id + a.Volume + a.Muted + a.Active))}"
-        + $"|{s.Bluetooth.Available}|{s.Bluetooth.RadioOn}|{string.Join(",", s.Bluetooth.Devices.Select(d => d.Id + d.Connected))}|{s.Brightness.Available}|{s.Brightness.Percent}|{s.Power.Available}|{s.Power.Mode}|{s.Appearance.Available}|{s.Appearance.Dark}|{s.OutputSwitchOk}|{s.CanRestoreOutput}";
+        + $"|{s.Bluetooth.Available}|{s.Bluetooth.RadioOn}|{string.Join(",", s.Bluetooth.Devices.Select(d => d.Id + d.Connected))}|{s.Brightness.Available}|{s.Brightness.Percent}|{s.Power.Available}|{s.Power.Mode}|{s.Appearance.Available}|{s.Appearance.Dark}|{s.Appearance.SystemDark}|{s.OutputSwitchOk}|{s.CanRestoreOutput}"
+        + $"|{s.Routing?.Available}|{(s.Routing is { } r ? string.Join(",", r.Outputs.Select(o => o.Key + "=" + o.Value)) : "")}";
 
     // Cada Refresh* es de un solo vuelo con su propia bandera (ref no se puede capturar en la lambda: se resuelve aquí con métodos explícitos).
     public void RefreshAudio()
@@ -57,6 +58,27 @@ public sealed class SystemHub
     {
         if (Interlocked.Exchange(ref _sessions, 1) == 1) return;
         _background(() => { try { var a = _s.Audio.ReadSessions(); Update(s => s with { Sessions = a }); } catch (Exception e) { _log("[hub] sesiones de audio: " + e.Message); } finally { Volatile.Write(ref _sessions, 0); } });
+    }
+
+    private int _routing;
+    /// <summary>WM-035: salida de cada app (solo con la función experimental activa y el menú Sonido abierto). Proceso aparte: tarda algo más que las demás lecturas.</summary>
+    public void RefreshRouting()
+    {
+        if (_s.Routing is not { } rt) { if (Snapshot.Routing is not null) Update(s => s with { Routing = null }); return; }
+        if (Interlocked.Exchange(ref _routing, 1) == 1) return;
+        _background(() =>
+        {
+            try
+            {
+                var probe = rt.Probe();
+                if (!probe.Available) { Update(s => s with { Routing = probe }); return; }
+                var pids = Snapshot.AppSessions.Sessions.Select(a => a.Pid).Where(p => p > 0).Distinct().ToList();
+                var outs = pids.Count == 0 ? new Dictionary<int, string?>() : rt.Read(pids);
+                Update(s => s with { Routing = probe with { Outputs = outs } });
+            }
+            catch (Exception e) { _log("[hub] salida por aplicación: " + e.Message); Update(s => s with { Routing = AppRoutingState.Off("no se pudo leer") }); }
+            finally { Volatile.Write(ref _routing, 0); }
+        });
     }
 
     public void RefreshWifi(bool scan)

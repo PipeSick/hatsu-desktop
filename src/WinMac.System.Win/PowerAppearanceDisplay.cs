@@ -46,7 +46,8 @@ public sealed class AppearanceService : IAppearanceService
         {
             using var k = Registry.CurrentUser.OpenSubKey(Key);
             if (k is null) return AppearanceState.None("Windows no tiene la clave de personalización");
-            return new AppearanceState(true, k.GetValue("AppsUseLightTheme") is int v && v == 0);
+            bool? system = k.GetValue("SystemUsesLightTheme") is int sv ? sv == 0 : null;
+            return new AppearanceState(true, k.GetValue("AppsUseLightTheme") is int v && v == 0, SystemDark: system);
         }
         catch (Exception e) { return AppearanceState.None("Apariencia: " + e.GetType().Name); }
     }

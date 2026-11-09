@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- WinMac Connect (docs/39): lógica pura del enlace con el iPhone (ANCS, batería, estado, ajustes). Sin Windows: se prueba también en Linux. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinMac.Connect</RootNamespace>
+  </PropertyGroup>
+</Project>

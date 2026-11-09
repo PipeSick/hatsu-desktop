@@ -28,6 +28,7 @@ internal sealed class SettingsWindow : IDisposable
     private D2DDevice? _dev; private SettingsPainter? _painter; private IDXGISwapChain1? _swap; private ID2D1Bitmap1? _bmp; private double _scale = 1; private bool _dark; private int _wPx, _hPx;
     public IntPtr Handle => _hwnd;
     public bool IsOpen => _hwnd != IntPtr.Zero;
+    private IReadOnlyList<WinMac.Apps.InstalledApp>? _appsCache; private DateTime _appsAt;
 
     public SettingsWindow(ConfigService cfg, Func<IReadOnlyDictionary<string, ModuleState>> states, Action openLocal, string exePath, Action<string> log)
     {
@@ -37,14 +38,54 @@ internal sealed class SettingsWindow : IDisposable
             try { if (on) Autostart.Install(_exe); else Autostart.Remove(); }
             catch (Exception e) { _log("[host] no se pudo cambiar el inicio automático: " + e.Message); throw new InvalidOperationException(e.Message); }
         }, log);
+        _actions.FindApps = q =>
+        {   // el mismo índice y la misma búsqueda que Launchpad y Spotlight; la lista se lee una vez y se reutiliza un minuto
+            try
+            {
+                if (_appsCache is null || (DateTime.UtcNow - _appsAt).TotalSeconds > 60) { _appsCache = WinMac.Apps.Win.AppsFolderReader.Read(_log); _appsAt = DateTime.UtcNow; }
+                return WinMac.Apps.AppMatcher.Search(_appsCache, q, null, 5).Select(a => (a.Id, a.Name)).ToList();
+            }
+            catch (Exception e) { _log("[host] buscar aplicaciones: " + e.GetType().Name); return []; }
+        };
+        _actions.AdoptAutostart = () =>
+        {   // adopción EXPLÍCITA: confirmación clara y solo si Windows hoy inicia OTRA copia; no se borra nada
+            var other = Autostart.ForeignPath(_exe); if (other is null) return false;
+            if (!WinMac.Dock.Win.Rendering.DarkDialog.Ask("¿Iniciar esta instalación con Windows?", $"Ahora Windows inicia otra copia:\n{other}\n\nSi continúas, iniciará esta:\n{_exe}\n\nLa carpeta anterior no se borra ni se cierra.", "Usar esta instalación", false, _log)) return false;
+            var written = Autostart.Adopt(_exe); _log(written is null ? "[host] adopción del inicio automático: sin cambios" : "[host] el inicio automático ahora apunta a esta instalación"); return written is not null;
+        };
+        _actions.LoadDock = () => { try { return WinMac.Dock.DockSettings.Sanitize(WinMac.Dock.DockConfig.LoadOrDefault(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath, WinMac.Dock.Win.Shell.DockDefaults.Create)); } catch (Exception e) { _log("[host] dock.json no se pudo leer: " + e.Message); return null; } };
+        _actions.SaveDock = d => { if (d.TrySave(WinMac.Dock.Win.Shell.DockDefaults.ConfigPath)) { _log("[host] ajustes del Dock guardados (el Dock los vuelve a leer)"); PostRefresh(); } else _log("[host] dock.json no se pudo guardar"); };
+        _actions.OpenUri = uri => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", uri) { UseShellExecute = false }); } catch (Exception e) { _log("[host] no se pudo abrir " + uri + ": " + e.Message); } };
         _cfg.Changed += OnConfigChanged;
     }
 
     private void OnConfigChanged(HostConfig a, HostConfig b) { if (_hwnd != IntPtr.Zero) Native.PostMessage(_hwnd, WM_REFRESH, IntPtr.Zero, IntPtr.Zero); }   // puede llegar de otro hilo
 
+    /// <summary>Extensions (docs/30): operations and the list to show; set by the host.</summary>
+    public WinMac.Host.IExtensionOps? ExtensionOps { get => _actions.Extensions; set => _actions.Extensions = value; }
+    /// <summary>Reabrir el asistente de primera ejecución (Ajustes › General). Lo pone el host.</summary>
+    public Action? RunOnboarding { get => _actions.RunOnboarding; set => _actions.RunOnboarding = value; }
+    /// <summary>Fase 3.1: causa de los módulos que no arrancaron, reintento por módulo e informe de diagnóstico (los pone el host).</summary>
+    public Func<IReadOnlyDictionary<string, ModuleFailure>>? ModuleFailures { get; set; }
+    public Func<string, bool>? RetryModule { get => _actions.RetryModule; set { _actions.RetryModule = id => { bool ok = value?.Invoke(id) ?? false; _ = Task.Delay(1200).ContinueWith(_ => Refresh()); return ok; }; } }
+    /// <summary>Diagnóstico de Bluetooth y llamadas (Ajustes › Hatsu Connect): lo pone el host.</summary>
+    public ConnectDiagnosticsService? ConnectDiag
+    {
+        get => _connectDiag;
+        set { _connectDiag = value; _actions.DiagRun = value is null ? null : value.Run; _actions.DiagOpen = value is null ? null : value.Open; _actions.DiagCopy = value is null ? null : value.Copy; _actions.DiagSave = value is null ? null : value.Save; _actions.DiagObserve = value is null ? null : value.Observe; _actions.DiagExperiment = value is null ? null : value.RunExperiment; }
+    }
+    private ConnectDiagnosticsService? _connectDiag;
+    public Action? RunDiagnostics { get => _actions.RunDiagnostics; set => _actions.RunDiagnostics = value; }
+    public Action? ClearClipboard { get => _actions.ClearClipboard; set => _actions.ClearClipboard = value; }
+    /// <summary>WM-034: estado real de la ocultación de la barra de tareas para la página Escritorio y Dock.</summary>
+    public Func<string>? TaskbarStatus { get; set; }
+    public Func<IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension Ext, string Status)>>? ExtensionList { get; set; }
+    /// <summary>Redraw with fresh data (safe from any thread).</summary>
+    public void Refresh() { if (_hwnd != IntPtr.Zero) Native.PostMessage(_hwnd, WM_REFRESH, IntPtr.Zero, IntPtr.Zero); }
+
     public void Show() => Show(null);
 
-    /// <param name="section">Sección pedida desde el panel de la Barra: «weather» abre Panel y Tiempo con el campo de ciudad listo; «sound», «system», «network», «disks» abren Panel y Tiempo.</param>
+    /// <param name="section">Sección pedida desde el panel de la Barra: «weather» abre Clima y ciudades con el campo de ciudad listo; «sound», «system», «network», «disks» abren Barra superior; también el id de cualquier sección.</param>
     public void Show(string? section)
     {
         try
@@ -59,7 +100,11 @@ internal sealed class SettingsWindow : IDisposable
 
     private void GoTo(string section)
     {
-        if (section is "weather" or "sound" or "system" or "network" or "disks") _ctl.SelectPage("hub");
+        if (section == "weather") _ctl.SelectPage("weather");
+        if (section is "sound" or "system" or "network" or "disks") _ctl.SelectPage("bar");   // «Panel de WinMac» está en Barra superior
+        if (section == "notifications") _ctl.SelectPage("nc");
+        if (section == "clip") _ctl.SelectPage("nc");   // el portapapeles ahora vive en «Notificaciones y portapapeles»
+        if (section is "dock" or "capture" or "spot" or "general" or "notch" or "ext" or "connect" or "gestures") _ctl.SelectPage(section);
         if (section == "weather" && _ctl.RowOf("hub.city") is { } city)
         {
             double y = city.Y; if (y < 0 || y > SettingsLayout.ViewportH - 120) _ctl.Scroll(y - 40);
@@ -80,9 +125,10 @@ internal sealed class SettingsWindow : IDisposable
         const uint style = 0x00CA0000;   // WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX: tamaño fijo
         var r = new Native.RECT { Right = S(SettingsLayout.WinW), Bottom = S(SettingsLayout.WinH) }; Native.AdjustWindowRectExForDpi(ref r, style, false, 0, dpi);
         int sw = Native.GetSystemMetrics(0), sh = Native.GetSystemMetrics(1), ww = r.Right - r.Left, wh = r.Bottom - r.Top;
-        _hwnd = Native.CreateWindowEx(0, ClassName, "Ajustes de WinMac", style, Math.Max(0, (sw - ww) / 2), Math.Max(0, (sh - wh) / 2), ww, wh, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
+        _hwnd = Native.CreateWindowEx(0, ClassName, "Ajustes de Hatsu Desktop", style, Math.Max(0, (sw - ww) / 2), Math.Max(0, (sh - wh) / 2), ww, wh, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
         int dark = _dark ? 1 : 0; Native.DwmSetWindowAttribute(_hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, ref dark, 4);
+        WindowChrome.Apply(_hwnd, _dark, _dark ? 0x161618 : 0xE8E8ED);   // icono de Hatsu y barra de título del color de la barra lateral
         _dev = new D2DDevice(); _dev.SetDpi(_scale); _painter = new SettingsPainter(_dev, _dark); CreateSurface();
         Native.ShowWindow(_hwnd, 5); _clickLogged = false;
     }
@@ -132,9 +178,28 @@ internal sealed class SettingsWindow : IDisposable
 
     private void Invalidate() { if (_hwnd != IntPtr.Zero) Native.InvalidateRect(_hwnd, IntPtr.Zero, false); }
 
+    /// <summary>
+    /// WM-015: permiso de ubicación tal como lo guarda Windows (Configuración › Privacidad › Ubicación), leído del registro del usuario SIN pedirlo ni cambiarlo.
+    /// Vacío si no se puede leer: la página no inventa el estado.
+    /// </summary>
+    private static string LocationConsent()
+    {
+        try
+        {
+            const string key = @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location";
+            string? v(Microsoft.Win32.RegistryKey root, string sub) { using var k = root.OpenSubKey(sub); return k?.GetValue("Value") as string; }
+            string? machine = v(Microsoft.Win32.Registry.LocalMachine, key), user = v(Microsoft.Win32.Registry.CurrentUser, key), desktop = v(Microsoft.Win32.Registry.CurrentUser, key + @"\NonPackaged");
+            if (machine == "Deny" || user == "Deny" || desktop == "Deny") return "Denegado (Configuración › Privacidad › Ubicación)";
+            return user == "Allow" || desktop == "Allow" ? "Permitido" : "";
+        }
+        catch (Exception) { return ""; }
+    }
+
     private void RebuildPages()
     {
-        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus)));
+        IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension, string)>? exts = null;
+        try { exts = ExtensionList?.Invoke(); } catch (Exception e) { _log("[extensiones] lista no disponible: " + e.Message); }
+        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { ModuleFailures = ModuleFailures?.Invoke() ?? new Dictionary<string, ModuleFailure>(), AutostartForeignPath = Autostart.ForeignPath(_exe), Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "", ConnectDiag = _connectDiag?.View() ?? new() }));
         PositionEdit();
     }
 
@@ -188,7 +253,7 @@ internal sealed class SettingsWindow : IDisposable
                 case WM_COMMAND when (int)((long)w & 0xFFFF) == ID_EDIT:
                 {
                     int code = (int)(((long)w >> 16) & 0xFFFF);
-                    if (code == EN_CHANGE && _edit != IntPtr.Zero && Native.GetFocus() == _edit) { _editDirty = true; _caretOn = true; Invalidate(); if (_editId == "hub.city") Native.SetTimer(_hwnd, TimerSuggest, 320, IntPtr.Zero); }
+                    if (code == EN_CHANGE && _edit != IntPtr.Zero && Native.GetFocus() == _edit) { _editDirty = true; _caretOn = true; Invalidate(); if (_editId == "hub.city") Native.SetTimer(_hwnd, TimerSuggest, 320, IntPtr.Zero); else if (_editId == "gest.find") ShowAppSuggestions(); else if (_editId == "search") { _ctl.SetSearch(EditText()); Invalidate(); } }
                     else if (code == EN_KILLFOCUS && _edit != IntPtr.Zero && _ctl.Suggestions.Count == 0) EndEdit(commit: true);
                     else if (code == EN_KILLFOCUS && _edit != IntPtr.Zero) { /* sigue la lista de sugerencias: el clic en una sugerencia se atiende antes (PointerDown) */ _suggestBlur = true; Native.SetTimer(_hwnd, (UIntPtr)8, 180, IntPtr.Zero); }
                     return IntPtr.Zero;
@@ -209,10 +274,59 @@ internal sealed class SettingsWindow : IDisposable
         switch (e.Kind)
         {
             case "focus": if (_edit != IntPtr.Zero && _editId == e.Id) PlaceCaretFromClick(); else ShowEdit(e.Id); return;
-            case "suggest": ChooseSuggestion(e.Index); return;
+            case "suggest": if (e.Id.StartsWith("gest.pick:", StringComparison.Ordinal)) ChoosePick(e.Id, e.Index); else if (e.Id == "gest.find") ChooseApp(e.Index); else ChooseSuggestion(e.Index); return;
         }
 
+        if (e.Kind == "button" && e.Id == "bar.preview") { _ctl.ScrollToGroup("Disponibles para agregar"); return; }   // «Personalizar iconos…»
+        if (e.Kind == "button" && e.Id == "gest.pick.actions")
+        {   // Cancelar (0) descarta; Guardar (1) confirma lo escrito en el campo de la página web
+            if (e.Index == 0) { EndEdit(commit: false); _actions.Apply(e); } else EndEdit(commit: true);
+            RebuildPages(); return;
+        }
+
+        if (e.Kind == "button" && e.Id.StartsWith("gest.pick:", StringComparison.Ordinal)) { EndEdit(commit: true); ShowGestureMenu(e.Id[10..]); return; }
         EndEdit(commit: true); _actions.Apply(e); RebuildPages();
+    }
+
+    private List<string> _pickIds = [];
+    private IReadOnlyList<(string Id, string Name)> _appResults = [];
+
+    /// <summary>Mientras se escribe en «Buscar aplicación…»: las apps instaladas que coinciden (la misma búsqueda de Launchpad y Spotlight), como lista bajo el campo.</summary>
+    private void ShowAppSuggestions()
+    {
+        string q = EditText().Trim();
+        _appResults = q.Length == 0 ? [] : _actions.FindApps?.Invoke(q) ?? [];
+        _ctl.SetSuggestions("gest.find", _appResults.Select(a => a.Name).ToList()); Invalidate();
+    }
+
+    private void ChooseApp(int index)
+    {
+        if (_ctl.SuggestFor != "gest.find" || SettingsBuilder.GestPick is not { } pick || index < 0 || index >= _appResults.Count) return;
+        var app = _appResults[index]; _editDirty = false; _ctl.ClearSuggestions();
+        _actions.AssignApp(pick.Field, app.Id, app.Name); EndEdit(commit: false); RebuildPages(); Invalidate();
+    }
+
+    /// <summary>Desplegable de acciones de Gestures: la misma lista de la ventana que usan las sugerencias de ciudad (mismo estilo), con la acción actual marcada.</summary>
+    private void ShowGestureMenu(string field)
+    {
+        if (_actions.GestureChoices(field) is not { Count: > 0 } choices) return;
+        _pickIds = choices.Select(c => c.Id).ToList();
+        _ctl.OpenDropdown("gest.pick:" + field, choices.Select(c => c.Name).ToList(), choices.ToList().FindIndex(c => c.Current));
+        Invalidate();
+    }
+
+    private void ChoosePick(string rowId, int index)
+    {
+        string field = rowId["gest.pick:".Length..]; _ctl.ClearSuggestions();
+        if (index >= 0 && index < _pickIds.Count && _pickIds[index] is SettingsBuilder.PickApp or SettingsBuilder.PickUrl)
+        {   // «Aplicación…» abre el buscador de apps instaladas; «Página web…», el cuadro para pegar el enlace
+            bool app = _pickIds[index] == SettingsBuilder.PickApp; SettingsBuilder.GestPick = (field, app ? "app" : "url"); SettingsBuilder.GestNote = null;
+            if (app) _ = Task.Run(() => _actions.FindApps?.Invoke("a"));   // se lee la lista de apps mientras se abre el campo, para que escribir sea instantáneo
+            RebuildPages(); Invalidate(); ShowEdit(app ? "gest.find" : "gest.url"); return;
+        }
+
+        if (index >= 0 && index < _pickIds.Count) _actions.Apply(new SettingsEdit("gest.set:" + field, "text", Text: _pickIds[index]));
+        RebuildPages(); Invalidate();
     }
 
     // ───────────────────────────── campo de texto nativo (solo mientras se edita)
@@ -262,14 +376,39 @@ internal sealed class SettingsWindow : IDisposable
         {
             case "hub.city": _ = ResolveCityAsync(text); break;
             case "hub.favs": _ = ResolveFavoritesAsync(text); break;
+            case "hub.favadd": _ = AddFavoriteAsync(text); break;
+            case "search": break;   // el buscador filtra mientras se escribe: no hay nada que confirmar
+            case "gest.find": break;   // el texto suelto no asigna nada: hay que elegir una app de la lista
+            case "gest.url": if (SettingsBuilder.GestPick is { } up) _actions.AssignUrl(up.Field, text); break;
             default: _actions.Apply(new SettingsEdit(id, "text", Text: text)); break;
         }
+    }
+
+    /// <summary>
+    /// Campo de atajo: en vez de escribir, se pulsa la combinación. Solo modificadores = se espera; Esc cancela; Retroceso o Supr quitan el atajo; una combinación válida (Ctrl o Alt + tecla) se guarda al instante.
+    /// Si la combinación ya la tiene un atajo global de Hatsu, Windows se la entrega a ese atajo y no llega aquí (se dice en el estado del módulo).
+    /// </summary>
+    private void CaptureHotkey(int vk)
+    {
+        if (vk is 0x10 or 0x11 or 0x12 or 0x5B or 0x5C or 0xA0 or 0xA1 or 0xA2 or 0xA3 or 0xA4 or 0xA5) return;   // solo un modificador: se sigue esperando
+        string id = _editId!;
+        bool ctrl = (Native.GetKeyState(0x11) & 0x8000) != 0, alt = (Native.GetKeyState(0x12) & 0x8000) != 0, shift = (Native.GetKeyState(0x10) & 0x8000) != 0;
+        if (vk == VK_ESCAPE && !ctrl && !alt) { EndEdit(commit: false); Native.SetFocus(_hwnd); return; }
+        if ((vk == 0x08 || vk == 0x2E) && !ctrl && !alt) { Native.SetWindowText(_edit, ""); _editDirty = true; EndEdit(commit: true); Native.SetFocus(_hwnd); return; }   // quitar el atajo
+        if (WinMac.Bar.Features.HotkeySpec.FromKey((uint)vk, ctrl, alt, shift) is not { } spec) { _log("[host] ajustes: combinación no válida (necesita Ctrl o Alt y una tecla compatible)"); return; }
+        Native.SetWindowText(_edit, spec.Format()); _editDirty = true; EndEdit(commit: true); Native.SetFocus(_hwnd);
     }
 
     private IntPtr EditProc(IntPtr h, uint msg, IntPtr w, IntPtr l)
     {
         try
         {
+            if (_editId is { } hid && hid.StartsWith("mod.key:", StringComparison.Ordinal) && msg is WM_KEYDOWN or 0x104 /* WM_SYSKEYDOWN */ or WM_CHAR or 0x106 /* WM_SYSCHAR */)
+            {
+                if (msg is WM_CHAR or 0x106) return IntPtr.Zero;                         // captura de teclado: nunca se escribe texto, solo se lee la combinación
+                CaptureHotkey((int)w); return IntPtr.Zero;
+            }
+
             if (msg == WM_KEYDOWN)
             {
                 int vk = (int)w;
@@ -323,6 +462,7 @@ internal sealed class SettingsWindow : IDisposable
 
     private void ChooseSuggestion(int index)
     {
+        if (_ctl.SuggestFor == "gest.find") { ChooseApp(index); return; }   // Intro sobre una app de la lista
         if (index < 0 || index >= _suggestPlaces.Count) return; var p = _suggestPlaces[index];
         _editDirty = false; _ctl.ClearSuggestions(); _suggestCts?.Cancel();
         _cfg.ApplyBarPatch(Patch("weatherCity", p.Serialize())); _weatherStatus = "Ciudad: " + CityResolver.DisplayLabel(p);
@@ -355,6 +495,26 @@ internal sealed class SettingsWindow : IDisposable
             _weatherStatus = problems.Count == 0 ? _weatherStatus : string.Join(" · ", problems);
         }
         catch (Exception e) { _weatherStatus = "No se pudieron buscar las ciudades"; _log("[host] ciudades: " + e.GetType().Name + ": " + e.Message); }
+        PostRefresh();
+    }
+
+    /// <summary>WM-015: añade UNA ciudad a la lista de ciudades adicionales (sin duplicados), resuelta con el mismo buscador que la principal.</summary>
+    private async Task AddFavoriteAsync(string text)
+    {
+        text = text.Trim(); if (text.Length == 0) return;
+        try
+        {
+            _weatherStatus = "Buscando…"; PostRefresh();
+            var r = await CityResolver.ResolveOneAsync(text, WeatherSource, CancellationToken.None, HomeCountry()).ConfigureAwait(false);
+            if (r.Place is { } p)
+            {
+                var favs = WinMac.Bar.Hub.GeoPoint.ParseList((_cfg.Current.Bar ?? new WinMac.Bar.BarConfig()).WeatherFavorites).ToList();
+                if (favs.Any(f => Math.Abs(f.Lat - p.Lat) < 0.01 && Math.Abs(f.Lon - p.Lon) < 0.01)) _weatherStatus = CityResolver.DisplayLabel(p) + " ya está en la lista";
+                else { favs.Add(p); _cfg.ApplyBarPatch(Patch("weatherFavorites", WinMac.Bar.Hub.GeoPoint.SerializeList(favs))); _weatherStatus = "Añadida: " + CityResolver.DisplayLabel(p); }
+            }
+            else _weatherStatus = r.Message;
+        }
+        catch (Exception e) { _weatherStatus = "No se pudo buscar la ciudad"; _log("[host] ciudad adicional: " + e.GetType().Name + ": " + e.Message); }
         PostRefresh();
     }
 

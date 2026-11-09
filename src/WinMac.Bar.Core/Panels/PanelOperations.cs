@@ -28,15 +28,22 @@ public interface IPanelUi
     void ShowChoices(string title, IReadOnlyList<Choice> choices, Action<string> onPick);
     /// <summary>Cambia un ajuste central (parche JSON camelCase), que el host guarda y reparte.</summary>
     void PatchConfig(object patch);
-    bool Confirm(string title, string text);
+    /// <param name="action">Label of the confirming button (WM-024); <paramref name="danger"/> paints it red. «Cancelar» is always the default.</param>
+    bool Confirm(string title, string text, string action = "Continuar", bool danger = false, ConfirmIcon icon = ConfirmIcon.Warning);
 }
 
 /// <summary>
 /// Traduce lo que el usuario toca en un panel (<see cref="PanelEvent"/>) en operaciones REALES sobre los servicios del sistema, siempre fuera del hilo de interfaz y con «ocupado» visible,
 /// el valor mostrado al instante cuando es seguro, y el error con su motivo si algo falla. Es lógica pura: se prueba con servicios simulados, sin Windows.
 /// </summary>
-public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> log, TimeSpan? notificationDelay = null, HubRuntime? rt = null)
+public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> log, TimeSpan? notificationDelay = null, HubRuntime? rt = null, Notifications.NotificationStore? nc = null)
 {
+    /// <summary>El brillo que pidió el usuario desde la barra se aplicó de verdad (porcentaje, pantalla): la Isla lo muestra. Los monitores DDC/CI no avisan de cambios por sí solos.</summary>
+    public event Action<int, string>? BrightnessApplied;
+
+    /// <summary>WinMac Connect: las notificaciones del iPhone que muestra el panel (null = módulo apagado).</summary>
+    public Notifications.PhoneInbox? Phone { get; set; }
+
     private readonly TimeSpan _notifyDelay = notificationDelay ?? TimeSpan.FromMilliseconds(250);
 
     private void SetMessage(string? m) => ui.Ctx = ui.Ctx with { Message = m };
@@ -66,6 +73,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
             if (id.StartsWith("open:ms-settings:") || id.StartsWith("open:ms-windows-store:")) { ui.HidePanel(); ui.OpenUri(id[5..]); return; }
             if (id.StartsWith("open:")) { var k = id[5..] switch { "wifi" => PanelKind.Wifi, "bluetooth" => PanelKind.Bluetooth, "sound" => PanelKind.Sound, "battery" => PanelKind.Battery, "display" => PanelKind.Display, _ => PanelKind.ControlCenter }; ui.Navigate(k); return; }
             if (HubAction(id)) return;
+            if (NcAction(id)) return;
             var s = hub.Snapshot; var svc = hub.Services;
             switch (id)
             {
@@ -96,6 +104,48 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
             if (id.StartsWith("topology:") && Enum.TryParse<DisplayTopology>(id[9..], out var topo)) { ui.HidePanel(); hub.Run(() => svc.Display.SetTopology(topo), r => { if (!r.IsOk) ui.ShowInfo("Pantallas", r.Message); }); return; }
         }
         catch (Exception ex) { log("[bar] evento de panel falló: " + ex.GetType().Name + ": " + ex.Message); }
+    }
+
+    /// <summary>Acciones del Centro de Notificaciones. Devuelve true si el Id era de ellas.</summary>
+    private bool NcAction(string id)
+    {
+        bool win = ui.Ctx.Cfg.NotifRemoveFromWindows;
+        switch (id)
+        {
+            case "nc:open": ui.Navigate(PanelKind.Notifications); return true;   // mosaico del Control Center: el anfitrión lo reabre como panel lateral
+            case "nc:close": ui.HidePanel(); return true;
+            case "nc:settings": ui.HidePanel(); ui.OpenSettings("notifications"); return true;
+            case "nc:enable":   // consentimiento explícito en WinMac; después, el de Windows
+                ui.Ctx = ui.Ctx with { Cfg = ui.Ctx.Cfg with { NotificationsFromWindows = true } }; ui.PatchConfig(new { notificationsFromWindows = true });
+                nc?.SetEnabled(true); if (nc is { Active: false }) nc.Activate(); ui.Rebuild(); return true;
+            case "nc:request": nc?.RequestAccess(); ui.Rebuild(); return true;
+            case "nc:retry": nc?.Refresh(); return true;
+            case "nc:clearall":
+                if (nc is null) return true;
+                if (win && !ui.Confirm("¿Eliminar todas las notificaciones?", "Cuando Windows lo permita, también se eliminarán de su centro de notificaciones. No se puede deshacer.", "Eliminar notificaciones", danger: true, icon: ConfirmIcon.Trash)) return true;
+                nc.ClearAll(win); return true;
+        }
+
+        if (id.StartsWith("ngtoggle:"))
+        {
+            var key = id[9..]; var view = ui.Ctx.Nc; if (view is null) return true;
+            var set = new HashSet<string>(view.Expanded, StringComparer.OrdinalIgnoreCase); if (!set.Remove(key)) set.Add(key);
+            ui.Ctx = ui.Ctx with { Nc = view with { Expanded = set } }; ui.Rebuild(); return true;
+        }
+
+        if (id.StartsWith("ngclear:")) { nc?.ClearGroup(id[8..], win); return true; }
+        // WinMac Connect: ocultar en WinMac (nunca se borra del iPhone)
+        if (id == "pclearall") { Phone?.HideAll(); ui.Rebuild(); return true; }
+        if (id.StartsWith("pgclear:")) { Phone?.HideGroup(id[8..]); ui.Rebuild(); return true; }
+        if (id.StartsWith("pdismiss:") && uint.TryParse(id[9..], out var pid)) { Phone?.Hide(pid); ui.Rebuild(); return true; }
+        if (id is "phone:settings" or "phone:settings-btn") { ui.HidePanel(); ui.OpenSettings("connect"); return true; }
+        if (id.StartsWith("ndismiss:") && uint.TryParse(id[9..], out var did)) { nc?.Dismiss(did, win); return true; }
+        if (id.StartsWith("nopen:") && uint.TryParse(id[6..], out var oid))
+        {
+            nc?.OpenApp(oid, r => { if (r.IsOk) ui.HidePanel(); else { SetMessage(r.Message ?? "No se pudo abrir la app"); ui.Rebuild(); } }); return true;
+        }
+
+        return false;
     }
 
     private void ToggleSelectedVolume(string letter) => ui.Ctx = ui.Ctx with { Hub = ui.Ctx.Hub is { } h ? h with { SelectedVolume = letter } : null };
@@ -129,7 +179,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
 
             case "speedtest":
                 if (rt is null || !rt.Speed.Available) { SetMessage("La prueba de velocidad no está disponible en este equipo"); ui.Rebuild(); return true; }
-                if (!ui.Confirm("Prueba de velocidad", "La prueba consume datos: descarga hasta 25 MB y sube hasta 8 MB con tu conexión. ¿Ejecutarla ahora?")) return true;   // nunca arranca sola ni sin confirmar
+                if (!ui.Confirm("Prueba de velocidad", "La prueba consume datos: descarga hasta 25 MB y sube hasta 8 MB con tu conexión.", "Ejecutar la prueba", icon: ConfirmIcon.Info)) return true;   // nunca arranca sola ni sin confirmar
                 rt.Speed.Start(); ui.Rebuild(); return true;
             case "speedtest-cancel": rt?.Speed.Cancel(); return true;
             case "weather:refresh": rt?.Weather.Refresh(force: true); ui.Rebuild(); return true;
@@ -145,6 +195,24 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
         if (id.StartsWith("disk:")) { ToggleSelectedVolume(id[5..]); ui.Rebuild(); return true; }
         if (id.StartsWith("explorer:")) { ui.OpenUri(id[9..] + "\\"); return true; }
         if (id.StartsWith("eject:")) { var letter = id[6..]; rt?.Monitor.Eject(letter, r => { SetMessage(r.IsOk ? null : r.Message ?? "No se pudo expulsar"); ui.Rebuild(); }); return true; }
+        // WM-035 (experimental): salida de audio de una app. Se elige en un menú; el cambio lo comprueba Windows antes de darlo por hecho.
+        if (id.StartsWith("appout:"))
+        {
+            var sid = id[7..]; var app = s.AppSessions.Sessions.FirstOrDefault(a => a.Id == sid);
+            if (app is null || app.Pid <= 0 || s.Routing is not { Available: true } rt) return true;
+            string? cur = rt.Outputs.TryGetValue(app.Pid, out var d) ? d : null;
+            var choices = new List<Choice> { new($"approute:{app.Pid}:default", "Predeterminada del sistema", cur is null) };
+            choices.AddRange(s.Audio.Outputs.Select(o => new Choice($"approute:{app.Pid}:{o.Id}", o.Name, string.Equals(o.Id, cur, StringComparison.OrdinalIgnoreCase))));
+            ui.ShowChoices("Salida de " + app.Name, choices, pick => Handle(new PanelEvent(PanelEventKind.Click, pick))); return true;
+        }
+
+        if (id.StartsWith("approute:"))
+        {
+            var parts = id.Split(':', 3); if (parts.Length < 3 || !int.TryParse(parts[1], out int pid) || svc.Routing is not { } routing) return true;
+            string? dev = parts[2] == "default" ? null : parts[2];
+            Op(id, "Cambiando…", () => routing.Set(pid, dev), hub.RefreshRouting); return true;
+        }
+
         if (id.StartsWith("appmute:"))
         {
             var sid = id[8..]; var app = s.AppSessions.Sessions.FirstOrDefault(a => a.Id == sid); if (app is null) return true; bool m = !app.Muted;
@@ -183,7 +251,7 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
             var mon = hub.Snapshot.Brightness.Monitors.ToList(); if (mon.Count == 0) return;
             hub.Patch(s => s with { Brightness = s.Brightness with { Monitors = s.Brightness.Monitors.Select(m => m with { Percent = v }).ToList() } });
             hub.SetLatest("brightness", v, p => { ServiceResult last = ServiceResult.Ok; foreach (var m in mon) { last = svc.Brightness.Set(m.Id, p); if (!last.IsOk) break; } return last; },
-                r => { if (!r.IsOk) SetMessage(r.Message); if (commit || !r.IsOk) hub.RefreshBrightness(true); ui.Rebuild(); });
+                r => { if (!r.IsOk) SetMessage(r.Message); else BrightnessApplied?.Invoke(v, mon.Count == 1 ? mon[0].Name : "Pantallas"); if (commit || !r.IsOk) hub.RefreshBrightness(true); ui.Rebuild(); });
         }
 
         ui.Rebuild();

@@ -10,7 +10,7 @@ public sealed class Supervisor
     private sealed class Runner(Supervisor owner, ModuleSpec spec)
     {
         public readonly ModuleSpec Spec = spec; public ModuleState State = ModuleState.Stopped;
-        public IModuleProcess? Proc; public volatile bool ReadySeen, ByeSeen; public DateTime LastPong;
+        public IModuleProcess? Proc; public ModuleFailure? Failure; public volatile bool ReadySeen, ByeSeen; public DateTime LastPong;
         public CancellationTokenSource Stop = new(); public Task? Loop; public readonly List<DateTime> Crashes = [];
         public readonly TaskCompletionSource FirstLaunch = new(TaskCreationOptions.RunContinuationsAsynchronously);   // el primer intento de lanzamiento ya ocurrió (con éxito o no)
 
@@ -23,7 +23,7 @@ public sealed class Supervisor
     public Supervisor(IProcessLauncher launcher, IHostBus bus, IClock clock, SupervisorPolicy policy, string pipeName, string token, Action<string>? log = null)
     {
         _launcher = launcher; _clock = clock; _p = policy; _pipe = pipeName; _token = token; _log = log ?? (_ => { });
-        bus.Ready += id => With(id, r => { r.ReadySeen = true; r.LastPong = _clock.UtcNow; r.Set(ModuleState.Running); });
+        bus.Ready += id => With(id, r => { r.ReadySeen = true; r.LastPong = _clock.UtcNow; r.Failure = null; r.Set(ModuleState.Running); });
         bus.Pong += id => With(id, r => r.LastPong = _clock.UtcNow);
         bus.Bye += id => With(id, r => r.ByeSeen = true);
         _bus = bus;
@@ -41,6 +41,9 @@ public sealed class Supervisor
         lock (_runners) _runners.Add(r);
     }
 
+    /// <summary>Última causa conocida de que un módulo no esté en marcha (solo los que fallaron; un módulo desactivado NO aparece aquí).</summary>
+    public IReadOnlyDictionary<string, ModuleFailure> Failures { get { lock (_runners) return _runners.Where(r => r.Failure is not null && r.State is not (ModuleState.Disabled or ModuleState.Running)).ToDictionary(r => r.Spec.Id, r => r.Failure!); } }
+
     public IReadOnlyDictionary<string, ModuleState> States { get { lock (_runners) return _runners.ToDictionary(r => r.Spec.Id, r => r.State); } }
     /// <summary>¿Es este PID el de un módulo lanzado por nosotros? (validación del cliente del canal en Windows)</summary>
     public bool IsKnownPid(uint pid) { lock (_pids) return _pids.Contains((int)pid); }
@@ -50,6 +53,7 @@ public sealed class Supervisor
         List<Runner> list; lock (_runners) list = [.. _runners];
         foreach (var r in list.Where(r => r.State is not (ModuleState.Disabled or ModuleState.NotInstalled)))
         {
+            if (_shuttingDown) break;   // si el host se cierra durante el arranque escalonado, no se lanza lo que falta
             r.Loop = Task.Run(() => RunAsync(r));
             await r.FirstLaunch.Task.ConfigureAwait(false);                                   // el orden de arranque es real: el siguiente no se lanza hasta que este ya existe
             await _clock.Delay(_p.StartStagger, CancellationToken.None).ConfigureAwait(false);   // el orden de aparición importa (la isla debe quedar encima)
@@ -148,20 +152,35 @@ public sealed class Supervisor
         while (!stop.IsCancellationRequested)
         {
             r.ReadySeen = false; r.ByeSeen = false;
-            IModuleProcess proc;
+            IModuleProcess? proc = null; Exception? launchError = null;
             try { proc = _launcher.Start(r.Spec, _pipe, _token); r.Proc = proc; lock (_pids) _pids.Add(proc.Id); }
-            catch (Exception ex) { Log($"[{r.Spec.Id}] no se pudo lanzar: {ex.Message}"); r.Set(ModuleState.Failed); r.FirstLaunch.TrySetResult(); return; }   // sin ejecutable: no se reintenta; los demás siguen
+            catch (Exception ex) { launchError = ex; }
+            if (launchError is not null)
+            {   // WM-036: el motivo real (código de Windows); un bloqueo de seguridad o un fallo pasajero se reintenta como una caída, un ejecutable inexistente no
+                Log($"[{r.Spec.Id}] no se pudo lanzar: {LaunchDiagnostics.Explain(launchError)}");
+                r.Failure = LaunchDiagnostics.Classify(launchError, r.Crashes.Count + 1);
+                r.FirstLaunch.TrySetResult();
+                if (!LaunchDiagnostics.Retryable(launchError)) { r.Set(ModuleState.Failed); return; }   // sin ejecutable: no se reintenta; los demás siguen
+                var t0 = _clock.UtcNow; r.Crashes.Add(t0); r.Crashes.RemoveAll(t => t0 - t > _p.CrashWindow);
+                if (r.Crashes.Count >= _p.MaxCrashes) { Log($"[{r.Spec.Id}] {r.Crashes.Count} intentos fallidos en {_p.CrashWindow.TotalSeconds:0}s: no se reintenta (ábrelo desde la bandeja de Hatsu Desktop)"); r.Set(ModuleState.Failed); return; }
+                var w0 = TimeSpan.FromMilliseconds(Math.Min(_p.BackoffMax.TotalMilliseconds, _p.BackoffStart.TotalMilliseconds * Math.Pow(2, step++)));
+                r.Set(ModuleState.Crashed); Log($"[{r.Spec.Id}] nuevo intento en {w0.TotalSeconds:0.##}s");
+                try { await _clock.Delay(w0, stop.Token).ConfigureAwait(false); } catch (OperationCanceledException) { return; }
+                continue;
+            }
             r.FirstLaunch.TrySetResult();
+            var started = proc!;
             r.Set(ModuleState.Starting); var startedAt = _clock.UtcNow; r.LastPong = startedAt;
 
-            var outcome = await WatchAsync(r, proc, startedAt, stop).ConfigureAwait(false);
+            var outcome = await WatchAsync(r, started, startedAt, stop).ConfigureAwait(false);
             if (outcome == Outcome.Stop) return;
             int code = 0;
-            if (outcome == Outcome.Exit) { code = await proc.Exited.ConfigureAwait(false); lock (_pids) _pids.Remove(proc.Id); }
+            if (outcome == Outcome.Exit) { code = await started.Exited.ConfigureAwait(false); lock (_pids) _pids.Remove(started.Id); }
             if (outcome == Outcome.Exit && r.ByeSeen && code == 0) { Log($"[{r.Spec.Id}] cierre voluntario: no se reinicia"); r.Set(ModuleState.Stopped); return; }
 
-            if (outcome is Outcome.Hung or Outcome.NeverReady) { Log($"[{r.Spec.Id}] {(outcome == Outcome.Hung ? "sin latido" : "no llegó a estar listo")}: se reinicia"); proc.Kill(); await ExitsWithinAsync(proc, TimeSpan.FromSeconds(2)).ConfigureAwait(false); lock (_pids) _pids.Remove(proc.Id); }
-            else Log($"[{r.Spec.Id}] terminó de forma inesperada (código {code})");
+            r.Failure = outcome == Outcome.Exit ? LaunchDiagnostics.ClassifyExit(code, r.Crashes.Count + 1) : new ModuleFailure(FailureKind.NotResponding, outcome == Outcome.Hung ? "sin latido" : "no llegó a estar listo", null, null, r.Crashes.Count + 1);
+            if (outcome is Outcome.Hung or Outcome.NeverReady) { Log($"[{r.Spec.Id}] {(outcome == Outcome.Hung ? "sin latido" : "no llegó a estar listo")}: se reinicia"); started.Kill(); await ExitsWithinAsync(started, TimeSpan.FromSeconds(2)).ConfigureAwait(false); lock (_pids) _pids.Remove(started.Id); }
+            else Log($"[{r.Spec.Id}] terminó de forma inesperada ({LaunchDiagnostics.ExitText(code)})");
 
             var now = _clock.UtcNow; r.Crashes.Add(now); r.Crashes.RemoveAll(t => now - t > _p.CrashWindow);
             if (r.Crashes.Count >= _p.MaxCrashes) { Log($"[{r.Spec.Id}] {r.Crashes.Count} caídas en {_p.CrashWindow.TotalSeconds:0}s: cortacircuito abierto, no se reintenta"); r.Set(ModuleState.Failed); return; }

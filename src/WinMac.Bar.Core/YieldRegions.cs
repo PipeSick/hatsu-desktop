@@ -18,7 +18,7 @@ public readonly record struct PxRect(int X, int Y, int W, int H)
 public static class YieldRegions
 {
     public const string Topic = "notch.rects";
-    public const int MaxRects = 16;
+    public const int MaxRects = 64;   // cada Isla publica su silueta en varias franjas (hombros, cuerpo y esquinas): ~6 por monitor
 
     /// <summary>Lee <c>{"rects":[{"x":..,"y":..,"w":..,"h":..}]}</c>. Tolerante: lo mal formado o de tamaño nulo se ignora; ante un mensaje ilegible, ningún hueco.</summary>
     public static IReadOnlyList<PxRect> Parse(JsonElement? data)

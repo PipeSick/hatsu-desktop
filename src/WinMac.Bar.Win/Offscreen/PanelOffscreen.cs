@@ -1,4 +1,5 @@
 using WinMac.Bar.Hub;
+using WinMac.Bar.Notifications;
 using WinMac.Bar.Win.Rendering;
 using WinMac.Dock;
 using WinMac.Dock.Imaging;
@@ -45,6 +46,26 @@ public static class PanelOffscreen
 
     private sealed class NoIcons : IAppIcons { public byte[]? GetBgra(string exePath, int size) => null; }
 
+    /// <summary>Notificaciones de MUESTRA para la captura del Centro de Notificaciones (no se lee nada de Windows).</summary>
+    private sealed class SampleNotifications(DateTimeOffset now) : INotificationSource
+    {
+        public (NotificationAccess Access, string? Reason) GetAccess() => (NotificationAccess.Allowed, null);
+        public Task<NotificationAccess> RequestAccessAsync() => Task.FromResult(NotificationAccess.Allowed);
+        public IReadOnlyList<AppNotification> Read() =>
+        [
+            new(1, "Microsoft.OutlookForWindows", "Outlook", "Ana Pérez", "Te envié el informe del trimestre. ¿Lo revisamos mañana a primera hora antes de la reunión?", now.AddMinutes(-3)),
+            new(2, "Microsoft.OutlookForWindows", "Outlook", "Equipo de soporte", "Tu solicitud #4821 se ha resuelto.", now.AddMinutes(-41)),
+            new(3, "Microsoft.OutlookForWindows", "Outlook", "Boletín", "Novedades de noviembre", now.AddHours(-3)),
+            new(4, "Spotify", "Spotify", "Ahora suena", "Canción de muestra — Artista", now.AddMinutes(-12)),
+            new(5, "Windows.SystemToast.SecurityAndMaintenance", "Seguridad de Windows", "Examen completado", null, now.AddHours(-26)),
+        ];
+        public ServiceResult Remove(uint id) => ServiceResult.Ok;
+        public ServiceResult ClearAll() => ServiceResult.Ok;
+        public ServiceResult OpenApp(string appId) => ServiceResult.Ok;
+        public bool StartWatching(Action changed, out string? why) { why = null; return true; }
+        public void StopWatching() { }
+    }
+
     /// <param name="kind">«hub» o «weather».</param>
     /// <param name="maxHeight">Altura máxima en DIP (como la de una pantalla de 1080p): si el contenido no cabe, se desplaza el centro. Infinito = sin límite.</param>
     /// <param name="scroll">Desplazamiento del contenido en DIP (solo con maxHeight).</param>
@@ -61,7 +82,68 @@ public static class PanelOffscreen
             new AudioSessionsState(true, [new("pid:1", 1, "Spotify", null, 100, false, false, true), new("pid:2", 2, "Discord", null, 100, false, false, true), new("pid:3", 3, "Google Chrome", null, 100, false, false, true), new("pid:4", 4, "Sonidos del sistema", null, 100, false, true, false)]));
         var cfg = new BarConfig { Use24Hour = false };
         var ctx = PanelContext.Initial(cfg, now) with { Sys = snapshot, Tab = tab, Hub = new HubData(mon, new SpeedTestState(SpeedTestStatus.Idle, null, null), weather.Current(), null, false) };
-        var model = kind == "weather" ? PanelBuilder.WeatherPanel(ctx) : PanelBuilder.HubPanel(ctx); var frame = PanelLayout.Compute(model, maxHeight, scroll);
+        PanelModel model;
+        if (kind.StartsWith("notifications", StringComparison.Ordinal))   // «notifications» (con muestra, un grupo desplegado) o «notifications-off» (antes de activarlo)
+        {
+            bool on = kind != "notifications-off"; var local = new DateTimeOffset(new DateTime(2026, 11, 2, 10, 30, 0, DateTimeKind.Local));
+            var store = new NotificationStore(new SampleNotifications(local), a => a(), a => a(), _ => { }, () => now); store.SetEnabled(on); store.Activate();
+            ctx = ctx with { Now = local.LocalDateTime, ViewYear = 2026, ViewMonth = 11, Cfg = cfg with { NotificationsFromWindows = on, Use24Hour = true },
+                Nc = new NcView(store.State, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Microsoft.OutlookForWindows" }, 356) };
+            model = PanelBuilder.NotificationCenter(ctx); if (double.IsInfinity(maxHeight)) maxHeight = 1040;
+        }
+        else if (kind is "mixer" or "mixer-routing")
+        {   // WM-035 (corrección de la iteración 6): DATOS DE MUESTRA del menú Sonido con nombres largos, dos sesiones de la misma app y, en «mixer-routing», el selector de salida por aplicación
+            var outs = new List<AudioDevice> { new("a", "Altavoces (Realtek(R) Audio)", false), new("b", "Altavoces (PRO X Wireless Gaming Headset)", true) };
+            var sessions = new List<AudioSession> { new("pid:1", 1, "Discord", null, 100, false, false, true), new("pid:1b", 11, "Discord", null, 98, false, false, true), new("pid:2", 2, "Microsoft Edge WebView2", null, 100, false, false, true), new("pid:3", 3, "Sonidos del sistema", null, 100, true, false, false) };
+            bool routing = kind == "mixer-routing"; var map = sessions.Where(x => x.Pid > 0).ToDictionary(x => x.Pid, x => x.Pid == 2 ? "b" : (string?)null);
+            var snap = snapshot with { Audio = new AudioState(true, 70, false, outs), OutputSwitchOk = true, CanRestoreOutput = true,
+                Input = new AudioInputState(true, 85, false, true, [new("m", "Micrófono (PRO X Wireless Gaming Headset)", true), new("m2", "Micrófono (Realtek(R) Audio)", false)]),
+                Sessions = new AudioSessionsState(true, sessions), Routing = routing ? new AppRoutingState(true, null, map) : null };
+            model = PanelBuilder.SoundPanel(ctx with { Sys = snap, Cfg = cfg with { SoundMixer = true, AppOutputRouting = routing } });
+        }
+        else if (kind.StartsWith("peripherals", StringComparison.Ordinal))
+        {   // It8: DATOS DE MUESTRA (no son dispositivos reales): un ratón con batería actual, un teclado sin lectura, unos auriculares desconectados y un mando sin batería
+            var st = new WinMac.Bar.Peripherals.PeripheralStore(); var t0 = now;
+            if (kind != "peripherals-empty")
+            {
+                WinMac.Bar.Peripherals.RawReading Rr(string id, string n, WinMac.Bar.Peripherals.DeviceKind k, WinMac.Bar.Peripherals.ConnectionKind c, bool on, int? p, WinMac.Bar.Peripherals.ChargeState ch = default, WinMac.Bar.Peripherals.BatteryCapability cap = default, string? note = null) => new(id, n, k, c, on, p, ch, cap, note);
+                var all = new[] { Rr("m", "Ratón de muestra", WinMac.Bar.Peripherals.DeviceKind.Mouse, WinMac.Bar.Peripherals.ConnectionKind.Bluetooth, true, 18, WinMac.Bar.Peripherals.ChargeState.NotCharging), Rr("k", "Teclado de muestra", WinMac.Bar.Peripherals.DeviceKind.Keyboard, WinMac.Bar.Peripherals.ConnectionKind.Bluetooth, true, null),
+                    Rr("h", "Auriculares de muestra", WinMac.Bar.Peripherals.DeviceKind.Headset, WinMac.Bar.Peripherals.ConnectionKind.Bluetooth, true, 64, WinMac.Bar.Peripherals.ChargeState.Charging), Rr("g", "Mando de muestra", WinMac.Bar.Peripherals.DeviceKind.Gamepad, WinMac.Bar.Peripherals.ConnectionKind.Usb, true, null, default, WinMac.Bar.Peripherals.BatteryCapability.Unsupported) };
+                st.Apply(new("bt", WinMac.Bar.Peripherals.ProviderStatus.Ok, all), t0);
+                st.Apply(new("bt", WinMac.Bar.Peripherals.ProviderStatus.Ok, all.Append(Rr("x", "Ratón antiguo de muestra", WinMac.Bar.Peripherals.DeviceKind.Mouse, WinMac.Bar.Peripherals.ConnectionKind.Dongle, true, 55)).ToArray()), t0.AddHours(-1));
+                st.Apply(new("bt", WinMac.Bar.Peripherals.ProviderStatus.Ok, all), t0);   // el «antiguo» ya no aparece: queda desconectado con su última lectura
+            }
+
+            model = PanelBuilder.PeripheralsPanel(ctx with { Cfg = cfg with { ShowPeripherals = true, PeripheralAlerts = true }, Periph = new PeripheralsView(st.View(t0.AddMinutes(1)), 0, false, true, 20) });
+        }
+        else if (kind.StartsWith("cleanup", StringComparison.Ordinal))
+        {   // It8: DATOS DE MUESTRA (tamaños inventados para ver el diseño; no se ha analizado ningún disco)
+            var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["LOCALAPPDATA"] = @"C:\Users\muestra\AppData\Local", ["TEMP"] = @"C:\Users\muestra\AppData\Local\Temp", ["USERPROFILE"] = @"C:\Users\muestra" };
+            var cats = WinMac.Bar.Cleanup.CleanupCatalog.Build(env); long[] sizes = [1_340_000_000, 214_000_000, 88_000_000, 0, 12_000_000, 3_000_000, 460_000_000, 0, 0];
+            var rows = cats.Select((cat, i) => new WinMac.Bar.Cleanup.CleanupRow(cat, sizes[i], sizes[i] > 0 ? 100 : 0, cat.Kind == WinMac.Bar.Cleanup.CleanupKind.Folder && sizes[i] > 0, cat.Kind != WinMac.Bar.Cleanup.CleanupKind.ReviewOnly && sizes[i] > 0, cat.Kind != WinMac.Bar.Cleanup.CleanupKind.ReviewOnly, cat.WhyNotCleanable)).ToList();
+            bool done = kind == "cleanup-done", scanning = kind == "cleanup-scanning", idle = kind == "cleanup-idle";
+            var phase = idle ? WinMac.Bar.Cleanup.CleanupPhase.Idle : scanning ? WinMac.Bar.Cleanup.CleanupPhase.Scanning : done ? WinMac.Bar.Cleanup.CleanupPhase.Done : WinMac.Bar.Cleanup.CleanupPhase.Ready;
+            long sel = rows.Where(r => r.Checked && r.Selectable).Sum(r => r.Bytes);
+            model = PanelBuilder.CleanupPanel(ctx with { Cfg = cfg with { ShowCleanup = true }, Clean = new CleanupView(phase, rows, sel, scanning ? "Analizando archivos temporales" : done ? "Limpieza parcial: se liberaron 1,6 GB" : $"Espacio recuperable encontrado: {WinMac.Bar.Cleanup.CleanupText.Size(sel)}", scanning ? 0.42 : 1, false,
+                done ? "Liberado: 1,6 GB (812 archivos). Omitidos: 6 en uso, 2 cambiaron tras el análisis." : null, false) });
+        }
+        else if (kind.StartsWith("phone", StringComparison.Ordinal))
+        {   // It7: DATOS DE MUESTRA del panel del iPhone: conectado con lectura reciente, desconectado (última lectura vieja) o sin lectura
+            var t = now;
+            var phs = kind switch
+            {
+                "phone-off" => new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Disconnected, DeviceName = "iPhone de Ana", Battery = 64, BatteryAtUtc = t.AddMinutes(-42), LastSeenUtc = t.AddMinutes(-40), BatteryStatus = WinMac.Connect.PhoneFeatureStatus.Active, NotificationsStatus = WinMac.Connect.PhoneFeatureStatus.Active },
+                "phone-unknown" => new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Connected, DeviceName = "iPhone de Ana", BatteryStatus = WinMac.Connect.PhoneFeatureStatus.Active, NotificationsStatus = WinMac.Connect.PhoneFeatureStatus.NotAuthorized },
+                _ => new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Connected, DeviceName = "iPhone de Ana", Battery = 82, BatteryAtUtc = t.AddMinutes(-1), BatteryStatus = WinMac.Connect.PhoneFeatureStatus.Active, NotificationsStatus = WinMac.Connect.PhoneFeatureStatus.Active },
+            };
+            model = PanelBuilder.PhonePanel(ctx with { Phone = phs, PhoneNotifCount = kind == "phone" ? 3 : 0 });
+        }
+        else if (kind == "apple") model = PanelBuilder.AppleMenu(ctx with { ForegroundApp = "Spotify", User = new SessionUser("Usuario de prueba", "EQUIPO-CI") });
+        else if (kind is "battery" or "battery-partial")   // WM-010: DATOS DE MUESTRA del panel de energía; «battery-partial» = un controlador que no informa de ciclos ni capacidad de diseño
+            model = PanelBuilder.BatteryPanel(ctx with { Battery = new BatteryInfo(true, 64, false, false, 3 * 3600 + 20 * 60),
+                BatteryDetail = kind == "battery" ? new BatteryDetails(57_000, 52_440, 33_560, -9_800, 212) : new BatteryDetails(null, 52_440, 33_560, null, null) });
+        else model = kind == "weather" ? PanelBuilder.WeatherPanel(ctx) : PanelBuilder.HubPanel(ctx);
+        var frame = PanelLayout.Compute(model, maxHeight, scroll);
         using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new PanelPainter(dev) { Theme = theme };
         int pw = (int)Math.Ceiling(frame.Width * scale), ph = (int)Math.Ceiling(frame.Height * scale); var dockTheme = theme == BarTheme.Dark ? DockTheme.Dark : DockTheme.Light;
         using var under = SyntheticBackdrop.Create(dev, frame.Width, frame.Height, scale, dockTheme, bands); using var target = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale); var c = dev.Context; c.Target = target;
@@ -69,6 +151,6 @@ public static class PanelOffscreen
         painter.Paint(frame, model, -1, clear: false);
         var rgba = BarOffscreen.Readback(dev, target, pw, ph, scale); Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(pngPath))!);
         File.WriteAllBytes(pngPath, PngWriter.EncodeRgba(rgba, pw, ph)); c.Target = null;
-        return $"{pw}x{ph}px, {dev.Description}, {kind} {(kind == "hub" ? tab.ToString() : "")}, tema {theme}, datos de muestra" + (frame.View is { } v ? $", desplazable (contenido {v.ContentHeight:0} DIP, visible {v.Bottom - v.Top:0}, desplazado {v.Offset:0}/{v.MaxOffset:0})" : "");
+        return $"{pw}x{ph}px, {dev.Description}, {kind} {(kind == "hub" ? tab.ToString() : "")}, tema {theme}, datos de muestra" + (kind.StartsWith("notifications", StringComparison.Ordinal) ? " (no son notificaciones reales)" : "") + (frame.View is { } v ? $", desplazable (contenido {v.ContentHeight:0} DIP, visible {v.Bottom - v.Top:0}, desplazado {v.Offset:0}/{v.MaxOffset:0})" : "");
     }
 }
