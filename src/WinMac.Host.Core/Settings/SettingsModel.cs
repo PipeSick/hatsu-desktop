@@ -72,6 +72,7 @@ public static partial class SettingsBuilder
         ("showPeripherals", "Icono de Periféricos en la barra", b => b.ShowPeripherals),
         ("peripheralAlerts", "Avisar cuando la batería de un periférico esté baja", b => b.PeripheralAlerts),
         ("peripheralAsusRog", "Leer la batería de periféricos ASUS ROG (receptor 2,4 GHz)", b => b.PeripheralAsusRog),
+        ("peripheralLogitech", "Leer la batería de periféricos Logitech (receptor)", b => b.PeripheralLogitech),
         ("showCleanup", "Icono de Limpieza en la barra", b => b.ShowCleanup),
         ("showVpn", "Icono de VPN en la barra (conexiones VPN de Windows)", b => b.ShowVpn),
         ("cleanupIsland", "Mostrar el progreso de la limpieza en Hatsu Notch", b => b.CleanupIsland),
@@ -197,6 +198,7 @@ public static partial class SettingsBuilder
             new("Periféricos", [
                 BarF("showPeripherals", "Batería de ratón, teclado y auriculares que Windows y el propio dispositivo informan (Bluetooth estándar y HID). Apagado: no se lee nada y no queda nada en memoria"),
                 BarF("peripheralAsusRog", "Teclado y ratón ROG con el receptor ROG OMNI. A diferencia de los demás lectores, ESTE ENVÍA al receptor la misma consulta de 64 bytes que Armoury Crate (solo lee la batería). Probado con Strix Scope II 96 y Keris II Origin; otros modelos no están verificados"),
+                BarF("peripheralLogitech", "PROBABLE, SIN VERIFICAR: escrito con la documentación pública del protocolo HID++ y sin ningún dispositivo Logitech para probarlo. Pregunta al receptor (solo lectura) cómo se llama cada dispositivo y cuánta batería tiene"),
                 BarF("peripheralAlerts", "Una sola vez por dispositivo al bajar del umbral; vuelve a avisar solo tras cargarlo. Sale por las notificaciones de Hatsu Notch"),
                 new(RowKind.Field, "periph.asus.kb", "Nombre del teclado ROG", "El receptor no dice el modelo. Si lo escribes aquí, aparece con ese nombre (por ejemplo, tu modelo exacto)", Text: bar.PeripheralAsusKeyboardName, Placeholder: "Teclado ROG"),
                 new(RowKind.Field, "periph.asus.mouse", "Nombre del ratón ROG", "Igual que el teclado: el nombre que quieras para tu ratón", Text: bar.PeripheralAsusMouseName, Placeholder: "Ratón ROG"),

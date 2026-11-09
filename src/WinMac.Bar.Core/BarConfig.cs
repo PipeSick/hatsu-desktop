@@ -110,6 +110,8 @@ public sealed record BarConfig
     public bool ShowCleanup { get; init; } = false;
     /// <summary>Periféricos ASUS ROG por el receptor ROG OMNI (docs/64). Envía al receptor la misma consulta que Armoury Crate; por eso es opt-in y viene APAGADO.</summary>
     public bool PeripheralAsusRog { get; init; } = false;
+    /// <summary>Periféricos Logitech con receptor (HID++). PROBABLE, sin verificar. Envía consultas de lectura al receptor; por eso es opt-in y viene APAGADO.</summary>
+    public bool PeripheralLogitech { get; init; } = false;
     /// <summary>Nombres que el usuario le pone al teclado y al ratón del receptor ROG OMNI (el receptor no dice el modelo). Vacío = el nombre genérico.</summary>
     public string PeripheralAsusKeyboardName { get; init; } = "";
     public string PeripheralAsusMouseName { get; init; } = "";

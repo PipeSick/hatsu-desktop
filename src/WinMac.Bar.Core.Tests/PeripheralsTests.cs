@@ -226,3 +226,44 @@ public class AsusRogProtocolTests
         Assert.Equal("Scope II 96", c.PeripheralAsusKeyboardName); Assert.Equal(40, c.PeripheralAsusMouseName.Length); Assert.Equal("", new BarConfig().PeripheralAsusKeyboardName);
     }
 }
+
+public class LogitechHidppTests
+{
+    private static byte[] Frame(params byte[] b) { var r = new byte[20]; Array.Copy(b, r, b.Length); return r; }
+
+    [Fact] public void Requests_are_long_reports_with_the_function_in_the_high_nibble_and_our_software_id()
+    {
+        var r = LogitechHidpp.GetFeature(1, 0x1004);
+        Assert.Equal(20, r.Length); Assert.Equal(0x11, r[0]); Assert.Equal(1, r[1]); Assert.Equal(0x00, r[2]); Assert.Equal(0x07, r[3]); Assert.Equal(0x10, r[4]); Assert.Equal(0x04, r[5]);
+        var b = LogitechHidpp.Request(2, 5, 1, 0xAA); Assert.Equal(0x17, b[3]); Assert.Equal(0xAA, b[4]);
+    }
+
+    [Fact] public void Feature_index_comes_from_the_reply_and_zero_means_not_supported()
+    {
+        var req = LogitechHidpp.GetFeature(1, 0x1004);
+        Assert.Equal((byte)9, LogitechHidpp.ParseFeatureIndex(req, Frame(0x11, 1, 0x00, 0x07, 9, 0, 1)));
+        Assert.Null(LogitechHidpp.ParseFeatureIndex(req, Frame(0x11, 1, 0x00, 0x07, 0, 0, 0)));            // no la tiene
+        Assert.Null(LogitechHidpp.ParseFeatureIndex(req, Frame(0x11, 2, 0x00, 0x07, 9, 0, 1)));            // de otro dispositivo
+        Assert.Null(LogitechHidpp.ParseFeatureIndex(req, Frame(0x11, 1, 0x00, 0x05, 9, 0, 1)));            // de otro software
+        Assert.Null(LogitechHidpp.ParseFeatureIndex(req, null));
+        Assert.True(LogitechHidpp.IsErrorFor(req, Frame(0x11, 1, 0xFF, 0x00, 0x07, 0x02)));
+    }
+
+    [Fact] public void Both_battery_features_give_a_credible_percentage_and_the_charge_state()
+    {
+        var q = LogitechHidpp.Request(1, 6, 0); var u = LogitechHidpp.Request(1, 8, 1);
+        var a = LogitechHidpp.ParseBatteryStatus(q, Frame(0x11, 1, 6, 0x07, 80, 50, 0)); Assert.Equal(80, a!.Percent); Assert.Equal(ChargeState.NotCharging, a.Charge);
+        var c = LogitechHidpp.ParseUnifiedBattery(u, Frame(0x11, 1, 8, 0x17, 35, 0x04, 1, 0)); Assert.Equal(35, c!.Percent); Assert.Equal(ChargeState.Charging, c.Charge);
+        Assert.Null(LogitechHidpp.ParseBatteryStatus(q, Frame(0x11, 1, 6, 0x07, 0, 0, 0)));                // 0 %: no creíble
+        Assert.Null(LogitechHidpp.ParseUnifiedBattery(u, Frame(0x11, 1, 8, 0x17, 255, 0, 0)));             // 255: fuera de rango
+        Assert.Equal(ChargeState.Unknown, LogitechHidpp.ChargeFrom(6));
+    }
+
+    [Fact] public void Names_and_kinds_come_from_the_device_itself()
+    {
+        var n = LogitechHidpp.Request(1, 3, 1, 0); var text = System.Text.Encoding.ASCII.GetBytes("MX Master 3S");
+        var reply = new byte[20]; reply[0] = 0x11; reply[1] = 1; reply[2] = 3; reply[3] = 0x17; Array.Copy(text, 0, reply, 4, text.Length);
+        Assert.Equal("MX Master 3S", LogitechHidpp.NameChunk(n, reply)); Assert.Equal("", LogitechHidpp.NameChunk(n, Frame(0x11, 2, 3, 0x17)));
+        Assert.Equal(DeviceKind.Mouse, LogitechHidpp.KindFrom(3)); Assert.Equal(DeviceKind.Keyboard, LogitechHidpp.KindFrom(0)); Assert.Equal(DeviceKind.Headset, LogitechHidpp.KindFrom(8)); Assert.Equal(DeviceKind.Other, LogitechHidpp.KindFrom(99));
+    }
+}
