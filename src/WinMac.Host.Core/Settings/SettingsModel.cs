@@ -110,7 +110,7 @@ public static partial class SettingsBuilder
     public static readonly string[] PositionNames = ["Centro", "Izquierda", "Derecha"], PlayerNames = ["Spotify", "Feishin", "Otro"];
     public static readonly Dictionary<string, string> SectionNames = new()
     {
-        ["music"] = "Música", ["agents"] = "Agentes de IA", ["timer"] = "Temporizador", ["calendar"] = "Calendario", ["downloads"] = "Descargas", ["notifications"] = "Notificaciones",
+        ["music"] = "Música", ["timer"] = "Temporizador", ["calendar"] = "Calendario", ["downloads"] = "Descargas", ["notifications"] = "Notificaciones",
         ["shelf"] = "Estantería", ["camera"] = "Cámara (espejo)", ["system"] = "Recursos del sistema", ["clipboard"] = "Portapapeles",
         ["activity"] = "En curso", ["captures"] = "Capturas", ["history"] = "Historial",
     };
@@ -305,10 +305,6 @@ public static partial class SettingsBuilder
             new(RowKind.Field, "notch.notifsec", "Notificaciones durante (s)", Enabled: installed, Reason: why, Text: n.PillNotifySeconds.ToString(), Placeholder: "5"),
             new(RowKind.Toggle, "notch.pillanim", "Animaciones", "La píldora crece y vuelve con una transición", n.PillAnimations, installed, why),
         ], "Lo que el notch muestra un momento sin abrirse."));
-        notch.Add(new("Agentes de IA", [
-            new(RowKind.Toggle, "notch.agents", "Agentes de IA", "Estado de tus agentes en el notch", n.AgentsEnabled, installed, why),
-            new(RowKind.Field, "notch.poll", "Actualizar cada (s)", Enabled: installed, Reason: why, Text: n.PollIntervalSeconds.ToString(), Placeholder: "30"),
-        ]));
         notch.Add(new("Pestañas", rows, "Activa, oculta y ordena las pestañas del notch."));
         notch.Add(new(null, [new(RowKind.Button, "notch.local", "Rutas y datos de Hatsu Notch…", Enabled: installed, Reason: why)]));
         var notchPage = new SettingsPage("notch", "Hatsu Notch", "island", notch);

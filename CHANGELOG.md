@@ -3,12 +3,12 @@
 Formato libre por versión. Las entradas marcadas «sin validar» están implementadas y probadas automáticamente, pero nadie las ha visto funcionar en un Windows real. Nada de esto está publicado como versión estable.
 
 ## Sin publicar (rama de trabajo)
-Versión del paquete: **2.0.9** (la Store exige una versión mayor en cada envío).
+Versión del paquete: **2.0.10** (la Store exige una versión mayor en cada envío).
 **Módulos de productividad** ([`docs/63`](docs/63-modulos-de-productividad.md)), cada uno con interruptor en *Ajustes › Módulos*, atajos configurables con captura de teclado y aviso de conflictos (incluidas las Capturas Ctrl+Mayús+3–6):
 - Mission Control (escritorio actual, multimonitor sin validar), Snap (zonas, editor, distribuciones propias), Live Text (OCR local), Spotlight Actions, Gestures (esquinas y botones laterales), Shelf+ en la Isla (archivos, carpetas, texto, imágenes).
 - Gestures: accesos rápidos para abrir aplicaciones instaladas o páginas web desde esquinas, botones laterales y atajos (hasta 6). Se retiró la acción de ocultar el Dock. Spotlight: «usar la distribución» acomoda las ventanas abiertas.
 
-**Ajustes reorganizados (propuesta A):** 12 secciones en 5 grupos (Escritorio, Funciones, Contenido, Dispositivos, Avanzado) con buscador de ajustes, «Atajos y gestos» como página propia, Notificaciones y Portapapeles juntos, e «iPhone y periféricos». **Personalizar los iconos de la barra:** vista previa, «En la barra» con orden y «Disponibles para agregar». **El menú con pestañas pasó a ser iconos sueltos** de Rendimiento, Red y Discos (cada uno abre su panel). **Gestures:** al abrir la lista de acciones, «Aplicación…» (busca entre las apps instaladas) y «Página web…» (pega el enlace).
+**Ajustes reorganizados (propuesta A):** 12 secciones en 5 grupos (Escritorio, Funciones, Contenido, Dispositivos, Avanzado) con buscador de ajustes, «Atajos y gestos» como página propia, Notificaciones y Portapapeles juntos, e «iPhone y periféricos». **Personalizar los iconos de la barra:** vista previa, «En la barra» con orden y «Disponibles para agregar». **El menú con pestañas pasó a ser iconos sueltos** de Rendimiento, Red y Discos (cada uno abre su panel). **Se quitó el monitor de agentes de IA** de la Isla (pestaña, sondeo y ajustes). **Ajustes 1:1 con el prototipo:** asa ⋮⋮ para arrastrar los iconos de la barra, píldoras «Agregar», «Cancelar/Guardar» y «Personalizar iconos…», etiqueta «Instalada». **Menú de Hatsu:** «Salir de Hatsu Desktop». **Gestures:** al abrir la lista de acciones, «Aplicación…» (busca entre las apps instaladas) y «Página web…» (pega el enlace).
 
 **VPN en la barra** (opcional, *Ajustes › Barra › VPN*): icono de escudo que muestra el estado y abre un panel para conectar o desconectar las VPN de Windows (Configuración › Red › VPN) con las credenciales ya guardadas. No cubre apps de VPN de terceros. Sin validar en Windows real.
 

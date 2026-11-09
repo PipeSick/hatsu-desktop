@@ -7,28 +7,14 @@ namespace WinMac.Host.Core.Tests;
 /// <summary>Fase 3.2 (Store): agentes de IA desactivados de fábrica solo en instalaciones nuevas, sin tocar lo guardado; rebranding visible a «Hatsu Notch».</summary>
 public class Phase32Tests
 {
-    [Fact] public void Store_factory_turns_agents_off_but_keeps_every_other_default_and_the_module_stays_activatable()
+    [Fact] public void The_AI_agents_monitor_is_gone_from_the_notch_tabs_and_settings()
     {
-        var off = NotchSettings.FactoryFor(true); var normal = NotchSettings.FactoryFor(false);
-        Assert.False(off.AgentsEnabled); Assert.False(off.Sections.Single(s => s.Id == "agents").Enabled);
-        Assert.True(normal.AgentsEnabled); Assert.True(normal.Sections.Single(s => s.Id == "agents").Enabled);   // fuera de la Store nada cambia
-        Assert.Equal(normal.Sections.Where(s => s.Id != "agents"), off.Sections.Where(s => s.Id != "agents"));   // el resto de secciones idéntico (cámara sigue apagada)
-        Assert.Equal(normal with { AgentsEnabled = false, Sections = off.Sections }, off);
-        // totalmente funcional: se activa a mano por el mismo canal de ajustes (parche) y por la pestaña
-        var on = off.ApplyPatch(JsonDocument.Parse("{\"agentsEnabled\":true}").RootElement);
-        Assert.True(on.AgentsEnabled);
-        var idx = off.Sections.ToList().FindIndex(s => s.Id == "agents"); Assert.True(off.ToggleSection(idx).Sections[idx].Enabled);
-    }
-
-    [Fact] public void Saved_notch_settings_are_never_overwritten_by_the_Store_factory()
-    {
-        var saved = NotchSettings.FactoryFor(false) with { AgentsEnabled = true };   // preferencia ya guardada: activado
-        var cfg = new HostConfig { Notch = saved };
-        var json = JsonSerializer.Serialize(cfg); var back = JsonSerializer.Deserialize<HostConfig>(json)!;
-        Assert.True(back.Notch!.Sanitize().AgentsEnabled);
-        Assert.True(back.Notch.Sections.Single(s => s.Id == "agents").Enabled);
-        // el valor de fábrica solo se usa cuando Notch es null
-        Assert.Null(new HostConfig().Notch);
+        Assert.DoesNotContain("agents", NotchSettings.SectionIds); Assert.DoesNotContain(NotchSettings.Factory.Sections, s => s.Id == "agents"); Assert.False(new NotchSettings().AgentsEnabled);
+        var pages = SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false));
+        var rows = pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).ToList();
+        Assert.DoesNotContain(rows, r => r.Id is "notch.agents" or "notch.poll"); Assert.DoesNotContain(pages.SelectMany(p => p.Groups), g => g.Header == "Agentes de IA");
+        // una configuración antigua con la sección «agents» la pierde al normalizar
+        var old = NotchSettings.NormalizeSections([new NotchSection("agents", true), new NotchSection("music", true)]); Assert.DoesNotContain(old, s => s.Id == "agents");
     }
 
     [Fact] public void Visible_texts_say_Hatsu_Notch_and_never_the_old_names()

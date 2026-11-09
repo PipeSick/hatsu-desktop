@@ -241,7 +241,6 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("notch.path", "text"): { var t = e.Text ?? ""; cfg.UpdateNotch(n => n with { CustomPlayerPath = t }); return true; }
             case ("notch.poll", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int s)) cfg.UpdateNotch(n => n with { PollIntervalSeconds = s }); return true;
             case ("notch.music", "toggle"): cfg.UpdateNotch(n => n with { MusicEnabled = e.On }); return true;
-            case ("notch.agents", "toggle"): cfg.UpdateNotch(n => n with { AgentsEnabled = e.On }); return true;
             case ("notch.lyrics", "toggle"): cfg.UpdateNotch(n => n with { LyricsEnabled = e.On, LyricsInPill = e.On && n.LyricsInPill }); return true;
             case ("notch.pill", "toggle"): cfg.UpdateNotch(n => n with { LyricsInPill = e.On }); return true;
             case ("notch.pillvol", "toggle"): cfg.UpdateNotch(n => n with { PillVolume = e.On }); return true;

@@ -18,14 +18,15 @@ public sealed record NotchSettings
     public static readonly string[] Positions = ["TopCenter", "TopLeft", "TopRight"];
     public static readonly string[] Players = ["Spotify", "Feishin", "Custom"];
     /// <summary>Mismo orden que NotchWin (NotchSections.AllIds): el Centro de actividades de WinMac 2.0 primero (docs/25).</summary>
-    public static readonly string[] SectionIds = ["activity", "captures", "clipboard", "downloads", "history", "music", "agents", "timer", "calendar", "notifications", "shelf", "camera", "system"];
+    public static readonly string[] SectionIds = ["activity", "captures", "clipboard", "downloads", "history", "music", "timer", "calendar", "notifications", "shelf", "camera", "system"];
     private const string CameraId = "camera";   // se abre la webcam: apagada por defecto
 
     public string Position { get; init; } = "TopCenter";
     public int GlassLevel { get; init; } = 60;
     public IReadOnlyList<NotchSection> Sections { get; init; } = DefaultSections();
     public bool MusicEnabled { get; init; } = true;
-    public bool AgentsEnabled { get; init; } = true;
+    /// <summary>El monitor de agentes de IA se quitó en 2.0.10; el campo sigue en el protocolo con NotchWin y queda apagado.</summary>
+    public bool AgentsEnabled { get; init; }
     public string MusicPlayer { get; init; } = "Spotify";
     public string? CustomPlayerPath { get; init; }
     public bool LyricsEnabled { get; init; }
