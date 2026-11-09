@@ -283,3 +283,31 @@ public class It8SettingsTests
         Assert.Equal("showNetwork", SettingsBuilder.BarToggles[0].Field);
     }
 }
+
+public class SettingsSearchTests
+{
+    private static SettingsController Make() { var c = new SettingsController(); c.SetPages(SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false))); return c; }
+
+    [Fact] public void Searching_shows_a_results_page_with_the_matching_rows_and_their_real_controls()
+    {
+        var c = Make(); Assert.Equal("general", c.Page!.Id);
+        c.SetSearch("vpn"); Assert.Equal("search", c.Page!.Id);
+        var rows = c.Page.Groups.SelectMany(g => g.Rows).ToList(); Assert.Contains(rows, r => r.Id == "bar:showVpn" || r.Id.StartsWith("baritem", StringComparison.Ordinal)); Assert.DoesNotContain(rows, r => r.Kind == RowKind.Info && r.Id != "search.none");
+        Assert.All(c.Page.Groups, g => Assert.False(string.IsNullOrEmpty(g.Header)));   // cada grupo dice de qué sección viene
+    }
+
+    [Fact] public void The_search_ignores_accents_and_case_and_says_so_when_nothing_matches()
+    {
+        var c = Make(); c.SetSearch("BATERIA"); Assert.Contains(c.Page!.Groups.SelectMany(g => g.Rows), r => r.Id.Contains("Battery", StringComparison.OrdinalIgnoreCase) || r.Title.Contains("atería"));
+        c.SetSearch("zzzzzz"); Assert.Equal("search.none", Assert.Single(c.Page!.Groups.SelectMany(g => g.Rows)).Id);
+    }
+
+    [Fact] public void Clearing_the_search_or_choosing_a_page_returns_to_the_normal_view_on_the_same_page()
+    {
+        var c = Make(); c.SelectPage("dock"); c.SetSearch("sonido"); Assert.Equal("search", c.Page!.Id);
+        c.SetSearch(""); Assert.Equal("dock", c.Page!.Id);   // volver no cambia de sección
+        c.SetSearch("sonido"); c.SelectPage("notch"); Assert.Equal("", c.SearchText); Assert.Equal("notch", c.Page!.Id);
+        var f = c.SearchFrame; var r = SettingsLayout.FieldRect(f); Assert.True(r.X >= 8 && r.X + r.W <= SettingsLayout.SidebarW - 8 && r.Y >= 40 && r.Y + r.H < SettingsLayout.SideTop);   // la caja cabe en la barra lateral, sobre las secciones
+    }
+}
+

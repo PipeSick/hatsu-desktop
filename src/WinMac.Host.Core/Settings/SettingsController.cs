@@ -14,7 +14,28 @@ public sealed class SettingsController
     public int HoverSide { get; private set; } = -1;
     public IReadOnlyList<SettingsPage> Pages => _pages;
     public int PageIndex => _page;
-    public SettingsPage? Page => _page >= 0 && _page < _pages.Count ? _pages[_page] : null;
+    public SettingsPage? Page => SearchText.Length > 0 ? _results : _page >= 0 && _page < _pages.Count ? _pages[_page] : null;
+
+    // ── Buscador de ajustes: con texto, el contenido es una página con las filas que coinciden (con sus mismos controles)
+    private SettingsPage? _results;
+    public string SearchText { get; private set; } = "";
+    public RowFrame SearchFrame => SettingsLayout.SearchFrame(SearchText);
+    public void SetSearch(string text) { text = (text ?? "").Trim(); if (text == SearchText) return; SearchText = text; _scroll = 0; ClearSuggestions(); Recompute(); }
+    public static string Fold(string s) => new string(s.Normalize(System.Text.NormalizationForm.FormD).Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray()).ToLowerInvariant();
+
+    private SettingsPage BuildResults()
+    {
+        var words = Fold(SearchText).Split(' ', StringSplitOptions.RemoveEmptyEntries); var groups = new List<SettingsGroup>();
+        foreach (var p in _pages)
+            foreach (var g in p.Groups)
+            {
+                var hits = g.Rows.Where(r => r.Kind is not (RowKind.Info or RowKind.Preview) && words.All(w => Fold(r.Title + " " + r.Subtitle + " " + p.Title + " " + g.Header).Contains(w))).ToList();
+                if (hits.Count > 0) groups.Add(new SettingsGroup(p.Title + (string.IsNullOrEmpty(g.Header) ? "" : " · " + g.Header), hits));
+            }
+
+        if (groups.Count == 0) groups.Add(new SettingsGroup(null, [new SettingsRow(RowKind.Info, "search.none", $"No encontré ningún ajuste con «{SearchText}». Prueba con otra palabra, por ejemplo «atajo», «batería» o «VPN».")]));
+        return new SettingsPage("search", "Resultados", "search", groups);
+    }
     /// <summary>Valor que se está arrastrando en un deslizador (la configuración se guarda solo al soltar).</summary>
     public (string Id, double Value)? Dragging => _drag && _downId is not null ? (_downId, _dragValue) : null;
 
@@ -33,18 +54,18 @@ public sealed class SettingsController
 
     public void SetPages(IReadOnlyList<SettingsPage> pages)
     {
-        string? keep = Page?.Id; _pages = pages; int i = keep is null ? 0 : pages.ToList().FindIndex(p => p.Id == keep); _page = i < 0 ? 0 : i; Recompute();
+        string? keep = _page >= 0 && _page < _pages.Count ? _pages[_page].Id : null; _pages = pages; int i = keep is null ? 0 : pages.ToList().FindIndex(p => p.Id == keep); _page = i < 0 ? 0 : i; Recompute();
     }
 
-    public void SelectPage(int i) { if (i < 0 || i >= _pages.Count || i == _page) return; _page = i; _scroll = 0; ClearSuggestions(); Hover = null; Recompute(); }
+    public void SelectPage(int i) { if (SearchText.Length > 0) { SearchText = ""; _scroll = 0; Recompute(); } if (i < 0 || i >= _pages.Count || i == _page) return; _page = i; _scroll = 0; ClearSuggestions(); Hover = null; Recompute(); }
     public void SelectPage(string id) => SelectPage(_pages.ToList().FindIndex(p => p.Id == id));
-    private void Recompute() { var p = Page; Frame = p is null ? new([], [], 0, 0, 0) : SettingsLayout.Compute(p, _scroll); _scroll = Frame.Scroll; }
+    private void Recompute() { _results = SearchText.Length > 0 ? BuildResults() : null; var p = Page; Frame = p is null ? new([], [], 0, 0, 0) : SettingsLayout.Compute(p, _scroll); _scroll = Frame.Scroll; }
 
     public bool Scroll(double deltaDip) { double before = _scroll; _scroll = Math.Clamp(before + deltaDip, 0, Frame.MaxScroll); Recompute(); return Math.Abs(_scroll - before) > 0.01; }
     public double ScrollOffset => _scroll;
 
     /// <summary>Fila de un campo por id (para colocar el campo de texto nativo encima y la lista de sugerencias).</summary>
-    public RowFrame? RowOf(string id) => Frame.Rows.FirstOrDefault(r => r.Row.Id == id);
+    public RowFrame? RowOf(string id) => id == "search" ? SearchFrame : Frame.Rows.FirstOrDefault(r => r.Row.Id == id);
 
     private static (double lx, double ly) Local(double x, double y) => (x - SettingsLayout.SidebarW, y - SettingsLayout.TitleH);
     private bool InContent(double x, double y) => x >= SettingsLayout.SidebarW && y >= SettingsLayout.TitleH;
@@ -83,6 +104,7 @@ public sealed class SettingsController
         _downId = null; _downPart = null; _downSide = -1; _drag = false;
         int sg = SuggestHit(x, y); if (sg >= 0) { var field = SuggestFor!; return new SettingsEdit(field, "suggest", Index: sg); }
         if (SuggestFor is not null) ClearSuggestions();
+        { var sf = SearchFrame; var fr = SettingsLayout.FieldRect(sf); if (x >= fr.X && x < fr.X + fr.W && y >= fr.Y && y < fr.Y + fr.H) return new SettingsEdit("search", "focus"); }
         _downSide = SideHit(x, y); if (_downSide >= 0) return null;
         if (!InContent(x, y)) return null;
         var (lx, ly) = Local(x, y); if (SettingsLayout.Hit(Frame, lx, ly) is not { } hit || !hit.Row.Row.Enabled) return null;

@@ -81,7 +81,9 @@ public static class SettingsLayout
     public static double SliderValueAt(RowFrame f, double x) { var (x0, x1, _) = SliderTrack(f); return Math.Clamp((x - x0) / (x1 - x0) * 100, 0, 100); }
 
     // ── Barra lateral
-    public const double SideItemH = 32, SideTop = 80, SideHeaderH = 24, SideHeaderGap = 8;   // doce secciones y cinco grupos caben sin desplazar la barra lateral
+    public const double SideItemH = 32, SideTop = 96, SideHeaderH = 24, SideHeaderGap = 8;   // doce secciones y cinco grupos caben sin desplazar la barra lateral
+    /// <summary>La caja «Buscar ajuste…» bajo el título de la barra lateral.</summary>
+    public static RowFrame SearchFrame(string text) { double w = SidebarW - 24, rowW = w / 0.56; return new RowFrame(new SettingsRow(RowKind.Field, "search", "Buscar ajuste", Text: text, Placeholder: "Buscar ajuste…"), 12 - rowW + 16 + w, 54, rowW, ControlH, true, true); }
     public sealed record SideEntry(int PageIndex, (double X, double Y, double W, double H) Rect, string? Header, double HeaderY);
 
     /// <summary>Posición de cada sección en la barra lateral; el nombre del grupo se dibuja encima de la primera sección de cada grupo.</summary>

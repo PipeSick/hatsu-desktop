@@ -92,6 +92,7 @@ internal sealed class SettingsPainter : IDisposable
     public void Paint(SettingsController c, double w, double h, EditView? edit, bool clear = true)
     {
         _ctx.BeginDraw(); if (clear) _ctx.Clear(Bg);
+        _searchEdit = edit is { Id: "search" } ? edit : null;
         DrawSidebar(c, h);
         double ox = SettingsLayout.SidebarW, oy = SettingsLayout.TitleH, cw = SettingsLayout.ContentW;
         if (c.Page is { } page)
@@ -110,10 +111,12 @@ internal sealed class SettingsPainter : IDisposable
         _ctx.EndDraw();
     }
 
+    private EditView? _searchEdit;
     private void DrawSidebar(SettingsController c, double h)
     {
         Brush(Side); _ctx.FillRectangle(R(0, 0, SettingsLayout.SidebarW, h), _b); Ln(SettingsLayout.SidebarW - 0.5, 0, SettingsLayout.SidebarW - 0.5, h, Sep, 1f);
-        Text("Ajustes", _title, 20, 18, SettingsLayout.SidebarW - 32, 44, Label());
+        Text("Ajustes", _title, 20, 8, SettingsLayout.SidebarW - 32, 44, Label());
+        DrawField(c.SearchFrame, _searchEdit, 1f); Glyph("search", SettingsLayout.FieldRect(c.SearchFrame).X + SettingsLayout.FieldRect(c.SearchFrame).W - 18, SettingsLayout.FieldRect(c.SearchFrame).Y + 16, 6.5, Secondary);
         foreach (var e in SettingsLayout.SideEntries(c.Pages))
         {
             int i = e.PageIndex; var r = e.Rect; bool sel = i == c.PageIndex, hov = i == c.HoverSide && !sel;

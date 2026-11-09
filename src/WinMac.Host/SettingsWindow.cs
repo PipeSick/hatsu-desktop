@@ -253,7 +253,7 @@ internal sealed class SettingsWindow : IDisposable
                 case WM_COMMAND when (int)((long)w & 0xFFFF) == ID_EDIT:
                 {
                     int code = (int)(((long)w >> 16) & 0xFFFF);
-                    if (code == EN_CHANGE && _edit != IntPtr.Zero && Native.GetFocus() == _edit) { _editDirty = true; _caretOn = true; Invalidate(); if (_editId == "hub.city") Native.SetTimer(_hwnd, TimerSuggest, 320, IntPtr.Zero); else if (_editId == "gest.find") ShowAppSuggestions(); }
+                    if (code == EN_CHANGE && _edit != IntPtr.Zero && Native.GetFocus() == _edit) { _editDirty = true; _caretOn = true; Invalidate(); if (_editId == "hub.city") Native.SetTimer(_hwnd, TimerSuggest, 320, IntPtr.Zero); else if (_editId == "gest.find") ShowAppSuggestions(); else if (_editId == "search") { _ctl.SetSearch(EditText()); Invalidate(); } }
                     else if (code == EN_KILLFOCUS && _edit != IntPtr.Zero && _ctl.Suggestions.Count == 0) EndEdit(commit: true);
                     else if (code == EN_KILLFOCUS && _edit != IntPtr.Zero) { /* sigue la lista de sugerencias: el clic en una sugerencia se atiende antes (PointerDown) */ _suggestBlur = true; Native.SetTimer(_hwnd, (UIntPtr)8, 180, IntPtr.Zero); }
                     return IntPtr.Zero;
@@ -370,6 +370,7 @@ internal sealed class SettingsWindow : IDisposable
             case "hub.city": _ = ResolveCityAsync(text); break;
             case "hub.favs": _ = ResolveFavoritesAsync(text); break;
             case "hub.favadd": _ = AddFavoriteAsync(text); break;
+            case "search": break;   // el buscador filtra mientras se escribe: no hay nada que confirmar
             case "gest.find": break;   // el texto suelto no asigna nada: hay que elegir una app de la lista
             case "gest.url": if (SettingsBuilder.GestPick is { } up) _actions.AssignUrl(up.Field, text); break;
             default: _actions.Apply(new SettingsEdit(id, "text", Text: text)); break;
