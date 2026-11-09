@@ -121,6 +121,9 @@ public sealed class BarPainter : IDisposable
                 case BarItemKind.Peripherals: DrawMouse(x + 8, cy); break;
                 case BarItemKind.Cleanup: DrawSparkles(x + 8, cy); break;
                 case BarItemKind.Vpn: DrawShield(x + 8, cy, f.Item.Look == BarItemLook.Normal); break;
+                case BarItemKind.HubSystem: DrawChip(x + 8, cy); break;
+                case BarItemKind.HubNetwork: DrawGlobe(x + 8, cy); break;
+                case BarItemKind.HubDisks: DrawDisk(x + 8, cy); break;
             }
             x += (float)(f.Item.GlyphWidth + (string.IsNullOrEmpty(f.Item.Text) ? 0 : _m.GlyphTextGap));
         }
@@ -292,6 +295,36 @@ public sealed class BarPainter : IDisposable
         Brush(Fg());
         _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.6f, cy - 7f, cx + 4.6f, cy + 7f), RadiusX = 4.6f, RadiusY = 4.6f }, _solid, 1.3f);
         _ctx.DrawLine(new Vector2(cx, cy - 7f), new Vector2(cx, cy - 1.5f), _solid, 1.2f, _round); _ctx.DrawLine(new Vector2(cx - 4.6f, cy - 1.5f), new Vector2(cx + 4.6f, cy - 1.5f), _solid, 1.2f, _round);
+    }
+
+    /// <summary>Rendimiento: un chip (cuadrado con patitas).</summary>
+    private void DrawChip(float cx, float cy)
+    {
+        Brush(Fg());
+        _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 4.6f, cy - 4.6f, cx + 4.6f, cy + 4.6f), RadiusX = 1.6f, RadiusY = 1.6f }, _solid, 1.5f);
+        _ctx.FillRectangle(new RawRectF(cx - 1.8f, cy - 1.8f, cx + 1.8f, cy + 1.8f), _solid);
+        for (int i = -1; i <= 1; i++)
+        {
+            float o = i * 3f;
+            _ctx.DrawLine(new Vector2(cx + o, cy - 7.4f), new Vector2(cx + o, cy - 4.6f), _solid, 1.2f, _round); _ctx.DrawLine(new Vector2(cx + o, cy + 4.6f), new Vector2(cx + o, cy + 7.4f), _solid, 1.2f, _round);
+            _ctx.DrawLine(new Vector2(cx - 7.4f, cy + o), new Vector2(cx - 4.6f, cy + o), _solid, 1.2f, _round); _ctx.DrawLine(new Vector2(cx + 4.6f, cy + o), new Vector2(cx + 7.4f, cy + o), _solid, 1.2f, _round);
+        }
+    }
+
+    /// <summary>Red: un globo (círculo con meridiano y ecuador).</summary>
+    private void DrawGlobe(float cx, float cy)
+    {
+        Brush(Fg()); _ctx.DrawEllipse(new Ellipse(new Vector2(cx, cy), 6.6f, 6.6f), _solid, 1.5f);
+        _ctx.DrawEllipse(new Ellipse(new Vector2(cx, cy), 2.8f, 6.6f), _solid, 1.2f);
+        _ctx.DrawLine(new Vector2(cx - 6.6f, cy), new Vector2(cx + 6.6f, cy), _solid, 1.2f, _round);
+    }
+
+    /// <summary>Discos: una unidad (rectángulo redondeado con una luz).</summary>
+    private void DrawDisk(float cx, float cy)
+    {
+        Brush(Fg()); _ctx.DrawRoundedRectangle(new RoundedRectangle { Rect = new RawRectF(cx - 7f, cy - 4.2f, cx + 7f, cy + 4.2f), RadiusX = 2.4f, RadiusY = 2.4f }, _solid, 1.5f);
+        _ctx.DrawLine(new Vector2(cx - 7f, cy + 0.4f), new Vector2(cx + 7f, cy + 0.4f), _solid, 1.2f, _round);
+        _ctx.FillEllipse(new Ellipse(new Vector2(cx + 4.2f, cy + 2.4f), 0.9f, 0.9f), _solid);
     }
 
     /// <summary>VPN: escudo; relleno con una marca cuando hay una conexión activa, solo contorno cuando no.</summary>

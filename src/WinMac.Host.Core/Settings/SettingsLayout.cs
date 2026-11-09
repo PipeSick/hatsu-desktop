@@ -8,7 +8,7 @@ public sealed record PageFrame(IReadOnlyList<GroupFrame> Groups, IReadOnlyList<R
 /// <summary>Reparto de la ventana de Ajustes (DIP, estilo «lista agrupada» de iOS). Coordenadas LOCALES al área de contenido (origen = esquina del área a la derecha de la barra lateral, bajo el título). Puro.</summary>
 public static class SettingsLayout
 {
-    public const double WinW = 860, WinH = 580, SidebarW = 240, TitleH = 76, Pad = 28, GroupGap = 22, HeaderH = 30, Radius = 12;
+    public const double WinW = 860, WinH = 700, SidebarW = 240, TitleH = 76, Pad = 28, GroupGap = 22, HeaderH = 30, Radius = 12;
     public const double SwitchW = 51, SwitchH = 31, ControlH = 32, ArrowW = 30;
     public static double ContentW => WinW - SidebarW;
     public static double ViewportH => WinH - TitleH;
@@ -80,8 +80,25 @@ public static class SettingsLayout
     public static double SliderValueAt(RowFrame f, double x) { var (x0, x1, _) = SliderTrack(f); return Math.Clamp((x - x0) / (x1 - x0) * 100, 0, 100); }
 
     // ── Barra lateral
-    public const double SideItemH = 36, SideTop = 92;   // diez secciones (WM-013) caben sin desplazar la barra lateral
-    public static (double X, double Y, double W, double H) SideItemRect(int i) => (12, SideTop + i * (SideItemH + 4), SidebarW - 24, SideItemH);
+    public const double SideItemH = 32, SideTop = 80, SideHeaderH = 24, SideHeaderGap = 8;   // doce secciones y cinco grupos caben sin desplazar la barra lateral
+    public sealed record SideEntry(int PageIndex, (double X, double Y, double W, double H) Rect, string? Header, double HeaderY);
+
+    /// <summary>Posición de cada sección en la barra lateral; el nombre del grupo se dibuja encima de la primera sección de cada grupo.</summary>
+    public static IReadOnlyList<SideEntry> SideEntries(IReadOnlyList<SettingsPage> pages)
+    {
+        var list = new List<SideEntry>(); double y = SideTop; string? last = null;
+        for (int i = 0; i < pages.Count; i++)
+        {
+            string? header = null; double hy = 0;
+            if (!string.IsNullOrEmpty(pages[i].Section) && pages[i].Section != last) { y += SideHeaderGap; hy = y; header = pages[i].Section; y += SideHeaderH; }
+            last = pages[i].Section;
+            list.Add(new SideEntry(i, (12, y, SidebarW - 24, SideItemH), header, hy)); y += SideItemH + 2;
+        }
+
+        return list;
+    }
+
+    public static (double X, double Y, double W, double H) SideItemRect(IReadOnlyList<SettingsPage> pages, int i) => SideEntries(pages)[i].Rect;
 
     // ── Lista de sugerencias bajo un campo (coordenadas locales)
     public const double SuggestRowH = 38;

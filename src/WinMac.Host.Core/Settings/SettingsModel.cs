@@ -17,7 +17,7 @@ public sealed record SettingsRow(RowKind Kind, string Id, string Title, string? 
 }
 
 public sealed record SettingsGroup(string? Header, IReadOnlyList<SettingsRow> Rows, string? Footer = null);
-public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOnlyList<SettingsGroup> Groups);
+public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOnlyList<SettingsGroup> Groups, string? Section = null);
 
 /// <summary>Vista del diagnóstico de llamadas (Ajustes › Hatsu Connect): lo da el host; puro para probar la página sin Windows.</summary>
 public sealed record ConnectDiagView(string Status = "Sin ejecutar", IReadOnlyList<string>? Summary = null, bool Running = false, bool HasReport = false, bool Observing = false, string ObserveStatus = "Detenida", string CallControlStatus = "sin información (el módulo Connect no ha informado)");
@@ -53,7 +53,7 @@ public static partial class SettingsBuilder
         ("wifiDetails", "Detalle de Wi-Fi al tocar una red", b => b.WifiDetails), ("appMenus", "Menús de la app en la barra (avanzado)", b => b.AppMenus),
         ("ccWifi", "Wi-Fi", b => b.CcWifi), ("ccBluetooth", "Bluetooth", b => b.CcBluetooth), ("ccSound", "Sonido", b => b.CcSound), ("ccBrightness", "Brillo", b => b.CcBrightness),
         ("ccPower", "Energía", b => b.CcPower), ("ccAppearance", "Apariencia", b => b.CcAppearance), ("ccDisplay", "Pantallas", b => b.CcDisplay), ("ccNotifications", "Notificaciones", b => b.CcNotifications),
-        ("showHub", "Icono de Hatsu Desktop (panel con pestañas)", b => b.ShowHub), ("showWeather", "Icono del Tiempo", b => b.ShowWeather), ("weatherFahrenheit", "Grados Fahrenheit", b => b.WeatherFahrenheit),
+        ("showHub", "Iconos de Rendimiento, Red y Discos", b => b.ShowHub), ("showWeather", "Icono del Tiempo", b => b.ShowWeather), ("weatherFahrenheit", "Grados Fahrenheit", b => b.WeatherFahrenheit),
         ("weatherAutoLocation", "Usar mi ubicación", b => b.WeatherAutoLocation),
         ("notificationCenter", "El reloj abre el Centro de Notificaciones", b => b.NotificationCenter), ("notificationsFromWindows", "Mostrar notificaciones de Windows", b => b.NotificationsFromWindows),
         ("notifRemoveFromWindows", "Borrar también en Windows", b => b.NotifRemoveFromWindows),
@@ -74,6 +74,9 @@ public static partial class SettingsBuilder
         ("peripheralAsusRog", "Leer la batería de periféricos ASUS ROG (receptor 2,4 GHz)", b => b.PeripheralAsusRog),
         ("peripheralLogitech", "Leer la batería de periféricos Logitech (receptor)", b => b.PeripheralLogitech),
         ("showCleanup", "Icono de Limpieza en la barra", b => b.ShowCleanup),
+        ("showHubSystem", "Icono de Rendimiento (CPU, memoria, temperaturas)", b => b.ShowHubSystem),
+        ("showHubNetwork", "Icono de Red (velocidad y conexiones)", b => b.ShowHubNetwork),
+        ("showHubDisks", "Icono de Discos (espacio y estado)", b => b.ShowHubDisks),
         ("showVpn", "Icono de VPN en la barra (conexiones VPN de Windows)", b => b.ShowVpn),
         ("cleanupIsland", "Mostrar el progreso de la limpieza en Hatsu Notch", b => b.CleanupIsland),
         ("mcEnabled", "Mission Control", b => b.McEnabled),
@@ -187,6 +190,9 @@ public static partial class SettingsBuilder
                 BarF("showPhonePercent", "Si el iPhone está conectado pero Windows no da una lectura reciente, se muestra «—» en vez de un número viejo"),
                 BarF("showPowerWithoutBattery", "Solo si el equipo no tiene batería y está conectado a la corriente; sin porcentaje. Apagado, el módulo de batería no aparece"),
                 BarF("showTaskManager", "Abre el Administrador de tareas de Windows"),
+                BarF("showHubSystem", "Solo se muestra si «Iconos de Rendimiento, Red y Discos» está activado"),
+                BarF("showHubNetwork", "Solo se muestra si «Iconos de Rendimiento, Red y Discos» está activado"),
+                BarF("showHubDisks", "Solo se muestra si «Iconos de Rendimiento, Red y Discos» está activado"),
                 new(RowKind.Button, "bar.orderreset", "Restaurar orden predeterminado", "Arrastra los iconos de la barra para cambiar su orden")]),
             new("Comportamiento", [
                 Bar(9, "Las ventanas maximizadas empiezan debajo de la barra y no quedan tapadas"),
@@ -315,7 +321,7 @@ public static partial class SettingsBuilder
         var pages = new List<SettingsPage> { general, dockPage, barPage, notchPage, capturePage, spotPage };
         if (ModulesPage(cfg, installed) is { } modulesPage) pages.Add(modulesPage);
         pages.AddRange([ncPage, weatherPage, clipPage, connectPage, ExtensionsPage(input.Extensions)]);
-        return pages;
+        return Organize(pages);
     }
 
     /// <summary>WM-019 / WM-001: tamaño del Dock (preajustes compactos y ajuste fino) y comportamiento. Escribe en dock.json, que el Dock vuelve a leer al cambiar.</summary>

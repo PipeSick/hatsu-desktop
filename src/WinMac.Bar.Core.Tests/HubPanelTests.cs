@@ -89,14 +89,19 @@ public class HubPanelModelTests
     }
 
     [Fact]
-    public void The_hub_and_weather_are_two_independent_bar_items_and_there_are_no_separate_icons_for_the_tabs()
+    public void The_tabbed_menu_became_separate_icons_for_performance_network_and_disks_and_each_opens_its_own_tab()
     {
         var (_, right) = BarModel.Build(BarState.Empty(DateTime.Now) with { Volume = new VolumeInfo(true, 50, false) }, new BarConfig());
-        Assert.Equal(BarItemKind.Hub, right[0].Kind); Assert.Equal(BarItemKind.Weather, right[1].Kind); Assert.Equal(1, right.Count(i => i.Kind == BarItemKind.Hub)); Assert.Equal(1, right.Count(i => i.Kind == BarItemKind.Weather));
-        Assert.Equal(PanelKind.Hub, BarModel.ClickAction(right[0]).Panel); Assert.Equal(PanelKind.Weather, BarModel.ClickAction(right[1]).Panel);
-        var (_, off) = BarModel.Build(BarState.Empty(DateTime.Now), new BarConfig { ShowHub = false, ShowWeather = false }); Assert.DoesNotContain(off, i => i.Kind is BarItemKind.Hub or BarItemKind.Weather);
+        Assert.Equal([BarItemKind.HubSystem, BarItemKind.HubNetwork, BarItemKind.HubDisks, BarItemKind.Weather], right.Take(4).Select(i => i.Kind)); Assert.DoesNotContain(right, i => i.Kind == BarItemKind.Hub);   // ya no hay un icono único con pestañas
+        Assert.Equal(PanelKind.Hub, BarModel.ClickAction(right[0]).Panel); Assert.Equal(1 + (int)HubTab.System, BarModel.ClickAction(right[0]).Index);
+        Assert.Equal(1 + (int)HubTab.Network, BarModel.ClickAction(right[1]).Index); Assert.Equal(1 + (int)HubTab.Disks, BarModel.ClickAction(right[2]).Index); Assert.Equal(PanelKind.Weather, BarModel.ClickAction(right[3]).Panel);
+        var (_, one) = BarModel.Build(BarState.Empty(DateTime.Now), new BarConfig { ShowHubNetwork = false }); Assert.DoesNotContain(one, i => i.Kind == BarItemKind.HubNetwork); Assert.Contains(one, i => i.Kind == BarItemKind.HubDisks);
+        var (_, off) = BarModel.Build(BarState.Empty(DateTime.Now), new BarConfig { ShowHub = false, ShowWeather = false }); Assert.DoesNotContain(off, i => i.Kind is BarItemKind.HubSystem or BarItemKind.HubNetwork or BarItemKind.HubDisks or BarItemKind.Weather);
         var (_, txt) = BarModel.Build(BarState.Empty(DateTime.Now) with { WeatherInfo = new WeatherBarInfo("rain", "12°C") }, new BarConfig()); Assert.Equal("12°C", txt.Single(i => i.Kind == BarItemKind.Weather).Text);
-        Assert.True(BarModel.IsClickable(BarItemKind.Hub)); Assert.True(BarModel.IsClickable(BarItemKind.Weather));
+        Assert.True(BarModel.IsClickable(BarItemKind.HubSystem)); Assert.True(BarModel.IsClickable(BarItemKind.Weather));
+        // abierto desde su icono, el panel no repite el logotipo ni las pestañas
+        var focused = PanelBuilder.HubPanel(PanelContext.Initial(new BarConfig(), DateTime.Now) with { Tab = HubTab.Network, HubFocused = true });
+        Assert.DoesNotContain(focused.Widgets, w => w.Kind is WidgetKind.Tabs || w.Id == "logo"); Assert.Contains(focused.Widgets, w => w.Kind == WidgetKind.TabHeader);
     }
 
     // ───────── Sonido (FOTO 2)

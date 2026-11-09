@@ -114,12 +114,13 @@ internal sealed class SettingsPainter : IDisposable
     {
         Brush(Side); _ctx.FillRectangle(R(0, 0, SettingsLayout.SidebarW, h), _b); Ln(SettingsLayout.SidebarW - 0.5, 0, SettingsLayout.SidebarW - 0.5, h, Sep, 1f);
         Text("Ajustes", _title, 20, 18, SettingsLayout.SidebarW - 32, 44, Label());
-        for (int i = 0; i < c.Pages.Count; i++)
+        foreach (var e in SettingsLayout.SideEntries(c.Pages))
         {
-            var r = SettingsLayout.SideItemRect(i); bool sel = i == c.PageIndex, hov = i == c.HoverSide && !sel;
+            int i = e.PageIndex; var r = e.Rect; bool sel = i == c.PageIndex, hov = i == c.HoverSide && !sel;
+            if (e.Header is { } hd) Text(hd.ToUpperInvariant(), _head, r.X + 10, e.HeaderY, r.W - 12, SettingsLayout.SideHeaderH, Secondary);
             if (sel) RR(r.X, r.Y, r.W, r.H, 10, new Color4(Tint.R, Tint.G, Tint.B, _dark ? 0.28f : 0.16f)); else if (hov) RR(r.X, r.Y, r.W, r.H, 10, Label(0.06f));
-            RR(r.X + 8, r.Y + 6, 28, 28, 7, C(IconColors[i % IconColors.Length])); Glyph(c.Pages[i].Glyph, r.X + 22, r.Y + 20, 8.5, new Color4(1, 1, 1, 1));
-            Text(c.Pages[i].Title, sel ? _sideSel : _side, r.X + 46, r.Y, r.W - 52, r.H, sel ? Tint : Label());
+            RR(r.X + 8, r.Y + 4, 24, 24, 6, C(IconColors[i % IconColors.Length])); Glyph(c.Pages[i].Glyph, r.X + 20, r.Y + 16, 7.5, new Color4(1, 1, 1, 1));
+            Text(c.Pages[i].Title, sel ? _sideSel : _side, r.X + 42, r.Y, r.W - 48, r.H, sel ? Tint : Label());
         }
     }
 

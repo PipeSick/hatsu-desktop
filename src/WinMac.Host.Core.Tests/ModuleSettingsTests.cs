@@ -55,7 +55,7 @@ public class ModulePageTests
 
     [Fact] public void The_modules_page_lists_only_implemented_modules_and_disables_their_settings_while_off()
     {
-        var page = Pages(new BarConfig()).Single(p => p.Id == "modules"); var rows = page.Groups.SelectMany(g => g.Rows).ToList();
+        var rows = Pages(new BarConfig()).Where(p => p.Id is "modules" or "gestures").SelectMany(p => p.Groups).SelectMany(g => g.Rows).ToList();   // Gestures tiene su propia página («Atajos y gestos»)
         Assert.Contains(rows, r => r.Id == "bar:mcEnabled" && !r.On); Assert.Contains(rows, r => r.Id == "bar:snapEnabled" && !r.On);
         Assert.All(rows.Where(r => r.Id is "mod.key:mcHotkey" or "snap.mod" or "snap.layout" or "snap.edit"), r => { Assert.False(r.Enabled); Assert.Equal("Activa el módulo", r.Reason); });
         foreach (var id in new[] { "bar:mcEnabled", "bar:snapEnabled", "bar:liveTextEnabled", "bar:spotActionsEnabled", "bar:gesturesEnabled", "shelf.enabled" }) Assert.Contains(rows, r => r.Id == id);   // los seis módulos tienen su interruptor

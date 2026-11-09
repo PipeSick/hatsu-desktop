@@ -52,7 +52,7 @@ public sealed class SettingsController
     private int SideHit(double x, double y)
     {
         if (x >= SettingsLayout.SidebarW) return -1;
-        for (int i = 0; i < _pages.Count; i++) { var r = SettingsLayout.SideItemRect(i); if (x >= r.X && x < r.X + r.W && y >= r.Y && y < r.Y + r.H) return i; }
+        foreach (var e in SettingsLayout.SideEntries(_pages)) { int i = e.PageIndex; var r = e.Rect; if (x >= r.X && x < r.X + r.W && y >= r.Y && y < r.Y + r.H) return i; }
         return -1;
     }
 

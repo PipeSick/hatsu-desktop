@@ -11,7 +11,8 @@ public class SettingsModelTests
     [Fact]
     public void There_are_twelve_pages_row_ids_are_unique_and_every_bar_option_appears_exactly_once()
     {
-        var pages = Pages(); Assert.Equal(["general", "dock", "bar", "notch", "capture", "spot", "modules", "nc", "weather", "clip", "connect", "ext"], pages.Select(p => p.Id));
+        var pages = Pages(); Assert.Equal(["general", "bar", "dock", "notch", "modules", "gestures", "spot", "nc", "capture", "weather", "connect", "ext"], pages.Select(p => p.Id));   // propuesta A: 12 secciones en 5 grupos
+        Assert.Equal([null, "Escritorio", "Escritorio", "Escritorio", "Funciones", "Funciones", "Funciones", "Contenido", "Contenido", "Contenido", "Dispositivos", "Avanzado"], pages.Select(p => p.Section));
         var ids = pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).Select(r => r.Id).ToList(); Assert.Equal(ids.Count, ids.Distinct().Count());
         foreach (var t in SettingsBuilder.BarToggles.Where(t => t.Field != "weatherAutoLocation")) Assert.Single(ids, i => i == "bar:" + t.Field);   // ningún ajuste de la Barra se pierde en el rediseño
         Assert.Single(ids, i => i == "wx.src");   // WM-015: «Usar mi ubicación» es ahora el selector «Origen» (Automática / Ciudad elegida)
@@ -108,10 +109,10 @@ public class SettingsControllerTests
     [Fact]
     public void The_sidebar_changes_page_resets_scroll_and_keeps_the_page_across_refreshes()
     {
-        var c = Make(); var r = SettingsLayout.SideItemRect(3); c.PointerDown(r.X + 10, r.Y + 10); c.PointerUp(r.X + 10, r.Y + 10); Assert.Equal("notch", c.Page!.Id);
+        var c = Make(); var r = SettingsLayout.SideEntries(c.Pages)[3].Rect; c.PointerDown(r.X + 10, r.Y + 10); c.PointerUp(r.X + 10, r.Y + 10); Assert.Equal("notch", c.Page!.Id);
         Assert.True(c.Scroll(120)); Assert.Equal(120, c.ScrollOffset, 3);
         c.SetPages(SettingsBuilder.Build(new SettingsInput(new HostConfig { Bar = new BarConfig { ShowDate = false } }, new Dictionary<string, ModuleState>(), false))); Assert.Equal("notch", c.Page!.Id); Assert.Equal(120, c.ScrollOffset, 3);   // un refresco no te saca de la página ni del punto donde estabas
-        var r0 = SettingsLayout.SideItemRect(0); c.PointerDown(r0.X + 5, r0.Y + 5); c.PointerUp(r0.X + 5, r0.Y + 5); Assert.Equal("general", c.Page!.Id); Assert.Equal(0, c.ScrollOffset);
+        var r0 = SettingsLayout.SideEntries(c.Pages)[0].Rect; c.PointerDown(r0.X + 5, r0.Y + 5); c.PointerUp(r0.X + 5, r0.Y + 5); Assert.Equal("general", c.Page!.Id); Assert.Equal(0, c.ScrollOffset);
     }
 
     [Fact]
@@ -208,7 +209,7 @@ public class SettingsActionsTests
         var longRow = shortRow with { Subtitle = string.Join(" ", Enumerable.Repeat("texto largo que no cabe", 8)) };
         Assert.True(SettingsLayout.RowHeight(longRow) > SettingsLayout.RowHeight(shortRow));
         Assert.Equal(0, (SettingsLayout.RowHeight(longRow) - SettingsLayout.RowHeight(shortRow)) % SettingsLayout.SubLineH, 3);
-        Assert.True(SettingsLayout.SideItemRect(9).Y + SettingsLayout.SideItemH <= SettingsLayout.WinH - 8);   // las diez secciones caben en la barra lateral
+        var side = SettingsLayout.SideEntries(SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false))); Assert.True(side[^1].Rect.Y + SettingsLayout.SideItemH <= SettingsLayout.WinH - 8);   // todas las secciones y los nombres de grupo caben en la barra lateral
         var seg = new SettingsRow(RowKind.Segmented, "wx.src", "Origen", "Subtítulo", Options: ["Automática", "Ciudad elegida"]);
         Assert.True(SettingsLayout.SegmentWidth(seg, SettingsLayout.ColW) / 2 >= "Ciudad elegida".Length * 7.4);   // CI: «Ciudad eleg…» salía recortado
         Assert.True(SettingsLayout.ControlSpace(seg) >= SettingsLayout.SegmentWidth(seg, SettingsLayout.ColW));      // el subtítulo no se mete bajo el control

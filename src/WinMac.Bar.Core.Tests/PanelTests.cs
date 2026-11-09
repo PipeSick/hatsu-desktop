@@ -56,7 +56,7 @@ public class BarModelPanelTests
     public void Control_center_and_bluetooth_icons_appear_only_when_there_is_something_behind_them()
     {
         var (_, r) = BarModel.Build(St(new BluetoothInfo(true, true, 1)), new BarConfig());
-        Assert.Equal([BarItemKind.Hub, BarItemKind.Weather, BarItemKind.Bluetooth, BarItemKind.Network, BarItemKind.Volume, BarItemKind.Battery, BarItemKind.ControlCenter, BarItemKind.Clock], r.Select(i => i.Kind));
+        Assert.Equal([BarItemKind.HubSystem, BarItemKind.HubNetwork, BarItemKind.HubDisks, BarItemKind.Weather, BarItemKind.Bluetooth, BarItemKind.Network, BarItemKind.Volume, BarItemKind.Battery, BarItemKind.ControlCenter, BarItemKind.Clock], r.Select(i => i.Kind));
         var (_, none) = BarModel.Build(St(BluetoothInfo.None), new BarConfig()); Assert.DoesNotContain(none, i => i.Kind == BarItemKind.Bluetooth);   // sin adaptador: no hay icono que engañe
         var (_, off) = BarModel.Build(St(new BluetoothInfo(true, true, 1)), new BarConfig { ShowBluetooth = false, ShowControlCenter = false }); Assert.DoesNotContain(off, i => i.Kind is BarItemKind.Bluetooth or BarItemKind.ControlCenter);
     }

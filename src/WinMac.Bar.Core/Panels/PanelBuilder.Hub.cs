@@ -38,12 +38,14 @@ public static partial class PanelBuilder
         }
 
         if (!string.IsNullOrWhiteSpace(c.Message)) content.Add(Note("msg", c.Message!));
-        var w = new List<Widget>
+        var w = new List<Widget>();
+        if (!c.HubFocused)   // abierto desde su propio icono: sin logotipo ni pestañas (cada pestaña ya es un icono de la barra)
         {
-            new(WidgetKind.Header, "logo", AppIdentity.Current.Name, Glyph: "logo", Data: AppIdentity.Current.LogoKey),
-            new(WidgetKind.Tabs, "tabs", "", Data: new TabsData(HubTabs.All, HubTabs.IndexOf(tab))),
-            new(WidgetKind.TabHeader, "settings:" + tab, SectionTitle(tab)),
-        };
+            w.Add(new(WidgetKind.Header, "logo", AppIdentity.Current.Name, Glyph: "logo", Data: AppIdentity.Current.LogoKey));
+            w.Add(new(WidgetKind.Tabs, "tabs", "", Data: new TabsData(HubTabs.All, HubTabs.IndexOf(tab))));
+        }
+
+        w.Add(new(WidgetKind.TabHeader, "settings:" + tab, SectionTitle(tab)));
         int from = w.Count; w.AddRange(content); int to = w.Count - 1;
         w.Add(new Widget(WidgetKind.Button, "hub:settings", "Ajustes", Col: 0, Glyph: "gear"));
         w.Add(new Widget(WidgetKind.Button, "hub:quit", "Salir", Col: 1, Glyph: "power"));

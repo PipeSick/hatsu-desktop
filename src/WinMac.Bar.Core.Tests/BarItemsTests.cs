@@ -86,7 +86,7 @@ public class BarItemsTests
     [Fact] public void Task_manager_participates_in_order_but_clock_stays_last()
     {
         var s = BarState.Empty(new DateTime(2026, 11, 4, 12, 0, 0));
-        var r = BarModel.Build(s, new BarConfig { ShowTaskManager = true, ShowHub = true, BarOrder = "TaskManager,Hub" }).Right;
+        var r = BarModel.Build(s, new BarConfig { ShowTaskManager = true, ShowHub = true, BarOrder = "TaskManager,HubSystem" }).Right;
         Assert.Equal("TaskManager", r[0].Id); Assert.Equal("Clock", r[^1].Id);
     }
 
@@ -99,17 +99,17 @@ public class BarItemsTests
     private static double CenterOf(BarController c, string id) { var f = c.Frame.Items.First(i => i.Item.Id == id); return f.X + f.W / 2; }
     [Fact] public void Click_without_movement_is_not_a_drag()
     {
-        var c = Ctl(); double x = CenterOf(c, "Hub"); c.PressAt(x); Assert.False(c.DragTo(x + 2)); Assert.Null(c.Release(x + 2, out bool drag)); Assert.False(drag);
+        var c = Ctl(); double x = CenterOf(c, "HubSystem"); c.PressAt(x); Assert.False(c.DragTo(x + 2)); Assert.Null(c.Release(x + 2, out bool drag)); Assert.False(drag);
     }
     [Fact] public void Drag_hub_after_task_manager_returns_new_order()
     {
-        var c = Ctl(); double hub = CenterOf(c, "Hub"), tm = CenterOf(c, "TaskManager");
+        var c = Ctl(); double hub = CenterOf(c, "HubSystem"), tm = CenterOf(c, "TaskManager");
         c.PressAt(hub); Assert.True(c.DragTo(tm + 6)); Assert.NotNull(c.Step(0.016).DropX);
-        var order = c.Release(tm + 6, out bool drag); Assert.True(drag); Assert.Equal("TaskManager,Hub", order);
+        var order = c.Release(tm + 6, out bool drag); Assert.True(drag); Assert.Equal("HubNetwork,HubDisks,TaskManager,HubSystem", order);   // los otros iconos de rendimiento quedan delante y se guarda el orden completo
     }
     [Fact] public void Drag_to_same_place_changes_nothing()
     {
-        var c = Ctl(); double hub = CenterOf(c, "Hub"); c.PressAt(hub); c.DragTo(hub + 6); Assert.Null(c.Release(hub + 6, out bool drag)); Assert.True(drag);
+        var c = Ctl(); double hub = CenterOf(c, "HubSystem"); c.PressAt(hub); c.DragTo(hub + 6); Assert.Null(c.Release(hub + 6, out bool drag)); Assert.True(drag);
     }
     [Fact] public void Clock_and_control_center_cannot_be_dragged()
     {
@@ -118,10 +118,10 @@ public class BarItemsTests
     }
     [Fact] public void Dropping_past_the_clock_clamps_inside_movable_range()
     {
-        var c = Ctl(); double hub = CenterOf(c, "Hub"); c.PressAt(hub); c.DragTo(1190);
-        Assert.Equal("TaskManager,Hub", c.Release(1190, out _));
+        var c = Ctl(); double hub = CenterOf(c, "HubSystem"); c.PressAt(hub); c.DragTo(1190);
+        Assert.Equal("HubNetwork,HubDisks,TaskManager,HubSystem", c.Release(1190, out _));
     }
-    [Fact] public void Cancel_drag_discards() { var c = Ctl(); c.PressAt(CenterOf(c, "Hub")); c.DragTo(CenterOf(c, "Hub") + 40); c.CancelDrag(); Assert.False(c.Dragging); }
+    [Fact] public void Cancel_drag_discards() { var c = Ctl(); c.PressAt(CenterOf(c, "HubSystem")); c.DragTo(CenterOf(c, "HubSystem") + 40); c.CancelDrag(); Assert.False(c.Dragging); }
 
     // ── It7: iconos de la bandeja legibles en tema claro
     private static byte[] Icon(Func<int, (byte R, byte G, byte B, byte A)> px)

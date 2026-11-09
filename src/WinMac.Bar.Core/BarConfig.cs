@@ -41,7 +41,11 @@ public sealed record BarConfig
     /// <summary>Wi-Fi: al tocar una red se despliega con señal, potencia (dBm), banda (2,4 / 5 / 6 GHz) y seguridad, con la acción de conectar dentro. Apagado por defecto (la lista conecta con un toque).</summary>
     public bool WifiDetails { get; init; } = false;
     // ── Panel multifunción (un solo icono) y Tiempo (otro icono independiente)
+    /// <summary>Iconos de Rendimiento, Red y Discos en la barra (antes, un solo icono abría un panel con pestañas). Cada uno se puede quitar con su propia opción.</summary>
     public bool ShowHub { get; init; } = true;
+    public bool ShowHubSystem { get; init; } = true;
+    public bool ShowHubNetwork { get; init; } = true;
+    public bool ShowHubDisks { get; init; } = true;
     public bool ShowWeather { get; init; } = true;
     /// <summary>Última pestaña del panel multifunción (se recuerda entre sesiones).</summary>
     public Hub.HubTab HubTab { get; init; } = Hub.HubTab.Sound;

@@ -1,6 +1,6 @@
 namespace WinMac.Bar;
 
-public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather, TrayMenu, Phone, TaskManager, PowerPlug, Peripherals, Cleanup, Vpn }
+public enum BarItemKind { WinMacMenu, AppName, Network, Volume, Battery, Clock, Bluetooth, ControlCenter, AppMenu, Hub, Weather, TrayMenu, Phone, TaskManager, PowerPlug, Peripherals, Cleanup, Vpn, HubSystem, HubNetwork, HubDisks }
 
 /// <summary>
 /// Un elemento de la barra. <see cref="Text"/> puede estar vacío (solo icono). <see cref="GlyphWidth"/> es el ancho fijo del icono (0 = sin icono).
@@ -36,7 +36,10 @@ public static class BarModel
 
         var right = new List<BarItem>();
         if (c.ShowTrayIcons && s.Tray.Count > 0) right.Add(new BarItem(BarItemKind.TrayMenu, "", IconW));   // UN botón (flecha abajo; arriba con el desplegable abierto) con las apps en segundo plano, como la flechita de la bandeja de Windows
-        if (c.ShowHub) right.Add(new BarItem(BarItemKind.Hub, "", IconW));   // UN solo icono de la aplicación: un panel con pestañas
+        // El menú con pestañas pasó a ser iconos sueltos: cada uno abre su panel (Sonido ya es el icono de volumen). El icono único «Hub» ya no se muestra.
+        if (c.ShowHub && c.ShowHubSystem) right.Add(new BarItem(BarItemKind.HubSystem, "", IconW, Tip: "Rendimiento"));
+        if (c.ShowHub && c.ShowHubNetwork) right.Add(new BarItem(BarItemKind.HubNetwork, "", IconW, Tip: "Red y velocidad"));
+        if (c.ShowHub && c.ShowHubDisks) right.Add(new BarItem(BarItemKind.HubDisks, "", IconW, Tip: "Discos"));
         if (c.ShowWeather) right.Add(new BarItem(BarItemKind.Weather, s.Weather.Text, IconW));   // el Tiempo es un componente aparte, con su propio panel
         if (c.ShowBluetooth && s.Bt.Present) right.Add(new BarItem(BarItemKind.Bluetooth, "", IconW));
         if (c.ShowNetwork && s.Network.Kind != NetKind.Unknown) right.Add(new BarItem(BarItemKind.Network, "", IconW));
@@ -65,6 +68,9 @@ public static class BarModel
         BarItemKind.ControlCenter => new BarAction(BarActionKind.OpenSettings, "ms-settings:"),
         BarItemKind.AppMenu => new BarAction(BarActionKind.ShowAppMenu),
         BarItemKind.Hub => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Hub),
+        BarItemKind.HubSystem => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Hub, Index: (int)Hub.HubTab.System + 1),   // Index = pestaña + 1; 0 = la que tenga la configuración
+        BarItemKind.HubNetwork => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Hub, Index: (int)Hub.HubTab.Network + 1),
+        BarItemKind.HubDisks => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Hub, Index: (int)Hub.HubTab.Disks + 1),
         BarItemKind.Weather => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Weather),
         BarItemKind.TrayMenu => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Tray),
         BarItemKind.Phone => new BarAction(BarActionKind.OpenPanel, Panel: PanelKind.Phone),

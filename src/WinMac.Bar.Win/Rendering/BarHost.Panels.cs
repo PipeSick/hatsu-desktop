@@ -148,11 +148,15 @@ public sealed partial class BarHost : IPanelUi
     }
 
     // ───────────────────────────── paneles
+    private Hub.HubTab? _openTab;
+
     private void OpenPanelFromBar(BarWindow src, BarAction a, BarItemFrame? item)
     {
         if (a.Panel is not PanelKind kind) { if (a.Uri is not null) BarNative.ShellExecuteW(IntPtr.Zero, "open", a.Uri, null, null, 1); return; }
-        if (_popover is { IsOpen: true } && _pkind == kind && ReferenceEquals(_popSource, src)) { _popover.Hide(); return; }   // segundo clic en el mismo icono de la misma barra = cerrar; en otra barra = abrirlo ahí
+        var wantTab = kind == PanelKind.Hub && a.Index > 0 ? (Hub.HubTab?)(Hub.HubTab)(a.Index - 1) : null;
+        if (_popover is { IsOpen: true } && _pkind == kind && ReferenceEquals(_popSource, src) && wantTab == _openTab) { _popover.Hide(); return; }   // segundo clic en el mismo icono de la misma barra = cerrar; en otra barra = abrirlo ahí
         int cx = item is null ? src.Left + src.MonitorRect.W / 2 : src.Left + (int)((item.X + item.W / 2) * src.Scale);
+        _openTab = kind == PanelKind.Hub && a.Index > 0 ? (Hub.HubTab)(a.Index - 1) : null;   // el icono de Rendimiento, Red o Discos abre su pestaña
         try { OpenPanel(src, kind, cx, alignRight: kind == PanelKind.ControlCenter); }
         catch (Exception e)
         {
@@ -165,7 +169,7 @@ public sealed partial class BarHost : IPanelUi
     {
         _popover ??= new PopoverWindow(OnPanelEvent, OnPanelClosed, _log, PanelIcon);
         _popSource = src; _pkind = kind; _anchorX = anchorX; _alignRight = alignRight; _panelTicks = 0; _lastPanelRefresh = DateTime.UtcNow;
-        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _cfg.HubTab, Tray = _trayStore.Visible }; _pctx = WithModules(_pctx with { Hub = MakeHubData() });
+        _pctx = PanelContext.Initial(_cfg, DateTime.Now) with { Sys = _hub.Snapshot, Battery = _battery, Tab = _openTab ?? _cfg.HubTab, HubFocused = _openTab is not null, Tray = _trayStore.Visible }; _pctx = WithModules(_pctx with { Hub = MakeHubData() });
         if (kind == PanelKind.Notifications) { OpenNotificationCenter(src); return; }
         var model = PanelBuilder.Build(kind, _pctx);
         _popover.Show(model, anchorX, src.Top + src.Height, src.MonitorRect, src.Scale, _theme, alignRight);   // se abre en el monitor donde se hizo clic, escalado a SU DPI
