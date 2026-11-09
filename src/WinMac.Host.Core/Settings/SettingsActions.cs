@@ -199,6 +199,8 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("bar.spot", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.SpotKeyValues.Length: cfg.ApplyBarPatch(Patch("spotlightHotkey", SettingsBuilder.SpotKeyValues[e.Index])); return true;
             case ("hub.rate", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.RateValues.Length: cfg.ApplyBarPatch(Patch("rateUnit", SettingsBuilder.RateValues[e.Index])); return true;
             case ("bar.ics", "text"): { var t = (e.Text ?? "").Trim(); cfg.ApplyBarPatch(Patch("calendarIcsPath", t.Length == 0 ? null : t)); return true; }
+            case ("periph.asus.kb", "text"): cfg.ApplyBarPatch(Patch("peripheralAsusKeyboardName", (e.Text ?? "").Trim())); return true;
+            case ("periph.asus.mouse", "text"): cfg.ApplyBarPatch(Patch("peripheralAsusMouseName", (e.Text ?? "").Trim())); return true;
             case ("periph.thr", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int thr)) cfg.ApplyBarPatch(Patch("peripheralAlertThreshold", thr)); return true;
             case ("periph.unhide", _): cfg.ApplyBarPatch(Patch("peripheralHidden", "")); return true;
             case ("onboarding.rerun", _): if (RunOnboarding is null) return false; RunOnboarding(); return true;

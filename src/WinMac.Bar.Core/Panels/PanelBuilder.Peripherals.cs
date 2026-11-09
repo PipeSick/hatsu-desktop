@@ -46,7 +46,10 @@ public static partial class PanelBuilder
             }
 
             var noData = connected.Except(withData).ToList();
-            if (noData.Count > 0) w.Add(new Widget(WidgetKind.Note, "periph-nodata", "Conectado, sin dato de batería: " + string.Join(", ", noData.Select(d => d.Name)) + "."));
+            var receivers = noData.Where(d => d.Connection == ConnectionKind.Dongle && d.Battery == BatteryStatus.Unsupported).ToList();   // receptor reconocido, pero Hatsu aún no sabe leer su batería (puede que el dispositivo ni esté encendido)
+            var other = noData.Except(receivers).ToList();
+            if (other.Count > 0) w.Add(new Widget(WidgetKind.Note, "periph-nodata", "Conectado, sin dato de batería: " + string.Join(", ", other.Select(d => d.Name)) + "."));
+            if (receivers.Count > 0) w.Add(new Widget(WidgetKind.Note, "periph-receivers", "Receptor detectado, batería aún no compatible: " + string.Join(", ", receivers.Select(d => d.Name)) + "."));
             if (connected.Count == 0) w.Add(new Widget(WidgetKind.Note, "periph-none", "No hay periféricos conectados ahora."));
         }
 

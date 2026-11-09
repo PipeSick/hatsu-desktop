@@ -198,6 +198,8 @@ public static partial class SettingsBuilder
                 BarF("showPeripherals", "Batería de ratón, teclado y auriculares que Windows y el propio dispositivo informan (Bluetooth estándar y HID). Apagado: no se lee nada y no queda nada en memoria"),
                 BarF("peripheralAsusRog", "Teclado y ratón ROG con el receptor ROG OMNI. A diferencia de los demás lectores, ESTE ENVÍA al receptor la misma consulta de 64 bytes que Armoury Crate (solo lee la batería). Probado con Strix Scope II 96 y Keris II Origin; otros modelos no están verificados"),
                 BarF("peripheralAlerts", "Una sola vez por dispositivo al bajar del umbral; vuelve a avisar solo tras cargarlo. Sale por las notificaciones de Hatsu Notch"),
+                new(RowKind.Field, "periph.asus.kb", "Nombre del teclado ROG", "El receptor no dice el modelo. Si lo escribes aquí, aparece con ese nombre (por ejemplo, tu modelo exacto)", Text: bar.PeripheralAsusKeyboardName, Placeholder: "Teclado ROG"),
+                new(RowKind.Field, "periph.asus.mouse", "Nombre del ratón ROG", "Igual que el teclado: el nombre que quieras para tu ratón", Text: bar.PeripheralAsusMouseName, Placeholder: "Ratón ROG"),
                 new(RowKind.Field, "periph.thr", "Umbral de batería baja (%)", "Entre 5 y 50", Text: bar.PeripheralAlertThreshold.ToString(), Placeholder: "20"),
                 new(RowKind.Button, "periph.unhide", "Mostrar los dispositivos ocultos"),
             ], "Los receptores 2,4 GHz y el software de cada fabricante (Armoury Crate, Synapse…) no se consultan: sin interfaz documentada no se inventa nada."),

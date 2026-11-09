@@ -33,7 +33,7 @@ public sealed partial class BarHost
         if (!_cfg.ShowPeripherals || _periphBusy) return;
         if (!force && DateTime.UtcNow - _lastPeriphRead < MinManualGap) return;
         _periph ??= new PeripheralStore(); _periphAlerts ??= new PeripheralAlertEngine();
-        _periphProviders = _cfg.PeripheralAsusRog ? [new BluetoothPeripheralProvider(), new HidBatteryProvider(), new AsusRogProvider()] : [new BluetoothPeripheralProvider(), new HidBatteryProvider()];   // se rearma en cada lectura: activar o apagar el lector ASUS se nota al instante
+        _periphProviders = _cfg.PeripheralAsusRog ? [new BluetoothPeripheralProvider(), new HidBatteryProvider(), new AsusRogProvider(_cfg.PeripheralAsusKeyboardName, _cfg.PeripheralAsusMouseName)] : [new BluetoothPeripheralProvider(), new HidBatteryProvider()];   // se rearma en cada lectura: activar o apagar el lector ASUS se nota al instante
         var cts = _periphCts = new CancellationTokenSource(); var store = _periph; var providers = _periphProviders;
         _periphBusy = true; _lastPeriphRead = DateTime.UtcNow; RebuildPeripheralsPanel();
         Task.Run(async () =>

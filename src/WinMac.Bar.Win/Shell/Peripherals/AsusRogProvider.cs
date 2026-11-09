@@ -11,22 +11,29 @@ namespace WinMac.Bar.Win.Shell.Peripherals;
 /// </summary>
 internal sealed class AsusRogProvider : IPeripheralProvider
 {
+    private readonly string? _kbName, _mouseName;
+    public AsusRogProvider(string? keyboardName, string? mouseName) { _kbName = string.IsNullOrWhiteSpace(keyboardName) ? null : keyboardName; _mouseName = string.IsNullOrWhiteSpace(mouseName) ? null : mouseName; }
     public string Id => "asus-rog";
     public string DisplayName => "ASUS ROG (receptor 2,4 GHz)";
     public SupportLevel Support => SupportLevel.Experimental;
 
     public Task<IReadOnlyList<RawReading>> ReadAsync(CancellationToken ct) => Task.Run<IReadOnlyList<RawReading>>(() =>
     {
-        var res = new List<RawReading>(); var paths = Enumerate();
+        var res = new List<RawReading>(); var paths = Enumerate(out var others);
         foreach (var q in AsusRogProtocol.OmniQueries)
         {
             ct.ThrowIfCancellationRequested();
             if (!paths.TryGetValue(q.UsagePage, out var path)) continue;             // el receptor no está conectado
             int? pct = Ask(path, q, ct);
-            res.Add(new RawReading("asus-rog:" + q.Role, AsusRogProtocol.DisplayName(q.Role), AsusRogProtocol.Kind(q.Role), ConnectionKind.Dongle, pct is not null, pct,
+            string name = (q.Role == AsusRogProtocol.Role.Keyboard ? _kbName : _mouseName) ?? AsusRogProtocol.DisplayName(q.Role);
+            res.Add(new RawReading("asus-rog:" + q.Role, name, AsusRogProtocol.Kind(q.Role), ConnectionKind.Dongle, pct is not null, pct,
                 ChargeState.Unknown, pct is null ? BatteryCapability.Unknown : BatteryCapability.Supported, "Lectura por el canal del receptor ROG OMNI; modelo no identificado."));
         }
 
+        // Otros receptores ASUS (por ejemplo, los de auriculares 2,4 GHz): se listan por su nombre para que se vea que Hatsu los reconoció, pero su batería aún no se puede leer.
+        foreach (var (pid, prod) in others)
+            res.Add(new RawReading("asus-rx:" + pid.ToString("X4"), prod, prod.Contains("HEADSET", StringComparison.OrdinalIgnoreCase) || prod.Contains("DELTA", StringComparison.OrdinalIgnoreCase) ? DeviceKind.Headset : DeviceKind.Other, ConnectionKind.Dongle, true, null,
+                ChargeState.Unknown, BatteryCapability.Unsupported, "Receptor ASUS detectado; la batería de este modelo aún no es compatible."));
         return res;
     }, ct);
 
@@ -58,9 +65,9 @@ internal sealed class AsusRogProvider : IPeripheralProvider
     }
 
     /// <summary>Rutas HID del receptor Omni por página de uso (solo canales del fabricante de 64 bytes).</summary>
-    private static Dictionary<ushort, string> Enumerate()
+    private static Dictionary<ushort, string> Enumerate(out List<(ushort Pid, string Name)> others)
     {
-        var map = new Dictionary<ushort, string>(); Guid g; HidD_GetHidGuid(out g);
+        var map = new Dictionary<ushort, string>(); others = []; var seen = new HashSet<ushort>(); Guid g; HidD_GetHidGuid(out g);
         IntPtr set = SetupDiGetClassDevs(ref g, null, IntPtr.Zero, 0x12);
         try
         {
@@ -73,7 +80,14 @@ internal sealed class AsusRogProvider : IPeripheralProvider
                 IntPtr q = CreateFile(det.DevicePath, 0, 3, IntPtr.Zero, 3, 0, IntPtr.Zero); if (q == IntPtr.Zero || q == new IntPtr(-1)) continue;
                 try
                 {
-                    var a = new HIDD_ATTRIBUTES { Size = Marshal.SizeOf<HIDD_ATTRIBUTES>() }; if (!HidD_GetAttributes(q, ref a) || a.VendorID != AsusRogProtocol.Vendor || a.ProductID != AsusRogProtocol.OmniReceiverPid) continue;
+                    var a = new HIDD_ATTRIBUTES { Size = Marshal.SizeOf<HIDD_ATTRIBUTES>() }; if (!HidD_GetAttributes(q, ref a) || a.VendorID != AsusRogProtocol.Vendor) continue;
+                    if (a.ProductID != AsusRogProtocol.OmniReceiverPid)
+                    {   // otro dispositivo ASUS: solo interesa si es un receptor o unos auriculares inalámbricos (no la placa, el AIO ni el controlador de luces)
+                        var sbp = new StringBuilder(256); HidD_GetProductString(q, sbp, 512); string prod = sbp.ToString().Trim();
+                        if (prod.Length > 0 && seen.Add(a.ProductID) && (prod.Contains("2.4", StringComparison.Ordinal) || prod.Contains("RECEIVER", StringComparison.OrdinalIgnoreCase) || prod.Contains("WIRELESS", StringComparison.OrdinalIgnoreCase))) others.Add((a.ProductID, prod));
+                        continue;
+                    }
+
                     if (!HidD_GetPreparsedData(q, out var pp)) continue;
                     try { if (HidP_GetCaps(pp, out var c) >= 0 && c.UsagePage >= 0xFF00 && c.InputReportByteLength == AsusRogProtocol.FrameLength && c.OutputReportByteLength == AsusRogProtocol.FrameLength) map.TryAdd(c.UsagePage, det.DevicePath); }
                     finally { HidD_FreePreparsedData(pp); }
@@ -96,6 +110,7 @@ internal sealed class AsusRogProvider : IPeripheralProvider
     }
     [DllImport("hid.dll")] private static extern void HidD_GetHidGuid(out Guid g);
     [DllImport("hid.dll")] private static extern bool HidD_GetAttributes(IntPtr h, ref HIDD_ATTRIBUTES a);
+    [DllImport("hid.dll", CharSet = CharSet.Unicode)] private static extern bool HidD_GetProductString(IntPtr h, StringBuilder s, int len);
     [DllImport("hid.dll")] private static extern bool HidD_GetPreparsedData(IntPtr h, out IntPtr p);
     [DllImport("hid.dll")] private static extern bool HidD_FreePreparsedData(IntPtr p);
     [DllImport("hid.dll")] private static extern int HidP_GetCaps(IntPtr p, out HIDP_CAPS c);

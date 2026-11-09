@@ -172,6 +172,8 @@ public class PeripheralsTests
 
 public class AsusRogProtocolTests
 {
+    private static readonly DateTime T0 = new(2026, 11, 4, 12, 0, 0, DateTimeKind.Utc);
+    private static ProviderResult Ok(params RawReading[] r) => new("t", ProviderStatus.Ok, r);
     private static byte[] Hex(string h) { var b = new byte[64]; var s = Convert.FromHexString(h); Array.Copy(s, b, s.Length); return b; }
     private static AsusRogProtocol.Query Kb => AsusRogProtocol.OmniQueries.Single(q => q.Role == AsusRogProtocol.Role.Keyboard);
     private static AsusRogProtocol.Query Mouse => AsusRogProtocol.OmniQueries.Single(q => q.Role == AsusRogProtocol.Role.Mouse);
@@ -205,5 +207,22 @@ public class AsusRogProtocolTests
     {
         Assert.Contains("Teclado ROG", AsusRogProtocol.DisplayName(AsusRogProtocol.Role.Keyboard)); Assert.Equal(DeviceKind.Mouse, AsusRogProtocol.Kind(AsusRogProtocol.Role.Mouse));
         Assert.False(new BarConfig().PeripheralAsusRog);   // opt-in: manda una consulta al receptor
+    }
+
+    [Fact] public void A_recognized_receiver_without_battery_support_is_listed_by_name_apart_from_connected_devices_without_data()
+    {
+        var st = new PeripheralStore();
+        var rx = new RawReading("asus-rx:1AFA", "ROG DELTA II (2.4GHz)", DeviceKind.Headset, ConnectionKind.Dongle, true, null, ChargeState.Unknown, BatteryCapability.Unsupported);
+        var bt = new RawReading("bt:x", "Mando de prueba", DeviceKind.Gamepad, ConnectionKind.Bluetooth, true, null, ChargeState.Unknown, BatteryCapability.Unknown);
+        st.Apply(Ok(rx, bt), T0);
+        var m = PanelBuilder.PeripheralsPanel(PanelContext.Initial(new BarConfig(), T0) with { Periph = new PeripheralsView(st.View(T0), 0, false, false, 20) });
+        Assert.Contains("ROG DELTA II", Assert.Single(m.Widgets, w => w.Id == "periph-receivers").Text);
+        var nodata = Assert.Single(m.Widgets, w => w.Id == "periph-nodata"); Assert.Contains("Mando de prueba", nodata.Text); Assert.DoesNotContain("DELTA", nodata.Text);
+    }
+
+    [Fact] public void User_given_names_are_cleaned_and_limited()
+    {
+        var c = new BarConfig { PeripheralAsusKeyboardName = "  Scope II 96\u0007  ", PeripheralAsusMouseName = new string('x', 80) }.Sanitize();
+        Assert.Equal("Scope II 96", c.PeripheralAsusKeyboardName); Assert.Equal(40, c.PeripheralAsusMouseName.Length); Assert.Equal("", new BarConfig().PeripheralAsusKeyboardName);
     }
 }

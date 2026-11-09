@@ -110,6 +110,9 @@ public sealed record BarConfig
     public bool ShowCleanup { get; init; } = false;
     /// <summary>Periféricos ASUS ROG por el receptor ROG OMNI (docs/64). Envía al receptor la misma consulta que Armoury Crate; por eso es opt-in y viene APAGADO.</summary>
     public bool PeripheralAsusRog { get; init; } = false;
+    /// <summary>Nombres que el usuario le pone al teclado y al ratón del receptor ROG OMNI (el receptor no dice el modelo). Vacío = el nombre genérico.</summary>
+    public string PeripheralAsusKeyboardName { get; init; } = "";
+    public string PeripheralAsusMouseName { get; init; } = "";
     /// <summary>Icono de VPN en la barra (conexiones VPN de Windows: ver, conectar y desconectar). APAGADO por defecto.</summary>
     public bool ShowVpn { get; init; } = false;
     /// <summary>It8: mostrar el progreso de Cleanup en la Isla.</summary>
@@ -202,6 +205,7 @@ public sealed record BarConfig
         LtHotkey = Features.FeatureConfig.NormalizeHotkey(LtHotkey, "Ctrl+Alt+Space"),
         SnapNextHotkey = Features.FeatureConfig.NormalizeHotkey(SnapNextHotkey, ""),
         GestLaunchers = Features.Launchers.Serialize(Features.Launchers.Parse(GestLaunchers)),
+        PeripheralAsusKeyboardName = CleanName(PeripheralAsusKeyboardName), PeripheralAsusMouseName = CleanName(PeripheralAsusMouseName),
         GestKey1 = Features.FeatureConfig.NormalizeHotkey(GestKey1, ""), GestKey2 = Features.FeatureConfig.NormalizeHotkey(GestKey2, ""),
         SnapModifier = Features.FeatureConfig.SnapModifiers.Contains(SnapModifier) ? SnapModifier : "Shift",
         SnapLayout = string.IsNullOrWhiteSpace(SnapLayout) ? "Mitades" : SnapLayout.Trim(),
@@ -270,4 +274,6 @@ public sealed record BarConfig
         }
         catch (Exception) { return false; }
     }
+
+    private static string CleanName(string? n) { var t = new string((n ?? "").Where(c => !char.IsControl(c)).ToArray()).Trim(); return t.Length > 40 ? t[..40].Trim() : t; }
 }
