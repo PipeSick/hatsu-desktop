@@ -1,4 +1,4 @@
 # Commit de PipeSick/notch-win que el CI de Hatsu Desktop compila para validar la integración.
-# RAMA DE TRABAJO feat/hatsu-shelf-plus (95b2408): sobre feat/hatsu-calls (e98863c) añade Shelf+ (estantería de la Isla con archivos, carpetas, texto e imágenes, límite, vaciar y comandos shelf-open / shelf-add-text), banner de descargas adaptable, clic en notificación abre la app y protección del fondo translúcido.
+# RAMA DE TRABAJO feat/hatsu-shelf-plus (6ee3bb7): sobre feat/hatsu-calls (e98863c) añade Shelf+ (estantería de la Isla con archivos, carpetas, texto e imágenes, límite, vaciar y comandos shelf-open / shelf-add-text), banner de descargas adaptable, clic en notificación abre la app y protección del fondo translúcido.
 # Solo vale para esta rama de Hatsu Desktop; el pin de Stable (42d61c9) NO se cambia hasta que el propietario autorice la fusión y se valide en un PC real.
-95b2408093547e0def2f19b899ea4c24d5e48e7e
+6ee3bb73dc589825d093173b01f417d774c29cf1

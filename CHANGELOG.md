@@ -3,7 +3,7 @@
 Formato libre por versión. Las entradas marcadas «sin validar» están implementadas y probadas automáticamente, pero nadie las ha visto funcionar en un Windows real. Nada de esto está publicado como versión estable.
 
 ## Sin publicar (rama de trabajo)
-Versión del paquete: **2.0.8** (la Store exige una versión mayor en cada envío; la 2.0.7 ya se entregó).
+Versión del paquete: **2.0.9** (la Store exige una versión mayor en cada envío).
 **Módulos de productividad** ([`docs/63`](docs/63-modulos-de-productividad.md)), cada uno con interruptor en *Ajustes › Módulos*, atajos configurables con captura de teclado y aviso de conflictos (incluidas las Capturas Ctrl+Mayús+3–6):
 - Mission Control (escritorio actual, multimonitor sin validar), Snap (zonas, editor, distribuciones propias), Live Text (OCR local), Spotlight Actions, Gestures (esquinas y botones laterales), Shelf+ en la Isla (archivos, carpetas, texto, imágenes).
 - Gestures: accesos rápidos para abrir aplicaciones instaladas o páginas web desde esquinas, botones laterales y atajos (hasta 6). Se retiró la acción de ocultar el Dock. Spotlight: «usar la distribución» acomoda las ventanas abiertas.
@@ -14,7 +14,7 @@ Versión del paquete: **2.0.8** (la Store exige una versión mayor en cada enví
 
 **Capturas:** se copian al portapapeles al tomarlas (default; se apaga en Ajustes) y la miniatura se puede arrastrar a otra aplicación.
 
-**Hatsu Notch:** banner de descargas con ancho adaptable; clic en una notificación abre la app que la envió; protección frente al error del fondo translúcido.
+**Hatsu Notch:** banner de descargas con ancho adaptable; clic en una notificación abre la app que la envió (ahora con la activación de Windows, que informa si falló, y con un registro en `%LOCALAPPDATA%/NotchWin/notificaciones.log`); protección frente al error del fondo translúcido.
 **Dock:** × en cada ventana de la vista previa; «Reservar espacio» y la vista previa se aplican en vivo.
 **Barra:** icono propio de Hatsu; panel de Limpieza rediseñado; las rutas largas de Spotlight se recortan con «…».
 **Correcciones:** la Barra y el Dock ya no se esconden cuando una app marcada como «ocupada» (p. ej. ChatGPT) no cubre la pantalla entera.
