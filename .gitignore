@@ -6,3 +6,4 @@ last-path.txt
 .mono/
 calibration/private/
 __pycache__/
+ci-report/

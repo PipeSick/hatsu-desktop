@@ -2,6 +2,8 @@
 
 Experiencia de escritorio inspirada en macOS Tahoe para **Windows 11**: barra superior, Dock, Launchpad, Spotlight, centro de notificaciones, una isla informativa (**Hatsu Notch**) y un conjunto de módulos de productividad. Código abierto bajo **Apache-2.0** ([`LICENSE`](LICENSE) · [`NOTICE`](NOTICE) · [`THIRD_PARTY.md`](THIRD_PARTY.md)).
 
+**Instalar:** [Microsoft Store](https://apps.microsoft.com/detail/9NJ0XLP6NXVJ) · **Privacidad:** [política](https://pipesick.github.io/hatsu-desktop/privacy/) · **Cambios:** [`CHANGELOG.md`](CHANGELOG.md)
+
 > **Estado: en desarrollo activo (versión 2.0.x).** Lo lógico se prueba en cada commit en el CI; lo gráfico, la entrada y el hardware se validan a mano en un Windows real, y cada documento dice qué está validado y qué no.
 >
 > **Hatsu Desktop es la evolución de WinMac.** Antes se llamaba «WinMac». Por compatibilidad se conservan los identificadores internos (`WinMac*.exe`, `%APPDATA%\WinMac`, canales entre componentes). Ver [`docs/46`](docs/46-rebranding-hatsu-desktop.md). El repositorio antes era `PipeSick/win11-macos` ([`docs/54`](docs/54-migracion-repositorio-hatsu-desktop.md)).
@@ -25,13 +27,12 @@ Todo se configura desde una sola ventana de Ajustes ([`docs/31`](docs/31-configu
 
 ## Novedades
 
-Resumen en [`CHANGELOG.md`](CHANGELOG.md). Lo último (rama de trabajo, **pendiente de validar en Windows real**):
-- Seis módulos de productividad nuevos, con interruptor individual, atajos configurables con captura de teclado y estado de salud en Ajustes.
-- Hatsu Notch: banner de descargas que se ajusta al contenido, clic en una notificación abre la app que la envió, Shelf+.
-- Dock: botón × en cada ventana de la vista previa; «Reservar espacio» y la vista previa se aplican sin reiniciar.
-- VPN en la barra (opcional): ver el estado y conectar o desconectar las VPN de Windows desde un panel.
-- Limpieza con panel rediseñado; icono propio de Hatsu en la barra y el panel.
-- Gestures permite abrir tus aplicaciones o páginas web favoritas con una esquina, un botón del ratón o un atajo; Spotlight puede acomodar las ventanas abiertas con una distribución de Snap.
+Resumen en [`CHANGELOG.md`](CHANGELOG.md). Lo último (versión **2.0.10**, **pendiente de validar en Windows real**):
+- **Ajustes** reorganizados en 12 secciones y 5 grupos con buscador. Los iconos de la barra se activan, ordenan (arrastrando el asa) y agregan desde un solo lugar.
+- **Barra:** Rendimiento, Red y Discos son iconos sueltos; VPN, Limpieza y Periféricos (batería de teclado y mouse ASUS ROG; Logitech «probable») son opcionales. «Salir de Hatsu Desktop» en el menú de Hatsu.
+- **Módulos de productividad:** Mission Control, Snap, Live Text, Spotlight Actions, Gestures (abrir aplicaciones o páginas web desde esquinas, botones o atajos) y Shelf+.
+- **Hatsu Notch:** clic en una notificación abre la app que la envió. Se quitó el monitor de agentes de IA.
+- **Dock:** vista previa con × por ventana; «Reservar espacio» y la vista previa se aplican sin reiniciar.
 
 ## Probar y compilar
 
