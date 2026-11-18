@@ -1,4 +1,4 @@
-# Periféricos de más marcas (lotes 1 a 3)
+# Periféricos de más marcas
 
 Hatsu lee la batería de aparatos de más marcas por el protocolo propio de cada una. **Todo este lote está SIN VERIFICAR con aparatos reales**: se escribió con la documentación pública y sin tener los aparatos. Se activa en Ajustes › Barra superior › Periféricos › «Leer la batería de más marcas» (apagado por defecto).
 
@@ -19,6 +19,7 @@ Hatsu lee la batería de aparatos de más marcas por el protocolo propio de cada
 | WLMouse | Beast X (4 variantes), Beast MAX, Sword X 8K, Beast X V2 | informe de característica de 65 bytes |
 | VAXEE | 4K y 8K, ZYGEN NP-01S V2 | informe de característica de 64 (lectura `0E A5 0B`) |
 | Redragon (Areson) y DAREU | M913 e M915RGB-WL con receptor 25A7:FA07/FA08; EM901X | consulta de 17 bytes por una colección y respuesta por su hermana |
+| Mandos | PlayStation (DualShock 4, DualSense, Edge), Switch Pro, GameSir Nova y Cyclone 2, BEITONG KP20, Xbox y GameSir en modo Xbox | los de PlayStation y Switch solo se escuchan (la batería va en sus informes normales); Xbox por la API de mandos de Windows y XInput |
 | ASUS ROG | teclado, ratón (Omni) y auriculares Pelta/Delta II | ver `docs/64` |
 | Logitech | receptores Unifying, Bolt, Lightspeed (HID++) | ver `docs/65` |
 
@@ -32,4 +33,5 @@ Hatsu lee la batería de aparatos de más marcas por el protocolo propio de cada
 - Los aparatos que Synapse, iCUE, G HUB o NGENUITY tengan abiertos pueden contestar tarde o dejar la respuesta a medias; el lector reintenta.
 - Límites del lote 2: ATK NK solo lee el porcentaje (no la carga); Endgame Gear no hace el sondeo de reconexión; Kysona/ATK preguntan la batería directamente, sin preguntar antes si el ratón está conectado; Pulsar reintenta la consulta en vez de esperar la respuesta pendiente.
 - Límites del lote 3: VAXEE no consulta la carga; hay que probar en cada receptor cuál de las dos colecciones contesta.
-- **Todavía no están** (formas distintas de hablar que piden más trabajo): Keychron, Audeze, Poly/Plantronics, Jabra, JBL, Sony INZONE, Samsung Galaxy Buds, AirPods, mandos (PlayStation, Xbox, Switch, 8BitDo, GameSir, Flydigi), Rapoo, Aula, Machenike, Darmoshark, Fantech, Finalmouse y los genéricos de HID y HeadsetControl. Los que Windows ya informa por Bluetooth o por HID estándar se ven igual.
+- **Todavía no están** (formas distintas de hablar que piden más trabajo): Keychron, Audeze, Poly/Plantronics, Jabra, JBL, Sony INZONE, Samsung Galaxy Buds, AirPods, 8BitDo, Flydigi, Steam Controller, Rapoo, Aula, Machenike, Darmoshark, Fantech, Finalmouse y los genéricos de HID y HeadsetControl. Los que Windows ya informa por Bluetooth o por HID estándar se ven igual.
+- Mandos: PlayStation y Switch Pro no se leen si otra app los tiene abiertos en exclusiva; los de Xbox por XInput solo dan cuatro niveles (vacía, baja, media, llena).

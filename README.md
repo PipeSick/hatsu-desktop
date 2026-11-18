@@ -27,12 +27,13 @@ Todo se configura desde una sola ventana de Ajustes ([`docs/31`](docs/31-configu
 
 ## Novedades
 
-Resumen en [`CHANGELOG.md`](CHANGELOG.md). Lo último (versión **2.0.10**, **pendiente de validar en Windows real**):
+Resumen en [`CHANGELOG.md`](CHANGELOG.md). Lo último (versión **2.0.12**, **pendiente de validar en Windows real**):
 - **Ajustes** reorganizados en 12 secciones y 5 grupos con buscador. Los iconos de la barra se activan, ordenan (arrastrando el asa) y agregan desde un solo lugar.
 - **Barra:** Rendimiento, Red y Discos son iconos sueltos; VPN, Limpieza y Periféricos (batería de teclado y mouse ASUS ROG; Logitech «probable») son opcionales. «Salir de Hatsu Desktop» en el menú de Hatsu.
 - **Módulos de productividad:** Mission Control, Snap, Live Text, Spotlight Actions, Gestures (abrir aplicaciones o páginas web desde esquinas, botones o atajos) y Shelf+.
-- **Hatsu Notch:** clic en una notificación abre la app que la envió. Se quitó el monitor de agentes de IA.
-- **Dock:** vista previa con × por ventana; «Reservar espacio» y la vista previa se aplican sin reiniciar.
+- **Periféricos:** batería de ASUS ROG (con nombre de modelo), Logitech y, opcional y sin verificar, Razer, SteelSeries, Corsair, HyperX, mandos y más ([`docs/66`](docs/66-perifericos-mas-marcas.md)). **Mezclador:** las apps de todas las salidas de audio.
+- **Hatsu Notch:** clic en la barra de reproducción para saltar; clic en una notificación abre la app que la envió. Se quitó el monitor de agentes de IA.
+- **Dock:** modo juego (se oculta solo con un juego en ventana); vista previa con × por ventana; «Reservar espacio» y la vista previa se aplican sin reiniciar.
 
 ## Probar y compilar
 
