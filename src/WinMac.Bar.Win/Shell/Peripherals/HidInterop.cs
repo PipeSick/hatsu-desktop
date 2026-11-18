@@ -54,6 +54,24 @@ internal static class HidInterop
         var buf = new byte[length]; buf[0] = reportId; return HidD_GetFeature(h, buf, length) ? buf : null;
     }
 
+    /// <summary>Abre solo para leer (los mandos mandan su batería dentro de sus informes normales y no hay que escribirles nada).</summary>
+    public static IntPtr OpenRead(string path) { var h = CreateFile(path, 0x80000000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero); return h == new IntPtr(-1) ? IntPtr.Zero : h; }
+
+    /// <summary>Lee informes hasta que <paramref name="accept"/> devuelva algo o se acabe el plazo; no escribe nada.</summary>
+    public static T? ListenFrames<T>(IntPtr h, int inputLength, int timeoutMs, Func<byte[], T?> accept, CancellationToken ct) where T : class
+    {
+        T? result = null; var done = new ManualResetEventSlim();
+        var t = new Thread(() =>
+        {
+            var buf = new byte[inputLength];
+            for (int i = 0; i < 256 && result is null; i++) { if (!ReadFile(h, buf, (uint)buf.Length, out uint n, IntPtr.Zero)) break; result = accept(buf.AsSpan(0, (int)n).ToArray()); }
+            done.Set();
+        }) { IsBackground = true };
+        t.Start();
+        try { if (!done.Wait(timeoutMs, ct)) { CancelIoEx(h, IntPtr.Zero); t.Join(500); } } catch (OperationCanceledException) { CancelIoEx(h, IntPtr.Zero); t.Join(500); throw; }
+        return result;
+    }
+
     public static void Close(IntPtr h) { if (h != IntPtr.Zero) CloseHandle(h); }
 
     /// <summary>Manda <paramref name="feature"/> por <paramref name="featureHandle"/> y lee tramas de <paramref name="inputHandle"/> hasta que <paramref name="accept"/> devuelva algo (o se acabe el plazo o lleguen 32 tramas ajenas).</summary>

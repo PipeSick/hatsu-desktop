@@ -233,7 +233,7 @@ public class QueryDevicesTests
     {
         var s = QueryDevices.CoolerMaster.Collection; Assert.True(s.Matches(0xFF0A, 0, 3, 32, 32, 0)); Assert.False(s.Matches(0xFF0A, 0, 2, 32, 32, 0)); Assert.False(s.Matches(0xFF00, 0, 3, 32, 32, 0));
         Assert.True(QueryDevices.Lamzu.Collection.Matches(0, 0, -1, 0, 0, 65)); Assert.False(QueryDevices.Lamzu.Collection.Matches(0, 0, -1, 0, 0, 64));
-        Assert.Equal(14, QueryDevices.Specs.Count);
+        Assert.Equal(19, QueryDevices.Specs.Count);
     }
 
     [Fact] public void Cooler_Master_reads_percent_charging_and_the_link_and_names_the_model_on_the_shared_dongle()
@@ -387,6 +387,59 @@ public class QueryDevicesBatch3Tests
     {
         Assert.Equal((byte)0x49, QueryDevices.Frame17(0x04)[16]);   // la misma trama que manda el fabricante: 0x55 − (08 + 04)
         var r = R(17, (0, 9), (1, 4), (6, 91), (7, 1)); var d = QueryDevices.Dareu.Parse(0x260D, 0x1074, r)!; Assert.Equal(91, d.Percent); Assert.True(d.Charging); Assert.False(d.Cable); Assert.True(QueryDevices.Dareu.Parse(0x260D, 0x1090, r)!.Cable);
-        Assert.Null(QueryDevices.Dareu.Parse(0x260D, 0x1074, R(17, (0, 9), (1, 4), (6, 120)))); Assert.Null(QueryDevices.Dareu.Parse(0x260D, 0x1074, R(16, (0, 9), (1, 4), (6, 50)))); Assert.Equal(14, QueryDevices.Specs.Count);
+        Assert.Null(QueryDevices.Dareu.Parse(0x260D, 0x1074, R(17, (0, 9), (1, 4), (6, 120)))); Assert.Null(QueryDevices.Dareu.Parse(0x260D, 0x1074, R(16, (0, 9), (1, 4), (6, 50)))); Assert.Equal(19, QueryDevices.Specs.Count);
+    }
+}
+
+public class GamepadTests
+{
+    private static byte[] R(int len, params (int I, byte V)[] set) { var b = new byte[len]; foreach (var (i, v) in set) b[i] = v; return b; }
+
+    [Fact] public void DualShock_4_reads_level_cable_and_charging_and_skips_the_reduced_bluetooth_report()
+    {
+        var usb = QueryDevices.PlayStationParse(0x054C, 0x09CC, R(64, (0, 0x01), (30, 0x08)))!; Assert.Equal(85, usb.Percent); Assert.False(usb.Charging); Assert.True(usb.Cable); Assert.Equal("DualShock 4", usb.Name);
+        var cable = QueryDevices.PlayStationParse(0x054C, 0x09CC, R(64, (0, 0x01), (30, 0x10 | 0x06)))!; Assert.Equal(60, cable.Percent); Assert.True(cable.Charging);
+        Assert.Equal(100, QueryDevices.PlayStationParse(0x054C, 0x09CC, R(64, (0, 0x01), (30, 0x10 | 0x0B)))!.Percent); Assert.False(QueryDevices.PlayStationParse(0x054C, 0x09CC, R(64, (0, 0x01), (30, 0x10 | 0x0B)))!.Charging);
+        var bt = QueryDevices.PlayStationParse(0x054C, 0x09CC, R(78, (0, 0x11), (32, 0x04)))!; Assert.Equal(45, bt.Percent); Assert.False(bt.Cable);
+        Assert.Null(QueryDevices.PlayStationParse(0x054C, 0x09CC, R(78, (0, 0x01), (30, 0x08)))); Assert.Null(QueryDevices.PlayStationParse(0x054C, 0x0BA0, R(64, (0, 0x01), (30, 0)))); Assert.Null(QueryDevices.PlayStationParse(0x054C, 0x09CC, R(10, (0, 0x01))));
+    }
+
+    [Fact] public void DualSense_reads_level_state_and_full_charge()
+    {
+        var d = QueryDevices.PlayStationParse(0x054C, 0x0CE6, R(64, (0, 0x01), (53, 0x07)))!; Assert.Equal(75, d.Percent); Assert.False(d.Charging); Assert.Equal("DualSense", d.Name);
+        var ch = QueryDevices.PlayStationParse(0x054C, 0x0CE6, R(64, (0, 0x01), (53, 0x15)))!; Assert.True(ch.Charging); Assert.Equal(55, ch.Percent);
+        var full = QueryDevices.PlayStationParse(0x054C, 0x0DF2, R(64, (0, 0x01), (53, 0x2A)))!; Assert.Equal(100, full.Percent); Assert.True(full.Charging); Assert.Equal("DualSense Edge", full.Name);
+        Assert.Equal(25, QueryDevices.PlayStationParse(0x054C, 0x0CE6, R(78, (0, 0x31), (54, 0x02)))!.Percent); Assert.Null(QueryDevices.PlayStationParse(0x054C, 0x0CE6, R(78, (0, 0x01), (53, 0x07))));   // informe 01 largo = Bluetooth reducido
+        Assert.Equal(QueryDevices.Transport.Listen, QueryDevices.PlayStation.Transport); Assert.Equal((byte?)0x05, QueryDevices.PlayStation.PrimeFeatureReport);
+    }
+
+    [Fact] public void Switch_Pro_reads_five_levels_from_the_full_report_30()
+    {
+        var r = QueryDevices.SwitchPro.Parse(0x057E, 0x2009, R(13, (0, 0x30), (2, 0x80)))!; Assert.Equal(100, r.Percent); Assert.False(r.Charging);
+        var ch = QueryDevices.SwitchPro.Parse(0x057E, 0x2009, R(13, (0, 0x30), (2, 0x50)))!; Assert.Equal(50, ch.Percent); Assert.True(ch.Charging);
+        Assert.Null(QueryDevices.SwitchPro.Parse(0x057E, 0x2009, R(13, (0, 0x21), (2, 0x80)))); Assert.Null(QueryDevices.SwitchPro.Parse(0x057E, 0x2009, R(13, (0, 0x30), (2, 0xE0)))); Assert.Null(QueryDevices.SwitchPro.Parse(0x057E, 0x2009, R(8, (0, 0x30))));
+    }
+
+    [Fact] public void GameSir_Nova_and_Cyclone_2_read_their_vendor_replies()
+    {
+        Assert.Equal([0x00, 0x01, 0x01], QueryDevices.GameSirNova.Request(0x1098)); var nova = QueryDevices.GameSirNova.Parse(0x3537, 0x1098, R(64, (0, 1), (18, 77)))!; Assert.Equal(77, nova.Percent); Assert.False(nova.Charging); Assert.False(nova.Cable);
+        var ch = QueryDevices.GameSirNova.Parse(0x3537, 0x100F, R(64, (0, 1), (18, 0xFF)))!; Assert.Null(ch.Percent); Assert.True(ch.Charging); Assert.True(ch.Cable);
+        Assert.Null(QueryDevices.GameSirNova.Parse(0x3537, 0x1098, R(64, (0, 0xF4), (18, 50)))); Assert.Null(QueryDevices.GameSirNova.Parse(0x3537, 0x1098, R(64, (0, 1), (18, 150))));
+        var cy = QueryDevices.GameSirCyclone2.Parse(0x3537, 0x100B, R(40, (0, 0x12), (35, 1), (36, 63)))!; Assert.Equal(63, cy.Percent); Assert.True(cy.Charging); Assert.Null(QueryDevices.GameSirCyclone2.Parse(0x3537, 0x100B, R(40, (0, 0x10), (36, 63)))); Assert.Equal([0x0F, 0x03], QueryDevices.GameSirCyclone2.Request(0x100B));
+    }
+
+    [Fact] public void BEITONG_nibble_cipher_round_trips_and_the_reply_is_decoded()
+    {
+        for (int x = 0; x < 256; x++) Assert.Equal((byte)x, QueryDevices.BeitongDecode(QueryDevices.BeitongEncode((byte)x)));
+        Assert.Equal((byte)0xAD, QueryDevices.BeitongEncode(0x15)); Assert.Equal([0x02, 0xAD], QueryDevices.Beitong.Request(0x5128));
+        var r = R(64, (0, 2), (1, QueryDevices.BeitongEncode(0x15)), (2, QueryDevices.BeitongEncode(88)), (4, QueryDevices.BeitongEncode(1))); var b = QueryDevices.Beitong.Parse(0x20BC, 0x5128, r)!; Assert.Equal(88, b.Percent); Assert.True(b.Charging);
+        Assert.Null(QueryDevices.Beitong.Parse(0x20BC, 0x5128, R(64, (0, 2), (1, QueryDevices.BeitongEncode(0x25)), (2, QueryDevices.BeitongEncode(88))))); Assert.Null(QueryDevices.Beitong.Parse(0x20BC, 0x5128, R(64, (0, 2), (1, QueryDevices.BeitongEncode(0x15)), (2, QueryDevices.BeitongEncode(150)))));
+    }
+
+    [Fact] public void Xbox_battery_uses_real_capacity_or_the_four_coarse_xinput_levels()
+    {
+        Assert.Equal(50, XboxBattery.WgiPercent(2000, 4000)); Assert.Equal(100, XboxBattery.WgiPercent(5000, 4000)); Assert.Null(XboxBattery.WgiPercent(2000, 0)); Assert.Null(XboxBattery.WgiPercent(null, 4000)); Assert.Null(XboxBattery.WgiPercent(2000, null));
+        Assert.Equal((5, "Vacía"), XboxBattery.XInputLevel(0)); Assert.Equal((25, "Baja"), XboxBattery.XInputLevel(1)); Assert.Equal((60, "Media"), XboxBattery.XInputLevel(2)); Assert.Equal((100, "Llena"), XboxBattery.XInputLevel(3));
+        Assert.False(XboxBattery.IsBatteryType(0)); Assert.False(XboxBattery.IsBatteryType(1)); Assert.True(XboxBattery.IsBatteryType(2)); Assert.True(XboxBattery.IsBatteryType(3));
     }
 }

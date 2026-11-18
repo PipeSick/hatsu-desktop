@@ -7,8 +7,8 @@ namespace WinMac.Bar.Peripherals;
 /// </summary>
 public static class QueryDevices
 {
-    /// <summary>Report = se escribe un informe de salida y se lee uno de entrada de la misma colección. Feature = se manda y se lee un informe de característica. FeatureThenInput = se manda un informe de característica por una colección y la respuesta llega como informe de entrada por otra hermana de la misma interfaz.</summary>
-    public enum Transport { Report, Feature, FeatureThenInput }
+    /// <summary>Listen = no se escribe nada: el mando manda su batería dentro de sus informes normales y solo se escucha. Report = se escribe un informe de salida y se lee uno de entrada de la misma colección. Feature = se manda y se lee un informe de característica. FeatureThenInput = se manda un informe de característica por una colección y la respuesta llega como informe de entrada por otra hermana de la misma interfaz.</summary>
+    public enum Transport { Report, Feature, FeatureThenInput, Listen }
 
     /// <summary>Qué colección HID lleva el protocolo: página/uso, número de interfaz USB y/o largos de informe. Lo que no se indique no se exige.</summary>
     public sealed record Selector(ushort Page = 0, ushort Usage = 0, int Interface = -1, int Out = -1, int In = -1, int FeatureMin = -1, int FeatureExact = -1, ushort PageMin = 0, int OutMin = -1, int InMin = -1)
@@ -25,11 +25,12 @@ public static class QueryDevices
     /// <param name="Request">los bytes a mandar (con el número de informe delante); se rellenan con ceros hasta el largo del informe.</param>
     /// <param name="DelayMs">solo en informes de característica: espera entre mandar y leer.</param>
     /// <param name="Parse">respuesta → lectura; null = no es la respuesta (se sigue leyendo o se reintenta).</param>
+    /// <param name="PrimeFeatureReport">informe de característica que se lee una vez antes de escuchar cuando la colección tiene informes largos (Bluetooth): hace que el mando mande los informes completos.</param>
     /// <param name="Exclude">productos que no son de este protocolo aunque sean del fabricante (p. ej. los auriculares ATK, que hablan por un puerto serie).</param>
     /// <param name="HighInterfaceFirst">probar primero las interfaces USB de número más alto (la 2 de Pulsar rechaza el informe de característica).</param>
-    public sealed record Spec(string Brand, ushort[] Vendors, ushort[]? Pids, Selector Collection, Transport Transport, Func<ushort, byte[]> Request, int TimeoutMs, int DelayMs, Func<ushort, ushort, byte[], Reading?> Parse, ushort[]? Exclude = null, bool HighInterfaceFirst = false, Selector? ReplyCollection = null);
+    public sealed record Spec(string Brand, ushort[] Vendors, ushort[]? Pids, Selector Collection, Transport Transport, Func<ushort, byte[]> Request, int TimeoutMs, int DelayMs, Func<ushort, ushort, byte[], Reading?> Parse, ushort[]? Exclude = null, bool HighInterfaceFirst = false, Selector? ReplyCollection = null, byte? PrimeFeatureReport = null);
 
-    public static IReadOnlyList<Spec> Specs => [CoolerMaster, Cherry, Nzxt, Endgame, Arbiter, Lamzu, KysonaDedicated, KysonaVendor, Pulsar, AtkNk, WlMouse, Vaxee, Areson, Dareu];   // propiedad: los Spec se inicializan más abajo
+    public static IReadOnlyList<Spec> Specs => [CoolerMaster, Cherry, Nzxt, Endgame, Arbiter, Lamzu, KysonaDedicated, KysonaVendor, Pulsar, AtkNk, WlMouse, Vaxee, Areson, Dareu, PlayStation, SwitchPro, GameSirNova, GameSirCyclone2, Beitong];   // propiedad: los Spec se inicializan más abajo
 
     private static int? Pct(int v) => v is >= 1 and <= 100 ? v : null;
 
@@ -188,6 +189,54 @@ public static class QueryDevices
 
     public static readonly Spec Dareu = new("DAREU", [0x260D], [0x1090, 0x1074], FeatureFf02, Transport.FeatureThenInput, _ => Frame17(0x04), 1000, 0,
         (vid, pid, r) => r.Length == 17 && r[0] == 0x09 && r[1] == 0x04 && r[2] == 0x00 && r[6] <= 100 ? new($"dareu:260D:{pid:X4}", "DAREU EM901X", DeviceKind.Mouse, pid == 0x1090, true, r[6], r[7] != 0) : null, ReplyCollection: InputFf01);
+
+    // ───────── MANDOS ─────────
+
+    // PlayStation DualShock 4 / DualSense / Edge (054C): la batería va en el informe de entrada normal; solo se escucha.
+    // DS4: USB informe 01 byte 30, Bluetooth informe 11 byte 32: bits 0–3 nivel, bit 4 cable. DualSense: USB informe 01 byte 53, Bluetooth informe 31 byte 54: bits 0–3 nivel (0–10), bits 4–7 estado.
+    // Por Bluetooth mandan un informe reducido (largo mayor que 64) hasta que se lee el informe de característica 05; el informe 01 de más de 64 bytes se descarta.
+    private static bool IsDs4(ushort pid) => pid is 0x05C4 or 0x09CC or 0x0BA0;
+
+    public static Reading? PlayStationParse(ushort vid, ushort pid, byte[] r)
+    {
+        bool ds4 = IsDs4(pid); int at = ds4 ? (r.Length > 0 && r[0] == 0x01 ? 30 : r.Length > 0 && r[0] == 0x11 ? 32 : 0) : (r.Length > 0 && r[0] == 0x01 ? 53 : r.Length > 0 && r[0] == 0x31 ? 54 : 0);
+        if (at == 0 || r.Length <= at || (r[0] == 0x01 && r.Length > 64)) return null;
+        string name = ds4 ? "DualShock 4" : pid == 0x0DF2 ? "DualSense Edge" : "DualSense"; bool usb = r[0] == 0x01; string key = $"ps:{pid:X4}";
+        int level = r[at] & 0x0F;
+        if (ds4)
+        {
+            if (pid == 0x0BA0 && r[at] == 0) return null;   // adaptador inalámbrico sin mando
+            bool cable = (r[at] & 0x10) != 0;
+            return new(key, name, DeviceKind.Gamepad, usb, true, cable ? (level >= 11 ? 100 : Math.Clamp(level * 10, 0, 100)) : Math.Clamp(level * 10 + 5, 0, 100), cable && level < 11);
+        }
+
+        int state = r[at] >> 4; int pct = Math.Clamp(level * 10 + 5, 0, 100); bool charging = state == 0x1;
+        if (state == 0x2) { pct = 100; charging = true; }
+        return new(key, name, DeviceKind.Gamepad, usb, true, pct, charging);
+    }
+
+    public static readonly Spec PlayStation = new("PlayStation", [0x054C], [0x05C4, 0x09CC, 0x0BA0, 0x0CE6, 0x0DF2], new(Page: 0x01, Usage: 0x05), Transport.Listen, _ => [], 500, 0, PlayStationParse, PrimeFeatureReport: 0x05);
+
+    // Nintendo Switch Pro y compatibles (057E:2009, incluido el GameSir Tarantula Pro en modo Switch): informe completo 30, byte 2: bits 7…5 = nivel (0…4), bit 4 = cargando. Quien lo use (Steam Input u otro) debe activar los informes completos: Hatsu solo escucha.
+    public static readonly Spec SwitchPro = new("Nintendo Switch Pro", [0x057E], [0x2009], new(Page: 0x01, InMin: 13), Transport.Listen, _ => [], 350, 0,
+        (vid, pid, r) => r.Length >= 13 && r[0] == 0x30 && ((r[2] & 0xE0) >> 5) <= 4 ? new("switchpro:2009", "Nintendo Switch Pro Controller", DeviceKind.Gamepad, false, true, 25 * ((r[2] & 0xE0) >> 5), (r[2] & 0x10) != 0 && ((r[2] & 0xE0) >> 5) < 4) : null);
+
+    // GameSir Nova / Nova Lite / Nova 2 (3537:1098, 100F cable, 1040): colección FF7A de 64, sin número de informe. Pedir 01 01 → [0]==01 y [18] = batería 0…100 (FF = cargando, sin porcentaje). Las tramas F4 00 que llegan solas se saltan.
+    public static readonly Spec GameSirNova = new("GameSir", [0x3537], [0x1098, 0x100F, 0x1040], new(Page: 0xFF7A, OutMin: 3), Transport.Report, _ => [0x00, 0x01, 0x01], 800, 0,
+        (vid, pid, r) => r.Length >= 19 && r[0] == 0x01 && (r[18] <= 100 || r[18] == 0xFF) ? new("gamesir:" + pid.ToString("X4"), "GameSir Nova", DeviceKind.Gamepad, pid == 0x100F, true, r[18] <= 100 ? r[18] : null, r[18] == 0xFF) : null);
+
+    // GameSir Cyclone 2 (3537:100B): colección FFF0:0040, informes 0F de salida y 12 de entrada. Pedir 0F 03 → informe 12: [35] cable o cargando, [36] % (los eventos 0x10 no traen batería).
+    public static readonly Spec GameSirCyclone2 = new("GameSir", [0x3537], [0x100B], new(Page: 0xFFF0, Usage: 0x0040, OutMin: 3, InMin: 37), Transport.Report, _ => [0x0F, 0x03], 1500, 0,
+        (vid, pid, r) => r.Length >= 37 && r[0] == 0x12 && r[36] <= 100 ? new("gamesir:100B", "GameSir Cyclone 2", DeviceKind.Gamepad, false, true, r[36], r[35] == 1) : null);
+
+    // BEITONG (Betop) KP20 en su receptor 2,4 GHz (20BC:5128): colección 00FF:0003, informes de 64 con número 02. Todos los bytes después del número van revueltos con un cifrado fijo por nibbles.
+    // Pedir 02 15 (cifrado) → 02 15 <batería 0…100> 00 <estado de carga>.
+    private static readonly byte[] BeitongNibble = [0x0, 0xA, 0x6, 0xF, 0x1, 0xC, 0x2, 0x9, 0xE, 0x3, 0x7, 0xD, 0x4, 0xB, 0x5, 0x8];
+    public static byte BeitongEncode(byte x) => (byte)((BeitongNibble[x >> 4] << 4) | ((x & 0x0F) ^ 0x08));
+    public static byte BeitongDecode(byte x) => (byte)((Array.IndexOf(BeitongNibble, (byte)(x >> 4)) << 4) | ((x & 0x0F) ^ 0x08));
+
+    public static readonly Spec Beitong = new("BEITONG", [0x20BC], [0x5128], new(Page: 0x00FF, Usage: 0x0003, OutMin: 3, InMin: 5), Transport.Report, _ => [0x02, BeitongEncode(0x15)], 800, 0,
+        (vid, pid, r) => r.Length >= 5 && r[0] == 0x02 && BeitongDecode(r[1]) == 0x15 && BeitongDecode(r[2]) <= 100 ? new("beitong:5128", "BEITONG KP20", DeviceKind.Gamepad, false, true, BeitongDecode(r[2]), BeitongDecode(r[4]) == 1) : null);
 
     private static readonly (ushort Vid, ushort[] Pids, string Name)[] LamzuModels =
     [

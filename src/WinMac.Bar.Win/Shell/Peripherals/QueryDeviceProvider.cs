@@ -29,7 +29,7 @@ internal sealed class QueryDeviceProvider : IPeripheralProvider
                     foreach (var i in all.Where(i => i.Vendor == vendor && i.Product == pid && spec.Collection.Matches(i.UsagePage, i.Usage, InterfaceOf(i.Path), i.OutputLength, i.InputLength, i.FeatureLength))
                         .OrderByDescending(i => spec.HighInterfaceFirst ? InterfaceOf(i.Path) : 0))
                     {
-                        var r = spec.Transport switch { QueryDevices.Transport.Report => AskReport(i, spec, ct), QueryDevices.Transport.Feature => AskFeature(i, spec, ct), _ => AskFeatureThenInput(i, spec, all, ct) }; if (r is null) continue;
+                        var r = spec.Transport switch { QueryDevices.Transport.Report => AskReport(i, spec, ct), QueryDevices.Transport.Feature => AskFeature(i, spec, ct), QueryDevices.Transport.Listen => Listen(i, spec, ct), _ => AskFeatureThenInput(i, spec, all, ct) }; if (r is null) continue;
                         if (!found.TryGetValue(r.Key, out var prev)) { found[r.Key] = r; order.Add(r.Key); }
                         else if (r.Cable && !prev.Cable) found[r.Key] = r;   // el mismo aparato por cable y por receptor: gana el cable (es el que carga)
                         break;
@@ -70,6 +70,18 @@ internal sealed class QueryDeviceProvider : IPeripheralProvider
             return HidInterop.SendFeatureThenRead(hf, hi, frame, input.InputLength, spec.TimeoutMs, b => spec.Parse(i.Vendor, i.Product, b) is { } r ? new Box(r) : null, ct)?.R;
         }
         finally { HidInterop.Close(hf); HidInterop.Close(hi); }
+    }
+
+    /// <summary>Mandos: no se escribe nada; se escuchan los informes normales hasta que uno traiga la batería. Por Bluetooth se lee antes una vez el informe de característica que hace que mande los completos.</summary>
+    private static QueryDevices.Reading? Listen(HidIface i, QueryDevices.Spec spec, CancellationToken ct)
+    {
+        IntPtr h = HidInterop.OpenRead(i.Path); if (h == IntPtr.Zero) return null;
+        try
+        {
+            if (spec.PrimeFeatureReport is { } id && i.InputLength > 64) HidInterop.GetFeature(h, Math.Max((int)i.FeatureLength, 64), id);
+            return HidInterop.ListenFrames(h, i.InputLength, spec.TimeoutMs, b => spec.Parse(i.Vendor, i.Product, b) is { } r ? new Box(r) : null, ct)?.R;
+        }
+        finally { HidInterop.Close(h); }
     }
 
     private static QueryDevices.Reading? AskFeature(HidIface i, QueryDevices.Spec spec, CancellationToken ct)
