@@ -43,7 +43,7 @@ def main(site, repo):
         check(not re.search(r"VERIFICAR|VERIFY|TODO|FIXME|\*\(", html[k]), f"[{k}] sin marcas de borrador")
         check(f'<html lang="{k}">' in html[k], f"[{k}] atributo lang correcto")
         check(not re.search(r'(?:href|src)="/', html[k]), f"[{k}] sin enlaces absolutos a la raíz (romperían bajo /<repositorio>/)")
-    check("desactivado por defecto" in html["es"] and "off by default" in html["en"], "agentes de IA: desactivado por defecto en ambas")
+    check("desactivado por defecto" in html["es"] and "off by default" in html["en"], "periféricos: desactivados por defecto en ambas")
     check("definitiv" in html["es"] and "permanent" in html["en"].lower(), "Cleanup: borrado definitivo declarado en ambas")
     # 4) enlaces entre idiomas y de la raíz resuelven a archivos existentes dentro del sitio
     def resolves(base, href):
