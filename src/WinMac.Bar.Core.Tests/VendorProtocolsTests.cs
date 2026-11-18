@@ -224,3 +224,55 @@ public class HyperXProtocolTests
         Assert.Equal(100, HyperXProtocol.Interpolate(5000, [4121, 4042, 3517], [100, 50, 0])); Assert.Equal(0, HyperXProtocol.Interpolate(3000, [4121, 4042, 3517], [100, 50, 0])); Assert.Equal(75, HyperXProtocol.Interpolate(4081, [4121, 4041, 3517], [100, 50, 0]) is var v && v is >= 74 and <= 76 ? 75 : -1);
     }
 }
+
+public class QueryDevicesTests
+{
+    private static byte[] R(int len, params (int I, byte V)[] set) { var b = new byte[len]; foreach (var (i, v) in set) b[i] = v; return b; }
+
+    [Fact] public void Selectors_demand_only_what_they_name()
+    {
+        var s = QueryDevices.CoolerMaster.Collection; Assert.True(s.Matches(0xFF0A, 0, 3, 32, 32, 0)); Assert.False(s.Matches(0xFF0A, 0, 2, 32, 32, 0)); Assert.False(s.Matches(0xFF00, 0, 3, 32, 32, 0));
+        Assert.True(QueryDevices.Lamzu.Collection.Matches(0, 0, -1, 0, 0, 65)); Assert.False(QueryDevices.Lamzu.Collection.Matches(0, 0, -1, 0, 0, 64));
+        Assert.Equal(5, QueryDevices.Specs.Count);
+    }
+
+    [Fact] public void Cooler_Master_reads_percent_charging_and_the_link_and_names_the_model_on_the_shared_dongle()
+    {
+        var q = QueryDevices.CoolerMaster.Request(0x01B7); Assert.Equal([0x00, 0x46, 0x81, 0x00], q);
+        var r = R(20, (0, 0x47), (1, 0x81), (2, 0x50), (10, 64), (11, 1), (12, 1)); var m = QueryDevices.CoolerMaster.Parse(0x2516, 0x01B7, r)!;
+        Assert.Equal("Cooler Master MM712", m.Name); Assert.Equal(64, m.Percent); Assert.True(m.Charging); Assert.False(m.Cable);
+        Assert.Equal("Cooler Master MM731", QueryDevices.CoolerMaster.Parse(0x2516, 0x01B7, R(20, (0, 0x47), (1, 0x81), (2, 0x70), (10, 50)))!.Name); Assert.True(QueryDevices.CoolerMaster.Parse(0x2516, 0x0169, R(20, (0, 0x47), (1, 0x81), (10, 50), (12, 0)))!.Cable);
+        Assert.Null(QueryDevices.CoolerMaster.Parse(0x2516, 0x01B7, R(20, (0, 0x44), (1, 0x01)))); Assert.Null(QueryDevices.CoolerMaster.Parse(0x2516, 0x01B7, R(8, (0, 0x47), (1, 0x81)))); Assert.Null(QueryDevices.CoolerMaster.Parse(0x2516, 0x01B7, R(20, (0, 0x47), (1, 0x81), (10, 0)))!.Percent);
+    }
+
+    [Fact] public void CHERRY_sends_one_checked_frame_and_reads_percent_and_usb_power()
+    {
+        var q = QueryDevices.CherryQuery(); Assert.Equal(64, q.Length); Assert.Equal((byte)0x04, q[0]); Assert.Equal((byte)0x1A, q[3]); int sum = 0; for (int i = 3; i < 64; i++) sum += q[i]; Assert.Equal(sum & 0xFFFF, q[1] | (q[2] << 8));
+        var ok = QueryDevices.Cherry.Parse(0x046A, 0x00EA, R(64, (0, 4), (3, 0x1A), (8, 73), (9, 1)))!; Assert.Equal(73, ok.Percent); Assert.True(ok.Charging); Assert.False(ok.Cable); Assert.Equal("cherry:mx30s", ok.Key);
+        Assert.True(QueryDevices.Cherry.Parse(0x046A, 0x00E3, R(64, (0, 4), (3, 0x1A), (8, 50)))!.Cable); Assert.Null(QueryDevices.Cherry.Parse(0x046A, 0x00EA, R(64, (0, 4), (3, 0x1A), (8, 200)))); Assert.Null(QueryDevices.Cherry.Parse(0x046A, 0x00EA, R(64, (0, 4), (3, 0x1B), (8, 50))));
+    }
+
+    [Fact] public void NZXT_skips_the_ack_and_refuses_values_that_are_not_a_percentage()
+    {
+        var good = R(30, (0, 0x4E), (1, 0x02), (2, 0x97), (17, 88), (22, 1)); var r = QueryDevices.Nzxt.Parse(0x1E71, 0x2101, good)!; Assert.Equal(88, r.Percent); Assert.True(r.Charging); Assert.Equal("nzxt:2101", r.Key);
+        Assert.Null(QueryDevices.Nzxt.Parse(0x1E71, 0x2101, R(30, (0, 0x4E), (1, 0xE5)))); Assert.Null(QueryDevices.Nzxt.Parse(0x1E71, 0x2101, R(30, (0, 0x4E), (1, 0x02), (2, 0x97), (17, 0x2C), (18, 1))));
+        Assert.True(QueryDevices.Nzxt.Parse(0x1E71, 0x2129, good)!.Cable);
+    }
+
+    [Fact] public void Endgame_reads_percent_when_awake_asleep_when_08_or_11_and_retries_when_busy()
+    {
+        Assert.Equal([0xA1, 0xB4, 0x00], QueryDevices.Endgame.Request(0x1970));
+        Assert.Equal(55, QueryDevices.Endgame.Parse(0x3367, 0x1970, R(64, (0, 0xA1), (1, 1), (16, 55)))!.Percent); var asleep = QueryDevices.Endgame.Parse(0x3367, 0x1970, R(64, (0, 0xA1), (1, 0x08)))!; Assert.False(asleep.Connected); Assert.Null(asleep.Percent);
+        Assert.Null(QueryDevices.Endgame.Parse(0x3367, 0x1970, R(64, (0, 0xA1), (1, 0x03)))); Assert.Null(QueryDevices.Endgame.Parse(0x3367, 0x1970, R(64, (0, 0xA1), (1, 0x01), (16, 150))));
+    }
+
+    [Fact] public void LAMZU_accepts_the_answer_with_or_without_the_report_id_and_names_models_and_cables()
+    {
+        Assert.Equal([0, 0, 0, 2, 2, 0, 0x83], QueryDevices.Lamzu.Request(0x0042));
+        var withId = QueryDevices.Lamzu.Parse(0x37B0, 0x0042, R(65, (1, 0xA1), (4, 2), (6, 0x83), (7, 1), (8, 70)))!; Assert.Equal(70, withId.Percent); Assert.True(withId.Charging); Assert.Equal("LAMZU Orcus", withId.Name); Assert.True(withId.Cable);
+        var without = QueryDevices.Lamzu.Parse(0x37B0, 0x0043, R(65, (0, 0xA1), (3, 2), (5, 0x83), (6, 0), (7, 41)))!; Assert.Equal(41, without.Percent); Assert.False(without.Cable);
+        var off = QueryDevices.Lamzu.Parse(0x37B0, 0x0056, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 0)))!; Assert.False(off.Connected); Assert.Null(off.Percent);
+        Assert.Null(QueryDevices.Lamzu.Parse(0x37B0, 0x0056, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 150)))); Assert.Null(QueryDevices.Lamzu.Parse(0x37B0, 0x0056, R(65))); Assert.Equal("LAMZU wireless mouse", QueryDevices.Lamzu.Parse(0x373E, 0x7777, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 50)))!.Name);
+        Assert.True(QueryDevices.LamzuIsCable(0x373E, 0x001C)); Assert.False(QueryDevices.LamzuIsCable(0x373E, 0x001D)); Assert.Equal("LAMZU Maya X V2", QueryDevices.LamzuName(0x373E, 0x0016));
+    }
+}
