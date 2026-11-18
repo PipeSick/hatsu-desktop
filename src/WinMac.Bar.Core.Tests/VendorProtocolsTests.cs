@@ -125,3 +125,48 @@ public class SteelSeriesProtocolTests
         Assert.Equal(100, SteelSeriesProtocol.Map(300, 0, 8)); Assert.Equal(0, SteelSeriesProtocol.Map(-5, 0, 8));
     }
 }
+
+public class CorsairProtocolTests
+{
+    [Fact] public void Void_answers_give_percent_without_the_mic_bit_and_charging_states()
+    {
+        var ok = CorsairProtocol.ParseVoid([0, 0, 0x80 | 55, 0, 1])!; Assert.True(ok.Connected); Assert.Equal(55, ok.Percent); Assert.False(ok.Charging);
+        var ch = CorsairProtocol.ParseVoid([0, 0, 90, 0, 4])!; Assert.True(ch.Charging); Assert.Equal(90, ch.Percent);
+        var off = CorsairProtocol.ParseVoid([0, 0, 70, 0, 0])!; Assert.False(off.Connected); Assert.Null(off.Percent); Assert.Null(CorsairProtocol.ParseVoid([1, 2])); Assert.Null(CorsairProtocol.ParseVoid(null));
+        Assert.Equal([0xC9, 0x64], CorsairProtocol.VoidRequest);
+    }
+
+    [Fact] public void Bragi_requests_come_in_three_framings()
+    {
+        Assert.Equal(new byte[] { 0x02, 0x09, 0x02, 0x0F }, CorsairProtocol.BragiRequest(false, true, 0x09, 0x0F)); Assert.Equal(new byte[] { 0x00, 0x02, 0x09, 0x02, 0x0F }, CorsairProtocol.BragiRequest(false, false, 0x09, 0x0F));
+        Assert.Equal(new byte[] { 0x00, 0x08, 0x02, 0x10 }, CorsairProtocol.BragiRequest(true, true, 0x08, 0x10));
+    }
+
+    [Fact] public void Bragi_answers_are_matched_by_source_and_carry_a_little_endian_value()
+    {
+        var a = CorsairProtocol.ParseBragi(false, 0x09, [0x02, 0x01, 0x02, 0x00, 0xE8, 0x03, 0, 0])!; Assert.Equal(CorsairProtocol.BragiStatus.Value, a.Status); Assert.Equal(1000u, a.Value);
+        Assert.Equal(1000u, CorsairProtocol.ParseBragi(true, 0x09, [0x01, 0x02, 0x00, 0xE8, 0x03, 0, 0])!.Value); Assert.Equal(300u, CorsairProtocol.ParseBragi(true, 0x08, [0x00, 0x02, 0x00, 0x2C, 0x01, 0, 0])!.Value);
+        Assert.Null(CorsairProtocol.ParseBragi(false, 0x09, [0x02, 0x00, 0x02, 0x00, 1, 0, 0, 0]));   // viene de otro origen: una notificación
+        Assert.Equal(CorsairProtocol.BragiStatus.Error, CorsairProtocol.ParseBragi(false, 0x09, [0x02, 0x01, 0x02, 0x05, 0, 0, 0, 0])!.Status); Assert.Null(CorsairProtocol.ParseBragi(false, 0x09, [1, 2]));
+    }
+
+    [Fact] public void Bragi_levels_map_0_to_1000_to_percent_and_zero_is_not_a_reading()
+    {
+        Assert.Equal(100, CorsairProtocol.BragiPercent(1000)); Assert.Equal(50, CorsairProtocol.BragiPercent(500)); Assert.Equal(0, CorsairProtocol.BragiPercent(1)); Assert.Null(CorsairProtocol.BragiPercent(0)); Assert.Null(CorsairProtocol.BragiPercent(1001));
+        Assert.True(CorsairProtocol.BragiCharging(1)); Assert.True(CorsairProtocol.BragiCharging(3)); Assert.False(CorsairProtocol.BragiCharging(2));
+    }
+
+    [Fact] public void Compx_frames_have_a_checksum_and_answers_are_validated_against_it()
+    {
+        var q = CorsairProtocol.CompxRequest(0x04); Assert.Equal(17, q.Length); Assert.Equal((byte)0x08, q[0]); Assert.Equal(CorsairProtocol.CompxChecksum(q), q[16]); Assert.True(CorsairProtocol.IsCompxReply(0x04, q));
+        var r = new byte[17]; r[0] = 8; r[1] = 4; r[6] = 87; r[7] = 1; r[8] = 0x0F; r[9] = 0xA0; r[16] = CorsairProtocol.CompxChecksum(r);
+        Assert.True(CorsairProtocol.IsCompxReply(4, r)); var b = CorsairProtocol.CompxParseBattery(r); Assert.Equal(87, b.Percent); Assert.True(b.Charging); Assert.Equal(0x0FA0, b.Millivolts);
+        r[16] ^= 1; Assert.False(CorsairProtocol.IsCompxReply(4, r)); Assert.False(CorsairProtocol.IsCompxReply(3, q)); Assert.False(CorsairProtocol.IsCompxReply(4, null));
+    }
+
+    [Fact] public void Kinds_come_from_the_name_the_paired_id_and_the_0Axx_family()
+    {
+        Assert.Equal(DeviceKind.Headset, CorsairProtocol.GuessKind("CORSAIR HS80 RGB WIRELESS Gaming Receiver", 0x0A6B)); Assert.Equal(DeviceKind.Mouse, CorsairProtocol.GuessKind("Corsair Slipstream Receiver", 0x1BDC, 0x1B7E));
+        Assert.Equal(DeviceKind.Headset, CorsairProtocol.GuessKind("Receiver", 0x1BDC, 0x0A3E)); Assert.Equal(DeviceKind.Keyboard, CorsairProtocol.GuessKind("K70 RGB", 0x2B00)); Assert.Equal(DeviceKind.Other, CorsairProtocol.GuessKind("Algo", 0x2B00));
+    }
+}
