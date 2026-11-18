@@ -72,3 +72,56 @@ public class RazerProtocolTests
         Assert.Equal("Razer DeathAdder V3 Pro", RazerProtocol.CleanName("Razer DeathAdder V3 Pro HyperSpeed Dongle")); Assert.Equal("Razer device", RazerProtocol.CleanName(""));
     }
 }
+
+public class SteelSeriesProtocolTests
+{
+    private static SteelSeriesProtocol.Reading P(SteelSeriesProtocol.Family f, ushort pid, params byte[] r) => SteelSeriesProtocol.Parse(f, pid, r)!;
+
+    [Fact] public void Every_known_product_belongs_to_one_family_and_the_requests_are_the_documented_ones()
+    {
+        Assert.Equal(SteelSeriesProtocol.Family.Aerox, SteelSeriesProtocol.Find(0x1838)!.Family); Assert.Equal(SteelSeriesProtocol.Family.Nova, SteelSeriesProtocol.Find(0x2202)!.Family); Assert.Null(SteelSeriesProtocol.Find(0xFFFF));
+        Assert.Equal(new byte[] { 0x06, 0x12 }, SteelSeriesProtocol.StatusRequests(SteelSeriesProtocol.Family.Arctis1, 0x12B3)[0]); Assert.Equal(new byte[] { 0x00, 0xD2 }, SteelSeriesProtocol.StatusRequests(SteelSeriesProtocol.Family.Aerox, 0x1838)[0]);
+        Assert.Equal(new byte[] { 0x00, 0x92 }, SteelSeriesProtocol.StatusRequests(SteelSeriesProtocol.Family.Aerox, 0x183A)[0]); Assert.Equal(2, SteelSeriesProtocol.StatusRequests(SteelSeriesProtocol.Family.ArctisProWireless, 0x1290).Count);
+        Assert.Equal(0, SteelSeriesProtocol.CollectionFor(0x172B).Interface); Assert.Equal(3, SteelSeriesProtocol.CollectionFor(0x1872).Interface);
+    }
+
+    [Fact] public void Arctis_headsets_read_their_percent_offline_and_charging()
+    {
+        var a1 = P(SteelSeriesProtocol.Family.Arctis1, 0x12B3, 0, 0, 0x00, 75); Assert.True(a1.Connected); Assert.Equal(75, a1.Percent);
+        Assert.False(P(SteelSeriesProtocol.Family.Arctis1, 0x12B3, 0, 0, 0x01, 75).Connected); Assert.Null(P(SteelSeriesProtocol.Family.Arctis1, 0x12B3, 0, 0, 0x01, 75).Percent);
+        Assert.Equal(60, P(SteelSeriesProtocol.Family.Arctis7, 0x1260, 0, 0, 60).Percent); Assert.Equal("SteelSeries Arctis Pro", P(SteelSeriesProtocol.Family.Arctis7, 0x1252, 0, 0, 60).Name);
+        var a9 = P(SteelSeriesProtocol.Family.Arctis9, 0x12C2, 0, 0, 0, 0x7F, 1); Assert.Equal(50, a9.Percent); Assert.True(a9.Charging);
+    }
+
+    [Fact] public void Pro_Wireless_needs_a_second_question_for_the_level_and_Nova_Pro_reads_eight_steps()
+    {
+        var pro = P(SteelSeriesProtocol.Family.ArctisProWireless, 0x1290, 0x04); Assert.True(pro.Connected && pro.NeedsLevel); Assert.False(P(SteelSeriesProtocol.Family.ArctisProWireless, 0x1290, 0x02).Connected);
+        Assert.Equal(50, SteelSeriesProtocol.ParseLevel([2])); Assert.Null(SteelSeriesProtocol.ParseLevel([9])); Assert.Null(SteelSeriesProtocol.ParseLevel([]));
+        var r = new byte[20]; r[6] = 4; r[15] = 2; var np = SteelSeriesProtocol.Parse(SteelSeriesProtocol.Family.NovaProWireless, 0x12E0, r)!; Assert.Equal(50, np.Percent); Assert.True(np.Charging); Assert.Null(SteelSeriesProtocol.Parse(SteelSeriesProtocol.Family.NovaProWireless, 0x12E0, new byte[8]));
+    }
+
+    [Fact] public void Nova_family_layouts_depend_on_the_model()
+    {
+        Assert.Equal(75, P(SteelSeriesProtocol.Family.Nova, 0x220E, 0, 0x00, 3, 0x01, 0, 0, 0).Percent);   // Arctis 7+: 0…4
+        var n5 = P(SteelSeriesProtocol.Family.Nova, 0x2232, 0, 0x00, 0, 88, 0x01, 0, 0); Assert.Equal(88, n5.Percent); Assert.True(n5.Charging);
+        Assert.Equal(30, P(SteelSeriesProtocol.Family.Nova, 0x230A, 0, 0, 0, 0x03, 0x03, 30, 55).Percent);   // GameBuds: el menor
+        Assert.False(P(SteelSeriesProtocol.Family.Nova, 0x230A, 0, 0, 0, 0, 0, 30, 55).Connected);
+        Assert.Equal(50, P(SteelSeriesProtocol.Family.Nova, 0x2202, 0, 0, 2, 0x04, 0, 0, 0).Percent);   // Nova 7 con niveles
+        Assert.Null(P(SteelSeriesProtocol.Family.Nova, 0x2202, 0, 0, 80, 0x00, 0, 0, 0).Percent);   // desconectado: sin número
+    }
+
+    [Fact] public void Mice_decode_their_level_charging_and_off_states()
+    {
+        var a = P(SteelSeriesProtocol.Family.Aerox, 0x1838, 0, 0x80 | 21); Assert.Equal(100, a.Percent); Assert.True(a.Charging);
+        Assert.Equal(0, P(SteelSeriesProtocol.Family.Aerox, 0x1838, 0, 1).Percent); Assert.False(P(SteelSeriesProtocol.Family.Aerox, 0x1838, 0, 0).Connected); Assert.Null(P(SteelSeriesProtocol.Family.Aerox, 0x1838, 0, 60).Percent);
+        Assert.Equal("Cable USB", P(SteelSeriesProtocol.Family.Aerox, 0x183A, 0, 11).Via);
+        var rv = P(SteelSeriesProtocol.Family.Rival, 0x172B, 70, 0, 1); Assert.Equal(70, rv.Percent); Assert.True(rv.Charging); Assert.Equal("SteelSeries Rival 650 Wireless", rv.Name); Assert.Equal("Cable USB", rv.Via);
+        Assert.Equal(55, P(SteelSeriesProtocol.Family.RivalPro, 0x1880, 0x92, 0x00, 55).Percent); Assert.Null(SteelSeriesProtocol.Parse(SteelSeriesProtocol.Family.RivalPro, 0x1880, [0x91, 0, 55])); Assert.Null(SteelSeriesProtocol.Parse(SteelSeriesProtocol.Family.RivalPro, 0x1880, [0x92, 0, 200]));
+    }
+
+    [Fact] public void A_leading_zero_is_dropped_from_frames_and_numbered_ones_are_kept()
+    {
+        Assert.Equal(new byte[] { 5, 6 }, SteelSeriesProtocol.Payload([0, 5, 6])); Assert.Equal(new byte[] { 0x92, 0, 55 }, SteelSeriesProtocol.Payload([0x92, 0, 55]));
+        Assert.Equal(100, SteelSeriesProtocol.Map(300, 0, 8)); Assert.Equal(0, SteelSeriesProtocol.Map(-5, 0, 8));
+    }
+}
