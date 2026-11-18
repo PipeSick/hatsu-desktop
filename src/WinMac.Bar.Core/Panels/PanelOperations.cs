@@ -199,7 +199,8 @@ public sealed class PanelOperations(SystemHub hub, IPanelUi ui, Action<string> l
         if (id.StartsWith("appout:"))
         {
             var sid = id[7..]; var app = s.AppSessions.Sessions.FirstOrDefault(a => a.Id == sid);
-            if (app is null || app.Pid <= 0 || s.Routing is not { Available: true } rt) return true;
+            if (app is null || app.Pid <= 0) return true;
+            if (s.Routing is not { Available: true } rt) { ui.OpenUri("ms-settings:apps-volume"); return true; }   // sin la salida por aplicación de Hatsu, el mezclador de Windows es donde se elige
             string? cur = rt.Outputs.TryGetValue(app.Pid, out var d) ? d : null;
             var choices = new List<Choice> { new($"approute:{app.Pid}:default", "Predeterminada del sistema", cur is null) };
             choices.AddRange(s.Audio.Outputs.Select(o => new Choice($"approute:{app.Pid}:{o.Id}", o.Name, string.Equals(o.Id, cur, StringComparison.OrdinalIgnoreCase))));

@@ -305,12 +305,25 @@ public class PanelBuilderTests
         var on = PanelBuilder.SoundPanel(Ctx(sys, new BarConfig { AppOutputRouting = true }));
         Assert.Equal("Audífonos USB", ((AppRowData)on.Widgets.Single(w => w.Id == "d").Data!).Output);
         Assert.Equal("Predeterminada", ((AppRowData)on.Widgets.Single(w => w.Id == "s").Data!).Output);
-        var off = PanelBuilder.SoundPanel(Ctx(sys));   // ajuste experimental apagado: nada
+        var off = PanelBuilder.SoundPanel(Ctx(sys, new BarConfig { AppOutputRouting = false }));   // ajuste apagado a mano: nada
         Assert.Null(((AppRowData)off.Widgets.Single(w => w.Id == "d").Data!).Output);
         var refused = PanelBuilder.SoundPanel(Ctx(sys with { Routing = AppRoutingState.Off("Windows no la acepta en esta versión") }, new BarConfig { AppOutputRouting = true }));
         Assert.Null(((AppRowData)refused.Widgets.Single(w => w.Id == "d").Data!).Output);   // no se aparenta un selector que no funciona
         Assert.Contains("Windows no la acepta", refused.Widgets.Single(w => w.Id == "route-off").Text);
         Assert.Equal("No conectada", PanelBuilder.OutputLabel("zz", outs));
+    }
+
+    [Fact]
+    public void The_mixer_lists_apps_from_every_output_and_says_where_each_one_plays()
+    {
+        var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos USB", false) };
+        var apps = new List<AudioSession> { new("pid:1", 1, "Spotify", null, 80, false, false, true, "Altavoces"), new("pid:2", 2, "Discord", null, 40, false, false, true, "Audífonos USB"), new("pid:3", 3, "Chrome", null, 60, false, false, false, "Audífonos USB · Altavoces") };
+        var sys = Nothing with { Audio = new AudioState(true, 35, false, outs), OutputSwitchOk = true, Sessions = new AudioSessionsState(true, apps) };
+        foreach (var cfg in new[] { new BarConfig { AppOutputRouting = false }, new BarConfig { AppOutputRouting = true } })
+        {
+            var p = PanelBuilder.SoundPanel(Ctx(sys, cfg)); string Out(string id) => ((AppRowData)p.Widgets.Single(w => w.Id == id).Data!).Output!;
+            Assert.Equal("Altavoces", Out("pid:1")); Assert.Equal("Audífonos USB", Out("pid:2")); Assert.Equal("Audífonos USB · Altavoces", Out("pid:3"));   // la salida real, sin importar la predeterminada
+        }
     }
 
     [Fact]

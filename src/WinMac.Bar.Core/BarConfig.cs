@@ -127,8 +127,8 @@ public sealed record BarConfig
     public bool ShowTaskManager { get; init; } = false;
     /// <summary>It7: orden elegido por el usuario de los módulos propios movibles («Network,Volume,…», ver <see cref="BarOrdering"/>). Vacío = orden predeterminado.</summary>
     public string BarOrder { get; init; } = "";
-    /// <summary>WM-035 (EXPERIMENTAL): elegir la salida de audio de cada app desde el menú Sonido. APAGADO por defecto: usa una interfaz interna de Windows (la de su propio mezclador).</summary>
-    public bool AppOutputRouting { get; init; } = false;
+    /// <summary>WM-035 (EXPERIMENTAL): elegir la salida de audio de cada app desde el menú Sonido. Encendido por defecto desde 2.0.11 (el mezclador muestra todas las apps y pide poder moverlas): usa una interfaz interna de Windows (la de su propio mezclador); si Windows no la acepta, el panel lo dice y la salida se elige en el mezclador de Windows.</summary>
+    public bool AppOutputRouting { get; init; } = true;
 
     // ── Centro de Notificaciones (panel lateral; se abre con el reloj, como en macOS)
     /// <summary>El reloj abre el Centro de Notificaciones de WinMac. false = abre el calendario desplegable de antes.</summary>

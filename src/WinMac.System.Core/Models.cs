@@ -18,9 +18,9 @@ public sealed record AudioInputState(bool Available, int Volume, bool Muted, boo
 }
 
 /// <summary>
-/// Una aplicación con sesión de audio en la salida predeterminada. <see cref="Id"/> es estable mientras la app corre (agrupa todas las sesiones del mismo proceso: «pid:1234»; «system» = sonidos del sistema).
+/// Una aplicación con sesión de audio en CUALQUIER salida activa (no solo la predeterminada); <see cref="DeviceName"/> dice en cuál suena (varias separadas por « · »). <see cref="Id"/> es estable mientras la app corre (agrupa todas las sesiones del mismo proceso: «pid:1234»; «system» = sonidos del sistema).
 /// </summary>
-public sealed record AudioSession(string Id, int Pid, string Name, string? ExePath, int Volume, bool Muted, bool IsSystemSounds, bool Active);
+public sealed record AudioSession(string Id, int Pid, string Name, string? ExePath, int Volume, bool Muted, bool IsSystemSounds, bool Active, string? DeviceName = null);
 
 /// <summary>WM-035: estado de la salida por aplicación (experimental). <see cref="Outputs"/>: proceso → dispositivo (null = predeterminada).</summary>
 public sealed record AppRoutingState(bool Available, string? Reason, IReadOnlyDictionary<int, string?> Outputs)

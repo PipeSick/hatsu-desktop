@@ -266,7 +266,9 @@ public static partial class PanelBuilder
             {
                 if (rows++ >= MixerMaxApps) yield break;
                 k++;
-                string? output = routing is { Available: true } r && a.Pid > 0 ? OutputLabel(r.Outputs.TryGetValue(a.Pid, out var dev) ? dev : null, outputs) : null;
+                // dónde suena de verdad (cualquier salida, no solo la predeterminada); con «salida por aplicación» el mismo texto se pulsa para elegir otra
+                string? output = !string.IsNullOrEmpty(a.DeviceName) ? a.DeviceName
+                    : routing is { Available: true } r && a.Pid > 0 ? OutputLabel(r.Outputs.TryGetValue(a.Pid, out var dev) ? dev : null, outputs) : null;
                 yield return new Widget(WidgetKind.AppRow, a.Id, k == 1 ? a.Name : $"Sesión {k}", Value: a.Volume,
                     Data: new AppRowData(a.ExePath, k == 1 ? a.Name : $"Sesión {k}", a.Volume, a.Muted, a.Active, Compact: true, Output: output, SubRow: k > 1));
             }
