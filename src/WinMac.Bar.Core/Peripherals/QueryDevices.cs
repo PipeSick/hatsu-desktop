@@ -7,7 +7,8 @@ namespace WinMac.Bar.Peripherals;
 /// </summary>
 public static class QueryDevices
 {
-    public enum Transport { Report, Feature }
+    /// <summary>Report = se escribe un informe de salida y se lee uno de entrada de la misma colección. Feature = se manda y se lee un informe de característica. FeatureThenInput = se manda un informe de característica por una colección y la respuesta llega como informe de entrada por otra hermana de la misma interfaz.</summary>
+    public enum Transport { Report, Feature, FeatureThenInput }
 
     /// <summary>Qué colección HID lleva el protocolo: página/uso, número de interfaz USB y/o largos de informe. Lo que no se indique no se exige.</summary>
     public sealed record Selector(ushort Page = 0, ushort Usage = 0, int Interface = -1, int Out = -1, int In = -1, int FeatureMin = -1, int FeatureExact = -1, ushort PageMin = 0, int OutMin = -1, int InMin = -1)
@@ -26,9 +27,9 @@ public static class QueryDevices
     /// <param name="Parse">respuesta → lectura; null = no es la respuesta (se sigue leyendo o se reintenta).</param>
     /// <param name="Exclude">productos que no son de este protocolo aunque sean del fabricante (p. ej. los auriculares ATK, que hablan por un puerto serie).</param>
     /// <param name="HighInterfaceFirst">probar primero las interfaces USB de número más alto (la 2 de Pulsar rechaza el informe de característica).</param>
-    public sealed record Spec(string Brand, ushort[] Vendors, ushort[]? Pids, Selector Collection, Transport Transport, Func<ushort, byte[]> Request, int TimeoutMs, int DelayMs, Func<ushort, ushort, byte[], Reading?> Parse, ushort[]? Exclude = null, bool HighInterfaceFirst = false);
+    public sealed record Spec(string Brand, ushort[] Vendors, ushort[]? Pids, Selector Collection, Transport Transport, Func<ushort, byte[]> Request, int TimeoutMs, int DelayMs, Func<ushort, ushort, byte[], Reading?> Parse, ushort[]? Exclude = null, bool HighInterfaceFirst = false, Selector? ReplyCollection = null);
 
-    public static IReadOnlyList<Spec> Specs => [CoolerMaster, Cherry, Nzxt, Endgame, Arbiter, Lamzu, KysonaDedicated, KysonaVendor, Pulsar, AtkNk];   // propiedad: los Spec se inicializan más abajo
+    public static IReadOnlyList<Spec> Specs => [CoolerMaster, Cherry, Nzxt, Endgame, Arbiter, Lamzu, KysonaDedicated, KysonaVendor, Pulsar, AtkNk, WlMouse, Vaxee, Areson, Dareu];   // propiedad: los Spec se inicializan más abajo
 
     private static int? Pct(int v) => v is >= 1 and <= 100 ? v : null;
 
@@ -145,6 +146,48 @@ public static class QueryDevices
             if ((status != 0xA1 && status != 0xA2) || level > 100) return null;
             return new(key, m.Name, DeviceKind.Mouse, cable, level > 0 || cable, level > 0 ? level : null, chg == 0x01);   // 0 desde un receptor = ratón apagado o fuera de alcance
         });
+
+    // ───────── WLMouse (36A7): el mismo informe de 65 bytes en la colección FFFF. Responde con [3]==02, [4]==02, [6]==83; [1] A1/A2 = contestó, A0 = dormido; [7]==1 cargando y [8] %. El cable que contesta se lista con la clave de su receptor.
+    private static readonly (ushort Pid, bool Receiver, string Name, ushort ReceiverPid)[] WlMouseModels =
+    [
+        (0xA879, false, "WLMouse Sword X 8K", 0xA878), (0xA884, false, "WLMouse Beast X 8K", 0xA883), (0xA860, false, "WLMouse mouse", 0), (0xA866, false, "WLMouse mouse", 0), (0xA867, false, "WLMouse mouse", 0),
+        (0xA856, true, "WLMouse Beast X V2", 0), (0xA868, true, "WLMouse Beast X Mini Pro", 0), (0xA870, true, "WLMouse Beast X Pro", 0), (0xA878, true, "WLMouse Sword X 8K", 0), (0xA880, true, "WLMouse Beast MAX", 0),
+        (0xA883, true, "WLMouse Beast X 8K", 0), (0xA885, true, "WLMouse Beast X Mini", 0),
+    ];
+
+    public static readonly Spec WlMouse = new("WLMouse", [0x36A7], WlMouseModels.Select(m => m.Pid).ToArray(), new(Page: 0xFFFF, FeatureMin: 65), Transport.Feature, _ => [0, 0, 0, 0x02, 0x02, 0, 0x83], 0, 100,
+        (vid, pid, r) =>
+        {
+            if (r.Length < 9 || r[3] != 0x02 || r[4] != 0x02 || r[6] != 0x83) return null;   // todavía no es la respuesta
+            var m = WlMouseModels.FirstOrDefault(x => x.Pid == pid); if (m.Name is null) return null;
+            string key = "wlmouse:" + (m.ReceiverPid != 0 ? m.ReceiverPid : pid).ToString("X4");
+            if (r[1] == 0xA0) return new(key, m.Name, DeviceKind.Mouse, !m.Receiver, false, null, false);
+            if ((r[1] != 0xA1 && r[1] != 0xA2) || r[8] > 100) return null;
+            return new(key, m.Name, DeviceKind.Mouse, !m.Receiver, true, r[8], r[7] == 0x01);
+        });
+
+    // ───────── VAXEE 4K y 8K (3057: receptores 1002 y 2002, cable ZYGEN 1011): colección FF05:0001, informe de característica de 64. Lectura (no escritura): 0E A5 <cmd> 01 01. cmd 0B = batería en pasos de 5 % (0…20). La carga (cmd 10) no se consulta en esta versión.
+    public static readonly Spec Vaxee = new("VAXEE", [0x3057], [0x1002, 0x2002, 0x1011], new(Page: 0xFF05, Usage: 0x0001, FeatureExact: 64), Transport.Feature, _ => [0x0E, 0xA5, 0x0B, 0x01, 0x01], 0, 100,
+        (vid, pid, r) =>
+        {
+            if (r.Length < 6 || r[0] != 0x0E || r[1] != 0xA5 || r[2] != 0x0B || r[4] != 1 || r[5] > 20) return null;
+            string name = pid == 0x1011 ? "ZYGEN NP-01S V2 Wireless" : pid == 0x2002 ? "VAXEE 8K Wireless" : "VAXEE wireless mouse";
+            return new("vaxee:" + pid.ToString("X4"), name, DeviceKind.Mouse, pid == 0x1011, true, r[5] * 5, false);
+        });
+
+    // ───────── Redragon con receptor Areson (25A7:FA07 y FA08) y DAREU EM901X (260D): la consulta va como informe de característica de 17 bytes [08][04]…[suma 0x55 − bytes 0…15] por la colección FF02:0002 de la interfaz 1 y la respuesta llega como informe de entrada de 17 por la FF01:0000 de la misma interfaz.
+    // Areson: la trama entera suma 0x55 (mod 256), [6] = nivel de 0 a 10 (×10) y [7] cargando. DAREU: [6] = % directo y [7] cargando.
+    private static readonly Selector FeatureFf02 = new(Page: 0xFF02, Usage: 0x0002, Interface: 1, FeatureMin: 17), InputFf01 = new(Page: 0xFF01, Usage: 0x0000, Interface: 1, InMin: 17);
+
+    public static readonly Spec Areson = new("Redragon (Areson)", [0x25A7], [0xFA07, 0xFA08], FeatureFf02, Transport.FeatureThenInput, _ => Frame17(0x04), 1800, 0,
+        (vid, pid, r) =>
+        {
+            if (r.Length < 17 || r[0] != 0x09 || r[1] != 0x04 || r[2] != 0x00 || r[6] > 10) return null; int total = 0; foreach (var b in r.Take(17)) total += b; if ((total & 0xFF) != 0x55) return null;
+            return new($"areson:25A7:{pid:X4}", "Redragon wireless mouse", DeviceKind.Mouse, false, true, r[6] * 10, r[7] != 0);
+        }, ReplyCollection: InputFf01);
+
+    public static readonly Spec Dareu = new("DAREU", [0x260D], [0x1090, 0x1074], FeatureFf02, Transport.FeatureThenInput, _ => Frame17(0x04), 1000, 0,
+        (vid, pid, r) => r.Length == 17 && r[0] == 0x09 && r[1] == 0x04 && r[2] == 0x00 && r[6] <= 100 ? new($"dareu:260D:{pid:X4}", "DAREU EM901X", DeviceKind.Mouse, pid == 0x1090, true, r[6], r[7] != 0) : null, ReplyCollection: InputFf01);
 
     private static readonly (ushort Vid, ushort[] Pids, string Name)[] LamzuModels =
     [

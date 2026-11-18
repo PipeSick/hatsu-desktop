@@ -1,4 +1,4 @@
-# Periféricos de más marcas (lotes 1 y 2)
+# Periféricos de más marcas (lotes 1 a 3)
 
 Hatsu lee la batería de aparatos de más marcas por el protocolo propio de cada una. **Todo este lote está SIN VERIFICAR con aparatos reales**: se escribió con la documentación pública y sin tener los aparatos. Se activa en Ajustes › Barra superior › Periféricos › «Leer la batería de más marcas» (apagado por defecto).
 
@@ -16,6 +16,9 @@ Hatsu lee la batería de aparatos de más marcas por el protocolo propio de cada
 | Endgame Gear | OP1w 4k, XM2w 4k (receptor 4K) | informe de característica `A1 B4` |
 | LAMZU y Arbiter Studio | Maya, Tachi, Inca, Paro, Thorn, Atlantis, Orcus; Akitsu | informe de característica de 65 bytes |
 | Kysona, Pulsar, ATK/VXE, Redragon, Hitscan, G-Wolves, HECATE | ratones con trama de 17 bytes, Pulsar X2 V3, ATK NK | trama de 17 con suma; Pulsar 08 81 01; ATK BITMOUSE |
+| WLMouse | Beast X (4 variantes), Beast MAX, Sword X 8K, Beast X V2 | informe de característica de 65 bytes |
+| VAXEE | 4K y 8K, ZYGEN NP-01S V2 | informe de característica de 64 (lectura `0E A5 0B`) |
+| Redragon (Areson) y DAREU | M913 e M915RGB-WL con receptor 25A7:FA07/FA08; EM901X | consulta de 17 bytes por una colección y respuesta por su hermana |
 | ASUS ROG | teclado, ratón (Omni) y auriculares Pelta/Delta II | ver `docs/64` |
 | Logitech | receptores Unifying, Bolt, Lightspeed (HID++) | ver `docs/65` |
 
@@ -28,4 +31,5 @@ Hatsu lee la batería de aparatos de más marcas por el protocolo propio de cada
 - Sin verificar: puede fallar un modelo concreto, o dar un valor corrido. Si te pasa, el diagnóstico de `--dump` de Hatsu (no incluido) o una captura USB sirven para corregirlo.
 - Los aparatos que Synapse, iCUE, G HUB o NGENUITY tengan abiertos pueden contestar tarde o dejar la respuesta a medias; el lector reintenta.
 - Límites del lote 2: ATK NK solo lee el porcentaje (no la carga); Endgame Gear no hace el sondeo de reconexión; Kysona/ATK preguntan la batería directamente, sin preguntar antes si el ratón está conectado; Pulsar reintenta la consulta en vez de esperar la respuesta pendiente.
-- Pendiente (lote 3): Keychron, Audeze, Poly/Plantronics, Jabra, JBL, Sony INZONE, Samsung Galaxy Buds, AirPods, mandos (PlayStation, Xbox, Switch, 8BitDo, GameSir, Flydigi…), Rapoo, Vaxee, Aula, Areson, Machenike y los genéricos de HID, Bluetooth y HeadsetControl.
+- Límites del lote 3: VAXEE no consulta la carga; hay que probar en cada receptor cuál de las dos colecciones contesta.
+- **Todavía no están** (formas distintas de hablar que piden más trabajo): Keychron, Audeze, Poly/Plantronics, Jabra, JBL, Sony INZONE, Samsung Galaxy Buds, AirPods, mandos (PlayStation, Xbox, Switch, 8BitDo, GameSir, Flydigi), Rapoo, Aula, Machenike, Darmoshark, Fantech, Finalmouse y los genéricos de HID y HeadsetControl. Los que Windows ya informa por Bluetooth o por HID estándar se ven igual.

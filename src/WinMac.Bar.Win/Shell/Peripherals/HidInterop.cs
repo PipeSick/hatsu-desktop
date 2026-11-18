@@ -56,6 +56,22 @@ internal static class HidInterop
 
     public static void Close(IntPtr h) { if (h != IntPtr.Zero) CloseHandle(h); }
 
+    /// <summary>Manda <paramref name="feature"/> por <paramref name="featureHandle"/> y lee tramas de <paramref name="inputHandle"/> hasta que <paramref name="accept"/> devuelva algo (o se acabe el plazo o lleguen 32 tramas ajenas).</summary>
+    public static T? SendFeatureThenRead<T>(IntPtr featureHandle, IntPtr inputHandle, byte[] feature, int inputLength, int timeoutMs, Func<byte[], T?> accept, CancellationToken ct) where T : class
+    {
+        T? result = null; var done = new ManualResetEventSlim(); var armed = new ManualResetEventSlim();
+        var t = new Thread(() =>
+        {
+            var buf = new byte[inputLength]; armed.Set();
+            for (int i = 0; i < 32 && result is null; i++) { if (!ReadFile(inputHandle, buf, (uint)buf.Length, out uint n, IntPtr.Zero)) break; result = accept(buf.AsSpan(0, (int)n).ToArray()); }
+            done.Set();
+        }) { IsBackground = true };
+        t.Start(); armed.Wait(200); Thread.Sleep(20);
+        if (!HidD_SetFeature(featureHandle, feature, feature.Length)) { CancelIoEx(inputHandle, IntPtr.Zero); t.Join(500); return null; }
+        try { if (!done.Wait(timeoutMs, ct)) { CancelIoEx(inputHandle, IntPtr.Zero); t.Join(500); } } catch (OperationCanceledException) { CancelIoEx(inputHandle, IntPtr.Zero); t.Join(500); throw; }
+        return result;
+    }
+
     /// <summary>Escribe <paramref name="request"/> y lee tramas hasta que <paramref name="accept"/> devuelva algo (o se acabe el plazo o lleguen 16 tramas ajenas). Null = sin respuesta.</summary>
     public static T? Transact<T>(IntPtr h, byte[] request, int inputLength, int timeoutMs, Func<byte[], T?> accept, CancellationToken ct) where T : class
     {

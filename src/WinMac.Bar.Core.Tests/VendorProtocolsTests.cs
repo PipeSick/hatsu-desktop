@@ -233,7 +233,7 @@ public class QueryDevicesTests
     {
         var s = QueryDevices.CoolerMaster.Collection; Assert.True(s.Matches(0xFF0A, 0, 3, 32, 32, 0)); Assert.False(s.Matches(0xFF0A, 0, 2, 32, 32, 0)); Assert.False(s.Matches(0xFF00, 0, 3, 32, 32, 0));
         Assert.True(QueryDevices.Lamzu.Collection.Matches(0, 0, -1, 0, 0, 65)); Assert.False(QueryDevices.Lamzu.Collection.Matches(0, 0, -1, 0, 0, 64));
-        Assert.Equal(10, QueryDevices.Specs.Count);
+        Assert.Equal(14, QueryDevices.Specs.Count);
     }
 
     [Fact] public void Cooler_Master_reads_percent_charging_and_the_link_and_names_the_model_on_the_shared_dongle()
@@ -354,5 +354,39 @@ public class AsusRogModelsTests
         var r = R(64, (0, 1), (1, 0xA0), (2, 0x00), (5, 0xB0), (6, 0x1A), (9, 0x0E), (10, 0x1C)); Assert.True(AsusRogModels.IsPairingReply(r));
         Assert.Equal(new ushort[] { 0x1AB0, 0x1C0E }, AsusRogModels.ParsePairing(r)); Assert.Empty(AsusRogModels.ParsePairing(R(64, (1, 0xA0)))); Assert.False(AsusRogModels.IsPairingReply(R(64, (1, 0x12))));
         Assert.Equal(new byte[] { 1, 0xA0, 0 }, AsusRogModels.PairingRequest);
+    }
+}
+
+public class QueryDevicesBatch3Tests
+{
+    private static byte[] R(int len, params (int I, byte V)[] set) { var b = new byte[len]; foreach (var (i, v) in set) b[i] = v; return b; }
+
+    [Fact] public void WLMouse_cable_and_receiver_share_one_key_and_asleep_is_told_apart()
+    {
+        var rx = QueryDevices.WlMouse.Parse(0x36A7, 0xA878, R(65, (1, 0xA1), (3, 2), (4, 2), (6, 0x83), (7, 1), (8, 57)))!; Assert.Equal("WLMouse Sword X 8K", rx.Name); Assert.Equal(57, rx.Percent); Assert.True(rx.Charging); Assert.False(rx.Cable);
+        var cable = QueryDevices.WlMouse.Parse(0x36A7, 0xA879, R(65, (1, 0xA2), (3, 2), (4, 2), (6, 0x83), (8, 57)))!; Assert.True(cable.Cable); Assert.Equal(rx.Key, cable.Key);
+        Assert.False(QueryDevices.WlMouse.Parse(0x36A7, 0xA883, R(65, (1, 0xA0), (3, 2), (4, 2), (6, 0x83)))!.Connected);
+        Assert.Null(QueryDevices.WlMouse.Parse(0x36A7, 0xA883, R(65, (1, 0xA1), (3, 0), (4, 2), (6, 0x83), (8, 50)))); Assert.Null(QueryDevices.WlMouse.Parse(0x36A7, 0xA883, R(65, (1, 0xA1), (3, 2), (4, 2), (6, 0x83), (8, 150)))); Assert.Null(QueryDevices.WlMouse.Parse(0x36A7, 0x9999, R(65, (1, 0xA1), (3, 2), (4, 2), (6, 0x83), (8, 50))));
+    }
+
+    [Fact] public void VAXEE_reads_steps_of_five_percent_and_refuses_values_above_twenty()
+    {
+        Assert.Equal([0x0E, 0xA5, 0x0B, 0x01, 0x01], QueryDevices.Vaxee.Request(0x1002));
+        var r = QueryDevices.Vaxee.Parse(0x3057, 0x1002, R(64, (0, 0x0E), (1, 0xA5), (2, 0x0B), (4, 1), (5, 13)))!; Assert.Equal(65, r.Percent); Assert.Equal("VAXEE wireless mouse", r.Name); Assert.True(QueryDevices.Vaxee.Parse(0x3057, 0x1011, R(64, (0, 0x0E), (1, 0xA5), (2, 0x0B), (4, 1), (5, 20)))!.Cable);
+        Assert.Null(QueryDevices.Vaxee.Parse(0x3057, 0x1002, R(64, (0, 0x0E), (1, 0xA5), (2, 0x0B), (4, 1), (5, 21)))); Assert.Null(QueryDevices.Vaxee.Parse(0x3057, 0x1002, R(64, (0, 0x0E), (1, 0xA5), (2, 0x10), (4, 1), (5, 1)))); Assert.Equal("VAXEE 8K Wireless", QueryDevices.Vaxee.Parse(0x3057, 0x2002, R(64, (0, 0x0E), (1, 0xA5), (2, 0x0B), (4, 1), (5, 4)))!.Name);
+    }
+
+    [Fact] public void Areson_checks_the_whole_frame_sums_to_55_and_scales_the_level_from_0_10()
+    {
+        var r = R(17, (0, 9), (1, 4), (6, 8), (7, 1)); r[16] = (byte)(0x55 - (9 + 4 + 8 + 1)); var m = QueryDevices.Areson.Parse(0x25A7, 0xFA07, r)!; Assert.Equal(80, m.Percent); Assert.True(m.Charging);
+        r[16] ^= 1; Assert.Null(QueryDevices.Areson.Parse(0x25A7, 0xFA07, r)); Assert.Equal(QueryDevices.Transport.FeatureThenInput, QueryDevices.Areson.Transport); Assert.NotNull(QueryDevices.Areson.ReplyCollection);
+        var bad = R(17, (0, 9), (1, 4), (6, 11)); bad[16] = (byte)(0x55 - (9 + 4 + 11)); Assert.Null(QueryDevices.Areson.Parse(0x25A7, 0xFA07, bad));
+    }
+
+    [Fact] public void DAREU_reads_the_percent_directly_and_the_cable_is_told_apart()
+    {
+        Assert.Equal((byte)0x49, QueryDevices.Frame17(0x04)[16]);   // la misma trama que manda el fabricante: 0x55 − (08 + 04)
+        var r = R(17, (0, 9), (1, 4), (6, 91), (7, 1)); var d = QueryDevices.Dareu.Parse(0x260D, 0x1074, r)!; Assert.Equal(91, d.Percent); Assert.True(d.Charging); Assert.False(d.Cable); Assert.True(QueryDevices.Dareu.Parse(0x260D, 0x1090, r)!.Cable);
+        Assert.Null(QueryDevices.Dareu.Parse(0x260D, 0x1074, R(17, (0, 9), (1, 4), (6, 120)))); Assert.Null(QueryDevices.Dareu.Parse(0x260D, 0x1074, R(16, (0, 9), (1, 4), (6, 50)))); Assert.Equal(14, QueryDevices.Specs.Count);
     }
 }

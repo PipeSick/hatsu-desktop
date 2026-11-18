@@ -29,7 +29,7 @@ internal sealed class QueryDeviceProvider : IPeripheralProvider
                     foreach (var i in all.Where(i => i.Vendor == vendor && i.Product == pid && spec.Collection.Matches(i.UsagePage, i.Usage, InterfaceOf(i.Path), i.OutputLength, i.InputLength, i.FeatureLength))
                         .OrderByDescending(i => spec.HighInterfaceFirst ? InterfaceOf(i.Path) : 0))
                     {
-                        var r = spec.Transport == QueryDevices.Transport.Report ? AskReport(i, spec, ct) : AskFeature(i, spec, ct); if (r is null) continue;
+                        var r = spec.Transport switch { QueryDevices.Transport.Report => AskReport(i, spec, ct), QueryDevices.Transport.Feature => AskFeature(i, spec, ct), _ => AskFeatureThenInput(i, spec, all, ct) }; if (r is null) continue;
                         if (!found.TryGetValue(r.Key, out var prev)) { found[r.Key] = r; order.Add(r.Key); }
                         else if (r.Cable && !prev.Cable) found[r.Key] = r;   // el mismo aparato por cable y por receptor: gana el cable (es el que carga)
                         break;
@@ -54,6 +54,22 @@ internal sealed class QueryDeviceProvider : IPeripheralProvider
             return HidInterop.Transact(h, frame, i.InputLength, spec.TimeoutMs, b => spec.Parse(i.Vendor, i.Product, SteelSeriesProtocol.Payload(b)) is { } r ? new Box(r) : null, ct)?.R;
         }
         finally { HidInterop.Close(h); }
+    }
+
+    /// <summary>La consulta va como informe de característica por <paramref name="i"/> y la respuesta llega como informe de entrada por la colección hermana (misma interfaz) que indica el Spec. Se vacía la cola antes de mandar para no tomar un informe viejo por la respuesta.</summary>
+    private static QueryDevices.Reading? AskFeatureThenInput(HidIface i, QueryDevices.Spec spec, List<HidIface> all, CancellationToken ct)
+    {
+        if (spec.ReplyCollection is not { } sel) return null; int iface = InterfaceOf(i.Path);
+        var input = all.FirstOrDefault(x => x.Vendor == i.Vendor && x.Product == i.Product && InterfaceOf(x.Path) == iface && sel.Matches(x.UsagePage, x.Usage, InterfaceOf(x.Path), x.OutputLength, x.InputLength, x.FeatureLength)); if (input is null) return null;
+        IntPtr hf = HidInterop.OpenFeature(i.Path); if (hf == IntPtr.Zero) return null; IntPtr hi = HidInterop.OpenReadWrite(input.Path);
+        try
+        {
+            if (hi == IntPtr.Zero) return null;
+            var req = spec.Request(i.Product); var frame = new byte[i.FeatureLength]; Array.Copy(req, frame, Math.Min(req.Length, frame.Length));
+            // la lectura ya espera en segundo plano cuando se manda la consulta: Transact manda por la colección de entrada, así que aquí se hace a mano
+            return HidInterop.SendFeatureThenRead(hf, hi, frame, input.InputLength, spec.TimeoutMs, b => spec.Parse(i.Vendor, i.Product, b) is { } r ? new Box(r) : null, ct)?.R;
+        }
+        finally { HidInterop.Close(hf); HidInterop.Close(hi); }
     }
 
     private static QueryDevices.Reading? AskFeature(HidIface i, QueryDevices.Spec spec, CancellationToken ct)
