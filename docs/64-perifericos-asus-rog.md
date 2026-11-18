@@ -45,3 +45,14 @@ La lectura es una consulta de solo lectura, igual que con el teclado y el ratón
 - `FF AA` en los bytes 1–2 o 5–6 = apagado o dormido.
 
 **Origen y licencia.** Estos datos de protocolo vienen de lo que describe el proyecto [Wireless-Device-Battery-Monitor](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor) (GPL-3.0) y de los proyectos en que se basa. En Hatsu no se copia su código: el lector está escrito aparte (`AsusRogProtocol`, `AsusRogProvider`), solo con estos datos. **Pendiente:** probarlo con el audífono encendido; hasta entonces el dato se marca como lectura sin verificar y, sin respuesta, el dispositivo queda «no disponible».
+
+## Modelos ROG (tabla completa, sin verificar salvo los dos medidos)
+
+Hatsu ya no se limita a «un teclado» y «un ratón» por el receptor Omni. Ahora (`AsusRogModels`):
+1. Le pregunta al receptor Omni qué aparatos tiene emparejados (`01 A0 00` por la colección col01 de la interfaz 2: ranuras de 4 bytes con el id de producto desde el byte 5) y lee cada uno por su canal (teclados: col02, informe 2; ratones: col03, informe 3). Sale con el **nombre del modelo**. Si el Omni no da la lista, queda la consulta genérica de antes.
+2. Lee los teclados y ratones con su **propio receptor o por cable** (informe sin número, interfaz 1 para teclados y 0 para ratones).
+3. Cada modelo tiene su posición de la batería (teclados: byte 6, o el 11 en el Falchion; ratones: byte 5, o el 7 en el Strix Carry) y su escala (×25 en los medidores antiguos de 0 a 4). La carga sale del byte 9 (teclado) y del 10 (ratón).
+
+Modelos en la tabla: Azoth, Azoth Extreme y Extreme SE, Azoth X, Falchion, Falchion RX y RX Low Profile, Strix Scope II 96 y 96 RX, Strix Scope RX TKL; Chakram y Chakram X, Gladius II y III (Aimpoint y EVA-02), Harpe Ace (Aim Lab, Extreme, Mini) y Harpe II Ace, Keris Wireless (EVA, Aimpoint), Keris II Ace, Origin y Origin KJP, Pugio II, Spatha X, Strix Carry y Strix Impact II y III.
+
+Fuente: el proyecto Wireless-Device-Battery-Monitor (GPL-3.0) y los que cita (peripheral-battery-tray, G-Helper, BatteryTool). Solo se usaron los datos de protocolo; el código es propio.

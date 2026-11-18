@@ -317,3 +317,42 @@ public class QueryDevicesBatch2bTests
         Assert.Null(QueryDevices.AtkNk.Parse(0x373B, 0x1216, R(64, (0, 8), (1, 0x72), (5, 7), (7, 0))));   // 0 = dormido: sin lectura
     }
 }
+
+public class AsusRogModelsTests
+{
+    private static byte[] R(int len, params (int I, byte V)[] set) { var b = new byte[len]; foreach (var (i, v) in set) b[i] = v; return b; }
+    private static AsusRogModels.Model M(ushort pid, byte rid = 0) => AsusRogModels.Models.First(m => m.Pid == pid && m.ReportId == rid);
+
+    [Fact] public void The_table_has_every_known_model_with_its_own_offsets_and_the_two_measured_ones_are_there()
+    {
+        Assert.True(AsusRogModels.Models.Count >= 60); Assert.Equal("ROG Strix Scope II 96", M(0x1AB0, 2).Name); Assert.Equal("ROG Keris II Origin", M(0x1C0E, 3).Name);
+        Assert.Equal(11, M(0x193E).Offset); Assert.Equal(25, M(0x18E5).Scale); Assert.Equal(7, M(0x18B4).Offset); Assert.Equal(new byte[] { 2, 0x12, 0x01 }, AsusRogModels.Request(M(0x1AB0, 2))); Assert.Equal(new byte[] { 3, 0x12, 0x07 }, AsusRogModels.Request(M(0x1C0E, 3)));
+        Assert.All(AsusRogModels.Models.Where(m => m.ReportId != 0), m => Assert.NotNull(m.Col));   // los del Omni se reconocen por su colección
+    }
+
+    [Fact] public void A_keyboard_answer_gives_percent_and_charging_and_Falchion_reads_byte_11()
+    {
+        var r = AsusRogModels.Parse(M(0x1AB0, 2), R(64, (0, 2), (1, 0x12), (2, 0x01), (6, 60), (9, 1)))!; Assert.Equal(60, r.Percent); Assert.True(r.Charging);
+        Assert.Equal(44, AsusRogModels.Parse(M(0x193E), R(64, (1, 0x12), (2, 0x01), (6, 99), (11, 44)))!.Percent); Assert.Null(AsusRogModels.Parse(M(0x1AB0, 2), R(64, (1, 0x12), (2, 0x01), (6, 200)))!.Percent);
+    }
+
+    [Fact] public void A_mouse_answer_scales_old_gauges_and_treats_zero_as_no_data()
+    {
+        Assert.Equal(97, AsusRogModels.Parse(M(0x1C0E, 3), R(64, (0, 3), (1, 0x12), (2, 0x07), (5, 97), (10, 0)))!.Percent);
+        var old = AsusRogModels.Parse(M(0x18E5), R(64, (1, 0x12), (2, 0x07), (5, 3), (10, 1)))!; Assert.Equal(75, old.Percent); Assert.True(old.Charging);   // medidor antiguo de 0 a 4: ×25
+        Assert.Equal(AsusRogModels.Answer.Asleep, AsusRogModels.Parse(M(0x1C0E, 3), R(64, (1, 0x12), (2, 0x07), (5, 0)))!.Answer); Assert.Null(AsusRogModels.Parse(M(0x1C0E, 3), R(64, (1, 0x12), (2, 0x07), (5, 200)))!.Percent);
+    }
+
+    [Fact] public void FF_AA_means_asleep_and_foreign_or_short_answers_are_ignored()
+    {
+        Assert.Equal(AsusRogModels.Answer.Asleep, AsusRogModels.Parse(M(0x1AB0, 2), R(64, (1, 0xFF), (2, 0xAA)))!.Answer);
+        Assert.Null(AsusRogModels.Parse(M(0x1AB0, 2), R(64, (1, 0x12), (2, 0x07), (6, 60)))); Assert.Null(AsusRogModels.Parse(M(0x1AB0, 2), R(4))); Assert.Null(AsusRogModels.Parse(M(0x1AB0, 2), null));
+    }
+
+    [Fact] public void The_omni_pairing_list_is_read_in_four_byte_slots_until_a_zero()
+    {
+        var r = R(64, (0, 1), (1, 0xA0), (2, 0x00), (5, 0xB0), (6, 0x1A), (9, 0x0E), (10, 0x1C)); Assert.True(AsusRogModels.IsPairingReply(r));
+        Assert.Equal(new ushort[] { 0x1AB0, 0x1C0E }, AsusRogModels.ParsePairing(r)); Assert.Empty(AsusRogModels.ParsePairing(R(64, (1, 0xA0)))); Assert.False(AsusRogModels.IsPairingReply(R(64, (1, 0x12))));
+        Assert.Equal(new byte[] { 1, 0xA0, 0 }, AsusRogModels.PairingRequest);
+    }
+}

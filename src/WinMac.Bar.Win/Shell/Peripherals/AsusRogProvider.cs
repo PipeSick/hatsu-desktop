@@ -18,7 +18,14 @@ internal sealed class AsusRogProvider : IPeripheralProvider
     public Task<IReadOnlyList<RawReading>> ReadAsync(CancellationToken ct) => Task.Run<IReadOnlyList<RawReading>>(() =>
     {
         var res = new List<RawReading>(); var paths = Enumerate(out var others, out var headsets);
-        foreach (var q in AsusRogProtocol.OmniQueries)
+        var vendorIfaces = HidInterop.Scan(v => v == AsusRogProtocol.Vendor); var seen = new HashSet<string>();
+        // 1) El receptor Omni dice qué aparatos tiene emparejados; cada uno se lee por su canal y sale con su nombre de modelo.
+        bool identified = false;
+        foreach (var r in ReadOmniPaired(vendorIfaces, ct)) { if (seen.Add(r.Name)) res.Add(r); identified = true; }
+        // 2) Teclados y ratones con su propio receptor 2,4 GHz o por cable (informe sin número).
+        foreach (var r in ReadDirect(vendorIfaces, ct)) if (seen.Add(r.Name)) res.Add(r);
+        // 3) Si el Omni no dio la lista de emparejados, la consulta genérica de antes (sin nombre de modelo).
+        foreach (var q in identified ? [] : AsusRogProtocol.OmniQueries)
         {
             ct.ThrowIfCancellationRequested();
             if (!paths.TryGetValue(q.UsagePage, out var path)) continue;             // el receptor no está conectado
@@ -43,6 +50,62 @@ internal sealed class AsusRogProvider : IPeripheralProvider
                 ChargeState.Unknown, BatteryCapability.Unsupported, "Receptor ASUS detectado; la batería de este modelo aún no es compatible."));
         return res;
     }, ct);
+
+    private static int InterfaceOf(string path) { var m = System.Text.RegularExpressions.Regex.Match(path, @"mi_([0-9a-f]{2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase); return m.Success ? Convert.ToInt32(m.Groups[1].Value, 16) : -1; }
+
+    private static RawReading? ReadModel(HidIface i, AsusRogModels.Model m, bool omni, CancellationToken ct)
+    {
+        IntPtr h = HidInterop.OpenReadWrite(i.Path); if (h == IntPtr.Zero) return null;
+        try
+        {
+            var req = AsusRogModels.Request(m); var frame = new byte[Math.Max((int)i.OutputLength, 12)]; Array.Copy(req, frame, req.Length);
+            var raw = HidInterop.Transact(h, frame, i.InputLength, 600, b => AsusRogModels.Parse(m, b) is { } p ? new Parsed(p) : null, ct)?.Result; if (raw is null) return null;
+            string key = "asus-rog:" + m.Pid.ToString("X4") + (m.Role == AsusRogProtocol.Role.Keyboard ? ":kb" : ":ms");
+            if (raw.Answer == AsusRogModels.Answer.Asleep) return new RawReading(key, m.Name, AsusRogProtocol.Kind(m.Role), omni ? ConnectionKind.Dongle : ConnectionKind.Dongle, false, null, ChargeState.Unknown, BatteryCapability.Unknown, "Apagado o dormido.");
+            return new RawReading(key, m.Name, AsusRogProtocol.Kind(m.Role), ConnectionKind.Dongle, raw.Percent is not null, raw.Percent, raw.Percent is null ? ChargeState.Unknown : raw.Charging ? ChargeState.Charging : ChargeState.NotCharging,
+                raw.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, omni ? "Lectura por el receptor ROG OMNI." : "Lectura por el receptor o el cable del propio aparato (sin verificar con tu equipo).");
+        }
+        finally { HidInterop.Close(h); }
+    }
+
+    private sealed record Parsed(AsusRogModels.Result Result);
+
+    private static IEnumerable<RawReading> ReadOmniPaired(List<HidIface> all, CancellationToken ct)
+    {
+        var omni = all.Where(i => i.Product == AsusRogProtocol.OmniReceiverPid && InterfaceOf(i.Path) == 2 && i.OutputLength >= 12).ToList();
+        var listIface = omni.FirstOrDefault(i => i.Path.Contains("col01", StringComparison.OrdinalIgnoreCase)); if (listIface is null) yield break;
+        IReadOnlyList<ushort>? paired = null; IntPtr h = HidInterop.OpenReadWrite(listIface.Path);
+        if (h != IntPtr.Zero)
+        {
+            try
+            {
+                var frame = new byte[listIface.OutputLength]; Array.Copy(AsusRogModels.PairingRequest, frame, AsusRogModels.PairingRequest.Length);
+                paired = HidInterop.Transact(h, frame, listIface.InputLength, 800, b => AsusRogModels.IsPairingReply(b) ? new Pairs(AsusRogModels.ParsePairing(b)) : null, ct)?.List;
+            }
+            finally { HidInterop.Close(h); }
+        }
+
+        if (paired is null) yield break;
+        foreach (var pid in paired)
+        {
+            ct.ThrowIfCancellationRequested();
+            var m = AsusRogModels.Models.FirstOrDefault(x => x.Pid == pid && x.ReportId != 0 && x.Col is not null); if (m is null) continue;   // solo el canal del Omni de ese modelo
+            foreach (var i in omni.Where(i => i.Path.Contains(m.Col!, StringComparison.OrdinalIgnoreCase)))
+                if (ReadModel(i, m, omni: true, ct) is { } r) { yield return r; break; }
+        }
+    }
+
+    private sealed record Pairs(IReadOnlyList<ushort> List);
+
+    private static IEnumerable<RawReading> ReadDirect(List<HidIface> all, CancellationToken ct)
+    {
+        foreach (var m in AsusRogModels.Models.Where(x => x.ReportId == 0))
+        {
+            ct.ThrowIfCancellationRequested();
+            foreach (var i in all.Where(i => i.Product == m.Pid && i.UsagePage >= 0xFF00 && i.OutputLength >= 12 && (m.Interface < 0 || InterfaceOf(i.Path) == m.Interface)))
+                if (ReadModel(i, m, omni: false, ct) is { } r) { yield return r; break; }
+        }
+    }
 
     private static (int? Percent, bool Asleep, bool? Charging) AskHeadset(string path, CancellationToken ct)
     {
