@@ -335,6 +335,8 @@ public static partial class SettingsBuilder
             new("Comportamiento", [
                 new(RowKind.Toggle, "dock.autohide", "Ocultar automáticamente", "Aparece al llevar el ratón al borde inferior", d.AutoHide, enabled, off),
                 new(RowKind.Toggle, "dock.reserve", "Reservar espacio para el Dock", "Las ventanas maximizadas terminan encima del Dock y sus controles quedan visibles", d.ReserveSpace && !d.AutoHide, enabled && !d.AutoHide, !enabled ? off : d.AutoHide ? "Con ocultación automática el Dock no ocupa espacio" : null),
+                new(RowKind.Toggle, "dock.game", "Modo juego", "Con un juego en ventana en primer plano, el Dock se oculta solo y deja de reservar espacio; aparece al llevar el ratón al borde. Cuenta como juego lo que instala Steam y la lista de abajo", d.GameMode, enabled, off),
+                new(RowKind.Field, "dock.gameapps", "Más juegos (ejecutables)", "Separados por comas, por ejemplo «eldenring.exe, valorant.exe». Los de Steam no hacen falta", Enabled: enabled && d.GameMode, Reason: off, Text: WinMac.Dock.GameModeRules.FormatList(d.GameApps), Placeholder: "eldenring.exe"),
                 new(RowKind.Toggle, "dock.previews", "Vista previa de ventanas", "Al pasar el ratón sobre una app abierta", d.PreviewsEnabled, enabled, off),
                 new(RowKind.Toggle, "dock.minimize", "Clic en la app activa la minimiza", "Como en Windows; desactivado, como en macOS", d.ClickActiveMinimizes, enabled, off),
             ], "Al salir de Hatsu Desktop el espacio reservado se devuelve a Windows."),

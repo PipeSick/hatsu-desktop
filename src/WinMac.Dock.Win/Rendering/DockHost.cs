@@ -21,7 +21,10 @@ public sealed class DockHost : IDisposable
     private const int WM_DESTROY = 2, WM_SETTINGCHANGE = 0x1A, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_NCHITTEST = 0x84, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_MOUSEMOVE = 0x200, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
 
-    private DockController _ctl; private DockConfig _cfg; private DockMetrics _m; private GlassStyle _glass;
+    private DockController _ctl; private DockConfig _cfg;
+    /// <summary>Modo juego activo: mientras dura, el Dock se oculta solo y no reserva espacio (sin tocar lo que el usuario tiene guardado).</summary>
+    private bool _gameMode; private DateTime _lastGame;
+    private DockConfig Cfg => _gameMode ? _cfg with { AutoHide = true, ReserveSpace = false } : _cfg; private DockMetrics _m; private GlassStyle _glass;
     private readonly WindowTracker? _tracker; private readonly WindowActions? _actions; private readonly DockModelBuilder _builder;
     private readonly IIconSource _icons; private readonly AppIconSource? _appIcons; private readonly WindowThumbnails? _thumbs;
     private bool _pressPreview;
@@ -153,6 +156,11 @@ public sealed class DockHost : IDisposable
         _ctl.SetPointer(inWin ? new PointerSample(sx, sy) : null);
         _pointerOver = inWin && _view is not null && (InteractiveAt(sx, sy) || _view.HoverIndex >= 0);
         _ctl.SetEdgeHot(DockSettings.EdgeHot(p.X, p.Y, _monitor.Bottom, _winLeftPx, _winWpx, _winTopPx + _winHpx, screenEdgeFree: !_taskbarBelow));
+        if (!_demo && (DateTime.UtcNow - _lastGame).TotalMilliseconds > 1000)
+        {   // modo juego: un juego en ventana en este monitor → el Dock se oculta solo y libera el espacio; al salir, vuelve a como estaba
+            _lastGame = DateTime.UtcNow; bool next = _cfg.GameMode && GameModeRules.Next(GameWatcher.ForegroundIsGame((_monitor.Left, _monitor.Top, _monitor.Right, _monitor.Bottom), _cfg), _gameMode);
+            if (next != _gameMode) { _gameMode = next; _log($"[dock] modo juego {(next ? "activado" : "desactivado")}"); _ctl.Config = Cfg; if (_hwnd != IntPtr.Zero) PlaceWindow(show: false); _force = true; }
+        }
         if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000) { _lastFs = DateTime.UtcNow; _ctl.SetSuppressed(FullscreenWatcher.ShouldSuppress((_monitor.Left, _monitor.Top, _monitor.Right, _monitor.Bottom))); }
         if ((DateTime.UtcNow - _lastWorkCheck).TotalSeconds >= 2) {
             _lastWorkCheck = DateTime.UtcNow; ApplySystemTheme(); var top = TaskbarTopOn(_monitor); bool changed = (top is null) != (_taskbarTop is null); _taskbarTop = top; _taskbarBelow = top is not null;
@@ -182,12 +190,12 @@ public sealed class DockHost : IDisposable
         {
             // WM-033: a change that is not size/position (auto-hide, magnification, previews…) must reach the controller too. It did not: with «Ocultar
             // automáticamente» on, the controller never hid the Dock while the window was re-placed — the Dock «went up and stayed visible».
-            _ctl.Config = _cfg;
-            if ((_cfg.ReserveSpace && !_cfg.AutoHide) != _reserving && _hwnd != IntPtr.Zero) PlaceWindow(show: false);   // only the reservation changed
+            _ctl.Config = Cfg;
+            if ((Cfg.ReserveSpace && !Cfg.AutoHide) != _reserving && _hwnd != IntPtr.Zero) PlaceWindow(show: false);   // only the reservation changed
             return;
         }
         bool sizeChanged = key.Item1 != _appliedLayout.Item1 || previewsChanged; _appliedLayout = key; _appliedPreviews = _cfg.PreviewsEnabled;
-        if (_hwnd == IntPtr.Zero) { _ctl.Config = _cfg; return; }
+        if (_hwnd == IntPtr.Zero) { _ctl.Config = Cfg; return; }
         _pressed = -1; _pressDrag = false;
         if (sizeChanged)
         {
@@ -195,12 +203,12 @@ public sealed class DockHost : IDisposable
             _ctl = NewController(); _ctl.SetItems(items);
             var old = _painter; _painter = new DockPainter(_dev, _m, _glass, _icons, _thumbs); old.Dispose();
         }
-        else _ctl.Config = _cfg;
+        else _ctl.Config = Cfg;
         ResizeWindow(); _view = _ctl.Step(0); _force = true;
         _log($"[dock] ajustes aplicados: tamaño {_cfg.IconSize:0}, alineación {_cfg.Alignment}, altura +{_cfg.BottomOffset:0}");
     }
 
-    private DockController NewController() { var c = new DockController(_m, _cfg); if (_thumbs is not null) c.ThumbAspect = _thumbs.Aspect; return c; }
+    private DockController NewController() { var c = new DockController(_m, Cfg); if (_thumbs is not null) c.ThumbAspect = _thumbs.Aspect; return c; }
 
     private void RefreshItems()
     {
@@ -292,7 +300,7 @@ public sealed class DockHost : IDisposable
         // WM-001: reserve the Dock's strip (AppBar) so maximized windows end above it; with auto-hide or the option off, nothing is reserved
         _appBar ??= new DockAppBar(_hwnd, WM_APPBAR, _log);
         _taskbarTop = TaskbarTopOn(mi.rcMonitor); _taskbarBelow = _taskbarTop is not null; bool freeEdge = _taskbarTop is null;   // WM-043: sin barra visible, el borde físico manda
-        if (_cfg.ReserveSpace && !_cfg.AutoHide && !_demo)
+        if (Cfg.ReserveSpace && !Cfg.AutoHide && !_demo)
         {
             int band = (int)Math.Ceiling((_m.BarHeight + 6 + DockSettings.ClampBottom(_cfg.BottomOffset)) * _scale);
             _everReserved = true; int bottom = _appBar.Reserve(mi.rcMonitor, band, flushWithEdge: freeEdge);

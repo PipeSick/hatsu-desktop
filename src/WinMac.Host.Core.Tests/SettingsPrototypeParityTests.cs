@@ -53,3 +53,16 @@ public class SettingsPrototypeParityTests
         c.ScrollToGroup("Disponibles para agregar"); Assert.True(c.ScrollOffset >= 0);
     }
 }
+
+public class DockGameModeSettingsTests
+{
+    [Fact] public void Game_mode_rows_exist_and_write_the_dock_config()
+    {
+        var dock = new WinMac.Dock.DockConfig(); WinMac.Dock.DockConfig? saved = null;
+        var pages = SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false) { Dock = dock });
+        var rows = pages.First(p => p.Id == "dock").Groups.SelectMany(g => g.Rows).ToList(); Assert.Contains(rows, r => r.Id == "dock.game" && r.On); Assert.Contains(rows, r => r.Id == "dock.gameapps");
+        var path = Path.Combine(Path.GetTempPath(), "hatsu-game-" + Guid.NewGuid() + ".json"); var a = new SettingsActions(new ConfigService(path, new HostConfig()), () => { }, _ => { }) { LoadDock = () => dock, SaveDock = d => saved = d };
+        Assert.True(a.Apply(new SettingsEdit("dock.gameapps", "text", Text: "EldenRing, valorant.exe"))); Assert.Equal(["eldenring.exe", "valorant.exe"], saved!.GameApps);
+        Assert.True(a.Apply(new SettingsEdit("dock.game", "toggle", On: false))); Assert.False(saved!.GameMode);
+    }
+}

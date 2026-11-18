@@ -202,6 +202,8 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("dock.magnify", "toggle"): return Dock(d => d with { MagnificationEnabled = e.On });
             case ("dock.autohide", "toggle"): return Dock(d => d with { AutoHide = e.On });
             case ("dock.reserve", "toggle"): return Dock(d => d with { ReserveSpace = e.On });
+            case ("dock.game", "toggle"): return Dock(d => d with { GameMode = e.On });
+            case ("dock.gameapps", "text"): { var list = WinMac.Dock.GameModeRules.ParseList(e.Text); return Dock(d => d with { GameApps = list }); }
             case ("dock.previews", "toggle"): return Dock(d => d with { PreviewsEnabled = e.On });
             case ("dock.minimize", "toggle"): return Dock(d => d with { ClickActiveMinimizes = e.On });
             case ("bar.capdelay", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.CaptureDelayValues.Length: cfg.ApplyBarPatch(Patch("captureDelaySeconds", SettingsBuilder.CaptureDelayValues[e.Index])); return true;

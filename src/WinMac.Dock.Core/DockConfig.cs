@@ -32,6 +32,10 @@ public sealed record DockConfig
     public bool AutoHide { get; init; } = false;
     /// <summary>WM-001: reservar el espacio del Dock en el área de trabajo (AppBar de Windows) para que no tape las ventanas maximizadas. Sin efecto con autoocultación.</summary>
     public bool ReserveSpace { get; init; } = true;
+    /// <summary>Modo juego (2.0.11): mientras un juego en ventana esté en primer plano en este monitor, el Dock deja de reservar espacio y se oculta solo (aparece al llevar el puntero al borde); al salir del juego vuelve a como lo tengas. Un juego es una app de <see cref="GameApps"/> o cualquiera instalada por Steam.</summary>
+    public bool GameMode { get; init; } = true;
+    /// <summary>Nombres de ejecutable (p. ej. «eldenring.exe») que activan el modo juego, además de lo que Steam instala.</summary>
+    public List<string> GameApps { get; init; } = [];
     public double HideDelaySeconds { get; init; } = 0.6;
     public double ShowDelaySeconds { get; init; } = 0.12;
     public bool ShowRecents { get; init; } = true;
