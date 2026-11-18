@@ -1,4 +1,4 @@
-# Periféricos de más marcas (lote 1)
+# Periféricos de más marcas (lotes 1 y 2)
 
 Hatsu lee la batería de aparatos de más marcas por el protocolo propio de cada una. **Todo este lote está SIN VERIFICAR con aparatos reales**: se escribió con la documentación pública y sin tener los aparatos. Se activa en Ajustes › Barra superior › Periféricos › «Leer la batería de más marcas» (apagado por defecto).
 
@@ -10,6 +10,12 @@ Hatsu lee la batería de aparatos de más marcas por el protocolo propio de cada
 | Corsair | Void/HS (C9 64), Bragi (Virtuoso, HS80 MAX, Slipstream), Compx (Sabre V2 Pro) | tres protocolos |
 | HyperX | Cloud II, II Core, III, III S, Alpha, Alpha 2, Flight, Stinger Core; Pulsefire Haste 2 | un protocolo por familia |
 | Glorious y afines | Model O/D (2), Hitscan, G-Wolves, WLMouse YING | informe de característica de 65 bytes |
+| Cooler Master | MM712, MM731 | una consulta `46 81 00` por la colección FF0A |
+| CHERRY | MX 3.0S Wireless | trama de 64 bytes con suma, consulta `1A` |
+| NZXT | Lift Elite | consulta `4E 02 81 00 B0` |
+| Endgame Gear | OP1w 4k, XM2w 4k (receptor 4K) | informe de característica `A1 B4` |
+| LAMZU y Arbiter Studio | Maya, Tachi, Inca, Paro, Thorn, Atlantis, Orcus; Akitsu | informe de característica de 65 bytes |
+| Kysona, Pulsar, ATK/VXE, Redragon, Hitscan, G-Wolves, HECATE | ratones con trama de 17 bytes, Pulsar X2 V3, ATK NK | trama de 17 con suma; Pulsar 08 81 01; ATK BITMOUSE |
 | ASUS ROG | teclado, ratón (Omni) y auriculares Pelta/Delta II | ver `docs/64` |
 | Logitech | receptores Unifying, Bolt, Lightspeed (HID++) | ver `docs/65` |
 
@@ -21,4 +27,5 @@ Hatsu lee la batería de aparatos de más marcas por el protocolo propio de cada
 ## Límites
 - Sin verificar: puede fallar un modelo concreto, o dar un valor corrido. Si te pasa, el diagnóstico de `--dump` de Hatsu (no incluido) o una captura USB sirven para corregirlo.
 - Los aparatos que Synapse, iCUE, G HUB o NGENUITY tengan abiertos pueden contestar tarde o dejar la respuesta a medias; el lector reintenta.
-- Pendiente (lotes 2 y 3): Cooler Master, Keychron, Pulsar, Kysona, ATK, Lamzu, Endgame Gear, Arbiter, Cherry, NZXT, Poly, Audeze, Jabra, JBL, Sony INZONE, Samsung Galaxy Buds, AirPods, mandos (PlayStation, Xbox, Switch, 8BitDo…) y los genéricos de HID y Bluetooth.
+- Límites del lote 2: ATK NK solo lee el porcentaje (no la carga); Endgame Gear no hace el sondeo de reconexión; Kysona/ATK preguntan la batería directamente, sin preguntar antes si el ratón está conectado; Pulsar reintenta la consulta en vez de esperar la respuesta pendiente.
+- Pendiente (lote 3): Keychron, Audeze, Poly/Plantronics, Jabra, JBL, Sony INZONE, Samsung Galaxy Buds, AirPods, mandos (PlayStation, Xbox, Switch, 8BitDo, GameSir, Flydigi…), Rapoo, Vaxee, Aula, Areson, Machenike y los genéricos de HID, Bluetooth y HeadsetControl.

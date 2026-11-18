@@ -233,7 +233,7 @@ public class QueryDevicesTests
     {
         var s = QueryDevices.CoolerMaster.Collection; Assert.True(s.Matches(0xFF0A, 0, 3, 32, 32, 0)); Assert.False(s.Matches(0xFF0A, 0, 2, 32, 32, 0)); Assert.False(s.Matches(0xFF00, 0, 3, 32, 32, 0));
         Assert.True(QueryDevices.Lamzu.Collection.Matches(0, 0, -1, 0, 0, 65)); Assert.False(QueryDevices.Lamzu.Collection.Matches(0, 0, -1, 0, 0, 64));
-        Assert.Equal(5, QueryDevices.Specs.Count);
+        Assert.Equal(10, QueryDevices.Specs.Count);
     }
 
     [Fact] public void Cooler_Master_reads_percent_charging_and_the_link_and_names_the_model_on_the_shared_dongle()
@@ -271,8 +271,49 @@ public class QueryDevicesTests
         Assert.Equal([0, 0, 0, 2, 2, 0, 0x83], QueryDevices.Lamzu.Request(0x0042));
         var withId = QueryDevices.Lamzu.Parse(0x37B0, 0x0042, R(65, (1, 0xA1), (4, 2), (6, 0x83), (7, 1), (8, 70)))!; Assert.Equal(70, withId.Percent); Assert.True(withId.Charging); Assert.Equal("LAMZU Orcus", withId.Name); Assert.True(withId.Cable);
         var without = QueryDevices.Lamzu.Parse(0x37B0, 0x0043, R(65, (0, 0xA1), (3, 2), (5, 0x83), (6, 0), (7, 41)))!; Assert.Equal(41, without.Percent); Assert.False(without.Cable);
-        var off = QueryDevices.Lamzu.Parse(0x37B0, 0x0056, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 0)))!; Assert.False(off.Connected); Assert.Null(off.Percent);
+        var off = QueryDevices.Lamzu.Parse(0x37B0, 0x0043, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 0)))!; Assert.False(off.Connected); Assert.Null(off.Percent);
         Assert.Null(QueryDevices.Lamzu.Parse(0x37B0, 0x0056, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 150)))); Assert.Null(QueryDevices.Lamzu.Parse(0x37B0, 0x0056, R(65))); Assert.Equal("LAMZU wireless mouse", QueryDevices.Lamzu.Parse(0x373E, 0x7777, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 50)))!.Name);
         Assert.True(QueryDevices.LamzuIsCable(0x373E, 0x001C)); Assert.False(QueryDevices.LamzuIsCable(0x373E, 0x001D)); Assert.Equal("LAMZU Maya X V2", QueryDevices.LamzuName(0x373E, 0x0016));
+    }
+}
+
+public class QueryDevicesBatch2bTests
+{
+    private static byte[] R(int len, params (int I, byte V)[] set) { var b = new byte[len]; foreach (var (i, v) in set) b[i] = v; return b; }
+
+    [Fact] public void Arbiter_shares_a_key_between_cable_and_receiver_and_tells_asleep_from_off()
+    {
+        var awake = QueryDevices.Arbiter.Parse(0x373E, 0x000A, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 66)))!; Assert.Equal("Arbiter Studio Akitsu", awake.Name); Assert.Equal(66, awake.Percent); Assert.False(awake.Cable); Assert.Equal("arbiter:373E:000A", awake.Key);
+        var cable = QueryDevices.Arbiter.Parse(0x373E, 0x0009, R(65, (1, 0xA2), (4, 2), (6, 0x83), (7, 1), (8, 66)))!; Assert.True(cable.Cable); Assert.True(cable.Charging); Assert.Equal(awake.Key, cable.Key);
+        Assert.False(QueryDevices.Arbiter.Parse(0x373E, 0x0039, R(65, (1, 0xA0), (4, 2), (6, 0x83)))!.Connected); Assert.False(QueryDevices.Arbiter.Parse(0x373E, 0x0067, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 0)))!.Connected);
+        Assert.Equal("Arbiter Studio Akitsu Medium", QueryDevices.Arbiter.Parse(0x373E, 0x0067, R(65, (0, 0xA1), (3, 2), (5, 0x83), (7, 40)))!.Name);   // sin el id de informe
+        Assert.Null(QueryDevices.Arbiter.Parse(0x373E, 0x0067, R(65, (1, 0xA5), (4, 2), (6, 0x83), (8, 40)))); Assert.Null(QueryDevices.Arbiter.Parse(0x373E, 0x7777, R(65, (1, 0xA1), (4, 2), (6, 0x83), (8, 40))));   // modelo que no es Arbiter: lo lee LAMZU
+        Assert.Contains((ushort)0x0066, QueryDevices.Arbiter.Pids!); Assert.True(QueryDevices.Specs.ToList().IndexOf(QueryDevices.Arbiter) < QueryDevices.Specs.ToList().IndexOf(QueryDevices.Lamzu));
+    }
+
+    [Fact] public void The_17_byte_frame_has_the_55_minus_sum_checksum_and_replies_are_verified_with_it()
+    {
+        var q = QueryDevices.Frame17(0x04); Assert.Equal(17, q.Length); Assert.Equal((byte)0x08, q[0]); Assert.Equal((byte)0x49, q[16]); Assert.True(QueryDevices.IsFrame17Reply(0x04, q));
+        var r = R(17, (0, 8), (1, 4), (6, 72), (7, 1)); int sum = 0; for (int i = 0; i < 16; i++) sum += r[i]; r[16] = (byte)(0x55 - sum);
+        var m = QueryDevices.KysonaDedicated.Parse(0x3554, 0xF58A, r)!; Assert.Equal(72, m.Percent); Assert.True(m.Charging); Assert.Equal("VXE Dragonfly R1", m.Name); Assert.False(m.Cable); Assert.True(QueryDevices.KysonaDedicated.Parse(0x3554, 0xF58C, r)!.Cable);
+        r[16] ^= 1; Assert.Null(QueryDevices.KysonaDedicated.Parse(0x3554, 0xF58A, r)); Assert.False(QueryDevices.IsFrame17Reply(0x03, q)); Assert.Equal("Redragon wireless mouse", QueryDevices.Frame17Name(0x3554, 0xF55D)); Assert.Equal("Hitscan Hyperlight", QueryDevices.Frame17Name(0x3770, 0x0200));
+        Assert.Contains((ushort)0x11CA, QueryDevices.KysonaDedicated.Exclude!);   // los auriculares ATK no reciben tramas de ratón
+        Assert.True(QueryDevices.KysonaVendor.Collection.Matches(0xFF02, 2, -1, 64, 64, 0)); Assert.False(QueryDevices.KysonaVendor.Collection.Matches(0x0001, 2, -1, 64, 64, 0)); Assert.False(QueryDevices.KysonaVendor.Collection.Matches(0xFF02, 2, -1, 8, 8, 0));
+    }
+
+    [Fact] public void Pulsar_sends_08_81_01_with_a_16_bit_sum_and_waits_for_the_answered_state()
+    {
+        var q = QueryDevices.PulsarRequest(); Assert.Equal(65, q.Length); Assert.Equal([0x08, 0x81, 0x01], [q[2], q[3], q[4]]); Assert.Equal(0x08 + 0x81 + 0x01, q[63] | (q[64] << 8));
+        var ok = QueryDevices.Pulsar.Parse(0x3710, 0x3402, R(65, (1, 1), (2, 8), (3, 0x81), (4, 1), (7, 55)))!; Assert.Equal(55, ok.Percent); Assert.True(ok.Cable); Assert.True(ok.Charging); Assert.Equal("Pulsar X2 V3", ok.Name);
+        var dongle = QueryDevices.Pulsar.Parse(0x3710, 0x5402, R(65, (1, 1), (2, 8), (3, 0x81), (4, 1), (7, 0)))!; Assert.False(dongle.Connected); Assert.Null(dongle.Percent); Assert.Equal("Pulsar wireless mouse", dongle.Name);
+        Assert.Null(QueryDevices.Pulsar.Parse(0x3710, 0x5402, R(65, (1, 2), (2, 8), (3, 0x81), (4, 1), (7, 55)))); Assert.Null(QueryDevices.Pulsar.Parse(0x3710, 0x5402, R(65, (1, 5), (2, 8), (3, 0x81), (4, 1), (7, 55))));   // pendiente
+        Assert.Null(QueryDevices.Pulsar.Parse(0x3710, 0x5402, R(65, (1, 1), (2, 8), (3, 0x81), (4, 1), (7, 0xFF)))); Assert.True(QueryDevices.Pulsar.HighInterfaceFirst);
+    }
+
+    [Fact] public void ATK_NK_asks_for_the_battery_with_a_sum_over_bytes_2_to_63_and_reads_one_byte()
+    {
+        var q = QueryDevices.AtkNkQuery(0x07); Assert.Equal(64, q.Length); Assert.Equal([0x08, 0x72, 0x02, 0, 0x01, 0x07, 0x01], [q[0], q[2], q[3], q[4], q[5], q[6], q[7]]); int sum = 0; for (int i = 2; i < 64; i++) sum += q[i]; Assert.Equal((byte)sum, q[1]);
+        Assert.Equal(81, QueryDevices.AtkNk.Parse(0x373B, 0x1216, R(64, (0, 8), (1, 0x72), (5, 7), (7, 81)))!.Percent); Assert.Null(QueryDevices.AtkNk.Parse(0x373B, 0x1216, R(64, (0, 8), (1, 0x72), (2, 0xFF), (5, 7), (7, 81)))); Assert.Null(QueryDevices.AtkNk.Parse(0x373B, 0x1216, R(64, (0, 8), (1, 0x72), (5, 0x0F), (7, 1))));
+        Assert.Null(QueryDevices.AtkNk.Parse(0x373B, 0x1216, R(64, (0, 8), (1, 0x72), (5, 7), (7, 0))));   // 0 = dormido: sin lectura
     }
 }

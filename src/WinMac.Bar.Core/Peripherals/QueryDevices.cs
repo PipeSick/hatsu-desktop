@@ -10,11 +10,11 @@ public static class QueryDevices
     public enum Transport { Report, Feature }
 
     /// <summary>Qué colección HID lleva el protocolo: página/uso, número de interfaz USB y/o largos de informe. Lo que no se indique no se exige.</summary>
-    public sealed record Selector(ushort Page = 0, ushort Usage = 0, int Interface = -1, int Out = -1, int In = -1, int FeatureMin = -1, int FeatureExact = -1)
+    public sealed record Selector(ushort Page = 0, ushort Usage = 0, int Interface = -1, int Out = -1, int In = -1, int FeatureMin = -1, int FeatureExact = -1, ushort PageMin = 0, int OutMin = -1, int InMin = -1)
     {
         public bool Matches(ushort page, ushort usage, int iface, int outLen, int inLen, int featLen) =>
             (Page == 0 || page == Page) && (Usage == 0 || usage == Usage) && (Interface < 0 || iface == Interface) && (Out < 0 || outLen == Out) && (In < 0 || inLen == In)
-            && (FeatureMin < 0 || featLen >= FeatureMin) && (FeatureExact < 0 || featLen == FeatureExact);
+            && (FeatureMin < 0 || featLen >= FeatureMin) && (FeatureExact < 0 || featLen == FeatureExact) && page >= PageMin && outLen >= OutMin && inLen >= InMin;
     }
 
     public sealed record Reading(string Key, string Name, DeviceKind Kind, bool Cable, bool Connected, int? Percent, bool Charging);
@@ -24,9 +24,11 @@ public static class QueryDevices
     /// <param name="Request">los bytes a mandar (con el número de informe delante); se rellenan con ceros hasta el largo del informe.</param>
     /// <param name="DelayMs">solo en informes de característica: espera entre mandar y leer.</param>
     /// <param name="Parse">respuesta → lectura; null = no es la respuesta (se sigue leyendo o se reintenta).</param>
-    public sealed record Spec(string Brand, ushort[] Vendors, ushort[]? Pids, Selector Collection, Transport Transport, Func<ushort, byte[]> Request, int TimeoutMs, int DelayMs, Func<ushort, ushort, byte[], Reading?> Parse);
+    /// <param name="Exclude">productos que no son de este protocolo aunque sean del fabricante (p. ej. los auriculares ATK, que hablan por un puerto serie).</param>
+    /// <param name="HighInterfaceFirst">probar primero las interfaces USB de número más alto (la 2 de Pulsar rechaza el informe de característica).</param>
+    public sealed record Spec(string Brand, ushort[] Vendors, ushort[]? Pids, Selector Collection, Transport Transport, Func<ushort, byte[]> Request, int TimeoutMs, int DelayMs, Func<ushort, ushort, byte[], Reading?> Parse, ushort[]? Exclude = null, bool HighInterfaceFirst = false);
 
-    public static IReadOnlyList<Spec> Specs => [CoolerMaster, Cherry, Nzxt, Endgame, Lamzu];   // propiedad: los Spec se inicializan más abajo
+    public static IReadOnlyList<Spec> Specs => [CoolerMaster, Cherry, Nzxt, Endgame, Arbiter, Lamzu, KysonaDedicated, KysonaVendor, Pulsar, AtkNk];   // propiedad: los Spec se inicializan más abajo
 
     private static int? Pct(int v) => v is >= 1 and <= 100 ? v : null;
 
@@ -61,6 +63,58 @@ public static class QueryDevices
             return r[1] is 0x08 or 0x11 ? new("endgame:1970", "Endgame Gear 4k wireless mouse", DeviceKind.Mouse, false, false, null, false) : null;
         });
 
+    // ───────── Kysona, Pulsar (3554), ATK/VXE, Redragon (Compx), Hitscan, G-Wolves y HECATE: trama de 17 bytes, informe 08: [08][cmd][0×14][suma], suma = 0x55 − (bytes 0…15). cmd 04 = batería → [6] %, [7] cargando, [8..9] mV.
+    public static byte[] Frame17(byte cmd) { var f = new byte[17]; f[0] = 0x08; f[1] = cmd; int sum = 0; for (int i = 0; i < 16; i++) sum += f[i]; f[16] = (byte)(0x55 - sum); return f; }
+    public static bool IsFrame17Reply(byte cmd, byte[] r) { if (r.Length < 17 || r[0] != 0x08 || r[1] != cmd) return false; int sum = 0; for (int i = 0; i < 16; i++) sum += r[i]; return r[16] == (byte)(0x55 - sum); }
+
+    private static readonly HashSet<ushort> Frame17Cables = [0xF55E, 0xF58C, 0xF58F, 0xF506];
+    private static readonly ushort[] AtkHeadsets = [0x11CA, 0x11CB, 0x1203, 0x1204];   // hablan por un puerto serie: nunca se les manda una trama de ratón
+
+    /// <summary>Nombre del ratón por fabricante/producto: los receptores se llaman a sí mismos «Dongle», así que se usan nombres genéricos por familia.</summary>
+    public static string Frame17Name(ushort vid, ushort pid) => vid switch
+    {
+        0x3554 when pid is 0xF55D or 0xF5D5 or 0xF55E => "Redragon wireless mouse",
+        0x3554 when pid is 0xF58A or 0xF58C or 0xF58E or 0xF58F or 0xF505 or 0xF506 => "VXE Dragonfly R1",
+        0x3770 => "Hitscan Hyperlight", 0x35BB => "HECATE mouse", 0x373B => "ATK wireless mouse", 0x33E4 => GloriousProtocol.GWolvesName(pid), 0x3710 => "Pulsar wireless mouse", _ => "Wireless mouse",
+    };
+
+    private static bool Frame17IsCable(ushort vid, ushort pid) => (vid == 0x3554 && Frame17Cables.Contains(pid)) || (vid == 0x33E4 && GloriousProtocol.Identify(vid, pid) is { Cable: true }) || (vid == 0x35BB && pid is 0xD3FA or 0xD3FC or 0xD3FD);
+
+    private static Reading? Frame17Parse(ushort vid, ushort pid, byte[] r) =>
+        IsFrame17Reply(0x04, r) ? new($"kysona:{vid:X4}:{pid:X4}", Frame17Name(vid, pid), DeviceKind.Mouse, Frame17IsCable(vid, pid), true, r[6] <= 100 && r[6] > 0 ? r[6] : null, r[7] != 0) : null;
+
+    private static readonly ushort[] Frame17Vendors = [0x3554, 0x373B, 0x3770, 0x33E4, 0x3710, 0x35BB];
+
+    /// <summary>Colección propia de 17 bytes (Kysona).</summary>
+    public static readonly Spec KysonaDedicated = new("Kysona, Pulsar, ATK, Redragon", Frame17Vendors, null, new(Out: 17, In: 17), Transport.Report, _ => Frame17(0x04), 600, 0, Frame17Parse, AtkHeadsets);
+    /// <summary>Receptores ATK/VXE: el informe 08 va en una colección de fabricante que también lleva informes mayores (la FF02:0002 si existe). La respuesta con suma de comprobación descarta lo que no hable este protocolo.</summary>
+    public static readonly Spec KysonaVendor = new("Kysona, Pulsar, ATK, Redragon", Frame17Vendors, null, new(PageMin: 0xFF00, OutMin: 17, InMin: 17), Transport.Report, _ => Frame17(0x04), 600, 0, Frame17Parse, AtkHeadsets);
+
+    // ───────── Pulsar X2 V3 / X2 V3 eS (3710): informe de característica de 64 bytes. Batería = 08 81 01 con suma de 16 bits (bytes 0…61, LE en 62…63). Responde [estado][08][81][01]…[6] %; estado 01 = contestó, 02/05 = pendiente.
+    private static readonly IReadOnlyDictionary<ushort, (bool Cable, string? Name)> PulsarProducts = new Dictionary<ushort, (bool, string?)> { [0x3402] = (true, "Pulsar X2 V3"), [0x3406] = (true, "Pulsar X2 V3 eS"), [0x5402] = (false, null), [0x5403] = (false, null) };
+
+    public static byte[] PulsarRequest()
+    {
+        var req = new byte[65]; req[2] = 0x08; req[3] = 0x81; req[4] = 0x01; int sum = 0; for (int i = 1; i < 63; i++) sum += req[i]; req[63] = (byte)(sum & 0xFF); req[64] = (byte)(sum >> 8); return req;
+    }
+
+    public static readonly Spec Pulsar = new("Pulsar", [0x3710], PulsarProducts.Keys.ToArray(), new(FeatureMin: 65), Transport.Feature, _ => PulsarRequest(), 0, 50,
+        (vid, pid, r) =>
+        {
+            if (r.Length < 65 || r[2] != 0x08 || r[3] != 0x81 || r[4] != 0x01 || r[1] != 0x01 || r[7] > 100 || !PulsarProducts.TryGetValue(pid, out var p)) return null;   // 02/05 = pendiente; FF = sin lectura
+            int pct = r[7];
+            return new("pulsar:" + pid.ToString("X4"), p.Name ?? "Pulsar wireless mouse", DeviceKind.Mouse, p.Cable, pct > 0 || p.Cable, pct > 0 || p.Cable ? pct : null, p.Cable);   // sin registro de carga: por cable se da por cargando
+        }, HighInterfaceFirst: true);
+
+    // ───────── ATK / VXE NearLink en el receptor 373B:1216: colección FF05:0001, informe 08 de 64: [08][suma][72][02][00][01][cmd][01]…, suma = bytes 2…63. cmd 07 = batería. Respuesta [08][72][estado][seq][00][cmd][01][valor]; estado FF = error.
+    public static byte[] AtkNkQuery(byte cmd)
+    {
+        var f = new byte[64]; f[0] = 0x08; f[2] = 0x72; f[3] = 0x02; f[5] = 0x01; f[6] = cmd; f[7] = 0x01; int sum = 0; for (int i = 2; i < 64; i++) sum += f[i]; f[1] = (byte)(sum & 0xFF); return f;
+    }
+
+    public static readonly Spec AtkNk = new("ATK / VXE NK", [0x373B], [0x1216], new(Page: 0xFF05, Usage: 0x0001, OutMin: 64, InMin: 8), Transport.Report, _ => AtkNkQuery(0x07), 900, 0,
+        (vid, pid, r) => r.Length >= 8 && r[0] == 0x08 && r[1] == 0x72 && r[5] == 0x07 && r[2] != 0xFF && r[7] is >= 1 and <= 100 ? new("atknk:1216", "ATK / VXE NK mouse", DeviceKind.Mouse, false, true, r[7], false) : null);   // la carga (cmd 0F) no se consulta en esta versión
+
     // ───────── LAMZU (373E y 37B0): informe de característica de 65. Pedir 00 00 00 02 02 00 83 → responde con el informe id delante (A1 en [1]) o sin él (A1 en [0]): carga y % en los dos bytes que siguen a 83.
     public static readonly Spec Lamzu = new("LAMZU", [0x373E, 0x37B0], null, new(FeatureExact: 65), Transport.Feature, _ => [0, 0, 0, 0x02, 0x02, 0, 0x83], 0, 100,
         (vid, pid, r) =>
@@ -72,6 +126,24 @@ public static class QueryDevices
             if (pct > 100) return null;
             bool cable = LamzuIsCable(vid, pid);
             return new($"lamzu:{vid:X4}:{pid:X4}", LamzuName(vid, pid) ?? "LAMZU wireless mouse", DeviceKind.Mouse, cable, pct > 0 || cable, pct > 0 ? pct : null, chg == 1);   // 0 desde un receptor = ratón apagado o fuera de alcance
+        });
+
+    // ───────── Arbiter Studio Akitsu (373E): el mismo informe de 65 bytes que LAMZU, en la colección FFFF. Respuesta: [4]==02 y [6]==83 con el id delante (estado en [1]) o sin él (estado en [0]); A1/A2 = contestó, A0 = ratón dormido.
+    // Va antes que LAMZU: comparten fabricante y LAMZU lo llamaría «LAMZU wireless mouse».
+    private static readonly (ushort Cable, ushort Receiver, string Name)[] ArbiterModels = [(0x0009, 0x000A, "Arbiter Studio Akitsu"), (0x0038, 0x0039, "Arbiter Studio Akitsu 3950"), (0x0066, 0x0067, "Arbiter Studio Akitsu Medium")];
+
+    public static readonly Spec Arbiter = new("Arbiter Studio", [0x373E], ArbiterModels.SelectMany(m => new[] { m.Cable, m.Receiver }).ToArray(), new(Page: 0xFFFF, FeatureExact: 65), Transport.Feature, _ => [0, 0, 0, 0x02, 0x02, 0, 0x83], 0, 100,
+        (vid, pid, r) =>
+        {
+            byte status, chg, level;
+            if (r.Length >= 9 && r[4] == 0x02 && r[6] == 0x83) { status = r[1]; chg = r[7]; level = r[8]; }
+            else if (r.Length >= 8 && r[3] == 0x02 && r[5] == 0x83) { status = r[0]; chg = r[6]; level = r[7]; }
+            else return null;
+            var m = ArbiterModels.FirstOrDefault(x => x.Cable == pid || x.Receiver == pid); if (m.Name is null) return null;
+            string key = $"arbiter:373E:{m.Receiver:X4}"; bool cable = m.Cable == pid;   // cable y receptor comparten clave: enchufar el cable actualiza la misma entrada
+            if (status == 0xA0) return new(key, m.Name, DeviceKind.Mouse, cable, false, null, false);
+            if ((status != 0xA1 && status != 0xA2) || level > 100) return null;
+            return new(key, m.Name, DeviceKind.Mouse, cable, level > 0 || cable, level > 0 ? level : null, chg == 0x01);   // 0 desde un receptor = ratón apagado o fuera de alcance
         });
 
     private static readonly (ushort Vid, ushort[] Pids, string Name)[] LamzuModels =

@@ -22,11 +22,12 @@ internal sealed class QueryDeviceProvider : IPeripheralProvider
         foreach (var spec in _specs)
             foreach (var vendor in spec.Vendors)
             {
-                var pids = spec.Pids ?? all.Where(i => i.Vendor == vendor).Select(i => i.Product).Distinct().ToArray();
+                var pids = (spec.Pids ?? all.Where(i => i.Vendor == vendor).Select(i => i.Product).Distinct().ToArray()).Where(p => spec.Exclude is null || !spec.Exclude.Contains(p)).ToArray();
                 foreach (var pid in pids)
                 {
                     ct.ThrowIfCancellationRequested();
-                    foreach (var i in all.Where(i => i.Vendor == vendor && i.Product == pid && spec.Collection.Matches(i.UsagePage, i.Usage, InterfaceOf(i.Path), i.OutputLength, i.InputLength, i.FeatureLength)))
+                    foreach (var i in all.Where(i => i.Vendor == vendor && i.Product == pid && spec.Collection.Matches(i.UsagePage, i.Usage, InterfaceOf(i.Path), i.OutputLength, i.InputLength, i.FeatureLength))
+                        .OrderByDescending(i => spec.HighInterfaceFirst ? InterfaceOf(i.Path) : 0))
                     {
                         var r = spec.Transport == QueryDevices.Transport.Report ? AskReport(i, spec, ct) : AskFeature(i, spec, ct); if (r is null) continue;
                         if (!found.TryGetValue(r.Key, out var prev)) { found[r.Key] = r; order.Add(r.Key); }
