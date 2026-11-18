@@ -34,3 +34,14 @@ Estado: **implementado, probado en lógica pura; NO validado en Windows real con
 - **Otros receptores ASUS** (por ejemplo, el de los auriculares ROG DELTA II): se detectan por el nombre que el propio receptor da por USB y se listan, sin leer nada de ellos, como «Receptor detectado, batería aún no compatible». La presencia del receptor **no** prueba que el dispositivo esté encendido.
 - **Cómo crece:** cada modelo nuevo necesita su mensaje medido; ver la propuesta de lista de compatibilidad y de «reportar este dispositivo» en `docs/44`.
 
+
+## Auriculares ROG Pelta y ROG Delta II (sin verificar)
+
+El receptor del audífono (VID `0B05`, PID `1B84` Pelta / `1AFA` Delta II) es otro dispositivo, distinto del Omni. Su canal propio es el `FF00:0001`, informe `CC` de 64 bytes (en la captura del 8 de noviembre aparece con `PID=1AFA`, 64 bytes de entrada; el audífono estaba apagado y el receptor solo repetía `CC 51 30 … FF AA`).
+
+La lectura es una consulta de solo lectura, igual que con el teclado y el ratón:
+- `CC 12 07` → la respuesta trae la batería en el byte 6 (`FE` = todavía no lo sabe).
+- `CC 12 08` → el byte 5 vale 1 si está cargando.
+- `FF AA` en los bytes 1–2 o 5–6 = apagado o dormido.
+
+**Origen y licencia.** Estos datos de protocolo vienen de lo que describe el proyecto [Wireless-Device-Battery-Monitor](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor) (GPL-3.0) y de los proyectos en que se basa. En Hatsu no se copia su código: el lector está escrito aparte (`AsusRogProtocol`, `AsusRogProvider`), solo con estos datos. **Pendiente:** probarlo con el audífono encendido; hasta entonces el dato se marca como lectura sin verificar y, sin respuesta, el dispositivo queda «no disponible».

@@ -9,15 +9,15 @@ namespace WinMac.Bar.Win.Shell.Peripherals;
 /// </summary>
 internal sealed class AsusRogProvider : IPeripheralProvider
 {
-    private readonly string? _kbName, _mouseName;
-    public AsusRogProvider(string? keyboardName, string? mouseName) { _kbName = string.IsNullOrWhiteSpace(keyboardName) ? null : keyboardName; _mouseName = string.IsNullOrWhiteSpace(mouseName) ? null : mouseName; }
+    private readonly string? _kbName, _mouseName, _hsName;
+    public AsusRogProvider(string? keyboardName, string? mouseName, string? headsetName = null) { _hsName = string.IsNullOrWhiteSpace(headsetName) ? null : headsetName; _kbName = string.IsNullOrWhiteSpace(keyboardName) ? null : keyboardName; _mouseName = string.IsNullOrWhiteSpace(mouseName) ? null : mouseName; }
     public string Id => "asus-rog";
     public string DisplayName => "ASUS ROG (receptor 2,4 GHz)";
     public SupportLevel Support => SupportLevel.Experimental;
 
     public Task<IReadOnlyList<RawReading>> ReadAsync(CancellationToken ct) => Task.Run<IReadOnlyList<RawReading>>(() =>
     {
-        var res = new List<RawReading>(); var paths = Enumerate(out var others);
+        var res = new List<RawReading>(); var paths = Enumerate(out var others, out var headsets);
         foreach (var q in AsusRogProtocol.OmniQueries)
         {
             ct.ThrowIfCancellationRequested();
@@ -28,12 +28,36 @@ internal sealed class AsusRogProvider : IPeripheralProvider
                 ChargeState.Unknown, pct is null ? BatteryCapability.Unknown : BatteryCapability.Supported, "Lectura por el canal del receptor ROG OMNI; modelo no identificado."));
         }
 
+        // Auriculares ROG Pelta / Delta II: otro receptor, otro canal (FF00:0001, informe CC). Mismo principio: una consulta de solo lectura y la respuesta.
+        foreach (var (pid, path) in headsets)
+        {
+            ct.ThrowIfCancellationRequested();
+            string hsName = AsusRogProtocol.Headsets[pid]; var (pct, asleep, charging) = AskHeadset(path, ct);
+            res.Add(new RawReading("asus-rog:hs:" + pid.ToString("X4"), _hsName ?? hsName, DeviceKind.Headset, ConnectionKind.Dongle, pct is not null, pct, charging is null ? ChargeState.Unknown : charging.Value ? ChargeState.Charging : ChargeState.NotCharging,
+                pct is null ? BatteryCapability.Unknown : BatteryCapability.Supported, asleep ? "Apagado o dormido." : "Lectura por el receptor del audífono (sin verificar con tu equipo)."));
+        }
+
         // Otros receptores ASUS (por ejemplo, los de auriculares 2,4 GHz): se listan por su nombre para que se vea que Hatsu los reconoció, pero su batería aún no se puede leer.
         foreach (var (pid, prod) in others)
             res.Add(new RawReading("asus-rx:" + pid.ToString("X4"), prod, prod.Contains("HEADSET", StringComparison.OrdinalIgnoreCase) || prod.Contains("DELTA", StringComparison.OrdinalIgnoreCase) ? DeviceKind.Headset : DeviceKind.Other, ConnectionKind.Dongle, true, null,
                 ChargeState.Unknown, BatteryCapability.Unsupported, "Receptor ASUS detectado; la batería de este modelo aún no es compatible."));
         return res;
     }, ct);
+
+    private static (int? Percent, bool Asleep, bool? Charging) AskHeadset(string path, CancellationToken ct)
+    {
+        IntPtr h = HidInterop.OpenReadWrite(path); if (h == IntPtr.Zero) return (null, false, null);
+        try
+        {
+            // el primer aviso tras reconectar puede tardar ~1 s
+            var b = HidInterop.Transact(h, AsusRogProtocol.HeadsetRequest(AsusRogProtocol.HeadsetSubBattery), AsusRogProtocol.FrameLength, 1500, buf => AsusRogProtocol.ParseHeadsetBattery(buf), ct);
+            if (b is null) return (null, false, null);
+            bool? charging = null;
+            if (b.Percent is not null) charging = HidInterop.Transact(h, AsusRogProtocol.HeadsetRequest(AsusRogProtocol.HeadsetSubCharging), AsusRogProtocol.FrameLength, 800, buf => AsusRogProtocol.ParseHeadsetCharging(buf) is { } c ? new Box(c ? 1 : 0) : null, ct) is { } cb ? cb.Value == 1 : null;
+            return (b.Percent, b.Asleep, charging);
+        }
+        finally { HidInterop.Close(h); }
+    }
 
     private static int? Ask(string path, AsusRogProtocol.Query q, CancellationToken ct)
     {
@@ -49,14 +73,20 @@ internal sealed class AsusRogProvider : IPeripheralProvider
     private sealed record Box(int Value);
 
     /// <summary>Rutas HID del receptor Omni por página de uso (solo canales del fabricante de 64 bytes) y otros receptores ASUS inalámbricos por su nombre.</summary>
-    private static Dictionary<ushort, string> Enumerate(out List<(ushort Pid, string Name)> others)
+    private static Dictionary<ushort, string> Enumerate(out List<(ushort Pid, string Name)> others, out Dictionary<ushort, string> headsets)
     {
-        var map = new Dictionary<ushort, string>(); others = []; var seen = new HashSet<ushort>();
+        var map = new Dictionary<ushort, string>(); others = []; var seen = new HashSet<ushort>(); headsets = [];
         foreach (var i in HidInterop.Scan(v => v == AsusRogProtocol.Vendor))
         {
             if (i.Product == AsusRogProtocol.OmniReceiverPid)
             {
                 if (i.UsagePage >= 0xFF00 && i.InputLength == AsusRogProtocol.FrameLength && i.OutputLength == AsusRogProtocol.FrameLength) map.TryAdd(i.UsagePage, i.Path);
+                continue;
+            }
+
+            if (AsusRogProtocol.Headsets.ContainsKey(i.Product))   // receptor de auriculares conocido: su canal FF00:0001 de 64 bytes
+            {
+                if (i.UsagePage == AsusRogProtocol.HeadsetUsagePage && i.Usage == AsusRogProtocol.HeadsetUsage && i.InputLength == AsusRogProtocol.FrameLength && i.OutputLength == AsusRogProtocol.FrameLength) headsets.TryAdd(i.Product, i.Path);
                 continue;
             }
 

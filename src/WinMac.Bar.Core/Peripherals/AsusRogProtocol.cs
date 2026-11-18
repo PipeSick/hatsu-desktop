@@ -36,6 +36,32 @@ public static class AsusRogProtocol
         return p is >= 1 and <= 100 ? p : null;
     }
 
+    // ── Auriculares ROG Pelta y ROG Delta II (receptor 2,4 GHz propio, no el Omni).
+    // Fuente: el protocolo que describe el proyecto Wireless-Device-Battery-Monitor (krisgfx9, GPL-3.0) y los proyectos en que se basa; aquí NO se copia código, solo estos datos de protocolo.
+    // NO verificado con el aparato: pendiente de probar con el audífono encendido (docs/64).
+    public const byte HeadsetReportId = 0xCC, HeadsetCommand = 0x12, HeadsetSubBattery = 0x07, HeadsetSubCharging = 0x08;
+    public const ushort HeadsetUsagePage = 0xFF00, HeadsetUsage = 0x0001;
+
+    /// <summary>Modelos de auriculares conocidos, por el PID de su receptor (VID 0B05).</summary>
+    public static readonly IReadOnlyDictionary<ushort, string> Headsets = new Dictionary<ushort, string> { [0x1B84] = "ROG Pelta", [0x1AFA] = "ROG Delta II" };
+
+    /// <summary>Consulta de 64 bytes: [CC, 12, sub, ceros…]. sub 07 = batería, sub 08 = carga.</summary>
+    public static byte[] HeadsetRequest(byte sub) { var b = new byte[FrameLength]; b[0] = HeadsetReportId; b[1] = HeadsetCommand; b[2] = sub; return b; }
+
+    /// <summary>Respuesta de batería del audífono: porcentaje (1–100), dormido/apagado (el aparato contesta FF AA) o nada creíble. Un 0xFE significa «aún no lo sabe» y no se muestra como número.</summary>
+    public sealed record HeadsetBattery(int? Percent, bool Asleep);
+
+    public static HeadsetBattery? ParseHeadsetBattery(byte[]? r)
+    {
+        if (r is null || r.Length < 8 || r[0] != HeadsetReportId) return null;
+        if ((r[1] == 0xFF && r[2] == 0xAA) || (r[1] == HeadsetCommand && r[5] == 0xFF && r[6] == 0xAA)) return new HeadsetBattery(null, true);
+        if (r[1] != HeadsetCommand || r[2] != HeadsetSubBattery) return null;
+        return r[6] is >= 1 and <= 100 ? new HeadsetBattery(r[6], false) : new HeadsetBattery(null, false);
+    }
+
+    /// <summary>true = cargando, false = no, null = la respuesta no es la de carga.</summary>
+    public static bool? ParseHeadsetCharging(byte[]? r) => r is { Length: >= 8 } && r[0] == HeadsetReportId && r[1] == HeadsetCommand && r[2] == HeadsetSubCharging ? r[5] == 1 : null;
+
     /// <summary>Nombre para mostrar: el receptor no dice el modelo, solo el tipo de dispositivo.</summary>
     public static string DisplayName(Role r) => r == Role.Keyboard ? "Teclado ROG (receptor 2,4 GHz)" : "Ratón ROG (receptor 2,4 GHz)";
     public static DeviceKind Kind(Role r) => r == Role.Keyboard ? DeviceKind.Keyboard : DeviceKind.Mouse;
