@@ -251,7 +251,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
         {
             _lastFs = DateTime.UtcNow;
             // Una app a pantalla completa en OTRO monitor no debe esconder esta barra: solo se oculta si la app en primer plano está en este monitor.
-            bool fs = FullscreenWatcher.ShouldSuppress() && ForegroundIsOnThisMonitor();
+            bool fs = FullscreenWatcher.ShouldSuppress((_monitor.Left, _monitor.Top, _monitor.Right, _monitor.Bottom));
             if (fs != _hiddenForFullscreen) { _hiddenForFullscreen = fs; BarNative.ShowWindow(Hwnd, fs ? 0 : 4 /* SW_SHOWNOACTIVATE */); _force = true; }
             CheckReservation();
         }

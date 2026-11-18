@@ -153,7 +153,7 @@ public sealed class DockHost : IDisposable
         _ctl.SetPointer(inWin ? new PointerSample(sx, sy) : null);
         _pointerOver = inWin && _view is not null && (InteractiveAt(sx, sy) || _view.HoverIndex >= 0);
         _ctl.SetEdgeHot(DockSettings.EdgeHot(p.X, p.Y, _monitor.Bottom, _winLeftPx, _winWpx, _winTopPx + _winHpx, screenEdgeFree: !_taskbarBelow));
-        if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000) { _lastFs = DateTime.UtcNow; _ctl.SetSuppressed(FullscreenWatcher.ShouldSuppress()); }
+        if ((DateTime.UtcNow - _lastFs).TotalMilliseconds > 1000) { _lastFs = DateTime.UtcNow; _ctl.SetSuppressed(FullscreenWatcher.ShouldSuppress((_monitor.Left, _monitor.Top, _monitor.Right, _monitor.Bottom))); }
         if ((DateTime.UtcNow - _lastWorkCheck).TotalSeconds >= 2) {
             _lastWorkCheck = DateTime.UtcNow; ApplySystemTheme(); var top = TaskbarTopOn(_monitor); bool changed = (top is null) != (_taskbarTop is null); _taskbarTop = top; _taskbarBelow = top is not null;
             if (changed && _hwnd != IntPtr.Zero) { _log($"[dock] la barra de tareas de Windows {(top is null ? "ya no se ve" : "volvió")}: el Dock se recoloca"); PlaceWindow(show: false); _force = true; }

@@ -216,7 +216,11 @@ internal static class HostApp
             {
                 Native.TranslateMessage(ref msg); Native.DispatchMessage(ref msg);
             }
-            if (reopen.WaitOne(0)) { var ids = sup.RestartStopped(); log("[host] reapertura pedida: " + (ids.Count == 0 ? "nada que reabrir" : string.Join(", ", ids))); }
+            if (reopen.WaitOne(0))
+            {   // abrir Hatsu otra vez (menú Inicio, acceso directo) reabre lo que esté cerrado Y muestra Ajustes: es la vía de vuelta si la H de la Barra no está a la vista
+                var ids = sup.RestartStopped(); log("[host] reapertura pedida: " + (ids.Count == 0 ? "nada que reabrir" : string.Join(", ", ids)));
+                if (settings is { } sw) { try { sw.Show(null); } catch (Exception e) { log("[host] no se pudo abrir Ajustes: " + e.Message); } }
+            }
             if (quit.WaitOne(0)) { log("[host] señal de cierre recibida (--quit)"); break; }
             taskbar.Tick(config.Current.HideTaskbar, DateTime.UtcNow);
             Native.MsgWaitForMultipleObjectsEx(0, null, 100, Native.QS_ALLINPUT, 0x4 /* MWMO_INPUTAVAILABLE */);
