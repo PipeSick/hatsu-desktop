@@ -116,6 +116,8 @@ public sealed record BarConfig
     public bool PeripheralAsusRog { get; init; } = false;
     /// <summary>Periféricos Logitech con receptor (HID++). PROBABLE, sin verificar. Envía consultas de lectura al receptor; por eso es opt-in y viene APAGADO.</summary>
     public bool PeripheralLogitech { get; init; } = false;
+    /// <summary>2.0.11: leer la batería de más marcas (Razer, Glorious, Hitscan, G-Wolves, WLMouse…) por su protocolo propio. Apagado por defecto: manda una consulta de solo lectura a los aparatos de esas marcas. SIN VERIFICAR con aparatos reales.</summary>
+    public bool PeripheralVendors { get; init; } = false;
     /// <summary>Nombres que el usuario le pone al teclado y al ratón del receptor ROG OMNI (el receptor no dice el modelo). Vacío = el nombre genérico.</summary>
     public string PeripheralAsusKeyboardName { get; init; } = "";
     public string PeripheralAsusMouseName { get; init; } = "";

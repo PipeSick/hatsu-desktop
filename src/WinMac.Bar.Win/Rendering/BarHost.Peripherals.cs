@@ -36,6 +36,7 @@ public sealed partial class BarHost
         var prov = new List<IPeripheralProvider> { new BluetoothPeripheralProvider(), new HidBatteryProvider() };
         if (_cfg.PeripheralAsusRog) prov.Add(new AsusRogProvider(_cfg.PeripheralAsusKeyboardName, _cfg.PeripheralAsusMouseName));
         if (_cfg.PeripheralLogitech) prov.Add(new LogitechProvider());
+        if (_cfg.PeripheralVendors) { prov.Add(new RazerProvider()); prov.Add(new GloriousProvider()); }
         _periphProviders = prov.ToArray();   // se rearma en cada lectura: activar o apagar el lector ASUS se nota al instante
         var cts = _periphCts = new CancellationTokenSource(); var store = _periph; var providers = _periphProviders;
         _periphBusy = true; _lastPeriphRead = DateTime.UtcNow; RebuildPeripheralsPanel();

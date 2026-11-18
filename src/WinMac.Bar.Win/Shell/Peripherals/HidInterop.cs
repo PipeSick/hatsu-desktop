@@ -4,7 +4,7 @@ using System.Text;
 namespace WinMac.Bar.Win.Shell.Peripherals;
 
 /// <summary>Una interfaz HID presente (con sus capacidades), consultada sin abrirla para leer ni escribir.</summary>
-internal sealed record HidIface(string Path, ushort Vendor, ushort Product, ushort UsagePage, ushort Usage, ushort InputLength, ushort OutputLength, string ProductName);
+internal sealed record HidIface(string Path, ushort Vendor, ushort Product, ushort UsagePage, ushort Usage, ushort InputLength, ushort OutputLength, string ProductName, ushort FeatureLength = 0);
 
 /// <summary>Acceso común a HID para los lectores de periféricos: enumerar interfaces y hacer una consulta con plazo (escribir una trama y leer la respuesta). Un solo lugar para las declaraciones nativas.</summary>
 internal static class HidInterop
@@ -30,7 +30,7 @@ internal static class HidInterop
                     {
                         if (HidP_GetCaps(pp, out var c) < 0) continue;
                         var sbp = new StringBuilder(256); HidD_GetProductString(q, sbp, 512);
-                        list.Add(new HidIface(det.DevicePath, a.VendorID, a.ProductID, c.UsagePage, c.Usage, c.InputReportByteLength, c.OutputReportByteLength, sbp.ToString().Trim()));
+                        list.Add(new HidIface(det.DevicePath, a.VendorID, a.ProductID, c.UsagePage, c.Usage, c.InputReportByteLength, c.OutputReportByteLength, sbp.ToString().Trim(), c.FeatureReportByteLength));
                     }
                     finally { HidD_FreePreparsedData(pp); }
                 }
@@ -42,6 +42,18 @@ internal static class HidInterop
     }
 
     public static IntPtr OpenReadWrite(string path) { var h = CreateFile(path, 0xC0000000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero); return h == new IntPtr(-1) ? IntPtr.Zero : h; }
+    /// <summary>Abre sin pedir lectura ni escritura (acceso 0): basta para los informes de característica y funciona aunque el sistema tenga el ratón o el teclado abiertos.</summary>
+    public static IntPtr OpenFeature(string path) { var h = CreateFile(path, 0, 3, IntPtr.Zero, 3, 0, IntPtr.Zero); return h == new IntPtr(-1) ? IntPtr.Zero : h; }
+
+    /// <summary>Envía un informe de característica. <paramref name="data"/>[0] es el número de informe (0 si el aparato no los numera).</summary>
+    public static bool SetFeature(IntPtr h, byte[] data) => HidD_SetFeature(h, data, data.Length);
+
+    /// <summary>Lee un informe de característica de <paramref name="length"/> bytes (con el número de informe delante). Null si falla.</summary>
+    public static byte[]? GetFeature(IntPtr h, int length, byte reportId = 0)
+    {
+        var buf = new byte[length]; buf[0] = reportId; return HidD_GetFeature(h, buf, length) ? buf : null;
+    }
+
     public static void Close(IntPtr h) { if (h != IntPtr.Zero) CloseHandle(h); }
 
     /// <summary>Escribe <paramref name="request"/> y lee tramas hasta que <paramref name="accept"/> devuelva algo (o se acabe el plazo o lleguen 16 tramas ajenas). Null = sin respuesta.</summary>
@@ -75,6 +87,8 @@ internal static class HidInterop
         public ushort NumberLinkCollectionNodes, NumberInputButtonCaps, NumberInputValueCaps, NumberInputDataIndices, NumberOutputButtonCaps, NumberOutputValueCaps, NumberOutputDataIndices, NumberFeatureButtonCaps, NumberFeatureValueCaps, NumberFeatureDataIndices;
     }
     [DllImport("hid.dll")] private static extern void HidD_GetHidGuid(out Guid g);
+    [DllImport("hid.dll")] private static extern bool HidD_SetFeature(IntPtr h, byte[] buf, int len);
+    [DllImport("hid.dll")] private static extern bool HidD_GetFeature(IntPtr h, byte[] buf, int len);
     [DllImport("hid.dll")] private static extern bool HidD_GetAttributes(IntPtr h, ref HIDD_ATTRIBUTES a);
     [DllImport("hid.dll", CharSet = CharSet.Unicode)] private static extern bool HidD_GetProductString(IntPtr h, StringBuilder s, int len);
     [DllImport("hid.dll")] private static extern bool HidD_GetPreparsedData(IntPtr h, out IntPtr p);
