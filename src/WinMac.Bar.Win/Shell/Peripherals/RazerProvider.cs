@@ -38,7 +38,7 @@ internal sealed class RazerProvider : IPeripheralProvider
                 if (ok is not null && Command(h, tid, RazerProtocol.CmdCharging, kb != 0, ct) is { Status: RazerProtocol.Status.Ok } c) charging = RazerProtocol.Charging(c.Args);
                 if (!seen.Add(name)) { if (charging) for (int k = 0; k < res.Count; k++) if (res[k].Name == name) res[k] = res[k] with { Charge = ChargeState.Charging }; continue; }   // el ratón enchufado a cargar sale dos veces (cable y receptor): una sola
                 res.Add(new RawReading("razer:" + i.Product.ToString("X4"), name, kind, ConnectionKind.Dongle, pct is not null, pct, ok is null ? ChargeState.Unknown : charging ? ChargeState.Charging : ChargeState.NotCharging,
-                    pct is null ? BatteryCapability.Unknown : BatteryCapability.Supported, ok is null ? "Apagado o fuera de alcance." : "Lectura por el protocolo de Razer (sin verificar con tu equipo)."));
+                    pct is null ? BatteryCapability.Unknown : BatteryCapability.Supported, ok is null ? "Apagado o fuera de alcance." : "Lectura por el protocolo de Razer (sin verificar)."));
             }
             finally { HidInterop.Close(h); }
         }

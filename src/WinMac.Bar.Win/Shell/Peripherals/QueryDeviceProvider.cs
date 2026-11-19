@@ -39,7 +39,7 @@ internal sealed class QueryDeviceProvider : IPeripheralProvider
 
         return order.Select(k => found[k]).Select(r => new RawReading(r.Key, r.Name, r.Kind, r.Cable ? ConnectionKind.Usb : ConnectionKind.Dongle, r.Connected, r.Percent,
             r.Percent is null ? ChargeState.Unknown : r.Charging ? ChargeState.Charging : ChargeState.NotCharging, r.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported,
-            r.Connected ? "Lectura por el protocolo del fabricante (sin verificar con tu equipo)." : "Apagado, dormido o fuera de alcance.")).ToList();
+            r.Connected ? "Lectura por el protocolo del fabricante (sin verificar)." : "Apagado, dormido o fuera de alcance.")).ToList();
     }, ct);
 
     private static int InterfaceOf(string path) { var m = Regex.Match(path, @"mi_([0-9a-f]{2})", RegexOptions.IgnoreCase); return m.Success ? Convert.ToInt32(m.Groups[1].Value, 16) : -1; }

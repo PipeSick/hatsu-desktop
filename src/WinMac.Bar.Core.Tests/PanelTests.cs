@@ -327,6 +327,14 @@ public class PanelBuilderTests
     }
 
     [Fact]
+    public void A_long_peripheral_note_gets_a_taller_card_so_it_is_not_cut_off()
+    {
+        Assert.Equal(1, PanelLayout.DeviceNoteLines("Lectura por el receptor ROG OMNI.")); Assert.Equal(2, PanelLayout.DeviceNoteLines("Lectura por el receptor del audífono (sin verificar con tu equipo)."));
+        double H(string? note) => PanelLayout.HeightOf(new Widget(WidgetKind.DeviceCard, "d", "Dispositivo", Data: new DeviceCardData("d", "Ratón", "Receptor", "88 %", 0.88, "Conectado", null, "good", note, "periph:hide:d", "Ocultar")));
+        Assert.True(H("Lectura por el receptor del audífono (sin verificar con tu equipo).") > H("Lectura corta.")); Assert.True(H("Lectura corta.") > H(null));
+    }
+
+    [Fact]
     public void Wm035_without_a_compatible_switch_the_device_selectors_are_disabled_with_the_reason_and_the_simple_menu_remains()
     {
         var outs = new List<AudioDevice> { new("a", "Altavoces", true), new("b", "Audífonos", false) };

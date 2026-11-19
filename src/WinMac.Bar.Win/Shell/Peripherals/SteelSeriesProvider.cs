@@ -28,7 +28,7 @@ internal sealed class SteelSeriesProvider : IPeripheralProvider
                 string key = "steelseries:" + (pid is 0x172B or 0x1726 ? "172B" : pid.ToString("X4"));   // el Rival 650 es uno solo, por cable o por receptor
                 var raw = new RawReading(key, r.Name, model.Family is SteelSeriesProtocol.Family.Aerox or SteelSeriesProtocol.Family.Rival or SteelSeriesProtocol.Family.RivalPro ? DeviceKind.Mouse : DeviceKind.Headset,
                     r.Via == "Cable USB" ? ConnectionKind.Usb : ConnectionKind.Dongle, r.Connected, r.Percent, r.Percent is null || !r.Connected ? ChargeState.Unknown : r.Charging ? ChargeState.Charging : ChargeState.NotCharging,
-                    r.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, r.Connected ? "Lectura por el protocolo de SteelSeries (sin verificar con tu equipo)." : "Apagado o fuera de alcance.");
+                    r.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, r.Connected ? "Lectura por el protocolo de SteelSeries (sin verificar)." : "Apagado o fuera de alcance.");
                 int dup = res.FindIndex(x => x.DeviceId == key);
                 if (dup < 0) res.Add(raw); else if (r.Via == "Cable USB") res[dup] = raw;   // cargando por cable, se queda la lectura del cable
                 break;

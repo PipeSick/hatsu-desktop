@@ -28,7 +28,7 @@ internal sealed class XboxProvider : IPeripheralProvider
                 if (XboxBattery.WgiPercent(rep.RemainingCapacityInMilliwattHours, rep.FullChargeCapacityInMilliwattHours) is not { } pct) continue;
                 string name = c.HardwareVendorId == XboxBattery.GameSir ? "GameSir controller" : string.IsNullOrWhiteSpace(c.DisplayName) ? "Xbox controller" : c.DisplayName;
                 res.Add(new RawReading($"xbox:{c.HardwareProductId:X4}:{i}", name, DeviceKind.Gamepad, ConnectionKind.Unknown, true, pct, rep.Status == Windows.System.Power.BatteryStatus.Charging ? ChargeState.Charging : ChargeState.NotCharging, BatteryCapability.Supported,
-                    "Lectura por la API de mandos de Windows (sin verificar con tu equipo)."));
+                    "Lectura por la API de mandos de Windows (sin verificar)."));
             }
         }
         catch (Exception) { /* la API de mandos no está: queda XInput */ }

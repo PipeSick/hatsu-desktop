@@ -27,7 +27,7 @@ internal sealed class HyperXProvider : IPeripheralProvider
                     var r = Run(i, m.Family, ct); if (r is null) continue;
                     done.Add((m.Vendor, pid));
                     res.Add(new RawReading("hyperx:" + pid.ToString("X4"), r.Name, r.Kind, ConnectionKind.Dongle, r.Connected, r.Percent, r.Percent is null ? ChargeState.Unknown : r.Charging ? ChargeState.Charging : ChargeState.NotCharging,
-                        r.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, r.Connected ? "Lectura por el protocolo de HyperX (sin verificar con tu equipo)." : "Apagado o fuera de alcance."));
+                        r.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, r.Connected ? "Lectura por el protocolo de HyperX (sin verificar)." : "Apagado o fuera de alcance."));
                     break;
                 }
             }

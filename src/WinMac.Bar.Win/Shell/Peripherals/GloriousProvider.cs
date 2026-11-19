@@ -29,7 +29,7 @@ internal sealed class GloriousProvider : IPeripheralProvider
             bool cable = known?.Cable ?? false, awake = reply.State == GloriousProtocol.State.Awake;
             res.Add(new RawReading(v.Key + i.Product.ToString("X4"), name, kind, cable ? ConnectionKind.Usb : ConnectionKind.Dongle, awake, reply.Percent,
                 cable || reply.Charging ? ChargeState.Charging : awake ? ChargeState.NotCharging : ChargeState.Unknown, reply.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported,
-                awake ? "Lectura por el protocolo del fabricante (sin verificar con tu equipo)." : "Dormido o despertando."));
+                awake ? "Lectura por el protocolo del fabricante (sin verificar)." : "Dormido o despertando."));
         }
 
         return res;

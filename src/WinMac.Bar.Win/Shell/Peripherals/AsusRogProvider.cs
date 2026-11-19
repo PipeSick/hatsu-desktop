@@ -41,7 +41,7 @@ internal sealed class AsusRogProvider : IPeripheralProvider
             ct.ThrowIfCancellationRequested();
             string hsName = AsusRogProtocol.Headsets[pid]; var (pct, asleep, charging) = AskHeadset(path, ct);
             res.Add(new RawReading("asus-rog:hs:" + pid.ToString("X4"), _hsName ?? hsName, DeviceKind.Headset, ConnectionKind.Dongle, pct is not null, pct, charging is null ? ChargeState.Unknown : charging.Value ? ChargeState.Charging : ChargeState.NotCharging,
-                pct is null ? BatteryCapability.Unknown : BatteryCapability.Supported, asleep ? "Apagado o dormido." : "Lectura por el receptor del audífono (sin verificar con tu equipo)."));
+                pct is null ? BatteryCapability.Unknown : BatteryCapability.Supported, asleep ? "Apagado o dormido." : "Lectura por el receptor del audífono (sin verificar)."));
         }
 
         // Otros receptores ASUS (por ejemplo, los de auriculares 2,4 GHz): se listan por su nombre para que se vea que Hatsu los reconoció, pero su batería aún no se puede leer.
@@ -63,7 +63,7 @@ internal sealed class AsusRogProvider : IPeripheralProvider
             string key = "asus-rog:" + m.Pid.ToString("X4") + (m.Role == AsusRogProtocol.Role.Keyboard ? ":kb" : ":ms");
             if (raw.Answer == AsusRogModels.Answer.Asleep) return new RawReading(key, m.Name, AsusRogProtocol.Kind(m.Role), omni ? ConnectionKind.Dongle : ConnectionKind.Dongle, false, null, ChargeState.Unknown, BatteryCapability.Unknown, "Apagado o dormido.");
             return new RawReading(key, m.Name, AsusRogProtocol.Kind(m.Role), ConnectionKind.Dongle, raw.Percent is not null, raw.Percent, raw.Percent is null ? ChargeState.Unknown : raw.Charging ? ChargeState.Charging : ChargeState.NotCharging,
-                raw.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, omni ? "Lectura por el receptor ROG OMNI." : "Lectura por el receptor o el cable del propio aparato (sin verificar con tu equipo).");
+                raw.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, omni ? "Lectura por el receptor ROG OMNI." : "Lectura por el receptor o el cable del propio aparato (sin verificar).");
         }
         finally { HidInterop.Close(h); }
     }

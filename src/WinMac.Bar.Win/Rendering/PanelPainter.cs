@@ -348,7 +348,7 @@ public sealed partial class PanelPainter : IDisposable
                     FillRR(x + 14, by, x + wd - 14, by + 6, 3, Fill(0.12f)); FillRR(x + 14, by, x + 14 + Math.Max(6, (wd - 28) * fr), by + 6, 3, tone);
                     if (dc.Charge is { } chg) TextAlign(chg, _small, x + wd * 0.5, y + 46, wd * 0.5 - 14 - MeasureText(dc.Status, _small) - 22, 18, new Color4(0.20f, 0.78f, 0.35f, 1), TextAlignment.Trailing);
                 }
-                if (dc.Note is { } nt) TextAlign(nt, _small, x + 14, by + 8, wd - 28, 22, Fg(0.5f), vcenter: false, wrap: true);
+                if (dc.Note is { } nt) TextAlign(nt, _small, x + 14, by + 8, wd - 28, 16 * PanelLayout.DeviceNoteLines(nt) + 6, Fg(0.5f), vcenter: false, wrap: true);
                 break;
             }
             case WidgetKind.CleanRow when w.Data is CleanRowData cr:

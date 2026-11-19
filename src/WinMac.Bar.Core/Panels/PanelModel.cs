@@ -130,6 +130,9 @@ public sealed record PanelFrame(double Width, double Height, IReadOnlyList<Widge
 /// <summary>Reparto del panel (DIP). Puro: se prueba sin Windows.</summary>
 public static class PanelLayout
 {
+    /// <summary>Líneas que ocupa la nota de una tarjeta de periférico (letra de 12,5 px en un ancho de 264): una nota larga ya no se corta por abajo.</summary>
+    public static int DeviceNoteLines(string note) => Math.Max(1, (int)Math.Ceiling(note.Length * 6.6 / 264.0));
+
     public const double Width = 320, Pad = 14, Gap = 8, MonthHeader = 20, MonthRow = 32, CardInset = 12, CardPad = 10, HubWidth = 348, WeatherWidth = 304;
 
     public static double HeightOf(Widget w) => w.Kind switch
@@ -165,7 +168,7 @@ public static class PanelLayout
         WidgetKind.ActionStrip => 80,
         WidgetKind.LinkRow => 30,
         WidgetKind.BatteryHero => 96,
-        WidgetKind.DeviceCard => w.Data is DeviceCardData { Note: not null } ? 104 : 88,
+        WidgetKind.DeviceCard => w.Data is DeviceCardData { Note: { } note } ? 88 + 16 * DeviceNoteLines(note) : 88,
         WidgetKind.CleanRow => 76,
         WidgetKind.PhoneHeader => 66,
         WidgetKind.PhoneBattery => 124,

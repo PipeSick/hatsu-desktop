@@ -40,7 +40,7 @@ internal sealed class CorsairProvider : IPeripheralProvider
         {
             var r = HidInterop.Transact(h, Frame(i, CorsairProtocol.VoidRequest), i.InputLength, 1000, b => CorsairProtocol.ParseVoid(SteelSeriesProtocol.Payload(b)) is { } v ? new Box<CorsairProtocol.VoidReading>(v) : null, ct)?.Value; if (r is null) return null;
             return new RawReading("corsair:" + i.Product.ToString("X4"), i.ProductName.Length > 0 ? i.ProductName : "Corsair wireless headset", DeviceKind.Headset, ConnectionKind.Dongle, r.Connected, r.Percent,
-                r.Percent is null ? ChargeState.Unknown : r.Charging ? ChargeState.Charging : ChargeState.NotCharging, r.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, "Lectura por el protocolo de Corsair (sin verificar con tu equipo).");
+                r.Percent is null ? ChargeState.Unknown : r.Charging ? ChargeState.Charging : ChargeState.NotCharging, r.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, "Lectura por el protocolo de Corsair (sin verificar).");
         }
         finally { HidInterop.Close(h); }
     }
@@ -55,7 +55,7 @@ internal sealed class CorsairProvider : IPeripheralProvider
             if (!answered || online)
             {
                 var b = Ask(0x04);
-                if (b is not null) { done = true; var bat = CorsairProtocol.CompxParseBattery(b); return new RawReading("corsair:" + i.Product.ToString("X4"), name, DeviceKind.Mouse, ConnectionKind.Dongle, true, bat.Percent, bat.Percent is null ? ChargeState.Unknown : bat.Charging ? ChargeState.Charging : ChargeState.NotCharging, bat.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, "Lectura por el protocolo de Corsair (sin verificar con tu equipo)."); }
+                if (b is not null) { done = true; var bat = CorsairProtocol.CompxParseBattery(b); return new RawReading("corsair:" + i.Product.ToString("X4"), name, DeviceKind.Mouse, ConnectionKind.Dongle, true, bat.Percent, bat.Percent is null ? ChargeState.Unknown : bat.Charging ? ChargeState.Charging : ChargeState.NotCharging, bat.Percent is null ? BatteryCapability.Unknown : BatteryCapability.Supported, "Lectura por el protocolo de Corsair (sin verificar)."); }
                 if (answered) { done = true; return new RawReading("corsair:" + i.Product.ToString("X4"), name, DeviceKind.Mouse, ConnectionKind.Dongle, true, null, ChargeState.Unknown, BatteryCapability.Unknown, "Conectado, pero no contestó la batería."); }
             }
             else done = true;   // el receptor dice que el ratón no está conectado: no se muestra
@@ -93,7 +93,7 @@ internal sealed class CorsairProvider : IPeripheralProvider
                 string product = i.ProductName.Length > 0 ? i.ProductName : "Corsair wireless device"; var kind = CorsairProtocol.GuessKind(product, i.Product, paired ?? 0);
                 if (paired is { } pp && CorsairProtocol.Paired.TryGetValue((ushort)pp, out var known)) product = known.Name; else if (kind == DeviceKind.Headset && product.Contains("Receiver", StringComparison.OrdinalIgnoreCase)) product = "Corsair wireless headset";
                 bool charging = Get(target, CorsairProtocol.PropChargeState) is { } cs && CorsairProtocol.BragiCharging(cs);
-                res.Add(new RawReading("corsair:" + i.Product.ToString("X4") + ":" + target, product, kind, target == 0x08 ? ConnectionKind.Usb : ConnectionKind.Dongle, true, pct, charging ? ChargeState.Charging : ChargeState.NotCharging, BatteryCapability.Supported, "Lectura por el protocolo de Corsair (sin verificar con tu equipo)."));
+                res.Add(new RawReading("corsair:" + i.Product.ToString("X4") + ":" + target, product, kind, target == 0x08 ? ConnectionKind.Usb : ConnectionKind.Dongle, true, pct, charging ? ChargeState.Charging : ChargeState.NotCharging, BatteryCapability.Supported, "Lectura por el protocolo de Corsair (sin verificar)."));
                 any = true;
             }
 
