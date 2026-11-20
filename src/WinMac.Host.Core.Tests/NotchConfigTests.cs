@@ -48,7 +48,7 @@ public class NotchSettingsTests
     public void Sections_keep_the_given_order_drop_unknown_and_duplicate_ids_and_append_the_missing()
     {
         var n = new NotchSettings().ApplyPatch(J("{\"sections\":[{\"id\":\"timer\",\"enabled\":false},{\"id\":\"music\",\"enabled\":true},{\"id\":\"ghost\",\"enabled\":true},{\"id\":\"timer\",\"enabled\":true}]}"));
-        Assert.Equal("timer", n.Sections[0].Id); Assert.False(n.Sections[0].Enabled); Assert.Equal("music", n.Sections[1].Id);
+        Assert.Equal("home", n.Sections[0].Id); Assert.True(n.Sections[0].Enabled);   /* Inicio (nueva) va primera */ Assert.Equal("timer", n.Sections[1].Id); Assert.False(n.Sections[1].Enabled); Assert.Equal("music", n.Sections[2].Id);
         Assert.Equal(NotchSettings.SectionIds.Length, n.Sections.Count); Assert.DoesNotContain(n.Sections, s => s.Id == "ghost"); Assert.False(n.Sections.Single(s => s.Id == "camera").Enabled);
     }
 
@@ -81,7 +81,7 @@ public class NotchSettingsTests
         const string old = "{\"NotchModuleEnabled\":true,\"MusicModuleEnabled\":false,\"AiAgentsModuleEnabled\":true,\"PollIntervalSeconds\":45,\"AnthropicAdminApiKey\":\"sk-ant-admin-SECRETO\",\"ClaudeHomeOverride\":\"D:\\\\c\",\"NotchPosition\":2,\"MusicPlayer\":1,\"GlassLevel\":80,\"LyricsEnabled\":true,\"LyricsInPill\":true,\"NotchSections\":[{\"Id\":\"timer\",\"Enabled\":true},{\"Id\":\"music\",\"Enabled\":false}]}";
         var n = NotchSettings.ImportFromNotchWin(old)!;
         Assert.Equal("TopRight", n.Position); Assert.Equal("Feishin", n.MusicPlayer); Assert.Equal(80, n.GlassLevel); Assert.False(n.MusicEnabled); Assert.True(n.AgentsEnabled); Assert.Equal(45, n.PollIntervalSeconds);
-        Assert.True(n.LyricsEnabled && n.LyricsInPill); Assert.Equal("timer", n.Sections[0].Id); Assert.False(n.Sections.Single(s => s.Id == "music").Enabled);
+        Assert.True(n.LyricsEnabled && n.LyricsInPill); Assert.Equal("home", n.Sections[0].Id); Assert.Equal("timer", n.Sections[1].Id); Assert.False(n.Sections.Single(s => s.Id == "music").Enabled);
         string all = JsonSerializer.Serialize(n) + JsonSerializer.Serialize(n.ToWire()); Assert.DoesNotContain("SECRETO", all); Assert.DoesNotContain("sk-ant", all); Assert.DoesNotContain("D:\\\\c", all);   // ni la clave ni las rutas locales
     }
 
@@ -273,7 +273,7 @@ public class NotchChannelRoundtripTests
 
             notch.Event(NotchSettings.SetTopic, new { glassLevel = 85, lyricsEnabled = true, sections = new[] { new { id = "timer", enabled = true } }, position = "Bogus" });
             Assert.True(await Until(() => { lock (seen) return seen.Any(e => e.GetProperty("glassLevel").GetInt32() == 85); }), "no recibió el estado nuevo");
-            lock (seen) { var last = seen[^1]; Assert.Equal(85, last.GetProperty("glassLevel").GetInt32()); Assert.True(last.GetProperty("lyricsEnabled").GetBoolean()); Assert.Equal("TopCenter", last.GetProperty("position").GetString()); Assert.Equal("timer", last.GetProperty("sections")[0].GetProperty("id").GetString()); }
+            lock (seen) { var last = seen[^1]; Assert.Equal(85, last.GetProperty("glassLevel").GetInt32()); Assert.True(last.GetProperty("lyricsEnabled").GetBoolean()); Assert.Equal("TopCenter", last.GetProperty("position").GetString()); Assert.Equal("home", last.GetProperty("sections")[0].GetProperty("id").GetString()); Assert.Equal("timer", last.GetProperty("sections")[1].GetProperty("id").GetString()); }
             Assert.Equal(85, HostConfig.Load(file).Notch!.GlassLevel);   // el host es el dueño: lo guardó él
 
             ctl.OpenNotchLocalSettings(); Assert.True(await Until(() => { lock (cmds) return cmds.Count == 1; })); Assert.Equal("open-local-settings", cmds[0]);

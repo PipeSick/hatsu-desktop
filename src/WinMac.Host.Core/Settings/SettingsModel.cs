@@ -113,7 +113,7 @@ public static partial class SettingsBuilder
     {
         ["music"] = "Música", ["timer"] = "Temporizador", ["calendar"] = "Calendario", ["downloads"] = "Descargas", ["notifications"] = "Notificaciones",
         ["shelf"] = "Estantería", ["camera"] = "Cámara (espejo)", ["system"] = "Recursos del sistema", ["clipboard"] = "Portapapeles",
-        ["activity"] = "En curso", ["captures"] = "Capturas", ["history"] = "Historial",
+        ["home"] = "Inicio", ["activity"] = "En curso", ["captures"] = "Capturas", ["history"] = "Historial",
     };
 
     private static List<SettingsRow> HotkeyRows(BarConfig bar)

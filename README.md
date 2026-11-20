@@ -27,7 +27,7 @@ Todo se configura desde una sola ventana de Ajustes ([`docs/31`](docs/31-configu
 
 ## Novedades
 
-Resumen en [`CHANGELOG.md`](CHANGELOG.md). Lo último (versión **2.0.12**, **pendiente de validar en Windows real**):
+Resumen en [`CHANGELOG.md`](CHANGELOG.md). Lo último (versión **2.0.13**, **pendiente de validar en Windows real**):
 - **Ajustes** reorganizados en 12 secciones y 5 grupos con buscador. Los iconos de la barra se activan, ordenan (arrastrando el asa) y agregan desde un solo lugar.
 - **Barra:** Rendimiento, Red y Discos son iconos sueltos; VPN, Limpieza y Periféricos (batería de teclado y mouse ASUS ROG; Logitech «probable») son opcionales. «Salir de Hatsu Desktop» en el menú de Hatsu.
 - **Módulos de productividad:** Mission Control, Snap, Live Text, Spotlight Actions, Gestures (abrir aplicaciones o páginas web desde esquinas, botones o atajos) y Shelf+.

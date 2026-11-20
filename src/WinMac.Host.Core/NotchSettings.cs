@@ -18,7 +18,8 @@ public sealed record NotchSettings
     public static readonly string[] Positions = ["TopCenter", "TopLeft", "TopRight"];
     public static readonly string[] Players = ["Spotify", "Feishin", "Custom"];
     /// <summary>Mismo orden que NotchWin (NotchSections.AllIds): el Centro de actividades de WinMac 2.0 primero (docs/25).</summary>
-    public static readonly string[] SectionIds = ["activity", "captures", "clipboard", "downloads", "history", "music", "timer", "calendar", "notifications", "shelf", "camera", "system"];
+    // «home» (Inicio, propuesta A+B de la Isla) es nueva: quien ya tenía un orden guardado la recibe PRIMERA y encendida (igual que NotchWin: NotchSections.Normalize).
+    public static readonly string[] SectionIds = ["home", "activity", "captures", "clipboard", "downloads", "history", "music", "timer", "calendar", "notifications", "shelf", "camera", "system"];
     private const string CameraId = "camera";   // se abre la webcam: apagada por defecto
 
     public string Position { get; init; } = "TopCenter";
@@ -78,6 +79,7 @@ public sealed record NotchSettings
     {
         var result = new List<NotchSection>(); var seen = new HashSet<string>();
         foreach (var s in saved ?? []) if (s is not null && SectionIds.Contains(s.Id) && seen.Add(s.Id)) result.Add(new NotchSection(s.Id, s.Enabled));
+        if (!seen.Contains("home")) { result.Insert(0, new NotchSection("home", true)); seen.Add("home"); }
         foreach (var id in SectionIds.Where(id => !seen.Contains(id))) result.Add(new NotchSection(id, id != CameraId));
         return result;
     }

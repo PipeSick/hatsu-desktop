@@ -3,7 +3,11 @@
 Formato libre por versión. Las entradas marcadas «sin validar» están implementadas y probadas automáticamente, pero nadie las ha visto funcionar en un Windows real. Nada de esto está publicado como versión estable.
 
 ## Sin publicar (rama de trabajo)
-Versión del paquete: **2.0.12** (la Store exige una versión mayor en cada envío).
+Versión del paquete: **2.0.13** (la Store exige una versión mayor en cada envío).
+**2.0.13 (sin validar en Windows real):**
+- **Hatsu Notch:** pestaña nueva «Inicio» (primera): tablero de tarjetas con música (y la línea de letra), temporizador, notificaciones, descargas, próximo evento y portapapeles; cada tarjeta abre su módulo y solo salen las de módulos activados. El borde, las barras de audio y (abierto) un resplandor toman el color de la carátula. Todavía NO están las tarjetas de periféricos ni de recursos, ni la animación nueva de plegado.
+- **Barra de tareas de Windows:** al encender el PC, Explorer muestra su barra varias veces mientras se monta y Hatsu lo tomaba por una pelea y la dejaba visible 2 minutos. Ahora hay 30 s de margen tras iniciar o tras recrearse la barra, y si igual se rinde, reintenta a los 20 s. El aviso inmediato cubre cualquier barra de Explorer y deja una línea de diagnóstico con la ventana en primer plano. Causa inferida de los registros; falta confirmarla en tu PC.
+- **Periféricos:** la tarjeta crece con su nota para que el texto no se corte.
 **Módulos de productividad** ([`docs/63`](docs/63-modulos-de-productividad.md)), cada uno con interruptor en *Ajustes › Módulos*, atajos configurables con captura de teclado y aviso de conflictos (incluidas las Capturas Ctrl+Mayús+3–6):
 - Mission Control (escritorio actual, multimonitor sin validar), Snap (zonas, editor, distribuciones propias), Live Text (OCR local), Spotlight Actions, Gestures (esquinas y botones laterales), Shelf+ en la Isla (archivos, carpetas, texto, imágenes).
 - Gestures: accesos rápidos para abrir aplicaciones instaladas o páginas web desde esquinas, botones laterales y atajos (hasta 6). Se retiró la acción de ocultar el Dock. Spotlight: «usar la distribución» acomoda las ventanas abiertas.

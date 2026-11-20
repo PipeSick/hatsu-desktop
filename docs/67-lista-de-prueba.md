@@ -1,4 +1,4 @@
-# Qué probar en un Windows real (2.0.12)
+# Qué probar en un Windows real (2.0.13)
 
 Todo esto pasa las pruebas automáticas, pero **nadie lo ha visto funcionar en un Windows real**. Marca lo que funcione y anota lo que no (con la hora, para buscarlo en el registro).
 
