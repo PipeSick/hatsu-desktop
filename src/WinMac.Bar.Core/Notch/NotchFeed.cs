@@ -1,5 +1,6 @@
 using System.Text.Json;
 using WinMac.Bar.Notifications;
+using WinMac.Bar.Peripherals;
 
 namespace WinMac.Bar.Notch;
 
@@ -55,6 +56,21 @@ public static class NotchFeed
         kind = "notifications",
         items = list.OrderByDescending(n => n.Time).Take(60).Select(n => new { id = n.Id, app = n.DisplayApp, appId = string.IsNullOrWhiteSpace(n.AppId) ? null : n.AppId, title = n.Title, body = n.Body, at = n.Time.ToUnixTimeMilliseconds() }).ToArray(),
     };
+
+    /// <summary>
+    /// Inicio de la Isla: batería de los periféricos ya leídos (solo conectados, con porcentaje ACTUAL y no ocultos por el usuario; hasta 8). Nada más sale de aquí:
+    /// ni identificadores ni notas. La Isla solo dibuja lo que recibe.
+    /// </summary>
+    public static IReadOnlyList<DeviceView> PeripheralsVisible(IReadOnlyList<DeviceView> all) =>
+        all.Where(d => !d.Hidden && d.Connected && d.Battery == BatteryStatus.Current && d.Percent is >= 0 and <= 100).Take(8).ToList();
+
+    public static object Peripherals(IReadOnlyList<DeviceView> all) => new
+    {
+        kind = "peripherals",
+        items = PeripheralsVisible(all).Select(d => new { name = d.Name, type = d.Kind.ToString().ToLowerInvariant(), percent = d.Percent!.Value, charging = d.ChargeText is not null }).ToList(),
+    };
+
+    public static string PeripheralsKey(IReadOnlyList<DeviceView> all) => string.Join(",", PeripheralsVisible(all).Select(d => d.Name + ":" + d.Percent + ":" + (d.ChargeText is not null)));
 
     /// <summary>Identity of a snapshot (ids and times): equal keys mean nothing to send.</summary>
     public static string SnapshotKey(IReadOnlyList<AppNotification> list) => string.Join(",", list.OrderBy(n => n.Id).Select(n => n.Id + ":" + n.Time.ToUnixTimeMilliseconds()));

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using WinMac.Bar.Notch;
 using WinMac.Bar.Notifications;
+using WinMac.Bar.Peripherals;
 using WinMac.SystemControl.Win;
 
 namespace WinMac.Bar.Win.Rendering;
@@ -23,7 +24,7 @@ public sealed partial class BarHost
     private IDisposable? _volWatch, _brightWatch;
     private bool _notchStarted, _notchReading;
     private DateTime _nextNotchRead = DateTime.MinValue;
-    private readonly NewNotificationTracker _notchTracker = new(); private string? _notchSnapshotKey;
+    private readonly NewNotificationTracker _notchTracker = new(); private string? _notchSnapshotKey, _notchPeriphKey;
 
     /// <summary>Envía un evento a la Isla (lo pone Program en modo integrado). Se llama desde cualquier hilo.</summary>
     public Action<object>? NotchEvent { get; set; }
@@ -32,7 +33,17 @@ public sealed partial class BarHost
     public Action<object>? NotchActivity { get; set; }
 
     /// <summary>Ajustes centrales de la Isla (tópico retenido): qué quiere recibir.</summary>
-    public void ApplyNotchOptions(NotchFeedOptions o) { _notchOpts = o; _notchSnapshotKey = null; if (!o.Notifications) Post(_notchTracker.Reset); Post(SendNotchSnapshot); }   // the Island (re)connected: it gets the snapshot again
+    public void ApplyNotchOptions(NotchFeedOptions o) { _notchOpts = o; _notchSnapshotKey = null; _notchPeriphKey = null; Post(SendNotchPeripherals); if (!o.Notifications) Post(_notchTracker.Reset); Post(SendNotchSnapshot); }   // the Island (re)connected: it gets the snapshot again
+
+    /// <summary>Inicio de la Isla: la batería de los periféricos YA leídos (la lectura sigue siendo la del panel y las alertas; aquí no se lee nada nuevo). Solo si cambió.</summary>
+    private void SendNotchPeripherals()
+    {
+        if (NotchEvent is null || !_cfg.ShowPeripherals || _periph is not { } store) return;
+        var all = store.View(DateTime.UtcNow, PeripheralSettings.ParseHidden(_cfg.PeripheralHidden));
+        var key = NotchFeed.PeripheralsKey(all);
+        if (key == _notchPeriphKey) return;
+        _notchPeriphKey = key; Send(NotchFeed.Peripherals(all));
+    }
 
     private void Send(object payload)
     {

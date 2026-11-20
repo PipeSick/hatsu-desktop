@@ -55,6 +55,7 @@ public sealed partial class BarHost
                 foreach (var r in results.Where(r => r.Status != ProviderStatus.Ok)) _log($"[periféricos] proveedor {r.ProviderId}: {r.Status} {r.Error}");
                 _periphBusy = false; _nextPeriphPoll = DateTime.UtcNow + AlertPoll;
                 EvaluatePeripheralAlerts(store, now);
+                SendNotchPeripherals();
                 RebuildPeripheralsPanel();
             });
         });

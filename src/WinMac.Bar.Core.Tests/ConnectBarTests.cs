@@ -163,3 +163,26 @@ public class ConnectBarTests
         Assert.True(NotchFeed.SameCall(sys, sys with { Since = DateTimeOffset.Now.AddHours(1) })); Assert.False(NotchFeed.SameCall(sys, sys with { CanAnswer = true }));
     }
 }
+
+public sealed class NotchPeripheralsFeedTests
+{
+    private static WinMac.Bar.Peripherals.DeviceView D(string name, WinMac.Bar.Peripherals.DeviceKind k, bool connected, WinMac.Bar.Peripherals.BatteryStatus st, int? pct, WinMac.Bar.Peripherals.ChargeState ch = WinMac.Bar.Peripherals.ChargeState.NotCharging, bool hidden = false) =>
+        new(name.ToLowerInvariant(), name, k, WinMac.Bar.Peripherals.ConnectionKind.Usb, connected, st, pct, DateTime.UtcNow, ch, null, hidden, false);
+
+    [Fact]
+    public void Only_connected_current_visible_devices_go_to_the_island_and_nothing_but_name_type_percent_and_charging()
+    {
+        var all = new List<WinMac.Bar.Peripherals.DeviceView>
+        {
+            D("Keris", WinMac.Bar.Peripherals.DeviceKind.Mouse, true, WinMac.Bar.Peripherals.BatteryStatus.Current, 74, WinMac.Bar.Peripherals.ChargeState.Charging),
+            D("Viejo", WinMac.Bar.Peripherals.DeviceKind.Keyboard, true, WinMac.Bar.Peripherals.BatteryStatus.Stale, 50),
+            D("Apagado", WinMac.Bar.Peripherals.DeviceKind.Headset, false, WinMac.Bar.Peripherals.BatteryStatus.Disconnected, 30),
+            D("Oculto", WinMac.Bar.Peripherals.DeviceKind.Gamepad, true, WinMac.Bar.Peripherals.BatteryStatus.Current, 20, hidden: true),
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(NotchFeed.Peripherals(all));
+        Assert.Contains("\"kind\":\"peripherals\"", json); Assert.Contains("\"name\":\"Keris\"", json); Assert.Contains("\"type\":\"mouse\"", json); Assert.Contains("\"percent\":74", json); Assert.Contains("\"charging\":true", json);
+        Assert.DoesNotContain("Viejo", json); Assert.DoesNotContain("Apagado", json); Assert.DoesNotContain("Oculto", json); Assert.DoesNotContain("keris\"", json);   // ni lecturas viejas, ni desconectados, ni ocultos, ni el id
+        Assert.NotEqual(NotchFeed.PeripheralsKey(all), NotchFeed.PeripheralsKey(all.Skip(1).ToList()));
+        Assert.Equal(NotchFeed.PeripheralsKey(all), NotchFeed.PeripheralsKey(all.ToList()));
+    }
+}
