@@ -64,6 +64,13 @@ public static class TaskbarPolicy
     /// <summary>WM-045: tras rendirse (pelea con Explorer o el guardián restauró), se vuelve a intentar sola pasado este tiempo: nunca hace falta desactivar y reactivar el ajuste.</summary>
     public static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(2);
 
+    /// <summary>Primera rendición de la sesión: reintento rápido (el arranque de Windows deja a Explorer mostrando su barra varias veces); las siguientes esperan <see cref="RetryAfter"/>.</summary>
+    public static readonly TimeSpan FirstRetryAfter = TimeSpan.FromSeconds(20);
+    public static TimeSpan RetryDelay(int giveUps) => giveUps <= 1 ? FirstRetryAfter : RetryAfter;
+
+    /// <summary>Margen tras arrancar el host o tras TaskbarCreated: Explorer aún se está montando y muestra su barra muchas veces seguidas; eso no es una pelea y no cuenta para rendirse.</summary>
+    public static readonly TimeSpan StartupGrace = TimeSpan.FromSeconds(30);
+
     public static bool Suspended(DateTime now, DateTime suspendedUntil) => now < suspendedUntil;
 
     /// <param name="enabled">El ajuste está activado.</param>

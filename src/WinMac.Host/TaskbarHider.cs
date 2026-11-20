@@ -17,7 +17,7 @@ internal sealed class TaskbarHider
 {
     private readonly string _leasePath; private readonly Action<string> _log; private readonly string _exe;
     private readonly ReshowLimiter _limiter = new();
-    private DateTime _lastReshowLog = DateTime.MinValue; private int _lastBarCount; private bool _hiddenByUs, _enabled; private DateTime _nextTick, _hideAt = DateTime.MaxValue, _suspendedUntil = DateTime.MinValue; private Process? _guard;
+    private DateTime _lastReshowLog = DateTime.MinValue; private int _lastBarCount; private bool _hiddenByUs, _enabled; private DateTime _nextTick, _hideAt = DateTime.MaxValue, _suspendedUntil = DateTime.MinValue; private Process? _guard; private DateTime _graceUntil; private int _giveUps;
     private bool _suspended => TaskbarPolicy.Suspended(DateTime.UtcNow, _suspendedUntil);
     // WM-045: aviso inmediato cuando Explorer vuelve a mostrar su barra (accesibilidad pública, fuera de proceso: no se inyecta nada en Explorer)
     private IntPtr _hook; private uint _hookPid; private readonly WinEventProc _hookProc; private readonly HashSet<IntPtr> _bars = [];
@@ -49,7 +49,7 @@ internal sealed class TaskbarHider
     {
         if (!enabled || _suspended) return;
         _log("[barra de tareas] Explorer recreó la barra de tareas: se volverá a ocultar");
-        _hideAt = DateTime.UtcNow.AddSeconds(1.5); _limiter.Reset();
+        _hideAt = DateTime.UtcNow.AddSeconds(1.5); _limiter.Reset(); _graceUntil = DateTime.UtcNow + TaskbarPolicy.StartupGrace;
     }
 
     private void Step(bool enabled, DateTime now)
@@ -61,7 +61,7 @@ internal sealed class TaskbarHider
         {
             case TaskbarStep.Hide:
                 if (bars.Count == 0) { Status = "No se encontró la barra de tareas de Explorer"; return; }
-                if (_hiddenByUs && !_limiter.Allow(now)) { GiveUp("Windows la volvía a mostrar sin parar; se dejó visible para no parpadear y se reintentará en 2 minutos"); return; }
+                if (_hiddenByUs && DateTime.UtcNow >= _graceUntil && !_limiter.Allow(now)) { GiveUp("Windows la volvía a mostrar sin parar; se dejó visible para no parpadear y se reintentará en unos segundos"); return; }
                 if (!leaseExists) { new TaskbarLease(Environment.ProcessId, GetAutoHide(bars[0]), DateTime.UtcNow).Save(_leasePath); }   // SIEMPRE antes de tocar nada
                 EnsureGuard();
                 if (!GetAutoHide(bars[0]))
@@ -72,7 +72,7 @@ internal sealed class TaskbarHider
                 foreach (var h in bars) ShowWindow(h, SW_HIDE);
                 _bars.Clear(); _bars.UnionWith(bars); InstallHook();
                 ReportWorkArea();
-                if (!_hiddenByUs) _log($"[barra de tareas] oculta en {bars.Count} pantalla(s)");
+                if (!_hiddenByUs) { if (_graceUntil == default) _graceUntil = DateTime.UtcNow + TaskbarPolicy.StartupGrace; _log($"[barra de tareas] oculta en {bars.Count} pantalla(s)"); }
                 else if (bars.Count != _lastBarCount) _log($"[barra de tareas] ahora hay {bars.Count} barra(s) de Explorer (antes {_lastBarCount}): se ocultan todas");
                 _lastBarCount = bars.Count;
                 _hiddenByUs = true; Status = bars.Count == 1 ? "Oculta" : $"Oculta en {bars.Count} pantallas";
@@ -84,7 +84,7 @@ internal sealed class TaskbarHider
 
     private void GiveUp(string why)
     {
-        _suspendedUntil = DateTime.UtcNow + TaskbarPolicy.RetryAfter; RemoveHook(); _limiter.Reset(); Status = "Suspendida: " + why;
+        _giveUps++; _suspendedUntil = DateTime.UtcNow + TaskbarPolicy.RetryDelay(_giveUps); RemoveHook(); _limiter.Reset(); Status = "Suspendida: " + why;
         _log("[barra de tareas] se deja de ocultar en esta sesión: " + why);
         if (TaskbarLease.Load(_leasePath) is { } l) Restore(l, _leasePath, _log);
         else foreach (var h in ExplorerTaskbars()) ShowWindow(h, SW_SHOWNA);
@@ -99,7 +99,7 @@ internal sealed class TaskbarHider
         else if (_hiddenByUs) foreach (var h in ExplorerTaskbars()) ShowWindow(h, SW_SHOWNA);
         TaskbarLease.Delete(_leasePath);
         if (_hiddenByUs || lease is not null) _log("[barra de tareas] restaurada");
-        RemoveHook(); _hiddenByUs = false; _suspendedUntil = DateTime.MinValue; _limiter.Reset(); Status = "";
+        RemoveHook(); _hiddenByUs = false; _suspendedUntil = DateTime.MinValue; _giveUps = 0; _limiter.Reset(); Status = "";
     }
 
     /// <summary>WM-044: si tras ocultar la barra Windows aún reserva la franja inferior del monitor principal, se anota (sin tocar nada) para el diagnóstico.</summary>
@@ -147,7 +147,7 @@ internal sealed class TaskbarHider
             if (idObject != 0 /* OBJID_WINDOW */ || !_enabled || !_hiddenByUs || _suspended) return;
             // cualquier barra de Explorer, no solo las que había al ocultar: la de un monitor que se activó o despertó después (juego a pantalla completa en otro, salir del reposo) también se vuelve a ocultar
             if (!_bars.Contains(hwnd)) { if (ClassOf(hwnd) is not ("Shell_TrayWnd" or "Shell_SecondaryTrayWnd")) return; GetWindowThreadProcessId(hwnd, out uint owner); if (owner != _hookPid) return; _bars.Add(hwnd); }
-            if (!_limiter.Allow(DateTime.UtcNow)) { GiveUp("Windows la volvía a mostrar sin parar; se dejó visible para no parpadear y se reintentará en 2 minutos"); return; }
+            if (DateTime.UtcNow >= _graceUntil && !_limiter.Allow(DateTime.UtcNow)) { GiveUp("Windows la volvía a mostrar sin parar; se dejó visible para no parpadear y se reintentará en unos segundos"); return; }
             ShowWindow(hwnd, SW_HIDE);
             // para el diagnóstico: una línea por minuto como mucho, con qué ventana estaba en primer plano cuando Windows la mostró
             if (DateTime.UtcNow - _lastReshowLog > TimeSpan.FromSeconds(60)) { _lastReshowLog = DateTime.UtcNow; _log($"[barra de tareas] Windows mostró {ClassOf(hwnd)}: se volvió a ocultar (primer plano: {ClassOf(GetForegroundWindow())})"); }

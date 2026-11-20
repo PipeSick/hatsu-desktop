@@ -65,6 +65,14 @@ public class TaskbarTests
     }
 
     [Fact]
+    public void Wm046_first_give_up_retries_fast_and_the_startup_grace_is_longer_than_explorers_boot_burst()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(20), TaskbarPolicy.RetryDelay(1));
+        Assert.Equal(TaskbarPolicy.RetryAfter, TaskbarPolicy.RetryDelay(2));
+        Assert.True(TaskbarPolicy.StartupGrace >= TimeSpan.FromSeconds(20));
+    }
+
+    [Fact]
     public void Wm045_reconciliation_is_idempotent_at_start_after_explorer_restart_and_on_hot_changes()
     {
         // inicio con la barra visible → ocultar; ya oculta → nada; Explorer la recreó (visible, registro presente) → ocultar otra vez; desactivar en caliente → restaurar
