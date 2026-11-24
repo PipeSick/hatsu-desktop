@@ -18,7 +18,7 @@ namespace WinMac.Dock.Win.Rendering;
 /// </summary>
 public sealed class DockHost : IDisposable
 {
-    private const int WM_DESTROY = 2, WM_SETTINGCHANGE = 0x1A, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_NCHITTEST = 0x84, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_MOUSEMOVE = 0x200, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12;
+    private const int WM_DESTROY = 2, WM_SETTINGCHANGE = 0x1A, WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_POWERBROADCAST = 0x218, WM_NCHITTEST = 0x84, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_MOUSEMOVE = 0x200, WM_DPICHANGED = 0x2E0, WM_QUIT = 0x12;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
 
     private DockController _ctl; private DockConfig _cfg;
@@ -150,6 +150,10 @@ public sealed class DockHost : IDisposable
     private void PollInputs()
     {
         ApplyLaunchpadPin();
+        if (_resume.Due(_resumeClock.Elapsed.TotalSeconds) && _hwnd != IntPtr.Zero && !_monitorGone)
+        {   // tras suspender Windows tarda en acomodar pantallas y áreas de trabajo: se reafirma el borde varias veces (ResumeRecovery)
+            _log("[dock] reanudado tras suspender: se reafirma la posición y la reserva"); _appBar?.Forget(); PlaceWindow(show: false); _force = true;
+        }
         if (!Native.GetCursorPos(out var p)) return;
         double sx = (p.X - _winLeftPx) / _scale, sy = (p.Y - _winTopPx) / _scale;
         bool inWin = p.X >= _winLeftPx && p.X < _winLeftPx + _winWpx && p.Y >= _winTopPx && p.Y < _winTopPx + _winHpx;
@@ -293,6 +297,7 @@ public sealed class DockHost : IDisposable
         Native.GetMonitorInfo(Native.MonitorFromPoint(pt, Native.MONITOR_DEFAULTTOPRIMARY), ref mi);
         if (_screen is { } want && (mi.rcMonitor.Left != want.Left || mi.rcMonitor.Top != want.Top || mi.rcMonitor.Right != want.Right || mi.rcMonitor.Bottom != want.Bottom))
         {
+            if (_resume.Active) { _log("[dock] el monitor no coincide justo tras reanudar: se espera a que Windows termine de acomodar las pantallas"); return; }   // lectura transitoria: no cerrar el Dock
             _monitorGone = true; _log($"[dock] el monitor ({want.Left},{want.Top} {want.Width}x{want.Height}) ya no existe: este Dock se cierra"); return;
         }
         _monitor = mi.rcMonitor;
@@ -398,6 +403,7 @@ public sealed class DockHost : IDisposable
     }
 
     // ------------------------------------------------------------------ mensajes
+    private readonly ResumeRecovery _resume = new(); private static readonly System.Diagnostics.Stopwatch _resumeClock = System.Diagnostics.Stopwatch.StartNew();
     private DockAppBar? _appBar; private bool _reserving, _everReserved;
     private const int WM_APPBAR = 0x8000 + 0x51;   // WM_APP + 0x51: AppBar notifications
     private uint _taskbarCreated;
@@ -406,6 +412,7 @@ public sealed class DockHost : IDisposable
     {
         if (_taskbarCreated == 0) _taskbarCreated = Native2.RegisterWindowMessageW("TaskbarCreated");
         if (msg == _taskbarCreated && _taskbarCreated != 0) { _appBar?.Forget(); PlaceWindow(show: false); return IntPtr.Zero; }   // Explorer restarted
+        if (msg == WM_POWERBROADCAST) { if ((long)w is 0x7 /* PBT_APMRESUMESUSPEND */ or 0x12 /* PBT_APMRESUMEAUTOMATIC */) { _resume.Resumed(_resumeClock.Elapsed.TotalSeconds); _log("[dock] Windows reanudó de la suspensión"); } return (IntPtr)1; }
         if (msg == WM_APPBAR) { if ((long)w == 1 /* ABN_POSCHANGED */) PlaceWindow(show: false); return IntPtr.Zero; }
         switch ((int)msg)
         {

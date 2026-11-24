@@ -17,7 +17,7 @@ namespace WinMac.Bar.Win.Rendering;
 /// </summary>
 internal sealed class BarWindow : IWndTarget, IDisposable
 {
-    private const int WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_CAPTURECHANGED = 0x215, WM_RBUTTONUP = 0x205, WM_DPICHANGED = 0x2E0, WM_APP_BAR = 0x8001;
+    private const int WM_MOUSEACTIVATE = 0x21, WM_DISPLAYCHANGE = 0x7E, WM_POWERBROADCAST = 0x218, WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_CAPTURECHANGED = 0x215, WM_RBUTTONUP = 0x205, WM_DPICHANGED = 0x2E0, WM_APP_BAR = 0x8001;
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
     public const string ClassName = "WinMacBar";
 
@@ -116,6 +116,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
         _log($"[bar] AppBar reservado en {Info.Id}: ({abd.rc.Left},{abd.rc.Top})-({abd.rc.Right},{abd.rc.Bottom}) px");
     }
 
+    private readonly ResumeRecovery _resume = new();
     private readonly WorkAreaGuard _workGuard = new(); private static readonly System.Diagnostics.Stopwatch _guardClock = System.Diagnostics.Stopwatch.StartNew(); private bool _reportedUnreserved;
 
     /// <summary>
@@ -255,6 +256,15 @@ internal sealed class BarWindow : IWndTarget, IDisposable
             if (fs != _hiddenForFullscreen) { _hiddenForFullscreen = fs; BarNative.ShowWindow(Hwnd, fs ? 0 : 4 /* SW_SHOWNOACTIVATE */); _force = true; }
             CheckReservation();
         }
+
+        // Tras suspender: Windows tarda en acomodar pantallas y áreas de trabajo; se reafirma la posición y la reserva varias veces (ver ResumeRecovery)
+        if (_resume.Due(_guardClock.Elapsed.TotalSeconds) && Hwnd != IntPtr.Zero && !_disposed)
+        {
+            _log($"[bar] reanudado tras suspender: se reafirma la reserva de {Info.Id}");
+            _host.NotifyDisplayChange();   // reconciliar las barras con los monitores tal como están ahora
+            if (_host.Config.ReserveSpace) { if (_registered) AppBarRemove(); PlaceWindow(); _workGuard.Placed(_guardClock.Elapsed.TotalSeconds); }
+            _force = true;
+        }
     }
 
     /// <summary>Sugerencia del módulo bajo el puntero: aparece tras una pausa y se oculta al salir, pulsar o arrastrar.</summary>
@@ -323,6 +333,9 @@ internal sealed class BarWindow : IWndTarget, IDisposable
                     else if ((long)w == BarNative.ABN_FULLSCREENAPP) BarNative.SetWindowPos(Hwnd, ((long)l != 0 && FullscreenWatcher.ForegroundCoversMonitor()) ? new IntPtr(1) /* HWND_BOTTOM */ : new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE|NOMOVE|NOACTIVATE */);
                     return IntPtr.Zero;
                 case WM_DPICHANGED: if (!_resizing) { _scale = (int)((long)w & 0xFFFF) / 96.0; _dev.SetDpi(_scale); ResizeWindow(); } return IntPtr.Zero;
+                case WM_POWERBROADCAST:
+                    if ((long)w is 0x7 /* PBT_APMRESUMESUSPEND */ or 0x12 /* PBT_APMRESUMEAUTOMATIC */) { _resume.Resumed(_guardClock.Elapsed.TotalSeconds); _log("[bar] Windows reanudó de la suspensión"); }
+                    return (IntPtr)1;   // TRUE: aviso recibido
                 case WM_DISPLAYCHANGE: _host.NotifyDisplayChange(); return IntPtr.Zero;   // el anfitrión espera a que Windows termine de acomodar las pantallas y reconcilia
             }
         }

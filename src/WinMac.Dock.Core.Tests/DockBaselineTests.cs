@@ -129,3 +129,25 @@ public class DockBaselineTests
         Assert.Equal(1080, band.Bottom); Assert.Equal(1080 - (int)Math.Ceiling(M.BarHeight + 6), band.Top);
     }
 }
+
+public sealed class ResumeRecoveryTests
+{
+    [Fact]
+    public void After_a_resume_it_reasserts_once_at_each_step_and_then_stops()
+    {
+        var r = new WinMac.Dock.ResumeRecovery();
+        Assert.False(r.Due(100));                       // nadie reanudó
+        r.Resumed(100);
+        Assert.True(r.Active); Assert.False(r.Due(100.5));   // aún no toca
+        var fired = 0; for (double t = 100; t <= 140; t += 0.5) if (r.Due(t)) fired++;
+        Assert.Equal(WinMac.Dock.ResumeRecovery.Steps.Length, fired);
+        Assert.False(r.Active); Assert.False(r.Due(500));
+    }
+
+    [Fact]
+    public void A_second_resume_restarts_the_schedule()
+    {
+        var r = new WinMac.Dock.ResumeRecovery(); r.Resumed(0); Assert.True(r.Due(2)); r.Resumed(10);
+        Assert.False(r.Due(10.5)); Assert.True(r.Due(12));
+    }
+}
