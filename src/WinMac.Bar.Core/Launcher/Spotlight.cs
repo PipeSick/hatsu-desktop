@@ -302,6 +302,22 @@ public sealed class SpotlightController
         Query += c; Pending = -1; return true;
     }
 
+    /// <summary>
+    /// Ctrl+V / Mayús+Insertar: añade al final de la consulta el texto del portapapeles. Una sola línea (los saltos pasan a espacios), sin caracteres de control y hasta el
+    /// límite de 200 caracteres de la consulta. Puro: quien llama lee el portapapeles. Devuelve true si la consulta cambió.
+    /// </summary>
+    public bool Paste(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        var clean = new System.Text.StringBuilder(text.Length);
+        foreach (var ch in text) clean.Append(ch is '\r' or '\n' or '\t' ? ' ' : char.IsControl(ch) ? '\0' : ch);
+        var line = System.Text.RegularExpressions.Regex.Replace(clean.ToString().Replace("\0", ""), " {2,}", " ").Trim(); if (line.Length == 0) return false;
+        var room = 200 - Query.Length; if (room <= 0) return false;
+        if (line.Length > room) { line = line[..room]; if (line.Length > 0 && char.IsHighSurrogate(line[^1])) line = line[..^1]; }   // no partir un par sustituto
+        if (line.Length == 0) return false;
+        Query += line; Pending = -1; return true;
+    }
+
     public (SpotCommand Command, bool TextChanged) Key(int vk, bool ctrl) => Key(vk, ctrl, shift: false);
 
     public (SpotCommand Command, bool TextChanged) Key(int vk, bool ctrl, bool shift)

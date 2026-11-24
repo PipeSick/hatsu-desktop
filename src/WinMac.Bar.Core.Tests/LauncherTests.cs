@@ -422,3 +422,30 @@ public class SpotlightRelevanceTests
         Assert.Contains(SpotlightEngine.Query("descar", Apps, null, Folders, []), i => i.Kind == SpotKind.Folder);
     }
 }
+
+public sealed class SpotlightPasteTests
+{
+    [Fact]
+    public void Paste_appends_the_clipboard_text_as_one_clean_line()
+    {
+        var c = new WinMac.Bar.Launcher.SpotlightController(); c.Char('a');
+        Assert.True(c.Paste("  hola\r\nmundo\t!\u0007  "));
+        Assert.Equal("ahola mundo !", c.Query);
+    }
+
+    [Fact]
+    public void Paste_ignores_empty_or_blank_text_and_respects_the_200_character_limit()
+    {
+        var c = new WinMac.Bar.Launcher.SpotlightController();
+        Assert.False(c.Paste(null)); Assert.False(c.Paste("")); Assert.False(c.Paste(" \r\n\t "));
+        Assert.True(c.Paste(new string('x', 500))); Assert.Equal(200, c.Query.Length);
+        Assert.False(c.Paste("más"));   // ya no cabe nada
+    }
+
+    [Fact]
+    public void Paste_never_splits_a_surrogate_pair_at_the_limit()
+    {
+        var c = new WinMac.Bar.Launcher.SpotlightController(); c.Paste(new string('x', 199)); Assert.False(c.Paste("😀"));   // 1 libre: no cabe el par entero, y no se pega media letra
+        Assert.Equal(199, c.Query.Length);
+    }
+}

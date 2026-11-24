@@ -22,6 +22,27 @@ namespace WinMac.Bar.Win.Launcher;
 internal sealed class SpotlightWindow : IDisposable
 {
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
+    /// <summary>Texto del portapapeles (CF_UNICODETEXT), o null si no hay texto o está ocupado por otra app.</summary>
+    private static string? ClipboardText()
+    {
+        for (int i = 0; i < 5; i++) { if (OpenClipboard(IntPtr.Zero)) goto opened; System.Threading.Thread.Sleep(10); }
+        return null;
+        opened:
+        try
+        {
+            var h = GetClipboardData(13 /* CF_UNICODETEXT */); if (h == IntPtr.Zero) return null;
+            var p = GlobalLock(h); if (p == IntPtr.Zero) return null;
+            try { return Marshal.PtrToStringUni(p); } finally { GlobalUnlock(h); }
+        }
+        finally { CloseClipboard(); }
+    }
+
+    [DllImport("user32.dll")] private static extern bool OpenClipboard(IntPtr owner);
+    [DllImport("user32.dll")] private static extern bool CloseClipboard();
+    [DllImport("user32.dll")] private static extern IntPtr GetClipboardData(uint format);
+    [DllImport("kernel32.dll")] private static extern IntPtr GlobalLock(IntPtr mem);
+    [DllImport("kernel32.dll")] private static extern bool GlobalUnlock(IntPtr mem);
+
     private const int WM_MOUSEMOVE = 0x200, WM_LBUTTONUP = 0x202, WM_RBUTTONUP = 0x205, WM_ACTIVATE = 0x6, WM_KEYDOWN = 0x100, WM_CHAR = 0x102, WM_SYSKEYDOWN = 0x104;
 
     private readonly SpotlightController _ctl = new();
@@ -331,6 +352,13 @@ internal sealed class SpotlightWindow : IDisposable
                 case WM_KEYDOWN or WM_SYSKEYDOWN:
                 {
                     bool ctrl = (BarNative.GetKeyState(0x11) & 0x8000) != 0, shift = (BarNative.GetKeyState(0x10) & 0x8000) != 0;
+                    // Pegar: Ctrl+V o Mayús+Insertar (el campo es propio, dibujado: Windows no pega solo; Ctrl+V solo llegaba como un carácter de control y se ignoraba)
+                    if (((int)w == 0x56 && ctrl && !shift) || ((int)w == 0x2D && shift && !ctrl))
+                    {
+                        if (_ctl.Paste(ClipboardText())) { _dirty = true; _onCommand(SpotCommand.Redraw, true); }
+                        return IntPtr.Zero;
+                    }
+
                     var (c, changed) = _ctl.Key((int)w, ctrl, shift); _dirty = true;
                     if (c.Kind != SpotCommandKind.None || changed) _onCommand(c, changed);
                     return IntPtr.Zero;
