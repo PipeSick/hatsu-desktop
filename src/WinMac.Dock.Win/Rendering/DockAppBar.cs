@@ -23,7 +23,12 @@ internal sealed class DockAppBar(IntPtr hwnd, uint callbackMessage, Action<strin
         {
             abd.uCallbackMessage = callbackMessage;
             _registered = SHAppBarMessage(ABM_NEW, ref abd) != 0;
-            if (!_registered) { log("[dock] ABM_NEW falló: el Dock no puede reservar su espacio (se superpone)"); return monitor.Bottom; }
+            if (!_registered)
+            {   // ABM_NEW también falla si Windows YA tiene esta ventana registrada (p. ej. tras un «TaskbarCreated» que no fue un reinicio real de Explorer, o tras reanudar): se libera y se reintenta una vez
+                var stale = New(); SHAppBarMessage(ABM_REMOVE, ref stale); abd = New(); _registered = SHAppBarMessage(ABM_NEW, ref abd) != 0;
+                log(_registered ? "[dock] ABM_NEW falló (registro previo): se liberó y se volvió a registrar" : "[dock] ABM_NEW falló: el Dock no puede reservar su espacio (se superpone)");
+                if (!_registered) return monitor.Bottom;
+            }
         }
 
         abd = New(); abd.uEdge = ABE_BOTTOM;

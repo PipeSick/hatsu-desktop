@@ -100,6 +100,33 @@ public class RestartPolicyTests
     }
 
     [Fact]
+    public async Task A_suspend_of_the_whole_pc_does_not_restart_modules_that_were_healthy()
+    {
+        var f = new Fixture().With(("bar", true), ("dock", true)); await f.StartAllAsync(); await f.ReadyAsync("bar"); await f.ReadyAsync("dock");
+        await f.AdvanceHealthyAsync(TimeSpan.FromSeconds(20), "bar", "dock");
+        var bar = f.Launcher.Last("bar"); var dock = f.Launcher.Last("dock");
+        f.Clock.Jump(TimeSpan.FromHours(2));                                                      // suspensión: el reloj avanza, nadie corre ni contesta
+        await f.AdvanceHealthyAsync(TimeSpan.FromSeconds(30), "bar", "dock");                      // al volver, los módulos contestan con normalidad
+        Assert.False(bar.Killed); Assert.False(dock.Killed); Assert.Equal(1, f.Launcher.Count("bar")); Assert.Equal(1, f.Launcher.Count("dock"));
+    }
+
+    [Fact]
+    public async Task After_a_suspend_a_module_that_really_stopped_answering_is_still_restarted()
+    {
+        var f = new Fixture().With(("bar", true)); await f.StartAllAsync(); await f.ReadyAsync("bar"); var first = f.Launcher.Last("bar");
+        f.Clock.Jump(TimeSpan.FromHours(2)); f.Bus.OnSend = null;                                  // nunca vuelve a contestar
+        await f.Clock.AdvanceAsync(TimeSpan.FromSeconds(30)); Assert.True(first.Killed);           // el aviso de suspensión da un margen, no una inmunidad
+    }
+
+    [Fact]
+    public void The_stall_threshold_is_twice_the_hang_time_so_normal_hiccups_never_count_as_a_suspend()
+    {
+        var i = TimeSpan.FromSeconds(5);
+        Assert.False(SupervisorStall.WasStalled(TimeSpan.FromSeconds(5), i, 3)); Assert.False(SupervisorStall.WasStalled(TimeSpan.FromSeconds(25), i, 3));
+        Assert.True(SupervisorStall.WasStalled(TimeSpan.FromMinutes(5), i, 3));
+    }
+
+    [Fact]
     public async Task A_healthy_module_answering_pings_is_left_alone_for_minutes()
     {
         var f = new Fixture().With(("bar", true)); await f.StartAllAsync(); await f.ReadyAsync("bar");

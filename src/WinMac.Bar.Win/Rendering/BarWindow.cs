@@ -106,16 +106,30 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     private void AppBarSetPosCore()
     {
         var abd = new BarNative.APPBARDATA { cbSize = (uint)Marshal.SizeOf<BarNative.APPBARDATA>(), hWnd = Hwnd, uCallbackMessage = WM_APP_BAR };
-        if (!_registered) { _registered = BarNative.SHAppBarMessage(BarNative.ABM_NEW, ref abd) != 0; if (!_registered) { _log($"[bar] ABM_NEW falló en {Info.Id}: la barra se muestra superpuesta, sin reservar espacio."); return; } }
+        if (!_registered)
+        {
+            _registered = BarNative.SHAppBarMessage(BarNative.ABM_NEW, ref abd) != 0;
+            if (!_registered)
+            {   // ABM_NEW también falla si Windows YA tiene esta ventana registrada (registro real: tras el «TaskbarCreated» que Hatsu difunde al arrancar la bandeja, la barra olvidaba su registro
+                // y desde entonces cada intento fallaba para siempre, sin poder reafirmar la reserva ni al reanudar de la suspensión). Se libera el registro previo y se reintenta una vez.
+                var stale = new BarNative.APPBARDATA { cbSize = (uint)Marshal.SizeOf<BarNative.APPBARDATA>(), hWnd = Hwnd }; BarNative.SHAppBarMessage(BarNative.ABM_REMOVE, ref stale);
+                abd = new BarNative.APPBARDATA { cbSize = (uint)Marshal.SizeOf<BarNative.APPBARDATA>(), hWnd = Hwnd, uCallbackMessage = WM_APP_BAR };
+                _registered = BarNative.SHAppBarMessage(BarNative.ABM_NEW, ref abd) != 0;
+                if (!_registered) { _log($"[bar] ABM_NEW falló en {Info.Id}: la barra se muestra superpuesta, sin reservar espacio."); return; }
+                _log($"[bar] ABM_NEW falló en {Info.Id} (registro previo): se liberó y se volvió a registrar.");
+            }
+        }
         abd.uEdge = BarNative.ABE_TOP; abd.rc = new BarNative.RECT { Left = _monitor.Left, Top = _monitor.Top, Right = _monitor.Right, Bottom = _monitor.Top + _winHpx };
         BarNative.SHAppBarMessage(BarNative.ABM_QUERYPOS, ref abd);
         abd.rc.Bottom = abd.rc.Top + _winHpx;   // QUERYPOS ajusta el borde; la altura la fijamos nosotros
         BarNative.SHAppBarMessage(BarNative.ABM_SETPOS, ref abd);
         _winLeftPx = abd.rc.Left; _winTopPx = abd.rc.Top; _winWpx = abd.rc.Width;
         _workGuard.Placed(_guardClock.Elapsed.TotalSeconds);
-        _log($"[bar] AppBar reservado en {Info.Id}: ({abd.rc.Left},{abd.rc.Top})-({abd.rc.Right},{abd.rc.Bottom}) px");
+        var reserved = $"[bar] AppBar reservado en {Info.Id}: ({abd.rc.Left},{abd.rc.Top})-({abd.rc.Right},{abd.rc.Bottom}) px";
+        if (reserved != _lastReservedLog) { _lastReservedLog = reserved; _log(reserved); }   // el mismo aviso repetido llenaba bar.log (miles de líneas); solo se anota cuando cambia
     }
 
+    private string? _lastReservedLog;
     private readonly ResumeRecovery _resume = new();
     private readonly WorkAreaGuard _workGuard = new(); private static readonly System.Diagnostics.Stopwatch _guardClock = System.Diagnostics.Stopwatch.StartNew(); private bool _reportedUnreserved;
 

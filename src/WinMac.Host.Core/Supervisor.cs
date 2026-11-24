@@ -193,6 +193,7 @@ public sealed class Supervisor
 
     private async Task<Outcome> WatchAsync(Runner r, IModuleProcess proc, DateTime startedAt, CancellationTokenSource stop)
     {
+        var lastTick = _clock.UtcNow;
         while (true)
         {
             using var tick = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
@@ -203,9 +204,26 @@ public sealed class Supervisor
             if (done == proc.Exited) return Outcome.Exit;
             if (stop.IsCancellationRequested) return Outcome.Stop;
             var now = _clock.UtcNow;
+            // El equipo se suspendió (o el host estuvo congelado): durante ese rato NINGÚN módulo pudo contestar, y al volver `now - LastPong` es enorme. Eso no es un
+            // módulo colgado: reiniciar la Barra, el Dock y la Isla justo al reanudar (registro real: «sin latido» de los tres a la vez tras suspender) deja las barras a medias.
+            var stall = now - lastTick; lastTick = now;
+            if (SupervisorStall.WasStalled(stall, _p.HeartbeatInterval, _p.MissedBeats))
+            {
+                Log($"[{r.Spec.Id}] el equipo estuvo suspendido o detenido {stall.TotalSeconds:0} s: no cuenta como falta de latido");
+                r.LastPong = now; startedAt = now;
+                if (r.ReadySeen) _bus.Send(r.Spec.Id, Ipc.MsgType.Ping);
+                continue;
+            }
+
             if (!r.ReadySeen) { if (now - startedAt > _p.ReadyTimeout) return Outcome.NeverReady; continue; }
             _bus.Send(r.Spec.Id, Ipc.MsgType.Ping);
             if (now - r.LastPong > _p.HeartbeatInterval * _p.MissedBeats) return Outcome.Hung;
         }
     }
+}
+
+/// <summary>Puro: ¿el hueco entre dos vueltas del vigilante fue tan largo que el equipo estuvo suspendido o congelado? (más del doble del tiempo que tarda en darse por colgado un módulo).</summary>
+public static class SupervisorStall
+{
+    public static bool WasStalled(TimeSpan sinceLastTick, TimeSpan heartbeatInterval, int missedBeats) => sinceLastTick > heartbeatInterval * missedBeats * 2;
 }

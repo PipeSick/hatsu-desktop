@@ -5,6 +5,9 @@ internal sealed class ManualClock : IClock
     private DateTime _now = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc); private readonly List<(DateTime Due, TaskCompletionSource Tcs)> _w = [];
     public DateTime UtcNow { get { lock (_w) return _now; } }
 
+    /// <summary>Salta el reloj de golpe SIN despertar a nadie por el camino (como una suspensión: el equipo no corre mientras tanto).</summary>
+    public void Jump(TimeSpan d) { lock (_w) _now += d; }
+
     public Task Delay(TimeSpan d, CancellationToken ct)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
