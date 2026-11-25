@@ -147,3 +147,9 @@ Cada fase termina con: implementado · verificado en Linux · compila en Windows
 - Reescribir el pintor toca la ventana que ya funciona: se hace detrás de la misma interfaz de modelo y con el pintor antiguo disponible hasta Fase 6.
 - Las capturas de CI no son tu pantalla; la aprobación visual es tuya.
 - Medidas de rendimiento solo fiables en Windows real.
+
+## 13. Decisiones del propietario (registradas tras la Fase 0)
+- **D1-D3 aprobadas:** Direct2D propio con motor de layout nuevo (mide el texto real), ventana redimensionable/maximizable, campo `settingsTheme` (Automático por defecto).
+- **D4 (a construir de verdad, con backend y prueba cada una):** color de acento de la Isla · factor de ampliación del Dock (slider) · altura y densidad de la Barra. Cada una añade un campo de configuración con valor por defecto igual al comportamiento actual (sin cambiar lo que ya ve el usuario) y prueba de ida y vuelta con un `winmac.json` antiguo. Quedan **fuera**: agrupación de la Barra, posición del Dock en otros bordes, reordenar prioridades de la Isla, rueda del ratón, gestos multitáctiles.
+- **D5 autorizada:** feed de solo lectura Barra → Host (nombre, conexión, batería que ya se leen). Sin dato = «Sin dato».
+- **D6 autorizada:** push de validación **solo de `feat/settings-v2`** para el CI de Windows. Sin merge, pines ni releases.
