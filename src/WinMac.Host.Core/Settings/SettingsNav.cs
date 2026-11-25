@@ -153,6 +153,17 @@ public static partial class SettingsBuilder
         Add(connect, "Dispositivos", "iPhone (Hatsu Connect)", "phone"); Add(periphPage, "Dispositivos");
         Add(Get("ext"), "Avanzado", "Extensiones y diagnóstico");
         foreach (var p in pages.Where(p => result.All(r => r.Id != p.Id) && p.Id != "clip")) result.Add(p with { Section = "Avanzado" });   // cualquier página nueva no se pierde
+        // Diagnóstico: los dos botones salen de General y viven en «Extensiones y diagnóstico» (mismo id, misma acción).
+        string[] diagIds = ["diagnose.run", "logs.open"];
+        var diagRows = result.SelectMany(p => p.Groups).SelectMany(g => g.Rows).Where(r => diagIds.Contains(r.Id)).ToList();
+        if (diagRows.Count > 0 && result.Any(p => p.Id == "ext"))
+            for (int i = 0; i < result.Count; i++)
+            {
+                var pg = result[i];
+                if (pg.Id == "ext") result[i] = pg with { Groups = [.. pg.Groups, new SettingsGroup("Diagnóstico", diagRows, "El informe se guarda en tu equipo y no se envía nada.")] };
+                else if (pg.Groups.Any(g => g.Rows.Any(r => diagIds.Contains(r.Id))))
+                    result[i] = pg with { Groups = pg.Groups.Select(g => g with { Rows = g.Rows.Where(r => !diagIds.Contains(r.Id)).ToList() }).Where(g => g.Rows.Count > 0).ToList() };
+            }
         return Compose(result.Select(p => p with { Subtitle = p.Subtitle ?? Subtitles.GetValueOrDefault(p.Id) }).ToList());
     }
 }
