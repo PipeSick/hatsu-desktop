@@ -193,7 +193,7 @@ public static class SettingsLayout
         // si no caben con el alto de la ventana, las separaciones se estrechan (hasta un mínimo) en vez de cortar la lista
         double item = SideItemH, head = SideHeaderH, gap = SideHeaderGap, top = SideTop;
         double need() => top + pages.Count * (item + 2) + headers * (head + gap) + 8;
-        if (need() > WinH) { top = 96; gap = 3; head = 18; }
+        if (need() > WinH) { top = 106; gap = 3; head = 18; }
         if (need() > WinH) item = 30;
         if (need() > WinH) item = 27;
         double y = top;
