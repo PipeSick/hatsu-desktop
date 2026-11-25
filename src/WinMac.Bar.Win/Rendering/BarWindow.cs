@@ -167,6 +167,9 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     {
         if (Hwnd == IntPtr.Zero) return;
         var holes = _host.Holes; var win = WindowRect;
+        // Al cambiar el recorte (la Isla se pliega y la barra recupera su espacio) hay que repintar la ventana ENTERA: sin eso la franja recién devuelta mostraba restos
+        // (bordes raros) hasta el siguiente repintado por otro motivo, cerca de un segundo después. Causa inferida del reporte; sin validar en Windows real.
+        _force = true;
         if (!YieldRegions.Touches(win, holes)) { BarNative.SetWindowRgn(Hwnd, IntPtr.Zero, true); return; }   // nada que ceder: ventana completa
         var rgn = BarNative.CreateRectRgn(0, 0, 0, 0);
         foreach (var p in YieldRegions.Visible(win, holes))
