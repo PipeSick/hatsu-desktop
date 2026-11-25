@@ -153,3 +153,36 @@ Cada fase termina con: implementado · verificado en Linux · compila en Windows
 - **D4 (a construir de verdad, con backend y prueba cada una):** color de acento de la Isla · factor de ampliación del Dock (slider) · altura y densidad de la Barra. Cada una añade un campo de configuración con valor por defecto igual al comportamiento actual (sin cambiar lo que ya ve el usuario) y prueba de ida y vuelta con un `winmac.json` antiguo. Quedan **fuera**: agrupación de la Barra, posición del Dock en otros bordes, reordenar prioridades de la Isla, rueda del ratón, gestos multitáctiles.
 - **D5 autorizada:** feed de solo lectura Barra → Host (nombre, conexión, batería que ya se leen). Sin dato = «Sin dato».
 - **D6 autorizada:** push de validación **solo de `feat/settings-v2`** para el CI de Windows. Sin merge, pines ni releases.
+
+## 14. Estado de implementación (Settings V2)
+**Implementado y verificado en Linux (448 + 782 + 239 pruebas) y compilado en Windows por el CI** (revisión visual en un PC real: pendiente, la hace el propietario).
+
+| Área | Estado |
+|---|---|
+| Tema Claro / Oscuro / Automático (`settingsTheme`) | Hecho. Contraste WCAG comprobado por prueba. |
+| Ventana redimensionable/maximizable, mínimo 900×600, contenido centrado hasta 1280 | Hecho. Sin solapes de 700 a 3840 px (prueba). |
+| 13 páginas, barra lateral con categorías, buscador con «Abrir en <página>» | Hecho. Los 207 ids originales siguen existiendo (prueba con la matriz). |
+| General (tarjeta principal, componentes, apariencia) | Hecho. |
+| Barra / Dock / Isla con interruptor del módulo arriba y vista previa | Hecho. |
+| Módulos (galería de 10 con estado real) | Hecho. |
+| Atajos y gestos (monitor con esquinas, selectores con la acción a la derecha) | Hecho. |
+| iPhone (tarjeta con 7 estados) y Periféricos (tarjeta por dispositivo) | Hecho; datos reales por la Barra (solo lectura, sin dato nuevo). Sin batería informada = «Sin dato», nunca un porcentaje. |
+| Spotlight, Notificaciones y portapapeles, Capturas, Clima | Rehechas con el sistema común (sin mockup propio). |
+| Extensiones y diagnóstico (con los botones de informe y registros) | Hecho; salieron de General. |
+
+**Opciones nuevas que sí hacen algo (D4)** — todas con el valor de siempre por defecto y persistidas en la configuración existente, sin migración:
+- `settings.theme` (General): `HostConfig.SettingsTheme`.
+- `dock.zoom` (Dock): factor de ampliación 1,2–2,2× (defecto 1,7), en `dock.json`.
+- `bar.height` y `bar.density` (Barra): 22–40 px (defecto 28) y Cómoda/Normal/Compacta.
+- `notch.accent` (Isla): Violeta (defecto), Azul, Verde, Rosa, Naranja, Grafito; viaja por la configuración central a NotchWin (pin `7ae4caf`), que repinta en vivo. Los seis colores cumplen contraste ≥ 4,5:1 en claro y oscuro.
+
+**Fuera de alcance (acordado)**: agrupar iconos de la barra, Dock en otros bordes, reordenar prioridades de la Isla, rueda del ratón, multitáctil, actualizador/canal/idioma, estado de carga del iPhone, «Desemparejar».
+
+### Lista de validación en tu PC
+1. Cierra Hatsu de la Store, descomprime el paquete portable y abre `HatsuDesktop.exe`; Ajustes desde la bandeja.
+2. Tema Claro/Oscuro/Automático; cambia el tema de Windows con «Automático».
+3. Redimensiona, maximiza y mueve la ventana entre monitores con escalas distintas (100–200 %).
+4. Cada página: ¿se corta o se solapa algo? ¿cada interruptor/campo cambia lo que dice? Cierra y vuelve a abrir Hatsu: ¿se conserva?
+5. Dock zoom, altura/densidad de la Barra y color de acento de la Isla: se aplican en vivo.
+6. iPhone y Periféricos con la Barra encendida: tarjetas con datos reales.
+7. Búsqueda: «batería», «tema», «zoom» y salto a la página.
