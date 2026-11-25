@@ -28,6 +28,11 @@ public sealed record BarConfig
     /// <summary>Fracción central del ancho que se deja libre (p. ej. para una app tipo «notch»). 0 = sin hueco.</summary>
     public double CenterGap { get; init; } = 0.30;
 
+    /// <summary>Settings V2: alto de la barra en DIP (22–40). 28 es el de siempre; una configuración anterior sin este campo sigue valiendo.</summary>
+    public int BarHeight { get; init; } = 28;
+    /// <summary>Settings V2: espaciado entre los elementos: «Comfortable», «Normal» (el de siempre) o «Compact».</summary>
+    public string IconDensity { get; init; } = "Normal";
+
     // ── Control Center, paneles y menús (la barra «real»)
     public bool ShowBluetooth { get; init; } = true;
     public bool ShowControlCenter { get; init; } = true;
@@ -200,6 +205,8 @@ public sealed record BarConfig
         Language = Language == "en" ? "en" : "es",
         CaptureModifiers = Launcher.HotkeyAudit.CaptureModifierIds.Contains(CaptureModifiers) ? CaptureModifiers : "CtrlShift",
         CenterGap = double.IsFinite(CenterGap) ? Math.Clamp(CenterGap, 0, 0.6) : 0.30,
+        BarHeight = Math.Clamp(BarHeight, 22, 40),
+        IconDensity = IconDensity is "Comfortable" or "Compact" ? IconDensity : "Normal",
         CalendarIcsPath = string.IsNullOrWhiteSpace(CalendarIcsPath) ? null : CalendarIcsPath.Trim().Trim('"'),
         HubRefreshMs = Math.Clamp(HubRefreshMs, 500, 10_000),
         CaptureDelaySeconds = CaptureDelaySeconds switch { <= 0 => 0, <= 3 => 3, <= 5 => 5, _ => 10 },

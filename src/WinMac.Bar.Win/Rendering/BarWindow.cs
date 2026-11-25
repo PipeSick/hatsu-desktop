@@ -21,7 +21,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     private const uint WS_POPUP = 0x80000000, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
     public const string ClassName = "WinMacBar";
 
-    private readonly BarHost _host; private readonly BarMetrics _m = new(); private readonly Action<string> _log;
+    private readonly BarHost _host; private BarMetrics _m = new(); private readonly Action<string> _log;
     private BarNative.RECT _monitor;
     private double _scale = 1; private int _winLeftPx, _winTopPx, _winWpx, _winHpx;
     private D2DDevice _dev = null!; private IDXGISwapChain1 _swap = null!; private ID2D1Bitmap1? _bmp, _blurred;
@@ -34,7 +34,7 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     public BarWindow(BarHost host, MonitorSnapshot snap, BarConfig cfg, BarState initial, Action<string> log)
     {
         _host = host; _log = log; Info = snap.Info; _monitor = snap.Rect; _scale = snap.Info.Scale; _theme = host.Theme;
-        Ctl = new BarController(_m, cfg, initial);
+        _m = BarMetrics.For(cfg); Ctl = new BarController(_m, cfg, initial);
     }
 
     public BarController Ctl { get; }
@@ -249,7 +249,8 @@ internal sealed class BarWindow : IWndTarget, IDisposable
     public void ApplyConfig(BarConfig old, BarConfig c)
     {
         Ctl.Config = c;
-        if (old.ReserveSpace != c.ReserveSpace) PlaceWindow();
+        if (old.BarHeight != c.BarHeight || old.IconDensity != c.IconDensity) { _m = BarMetrics.For(c); Ctl.Metrics = _m; _painter.Metrics = _m; ResizeWindow(); }   // alto y densidad en vivo: se recrea la superficie y se vuelve a reservar el borde
+        else if (old.ReserveSpace != c.ReserveSpace) PlaceWindow();
         if (old.Background != c.Background) { _painter.Background = c.Background; BuildBackdrop(); }
         _force = true;
     }

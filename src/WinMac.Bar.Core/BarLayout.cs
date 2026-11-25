@@ -3,6 +3,14 @@ namespace WinMac.Bar;
 /// <summary>Medidas en DIP. Provisionales (sin referencia de macOS todavía): ver docs/12 §D5.</summary>
 public sealed record BarMetrics
 {
+    /// <summary>Medidas según la configuración (alto y densidad). Con los valores por defecto es idéntico a <c>new BarMetrics()</c>.</summary>
+    public static BarMetrics For(BarConfig c) => c.IconDensity switch
+    {
+        "Comfortable" => new BarMetrics { Height = Math.Clamp(c.BarHeight, 22, 40), ItemPadX = 10, ItemGap = 4 },
+        "Compact" => new BarMetrics { Height = Math.Clamp(c.BarHeight, 22, 40), ItemPadX = 5, ItemGap = 1 },
+        _ => new BarMetrics { Height = Math.Clamp(c.BarHeight, 22, 40) },
+    };
+
     public double Height { get; init; } = 28;
     public double PadX { get; init; } = 12;           // margen lateral de la barra
     public double ItemPadX { get; init; } = 8;        // margen interno de cada elemento (zona de resalte)

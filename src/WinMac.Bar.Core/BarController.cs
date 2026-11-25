@@ -6,13 +6,13 @@ public sealed record BarView(BarFrame Frame, BarState State, int HoverIndex, IRe
 /// <summary>Comportamiento de la barra (sin Windows): estado → elementos → distribución, resalte con suavizado, y clic → acción. El núcleo no ejecuta nada.</summary>
 public sealed class BarController
 {
-    private readonly BarMetrics _m; private BarConfig _cfg; private BarState _state; private BarFrame _frame = new([], 0, 0);
+    private BarMetrics _m; private BarConfig _cfg; private BarState _state; private BarFrame _frame = new([], 0, 0);
     private double[] _alpha = []; private int _hover = -1; private double _width;
     private Func<string, bool, double> _measure = (t, _) => t.Length * 7;
 
     public BarController(BarMetrics m, BarConfig cfg, BarState initial) { _m = m; _cfg = cfg; _state = initial; }
 
-    public BarMetrics Metrics => _m;
+    public BarMetrics Metrics { get => _m; set { _m = value; Relayout(); } }
     public BarConfig Config { get => _cfg; set { _cfg = value; Relayout(); } }
     public BarState State { get => _state; set { _state = value; Relayout(); } }
     /// <summary>Medida de texto del render (ancho en DIP).</summary>

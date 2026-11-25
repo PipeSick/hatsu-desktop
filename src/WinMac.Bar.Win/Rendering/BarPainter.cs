@@ -13,7 +13,7 @@ namespace WinMac.Bar.Win.Rendering;
 /// </summary>
 public sealed class BarPainter : IDisposable
 {
-    private readonly D2DDevice _dev; private readonly ID2D1DeviceContext _ctx; private readonly BarMetrics _m;
+    private readonly D2DDevice _dev; private readonly ID2D1DeviceContext _ctx; private BarMetrics _m;
     private readonly IDWriteFactory _dw; private readonly IDWriteTextFormat _regular, _bold, _logo;
     private readonly ID2D1SolidColorBrush _solid; private readonly ID2D1StrokeStyle _round;
     private ID2D1Bitmap? _backdrop;
@@ -38,6 +38,9 @@ public sealed class BarPainter : IDisposable
     }
 
     /// <summary>Fondo ya desenfocado del tamaño de la barra (nivel Glass). null = sin fondo.</summary>
+    /// <summary>Settings V2: alto/densidad nuevos (los tipos de letra no dependen de ellos).</summary>
+    public BarMetrics Metrics { set => _m = value; }
+
     public void SetBackdrop(ID2D1Bitmap? blurred) => _backdrop = blurred;
 
     public double Measure(string text, bool bold)

@@ -219,6 +219,8 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("mod:notch", "toggle"): cfg.SetModuleEnabled("notch", e.On); return true;
             case ("host.hidetaskbar", "toggle"): cfg.SetHideTaskbar(e.On); return true;
             case ("autostart", "toggle"): setAutostart(e.On); cfg.SetAutostartFlag(e.On); return true;
+            case ("bar.height", "slider"): cfg.ApplyBarPatch(Patch("barHeight", (int)Math.Round(22 + Math.Clamp(e.Number, 0, 100) / 100 * 18))); return true;
+            case ("bar.density", "segment") when e.Index is >= 0 and <= 2: cfg.ApplyBarPatch(Patch("iconDensity", SettingsBuilder.DensityValues[e.Index])); return true;
             case ("bar.bg", "segment") when e.Index >= 0 && e.Index < SettingsBuilder.BackgroundValues.Length: cfg.ApplyBarPatch(Patch("background", SettingsBuilder.BackgroundValues[e.Index])); return true;
             case ("bar.orderreset", _): cfg.ApplyBarPatch(Patch("barOrder", "")); return true;
             case ("bar.capmods", "segment") when e.Index >= 0 && e.Index < WinMac.Bar.Launcher.HotkeyAudit.CaptureModifierIds.Length: cfg.ApplyBarPatch(Patch("captureModifiers", WinMac.Bar.Launcher.HotkeyAudit.CaptureModifierIds[e.Index])); return true;

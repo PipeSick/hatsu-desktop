@@ -307,3 +307,26 @@ public class SettingsV2DockZoomTests
         var row = page.Groups.SelectMany(g => g.Rows).Single(r => r.Id == "dock.zoom"); Assert.False(row.Enabled); Assert.Equal("1,2×", row.SliderLabel(row.Value));
     }
 }
+
+public class SettingsV2BarSizeTests
+{
+    [Fact]
+    public void Bar_height_and_density_default_to_the_old_look_and_are_clamped()
+    {
+        var def = new WinMac.Bar.BarConfig(); Assert.Equal(28, def.BarHeight); Assert.Equal("Normal", def.IconDensity);
+        var m = WinMac.Bar.BarMetrics.For(def); var plain = new WinMac.Bar.BarMetrics(); Assert.Equal(plain.Height, m.Height); Assert.Equal(plain.ItemPadX, m.ItemPadX); Assert.Equal(plain.ItemGap, m.ItemGap);   // por defecto, idéntico a siempre
+        Assert.Equal(22, new WinMac.Bar.BarConfig { BarHeight = 3 }.Sanitize().BarHeight); Assert.Equal(40, new WinMac.Bar.BarConfig { BarHeight = 999 }.Sanitize().BarHeight); Assert.Equal("Normal", new WinMac.Bar.BarConfig { IconDensity = "x" }.Sanitize().IconDensity);
+        Assert.True(WinMac.Bar.BarMetrics.For(new WinMac.Bar.BarConfig { IconDensity = "Compact" }).ItemPadX < plain.ItemPadX); Assert.True(WinMac.Bar.BarMetrics.For(new WinMac.Bar.BarConfig { IconDensity = "Comfortable" }).ItemPadX > plain.ItemPadX);
+        var old = System.Text.Json.JsonSerializer.Deserialize<WinMac.Bar.BarConfig>("{}")!; Assert.Equal(28, old.BarHeight);   // una configuración anterior sigue valiendo
+    }
+
+    [Fact]
+    public void The_settings_rows_patch_the_real_bar_config()
+    {
+        var cfg = new ConfigService(Path.GetTempFileName(), new HostConfig()); var a = new SettingsActions(cfg, () => { }, _ => { });
+        Assert.True(a.Apply(new SettingsEdit("bar.height", "slider", Number: 100))); Assert.Equal(40, cfg.Current.Bar!.BarHeight);
+        Assert.True(a.Apply(new SettingsEdit("bar.density", "segment", Index: 2))); Assert.Equal("Compact", cfg.Current.Bar!.IconDensity);
+        var rows = SettingsBuilder.Build(new SettingsInput(cfg.Current, new Dictionary<string, ModuleState>(), false)).Single(p => p.Id == "bar").Groups.SelectMany(g => g.Rows).ToDictionary(r => r.Id);
+        Assert.Equal("40 px", rows["bar.height"].SliderLabel(rows["bar.height"].Value)); Assert.Equal(2, rows["bar.density"].Selected);
+    }
+}

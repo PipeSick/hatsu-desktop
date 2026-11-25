@@ -95,6 +95,7 @@ public static partial class SettingsBuilder
         ("ltAutoCopy", "Copiar el texto al reconocerlo", b => b.LtAutoCopy),
         ("ltAutoShelf", "Guardar el texto reconocido en la estantería", b => b.LtAutoShelf),
     ];
+    public static readonly string[] DensityNames = ["Cómoda", "Normal", "Compacta"], DensityValues = ["Comfortable", "Normal", "Compact"];
     public static readonly string[] ThemeModeNames = ["Automático", "Claro", "Oscuro"];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];
@@ -201,6 +202,8 @@ public static partial class SettingsBuilder
         [
             new("Apariencia", [
                 new(RowKind.Segmented, "bar.bg", "Fondo", Options: SettingsBuilder.BackgroundNames, Selected: Index(BackgroundValues, bar.Background.ToString())),
+                new(RowKind.Slider, "bar.height", "Altura de la barra", "De 22 a 40 px (28 es el valor de siempre)", Value: (bar.BarHeight - 22) / 18.0 * 100, SliderMin: 22, SliderMax: 40, Unit: "px"),
+                new(RowKind.Segmented, "bar.density", "Densidad de los iconos", "Espacio entre los elementos de la barra", Options: DensityNames, Selected: Array.IndexOf(DensityValues, bar.IconDensity) < 0 ? 1 : Array.IndexOf(DensityValues, bar.IconDensity)),
             ]),
             .. BarIconGroups(bar),
             new("Elementos", [Bar(3), Bar(5), Bar(6), Bar(7), Bar(8),
