@@ -61,6 +61,8 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
     public Func<string, bool>? RetryModule { get; set; }
     /// <summary>Genera el informe de diagnóstico local (solo lectura) y lo abre.</summary>
     public Action? RunDiagnostics { get; set; }
+    /// <summary>Abre la carpeta REAL de los registros en el Explorador (con el paquete de la Store no es la de AppData\Local\WinMac).</summary>
+    public Action? OpenLogsFolder { get; set; }
     /// <summary>Reabre el asistente de primera ejecución (no borra nada: solo lo muestra con las elecciones actuales).</summary>
     public Action? RunOnboarding { get; set; }
 
@@ -197,6 +199,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
         switch (id, e.Kind)
         {
             case ("diagnose.run", _): if (RunDiagnostics is null) return false; RunDiagnostics(); return true;
+            case ("logs.open", _): if (OpenLogsFolder is null) return false; OpenLogsFolder(); return true;
             case ("dock.size", "segment") when e.Index >= 0 && e.Index < WinMac.Dock.DockSettings.Presets.Length: return Dock(d => WinMac.Dock.DockSettings.WithIconSize(d, WinMac.Dock.DockSettings.Presets[e.Index].Size));
             case ("dock.fine", "slider"): return Dock(d => WinMac.Dock.DockSettings.WithIconSize(d, SettingsBuilder.DockFineSize(e.Number)));
             case ("dock.magnify", "toggle"): return Dock(d => d with { MagnificationEnabled = e.On });

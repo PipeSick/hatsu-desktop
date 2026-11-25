@@ -61,6 +61,15 @@ public class FailureClassificationTests
         Assert.True(a.Apply(new SettingsEdit("module.retry:dock", "button"))); Assert.Equal("dock", retried); Assert.True(a.Apply(new SettingsEdit("diagnose.run", "button"))); Assert.Equal(1, diag);
         Assert.False(new SettingsActions(cfg, () => { }, _ => { }).Apply(new SettingsEdit("module.retry:dock", "button")));
     }
+
+    [Fact] public void General_has_a_button_that_opens_the_logs_folder_and_it_only_calls_the_host_callback()
+    {
+        var rows = SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState> { ["bar"] = ModuleState.Running }, false)).Single(p => p.Id == "general").Groups.SelectMany(g => g.Rows).ToList();
+        Assert.Contains(rows, r => r.Id == "logs.open" && r.Kind == RowKind.Button);
+        var cfg = new ConfigService(Path.Combine(Path.GetTempPath(), "hatsu-p31b.json"), new HostConfig()); int opened = 0;
+        Assert.True(new SettingsActions(cfg, () => { }, _ => { }) { OpenLogsFolder = () => opened++ }.Apply(new SettingsEdit("logs.open", "button"))); Assert.Equal(1, opened);
+        Assert.False(new SettingsActions(cfg, () => { }, _ => { }).Apply(new SettingsEdit("logs.open", "button")));
+    }
 }
 
 public class MigrationWelcomeTests

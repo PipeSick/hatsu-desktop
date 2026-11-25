@@ -169,6 +169,11 @@ internal static class HostApp
             settings.ConnectDiag = connectDiag = new ConnectDiagnosticsService(AppContext.BaseDirectory.TrimEnd('\\'), log, (t, d) => bus.Emit(t, d), settings.Refresh);   // docs/58
             controller.CallStatusReceived = d => connectDiag?.SetCallStatus(d);
             settings.RunDiagnostics = () => _ = Task.Run(() => { try { var f = InstallDiagnose.Run(o, null, open: true, print: false); log("[host] informe de diagnóstico: " + (f ?? "no se pudo guardar")); } catch (Exception e) { log("[host] informe de diagnóstico falló: " + e.Message); } });
+            settings.OpenLogsFolder = () => _ = Task.Run(() =>
+            {   // la carpeta real: con el paquete de la Store no es AppData\Local\WinMac (Windows la redirige a Packages\…\LocalCache)
+                try { var dir = ReportPaths.RealLogsDir; Directory.CreateDirectory(dir); using var _ = Process.Start(new ProcessStartInfo("explorer.exe", "\"" + dir + "\"") { UseShellExecute = false }); log("[host] carpeta de registros abierta: " + dir.Replace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "%USERPROFILE%")); }
+                catch (Exception e) { log("[host] no se pudo abrir la carpeta de registros: " + e.GetType().Name); }
+            });
             var win = settings; controller.SettingsRequested = section => uiActions.Enqueue(() => win.Show(section));
             tray = new Tray(() => sup.States, RequestQuit, id => { if (sup.States.TryGetValue(id, out var st) && st == ModuleState.Disabled) config.SetModuleEnabled(id, true); else sup.Restart(id); }, settings.Show, log, showIcon: !o.NoTray);
             tray.TaskbarCreated = () => taskbar.OnTaskbarCreated(config.Current.HideTaskbar);

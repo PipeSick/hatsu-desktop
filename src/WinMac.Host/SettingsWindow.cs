@@ -76,6 +76,7 @@ internal sealed class SettingsWindow : IDisposable
     }
     private ConnectDiagnosticsService? _connectDiag;
     public Action? RunDiagnostics { get => _actions.RunDiagnostics; set => _actions.RunDiagnostics = value; }
+    public Action? OpenLogsFolder { get => _actions.OpenLogsFolder; set => _actions.OpenLogsFolder = value; }
     public Action? ClearClipboard { get => _actions.ClearClipboard; set => _actions.ClearClipboard = value; }
     /// <summary>WM-034: estado real de la ocultación de la barra de tareas para la página Escritorio y Dock.</summary>
     public Func<string>? TaskbarStatus { get; set; }
