@@ -359,7 +359,7 @@ internal sealed class SettingsPainter : IDisposable
         RR(dx, dy, dw, dh, dh * 0.34, new Color4(1, 1, 1, 0.20f)); RRStroke(dx, dy, dw, dh, dh * 0.34, new Color4(1, 1, 1, 0.38f), 1f);
         for (int i = 0; i < n; i++)
         {
-            double ix = dx + gap + i * (icon + gap), iy = dy + gap * 0.8 - (r.Row.On && i == 3 ? icon * 0.18 : 0), sz = r.Row.On && i == 3 ? icon * 1.18 : icon;
+            double ix = dx + gap + i * (icon + gap), iy = dy + gap * 0.8 - (r.Row.On && i == 3 ? icon * (r.Row.Selected / 10.0 - 1) * 0.28 : 0), sz = r.Row.On && i == 3 ? icon * (1 + (r.Row.Selected / 10.0 - 1) * 0.32) : icon;
             Gradient(ix - (sz - icon) / 2, iy - (sz - icon) / 2, sz, sz, C(AppColors[i % AppColors.Length]), C(AppColors[i % AppColors.Length] & 0x7F7F7F | 0x202020), sz * 0.24);
             if (i is 0 or 2 or 3 or 5) Dot(ix + icon / 2, dy + dh - gap * 0.45, 2, new Color4(1, 1, 1, 0.85f));
         }

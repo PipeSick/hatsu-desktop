@@ -86,7 +86,7 @@ internal static class Program
         bool demo = args.Contains("--demo"); string? persist = args.Contains("--no-config") ? null : cfgPath;
         if (demo || args.Contains("--single"))   // demostración o un solo Dock (en el monitor principal), como antes
         {
-            using var host = new DockHost(cfg, DockMetrics.ForIconSize(cfg.IconSize), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), demo, Log, persist);
+            using var host = new DockHost(cfg, DockMetrics.ForIconSize(cfg.IconSize, cfg.MagnificationScale), GlassStyle.For(SystemTheme.Resolve(cfg.Theme)), demo, Log, persist);
             var link1 = ModuleHostLink.FromArgs(args, "dock", typeof(Program).Assembly.GetName().Version?.ToString() ?? "0");
             if (link1 is not null) { link1.ShutdownRequested += host.RequestQuit; link1.HealthCheck = () => host.Responsive; link1.Start(); Log("Modo hosted: enlazado con HatsuDesktop.exe."); }
             Log("Iniciando dock…");
@@ -110,7 +110,7 @@ internal static class Program
                     var c = persist is null ? cfg : DockSettings.Sanitize(DockConfig.LoadOrDefault(persist, DockDefaults.Create));   // lo último guardado (otro Dock puede haberlo cambiado)
                     if (tier is GlassTier tt) c = c with { GlassTier = tt };
                     if (themeArg is ThemeMode tmm) c = c with { Theme = tmm };
-                    h = new DockHost(c, DockMetrics.ForIconSize(c.IconSize), GlassStyle.For(SystemTheme.Resolve(c.Theme)), false, Log, persist, mon);
+                    h = new DockHost(c, DockMetrics.ForIconSize(c.IconSize, c.MagnificationScale), GlassStyle.For(SystemTheme.Resolve(c.Theme)), false, Log, persist, mon);
                     lock (gate) fleet.Add((key, h, Thread.CurrentThread));
                     ready.Set();
                     Log($"Iniciando dock en el monitor {key}…");

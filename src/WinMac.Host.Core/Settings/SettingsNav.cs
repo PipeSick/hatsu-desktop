@@ -49,8 +49,8 @@ public static partial class SettingsBuilder
                 }
                 case "dock":
                 {
-                    var fine = Find("dock.fine"); var mag = Find("dock.magnify");
-                    if (fine is not null) groups.Insert(0, new SettingsGroup(null, [new SettingsRow(RowKind.Preview, "dock.preview", "Vista previa del Dock", Value: fine?.Value ?? 50, On: mag?.On ?? true, SliderMin: fine?.SliderMin ?? 32, SliderMax: fine?.SliderMax ?? 96, Unit: fine?.Unit)]));
+                    var fine = Find("dock.fine"); var mag = Find("dock.magnify"); var zr = Find("dock.zoom"); int zoom10 = zr is null ? 17 : (int)Math.Round((zr.SliderMin + zr.Value / 100 * (zr.SliderMax - zr.SliderMin)) * 10);
+                    if (fine is not null) groups.Insert(0, new SettingsGroup(null, [new SettingsRow(RowKind.Preview, "dock.preview", "Vista previa del Dock", Value: fine?.Value ?? 50, On: mag?.On ?? true, Selected: zoom10, SliderMin: fine?.SliderMin ?? 32, SliderMax: fine?.SliderMax ?? 96, Unit: fine?.Unit)]));
                     break;
                 }
 

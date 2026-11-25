@@ -182,7 +182,7 @@ public sealed class DockHost : IDisposable
     /// <summary>Añade a las métricas la holgura de la vista previa (la ventana crece hacia arriba y a los lados; la barra no cambia).</summary>
     private DockMetrics Compose(DockMetrics m, DockConfig cfg) => !_demo && cfg.PreviewsEnabled ? m with { PreviewHeadroom = PreviewSpec.Headroom(m), PreviewMaxWidth = Math.Min(PreviewSpec.MaxPanelWidth, Math.Max(PreviewSpec.MinPanelW + 40, ScreenWidthDip() - 2 * m.ShadowMargin - 24)) } : m;
 
-    private (double, DockAlignment, double, double) _appliedLayout; private bool _appliedPreviews;
+    private (double, DockAlignment, double, double, double) _appliedLayout; private bool _appliedPreviews;
 
     /// <summary>Aplica en vivo un cambio de tamaño, alineación o altura: el tamaño reconstruye controlador y painter con las métricas nuevas; lo demás solo recoloca la ventana.</summary>
     private void ApplyLayoutChange()
@@ -198,12 +198,12 @@ public sealed class DockHost : IDisposable
             if ((Cfg.ReserveSpace && !Cfg.AutoHide) != _reserving && _hwnd != IntPtr.Zero) PlaceWindow(show: false);   // only the reservation changed
             return;
         }
-        bool sizeChanged = key.Item1 != _appliedLayout.Item1 || previewsChanged; _appliedLayout = key; _appliedPreviews = _cfg.PreviewsEnabled;
+        bool sizeChanged = key.Item1 != _appliedLayout.Item1 || key.Item5 != _appliedLayout.Item5 || previewsChanged; _appliedLayout = key; _appliedPreviews = _cfg.PreviewsEnabled;
         if (_hwnd == IntPtr.Zero) { _ctl.Config = Cfg; return; }
         _pressed = -1; _pressDrag = false;
         if (sizeChanged)
         {
-            var items = _ctl.Items; _m = Compose(DockMetrics.ForIconSize(_cfg.IconSize), _cfg);
+            var items = _ctl.Items; _m = Compose(DockMetrics.ForIconSize(_cfg.IconSize, _cfg.MagnificationScale), _cfg);
             _ctl = NewController(); _ctl.SetItems(items);
             var old = _painter; _painter = new DockPainter(_dev, _m, _glass, _icons, _thumbs); old.Dispose();
         }

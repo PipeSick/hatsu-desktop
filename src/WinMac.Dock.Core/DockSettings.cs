@@ -12,6 +12,9 @@ public readonly record struct PxRect(int Left, int Top, int Right, int Bottom)
 /// </summary>
 public static class DockSettings
 {
+    public const double DefaultMagnification = 1.7, MinMagnification = 1.2, MaxMagnification = 2.2;
+    public static double ClampMagnification(double s) => double.IsNaN(s) ? DefaultMagnification : Math.Round(Math.Clamp(s, MinMagnification, MaxMagnification), 1);
+
     public const double DefaultIconSize = 48, MinIconSize = 28, MaxIconSize = 128, DefaultEdgeMargin = 16, MaxBottomOffset = 400, NudgeStep = 8;
 
     /// <summary>
@@ -43,10 +46,10 @@ public static class DockSettings
     public static DockConfig ResetBottom(DockConfig c) => c.BottomOffset == 0 ? c : c with { BottomOffset = 0 };
 
     /// <summary>Configuración tal como la sanea el Dock al cargarla (un archivo editado a mano con valores absurdos no rompe nada).</summary>
-    public static DockConfig Sanitize(DockConfig c) => c with { IconSize = ClampIconSize(c.IconSize), BottomOffset = ClampBottom(c.BottomOffset), EdgeMargin = double.IsNaN(c.EdgeMargin) ? DefaultEdgeMargin : Math.Clamp(c.EdgeMargin, 0, 200) };
+    public static DockConfig Sanitize(DockConfig c) => c with { MagnificationScale = ClampMagnification(c.MagnificationScale), IconSize = ClampIconSize(c.IconSize), BottomOffset = ClampBottom(c.BottomOffset), EdgeMargin = double.IsNaN(c.EdgeMargin) ? DefaultEdgeMargin : Math.Clamp(c.EdgeMargin, 0, 200) };
 
     /// <summary>¿Cambió algo que obliga a recolocar o reescalar la ventana?</summary>
-    public static (double, DockAlignment, double, double) LayoutKey(DockConfig c) => (c.IconSize, c.Alignment, c.EdgeMargin, c.BottomOffset);
+    public static (double, DockAlignment, double, double, double) LayoutKey(DockConfig c) => (c.IconSize, c.Alignment, c.EdgeMargin, c.BottomOffset, ClampMagnification(c.MagnificationScale));
 
     /// <summary>
     /// Esquina superior izquierda de la ventana (px). Centro y altura normal = exactamente la posición de siempre (centrada sobre la barra de tareas).

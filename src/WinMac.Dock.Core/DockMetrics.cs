@@ -36,10 +36,10 @@ public sealed record DockMetrics
     /// Métricas para un tamaño de ícono dado: BaseSize y todo lo que depende de él ya escalan solo (son proporciones); aquí se escalan además las dos medidas ABSOLUTAS
     /// que dependen del tamaño (alcance de la magnificación y salto), para que el Dock se vea igual de proporcionado a cualquier tamaño. Con 60 = idéntico al aprobado.
     /// </summary>
-    public static DockMetrics ForIconSize(double size)
+    public static DockMetrics ForIconSize(double size, double magnification = DockSettings.DefaultMagnification)
     {
         var d = new DockMetrics(); size = DockSettings.ClampIconSize(size); double k = size / d.BaseSize;
-        return d with { BaseSize = size, Radius = d.Radius * k, BounceHeight = d.BounceHeight * k };
+        return d with { BaseSize = size, Radius = d.Radius * k, BounceHeight = d.BounceHeight * k, MaxScale = DockSettings.ClampMagnification(magnification) };
     }
 
     // ── Derivados en DIP ──

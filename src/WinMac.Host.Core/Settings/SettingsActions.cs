@@ -205,6 +205,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("dock.fine", "slider"): return Dock(d => WinMac.Dock.DockSettings.WithIconSize(d, SettingsBuilder.DockFineSize(e.Number)));
             case ("settings.theme", "segment") when e.Index is >= 0 and <= 2: { string v = ((SettingsV2.SettingsThemeMode)e.Index).ToString(); cfg.Update(c => c with { SettingsTheme = v }); return true; }
             case ("dock.magnify", "toggle"): return Dock(d => d with { MagnificationEnabled = e.On });
+            case ("dock.zoom", "slider"): { double sc = WinMac.Dock.DockSettings.ClampMagnification(WinMac.Dock.DockSettings.MinMagnification + Math.Clamp(e.Number, 0, 100) / 100 * (WinMac.Dock.DockSettings.MaxMagnification - WinMac.Dock.DockSettings.MinMagnification)); return Dock(d => d with { MagnificationScale = sc }); }
             case ("dock.autohide", "toggle"): return Dock(d => d with { AutoHide = e.On });
             case ("dock.reserve", "toggle"): return Dock(d => d with { ReserveSpace = e.On });
             case ("dock.game", "toggle"): return Dock(d => d with { GameMode = e.On });

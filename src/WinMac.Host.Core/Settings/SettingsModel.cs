@@ -13,7 +13,7 @@ public sealed record SettingsRow(RowKind Kind, string Id, string Title, string? 
     double SliderMin = 0, double SliderMax = 100, string? Unit = null, string? Icon = null)
 {
     /// <summary>What the slider shows for a 0–100 position: the real value in its unit (WM-019: the Dock's fine size showed «29» for 48 points).</summary>
-    public string SliderLabel(double v) => Math.Round(SliderMin + Math.Clamp(v, 0, 100) / 100 * (SliderMax - SliderMin)) + (Unit is null ? "" : " " + Unit);
+    public string SliderLabel(double v) { double x = SliderMin + Math.Clamp(v, 0, 100) / 100 * (SliderMax - SliderMin); return Unit == "×" ? Math.Round(x, 1).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',') + "×" : Math.Round(x) + (Unit is null ? "" : " " + Unit); }
 }
 
 /// <param name="Cards">Settings V2: las filas se muestran como tarjetas en cuadrícula (cada una sigue siendo la misma fila con el mismo id y la misma acción).</param>
@@ -348,6 +348,7 @@ public static partial class SettingsBuilder
                 new(RowKind.Segmented, "dock.size", "Tamaño de los iconos", $"{d.IconSize:0} puntos (a 150 % de escala, 1,5 veces más píxeles)", Enabled: enabled, Reason: off, Options: names, Selected: sel),
                 new(RowKind.Slider, "dock.fine", "Ajuste fino", $"De {WinMac.Dock.DockSettings.MinIconSize:0} a {DockFineMax:0} puntos", Enabled: enabled, Reason: off, Value: DockFineValue(d.IconSize), SliderMin: WinMac.Dock.DockSettings.MinIconSize, SliderMax: DockFineMax, Unit: "pt"),
                 new(RowKind.Toggle, "dock.magnify", "Ampliación al pasar el ratón", null, d.MagnificationEnabled, enabled, off),
+                new(RowKind.Slider, "dock.zoom", "Factor de ampliación", "Cuánto crece el icono bajo el cursor (de 1,2× a 2,2×)", Enabled: enabled && d.MagnificationEnabled, Reason: !enabled ? off : "Activa la ampliación arriba", Value: (WinMac.Dock.DockSettings.ClampMagnification(d.MagnificationScale) - WinMac.Dock.DockSettings.MinMagnification) / (WinMac.Dock.DockSettings.MaxMagnification - WinMac.Dock.DockSettings.MinMagnification) * 100, SliderMin: WinMac.Dock.DockSettings.MinMagnification, SliderMax: WinMac.Dock.DockSettings.MaxMagnification, Unit: "×"),
             ], "El tamaño se ajusta a la escala de cada monitor (DPI): el mismo valor se ve igual de grande en todas las pantallas."),
             new("Comportamiento", [
                 new(RowKind.Toggle, "dock.autohide", "Ocultar automáticamente", "Aparece al llevar el ratón al borde inferior", d.AutoHide, enabled, off),

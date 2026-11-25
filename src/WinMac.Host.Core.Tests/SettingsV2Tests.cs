@@ -282,3 +282,28 @@ public class SettingsV2DevicePagesTests
         Assert.NotNull(WinMac.Bar.Notch.DevicesFeed.Payload(all));
     }
 }
+
+public class SettingsV2DockZoomTests
+{
+    [Fact]
+    public void The_dock_zoom_is_a_real_setting_with_the_old_value_as_default()
+    {
+        Assert.Equal(1.7, new WinMac.Dock.DockConfig().MagnificationScale);
+        var old = System.Text.Json.JsonSerializer.Deserialize<WinMac.Dock.DockConfig>("{\"version\":4}", WinMac.Dock.DockConfig.Json)!; Assert.Equal(1.7, old.MagnificationScale);   // un dock.json anterior sigue valiendo
+        Assert.Equal(1.2, WinMac.Dock.DockSettings.Sanitize(new WinMac.Dock.DockConfig { MagnificationScale = 0.1 }).MagnificationScale);
+        Assert.Equal(2.2, WinMac.Dock.DockSettings.Sanitize(new WinMac.Dock.DockConfig { MagnificationScale = 9 }).MagnificationScale);
+        Assert.Equal(1.7, WinMac.Dock.DockSettings.Sanitize(new WinMac.Dock.DockConfig { MagnificationScale = double.NaN }).MagnificationScale);
+        Assert.Equal(2.0, WinMac.Dock.DockMetrics.ForIconSize(48, 2.0).MaxScale); Assert.Equal(1.7, WinMac.Dock.DockMetrics.ForIconSize(48).MaxScale);
+        Assert.NotEqual(WinMac.Dock.DockSettings.LayoutKey(new WinMac.Dock.DockConfig()), WinMac.Dock.DockSettings.LayoutKey(new WinMac.Dock.DockConfig { MagnificationScale = 2.0 }));   // cambiar el factor reescala la ventana
+    }
+
+    [Fact]
+    public void The_zoom_slider_edits_dock_json_and_is_disabled_without_magnification()
+    {
+        var cfg = new ConfigService(Path.GetTempFileName(), new HostConfig()); var dock = new WinMac.Dock.DockConfig(); var a = new SettingsActions(cfg, () => { }, _ => { }) { LoadDock = () => dock, SaveDock = d => dock = d };
+        Assert.True(a.Apply(new SettingsEdit("dock.zoom", "slider", Number: 100))); Assert.Equal(2.2, dock.MagnificationScale);
+        Assert.True(a.Apply(new SettingsEdit("dock.zoom", "slider", Number: 0))); Assert.Equal(1.2, dock.MagnificationScale);
+        var page = SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), false) { Dock = dock with { MagnificationEnabled = false } }).Single(p => p.Id == "dock");
+        var row = page.Groups.SelectMany(g => g.Rows).Single(r => r.Id == "dock.zoom"); Assert.False(row.Enabled); Assert.Equal("1,2×", row.SliderLabel(row.Value));
+    }
+}

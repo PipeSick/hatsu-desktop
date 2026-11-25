@@ -29,6 +29,8 @@ public sealed record DockConfig
     public int Version { get; init; } = 4;
     public List<PinnedApp> Pinned { get; init; } = [];
     public bool MagnificationEnabled { get; init; } = true;
+    /// <summary>Settings V2: cuánto crece el icono bajo el cursor (1,2–2,2×). Por defecto 1,7, lo de siempre; un archivo anterior sin este campo sigue valiendo.</summary>
+    public double MagnificationScale { get; init; } = DockSettings.DefaultMagnification;
     public bool AutoHide { get; init; } = false;
     /// <summary>WM-001: reservar el espacio del Dock en el área de trabajo (AppBar de Windows) para que no tape las ventanas maximizadas. Sin efecto con autoocultación.</summary>
     public bool ReserveSpace { get; init; } = true;
