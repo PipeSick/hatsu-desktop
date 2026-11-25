@@ -9,7 +9,7 @@ namespace WinMac.Host.App;
 /// </summary>
 internal static class InstallDiagnose
 {
-    public static string DefaultFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "diagnostico.txt");
+    public static string DefaultFile => Path.Combine(ReportPaths.ReportsDir, "diagnostico.txt");   // con paquete MSIX, fuera de AppData: el Bloc de notas moderno no ve la ruta virtualizada
 
     public static string Collect(HostOptions o)
     {
@@ -28,7 +28,10 @@ internal static class InstallDiagnose
         List<string> barTail = []; try { var bl = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "bar.log"); if (File.Exists(bl)) barTail = File.ReadLines(bl).TakeLast(400).ToList(); } catch (Exception) { }
         var input = new DiagnosticsInput(version, dir, Environment.OSVersion.VersionString, DateTime.Now.ToString("yyyy-MM-dd HH:mm"), cfg, File.Exists(o.ConfigPath), legacy, auto, File.Exists(TaskbarLease.DefaultPath), sigs, procs.ToList(), tail, sec,
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.UserName, ReadMonitors(), barTail);
-        return InstallDiagnostics.Build(input);
+        var text = InstallDiagnostics.Build(input);
+        // Dónde están DE VERDAD los registros: con el paquete de la Store Windows los guarda en Packages\…\LocalCache y la carpeta «WinMac» de AppData\Local no existe
+        var where = "== Dónde están los registros (host.log, bar.log, dock.log…)\n  " + ReportPaths.RealLogsDir.Replace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "%USERPROFILE%") + "\n";
+        return text.Contains("== Fin del informe") ? text.Replace("== Fin del informe", where + "\n== Fin del informe") : text + "\n" + where;
     }
 
     // ── monitores y área de trabajo (solo lectura: EnumDisplayMonitors + GetMonitorInfo)

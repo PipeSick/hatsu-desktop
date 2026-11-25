@@ -49,7 +49,7 @@ internal static class SecurityDiagnostics
     public static int Run(bool quiet)
     {
         string report = BuildReport(out int hits); string dir = AppContext.BaseDirectory.TrimEnd('\\');
-        string outFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "security-report.txt");
+        string outFile = Path.Combine(ReportPaths.ReportsDir, "security-report.txt");
         try { Directory.CreateDirectory(Path.GetDirectoryName(outFile)!); File.WriteAllText(outFile, report); } catch (Exception) { outFile = "(no se pudo guardar)"; }
         try { Console.WriteLine(report); } catch (Exception) { }
         if (!quiet) MessageBoxW(IntPtr.Zero, (hits == 0 ? "No se encontraron bloqueos recientes de archivos de Hatsu Desktop." : $"Se encontraron {hits} evento(s) de seguridad sobre archivos de Hatsu Desktop.") + "\n\nInforme: " + outFile, "Hatsu Desktop — diagnóstico de seguridad", 0x40);

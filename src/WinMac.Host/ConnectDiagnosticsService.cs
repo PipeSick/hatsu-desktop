@@ -23,7 +23,7 @@ internal sealed class ConnectDiagnosticsService
         bool changed; lock (_gate) { changed = _callStatus != text; _callStatus = text; }
         if (changed) _refresh();
     }
-    private string ReportPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "connect-probe-calls.txt");
+    private string ReportPath => Path.Combine(ReportPaths.ReportsDir, "connect-probe-calls.txt");
 
     public ConnectDiagnosticsService(string exeDir, Action<string> log, Action<string, object?> emit, Action refresh) { _exeDir = exeDir; _log = log; _emit = emit; _refresh = refresh; }
 

@@ -62,3 +62,29 @@ public class Phase32Tests
             if (!f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")) Assert.DoesNotContain("SetWindowsHookEx", File.ReadAllText(f));
     }
 }
+
+public sealed class PackagePathsTests
+{
+    private const string Full = "PipeSick.HatsuDesktop_2.0.10.0_x64__83tr6qzbbarj8";
+
+    [Fact]
+    public void The_family_name_comes_from_the_package_full_name_and_bad_input_gives_null()
+    {
+        Assert.Equal("PipeSick.HatsuDesktop_83tr6qzbbarj8", WinMac.Host.PackagePaths.FamilyName(Full));
+        Assert.Null(WinMac.Host.PackagePaths.FamilyName(null)); Assert.Null(WinMac.Host.PackagePaths.FamilyName("")); Assert.Null(WinMac.Host.PackagePaths.FamilyName("sin_formato"));
+    }
+
+    [Fact]
+    public void With_the_store_package_reports_go_outside_AppData_and_the_real_logs_are_under_Packages()
+    {
+        Assert.Equal(Path.Combine("D", "Hatsu Desktop"), WinMac.Host.PackagePaths.ReportsDir("L", "D", Full));
+        Assert.Equal(Path.Combine("L", "Packages", "PipeSick.HatsuDesktop_83tr6qzbbarj8", "LocalCache", "Local", "WinMac", "logs"), WinMac.Host.PackagePaths.RealLogsDir("L", Full));
+    }
+
+    [Fact]
+    public void Without_a_package_nothing_changes()
+    {
+        Assert.Equal(Path.Combine("L", "WinMac", "logs"), WinMac.Host.PackagePaths.ReportsDir("L", "D", null));
+        Assert.Equal(Path.Combine("L", "WinMac", "logs"), WinMac.Host.PackagePaths.RealLogsDir("L", null));
+    }
+}

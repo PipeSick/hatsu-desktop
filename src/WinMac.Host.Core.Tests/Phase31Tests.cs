@@ -116,7 +116,7 @@ public class MigrationWelcomeTests
         string root = FindRoot(); var win = File.ReadAllText(Path.Combine(root, "src", "WinMac.Bar.Win", "Rendering", "BarWindow.cs")); var host = File.ReadAllText(Path.Combine(root, "src", "WinMac.Bar.Win", "Shell", "Tray", "TrayHost.cs"));
         Assert.Contains("_host.RunAppBarOp(AppBarSetPosCore)", win); Assert.Contains("_host.RunAppBarOp(AppBarRemoveCore)", win);
         foreach (var core in new[] { "AppBarSetPosCore", "AppBarRemoveCore" }) { int i = win.IndexOf("private void " + core + "()", StringComparison.Ordinal); Assert.True(i > 0); }
-        Assert.Equal(4, System.Text.RegularExpressions.Regex.Matches(win, @"SHAppBarMessage\(").Count);   // NEW, QUERYPOS, SETPOS y REMOVE: todas dentro de los dos métodos envueltos
+        Assert.Equal(6, System.Text.RegularExpressions.Regex.Matches(win, @"SHAppBarMessage\(").Count);   // NEW, REMOVE+NEW (reintento si ya estaba registrada), QUERYPOS, SETPOS y REMOVE: todas dentro de los dos métodos envueltos
         Assert.Contains("HWND_NOTOPMOST", host); Assert.Contains("WithExplorerDirect", host); Assert.Contains("if (_suspended) return;", host);   // mientras dura la operación, el temporizador no vuelve a subir el proxy
     }
 
