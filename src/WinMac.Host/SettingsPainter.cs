@@ -96,6 +96,11 @@ internal sealed class SettingsPainter : IDisposable
             case "search": Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)(cx - s * .18), (float)(cy - s * .18)), (float)(s * .58), (float)(s * .58)), _b, 1.7f); Ln(cx + s * .25, cy + s * .25, cx + s * .85, cy + s * .85, c, 2f); break;
             case "clipboard": RRStroke(cx - s * .72, cy - s * .7, s * 1.44, s * 1.6, s * .2, c, 1.6f); RR(cx - s * .35, cy - s * .9, s * .7, s * .34, s * .1, c); break;
             case "bell": RRStroke(cx - s * .62, cy - s * .78, s * 1.24, s * 1.3, s * .55, c, 1.6f); Ln(cx - s * .9, cy + s * .5, cx + s * .9, cy + s * .5, c, 1.6f); Dot(cx, cy + s * .82, 1.4, c); break;
+            case "grid": for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++) RRStroke(cx - s * .85 + i * s * .95, cy - s * .85 + j * s * .95, s * .75, s * .75, s * .15, c, 1.5f); break;
+            case "snap": RRStroke(cx - s, cy - s * .75, s * 2, s * 1.5, s * .2, c, 1.5f); Ln(cx, cy - s * .75, cx, cy + s * .75, c, 1.5f); break;
+            case "text": Ln(cx - s * .8, cy - s * .55, cx + s * .8, cy - s * .55, c, 1.8f); Ln(cx, cy - s * .55, cx, cy + s * .8, c, 1.8f); Ln(cx - s * .45, cy + s * .8, cx + s * .45, cy + s * .8, c, 1.5f); break;
+            case "gesture": for (int i = 0; i < 3; i++) Dot(cx - s * .6 + i * s * .6, cy + (i == 1 ? -s * .25 : s * .25), 2.2, c); Ln(cx - s * .6, cy + s * .25, cx, cy - s * .25, c, 1.3f); Ln(cx, cy - s * .25, cx + s * .6, cy + s * .25, c, 1.3f); break;
+            case "shelf": RRStroke(cx - s * .9, cy - s * .2, s * 1.8, s * .95, s * .2, c, 1.6f); Ln(cx - s * .9, cy - s * .2, cx - s * .5, cy - s * .7, c, 1.5f); Ln(cx - s * .5, cy - s * .7, cx + s * .5, cy - s * .7, c, 1.5f); Ln(cx + s * .5, cy - s * .7, cx + s * .9, cy - s * .2, c, 1.5f); break;
             case "periph": RRStroke(cx - s * .55, cy - s * .9, s * 1.1, s * 1.8, s * .55, c, 1.6f); Ln(cx, cy - s * .9, cx, cy - s * .15, c, 1.5f); break;
             case "chevron": Ln(cx - s * .3, cy - s * .62, cx + s * .3, cy, c, 1.8f); Ln(cx + s * .3, cy, cx - s * .3, cy + s * .62, c, 1.8f); break;
             case "up": Ln(cx - s * .55, cy + s * .25, cx, cy - s * .3, c, 1.8f); Ln(cx, cy - s * .3, cx + s * .55, cy + s * .25, c, 1.8f); break;
@@ -109,6 +114,8 @@ internal sealed class SettingsPainter : IDisposable
         ["general"] = 0x8B5CF6, ["bar"] = 0x3B82F6, ["dock"] = 0x14B8A6, ["notch"] = 0xA855F7, ["modules"] = 0x8E8AA6, ["gestures"] = 0x0EA5E9, ["spot"] = 0x06B6D4,
         ["nc"] = 0xDB5EA9, ["capture"] = 0x8E8AA6, ["weather"] = 0x3B9BEF, ["connect"] = 0x3B82F6, ["periph"] = 0x14A38B, ["ext"] = 0x8B5CF6,
     };
+    private static readonly Dictionary<string, int> GlyphColors = new() { ["bar"] = 0x3B82F6, ["dock"] = 0x14B8A6, ["island"] = 0xA855F7, ["phone"] = 0x3B82F6, ["grid"] = 0x6366F1, ["snap"] = 0x0EA5E9, ["text"] = 0xF59E0B, ["search"] = 0x06B6D4, ["gesture"] = 0xDB5EA9, ["shelf"] = 0x14A38B };
+    private static int ColorOfGlyph(string? g) => g is not null && GlyphColors.TryGetValue(g, out var c) ? c : 0x8B5CF6;
     private static int ColorOf(string pageId) => PageColors.TryGetValue(pageId, out var c) ? c : 0x8B5CF6;
 
     /// <summary>Degradado lineal entre dos colores en un rectángulo (vertical u horizontal).</summary>
@@ -249,17 +256,25 @@ internal sealed class SettingsPainter : IDisposable
     {
         var row = r.Row; float dim = row.Enabled ? 1f : 0.5f; bool hover = c.Hover is { } hv && hv.Id == row.Id;
         Shadow(r.X, r.Y, r.W, r.H, 16); RR(r.X, r.Y, r.W, r.H, 16, hover ? Raised : Card); RRStroke(r.X, r.Y, r.W, r.H, 16, hover ? new Color4(Tint.R, Tint.G, Tint.B, 0.5f) : Sep, hover ? 1.3f : 0.9f);
-        Tile(r.X + 16, r.Y + 18, 48, ColorOf(row.Icon switch { "bar" => "bar", "dock" => "dock", "phone" => "connect", "island" => "notch", _ => "general" }), row.Icon ?? "gear");
+        Tile(r.X + 16, r.Y + 18, 48, ColorOfGlyph(row.Icon), row.Icon ?? "gear");
         double tx = r.X + 16 + 48 + 14, sw = SettingsLayout.SwitchW, tw = r.W - (tx - r.X) - sw - 24;
         Text(row.Title, _cardTitle, tx, r.Y + 18, tw, 22, Label(dim));
         var sub = SettingsLayout.SubText(row); Text(sub, _sub, tx, r.Y + 44, tw, SettingsLayout.SubLineH * SettingsLayout.Lines(sub, tw) + 3, Secondary, wrap: true, top: true);
         DrawSwitch(SettingsLayout.SwitchRect(r), row.On, dim);
+        if (row.Id.StartsWith("card:", StringComparison.Ordinal))
+        {   // estado real del módulo (el mismo interruptor): «Activo» o «Desactivado»
+            string st = !row.Enabled ? "No disponible" : row.On ? "Activo" : "Desactivado"; double cw = Measure(st, _head) + 30, cy = r.Y + r.H - 32;
+            RR(tx, cy, cw, 22, 11, row.On && row.Enabled ? new Color4(Green.R, Green.G, Green.B, 0.16f) : Label(0.07f)); Dot(tx + 12, cy + 11, 3.5, row.On && row.Enabled ? Green : Label(0.4f)); Text(st, _head, tx + 22, cy, cw - 22, 22, Label(0.9f));
+        }
     }
 
     private void DrawRow(RowFrame r, SettingsController c, EditView? edit)
     {
         var row = r.Row; float dim = row.Enabled ? 1f : 0.42f; double x = r.X + 16, midY = r.Y + r.H / 2;
         bool hasSub = !string.IsNullOrEmpty(row.Subtitle) || (!row.Enabled && !string.IsNullOrEmpty(row.Reason));
+        if (row.Kind == RowKind.Preview && row.Id == "dock.preview") { DrawDockPreview(r); return; }
+        if (row.Kind == RowKind.Preview && row.Id == "notch.preview") { DrawNotchPreview(r); return; }
+        if (row.Kind == RowKind.Preview && row.Id == "gest.preview") { DrawGestPreview(r); return; }
         if (row.Kind == RowKind.Preview)
         {   // tira con la barra de arriba tal como queda: el nombre, los menús, los iconos en su orden y la hora
             double bx = r.X + 16, by = r.Y + 8, bw = r.W - 32, bh = r.H - 16; var white = new Color4(1, 1, 1, 0.9f);
@@ -273,10 +288,10 @@ internal sealed class SettingsPainter : IDisposable
 
         if (row.Kind == RowKind.Info) { Glyph("info", x + 10, midY, 9, Secondary); Text(row.Title, _sub, x + 30, r.Y + 4, r.W - 62, r.H - 8, Secondary, wrap: true); return; }
         bool grip = SettingsLayout.HasGrip(row); if (grip) x += SettingsLayout.GripW - 10;
-        double tw = r.W - 32 - ControlSpace(row);
+        double tw = r.W - 32 - SettingsLayout.ControlSpace(row, r.W);
         if (row.Kind == RowKind.Button && row.Options is { Count: > 0 } pills)
         {   // fila de acción con píldoras azules (Agregar, Cancelar / Guardar)
-            double ptw = r.W - 32 - ControlSpace(row);
+            double ptw = r.W - 32 - SettingsLayout.ControlSpace(row, r.W);
             if (!string.IsNullOrEmpty(row.Subtitle)) { Text(row.Title, _body, x, r.Y + 8, ptw, 22, Label()); Text(row.Subtitle, _sub, x, r.Y + 30, Math.Max(40, ptw), SettingsLayout.SubLineH * SettingsLayout.Lines(row.Subtitle, ptw) + 3, Secondary, wrap: true, top: true); }
             else Text(row.Title, _body, x, r.Y, ptw, r.H, Label());
             for (int i = 0; i < pills.Count; i++) { var pr = SettingsLayout.PillRect(r, i); Pill(pr.X, pr.Y, pr.W, pr.H, pills[i], primary: i == pills.Count - 1); }
@@ -308,6 +323,65 @@ internal sealed class SettingsPainter : IDisposable
     }
 
     private static double ControlSpace(SettingsRow r) => SettingsLayout.ControlSpace(r);
+
+    private static readonly int[] AppColors = [0x3B82F6, 0xF5B83D, 0x2D9CDB, 0x7C5CFF, 0x22C55E, 0x1D9BF0, 0xE8E4F2];
+
+    /// <summary>Fondo de escritorio de muestra para las vistas previas (violeta, como los mockups).</summary>
+    private void Wallpaper(double x, double y, double w, double h, double radius)
+    {
+        Gradient(x, y, w, h, C(0x4B2FA6), C(0x9A74F0), radius); Gradient(x, y, w, h, new Color4(1, 1, 1, 0.0f), new Color4(1, 1, 1, 0.14f), radius, vertical: false);
+    }
+
+    /// <summary>Vista previa del Dock: representativa (colores de muestra, no tus apps); el tamaño y la ampliación reflejan los ajustes reales.</summary>
+    private void DrawDockPreview(RowFrame r)
+    {
+        double px = r.X + 14, py = r.Y + 14, pw = r.W - 28, ph = r.H - 28; Wallpaper(px, py, pw, ph, 14);
+        double size = Math.Round(r.Row.SliderMin + r.Row.Value / 100 * (r.Row.SliderMax - r.Row.SliderMin)), icon = Math.Clamp(size * 0.62, 20, 54), gap = icon * 0.28, n = 7;
+        double dw = n * icon + (n + 1) * gap, dh = icon + gap * 1.6, dx = px + (pw - dw) / 2, dy = py + ph - dh - 14;
+        RR(dx, dy, dw, dh, dh * 0.34, new Color4(1, 1, 1, 0.20f)); RRStroke(dx, dy, dw, dh, dh * 0.34, new Color4(1, 1, 1, 0.38f), 1f);
+        for (int i = 0; i < n; i++)
+        {
+            double ix = dx + gap + i * (icon + gap), iy = dy + gap * 0.8 - (r.Row.On && i == 3 ? icon * 0.18 : 0), sz = r.Row.On && i == 3 ? icon * 1.18 : icon;
+            Gradient(ix - (sz - icon) / 2, iy - (sz - icon) / 2, sz, sz, C(AppColors[i % AppColors.Length]), C(AppColors[i % AppColors.Length] & 0x7F7F7F | 0x202020), sz * 0.24);
+            if (i is 0 or 2 or 3 or 5) Dot(ix + icon / 2, dy + dh - gap * 0.45, 2, new Color4(1, 1, 1, 0.85f));
+        }
+
+        Text(r.Row.SliderLabel(r.Row.Value), _head, px + 14, py + 8, 80, 18, new Color4(1, 1, 1, 0.85f));
+    }
+
+    /// <summary>Vista previa de la Isla: reposo con un estado de ejemplo y sus cuatro estados (música, descarga, temporizador, notificación).</summary>
+    private void DrawNotchPreview(RowFrame r)
+    {
+        double px = r.X + 14, py = r.Y + 14, pw = r.W - 28, ph = r.H - 28; Wallpaper(px, py, pw, ph, 14);
+        double nw = Math.Min(380, pw * 0.62), nh = 52, nx = px + (pw - nw) / 2, ny = py - 1;
+        RR(nx, ny, nw, nh + 14, 24, new Color4(0.05f, 0.04f, 0.08f, 1)); RR(nx - 1, ny, nw + 2, 14, 2, new Color4(0.05f, 0.04f, 0.08f, 1));
+        Gradient(nx + 16, ny + 18, 30, 30, C(0xB78CFF), C(0x6B3FD1), 8);
+        RR(nx + 56, ny + 21, 92, 7, 3.5, new Color4(1, 1, 1, 0.8f)); RR(nx + 56, ny + 34, 60, 6, 3, new Color4(1, 1, 1, 0.38f));
+        Text("◀   ❚❚   ▶", _small, nx + nw - 150, ny + 14, 120, 36, new Color4(1, 1, 1, 0.9f), center: true);
+        string[] marks = ["♪", "↓", "00:00", "•"]; double tw = Math.Min(150, (pw - 24 - 3 * 12) / 4), tx0 = px + (pw - (4 * tw + 3 * 12)) / 2, ty = py + ph - 64;
+        for (int i = 0; i < 4 && i < (r.Row.Options?.Count ?? 0); i++)
+        {
+            double tx = tx0 + i * (tw + 12); RR(tx, ty, tw, 52, 14, new Color4(1, 1, 1, i == 0 ? 0.30f : 0.16f)); if (i == 0) RRStroke(tx, ty, tw, 52, 14, new Color4(1, 1, 1, 0.7f), 1.4f);
+            RR(tx + tw / 2 - 34, ty + 8, 68, 20, 10, new Color4(0.05f, 0.04f, 0.08f, 1)); Text(marks[i], _head, tx + tw / 2 - 34, ty + 8, 68, 20, new Color4(1, 1, 1, 0.92f), center: true);
+            Text(r.Row.Options![i], _head, tx, ty + 30, tw, 18, new Color4(1, 1, 1, 0.9f), center: true);
+        }
+    }
+
+    /// <summary>Vista previa de las esquinas activas: un monitor con las cuatro esquinas y la acción asignada a cada una (lo real, de los ajustes).</summary>
+    private void DrawGestPreview(RowFrame r)
+    {
+        var o = r.Row.Options ?? []; double mw = Math.Min(360, r.W - 60), mh = r.H - 64, mx = r.X + (r.W - mw) / 2, my = r.Y + 18;
+        RR(mx - 6, my - 6, mw + 12, mh + 12, 16, K(_p.SurfaceRaised)); RRStroke(mx - 6, my - 6, mw + 12, mh + 12, 16, Sep, 1f); Wallpaper(mx, my, mw, mh, 10);
+        RR(mx + mw / 2 - 40, my + mh + 8, 80, 8, 4, Label(0.25f)); RR(mx + mw / 2 - 18, my + mh + 6, 36, 4, 2, Label(0.25f));
+        double cwid = Math.Min(130, mw / 2 - 14), ch = 24; (double X, double Y)[] pos = [(mx + 8, my + 8), (mx + mw - cwid - 8, my + 8), (mx + 8, my + mh - ch - 8), (mx + mw - cwid - 8, my + mh - ch - 8)];
+        for (int i = 0; i < 4; i++)
+        {
+            bool set = i < o.Count && o[i] != "Nada"; RR(pos[i].X, pos[i].Y, cwid, ch, 8, set && r.Row.On ? new Color4(1, 1, 1, 0.85f) : new Color4(1, 1, 1, 0.22f));
+            Text(i < o.Count ? o[i] : "Nada", _head, pos[i].X + 6, pos[i].Y, cwid - 12, ch, set && r.Row.On ? C(0x2B1B63) : new Color4(1, 1, 1, 0.75f), center: true);
+        }
+
+        Text(r.Row.On ? "Esquinas activas" : "Activa Hatsu Gestures para usar las esquinas", _small, r.X + 16, r.Y + r.H - 28, r.W - 32, 22, Secondary, center: true);
+    }
 
     private void DrawSwitch((double X, double Y, double W, double H) s, bool on, float dim)
     {

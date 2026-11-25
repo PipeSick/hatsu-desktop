@@ -32,15 +32,17 @@ public static class SettingsLayout
     public static SettingsV2.ITextMeasurer? Measurer { get => _measurer; set => _measurer = value; }
 
     /// <summary>Con poco ancho los controles de una fila pasan DEBAJO de su texto en vez de dibujarse encima.</summary>
-    public static bool IsStacked(SettingsRow r) => r.Kind switch
+    public static bool IsStacked(SettingsRow r) => IsStacked(r, ColW);
+    public static bool IsStacked(SettingsRow r, double w) => r.Id != "search" && r.Kind switch
     {
-        RowKind.Segmented or RowKind.Field or RowKind.Slider => ColW < 640,
-        RowKind.Button when r.Options is { Count: > 0 } => ColW < PillsWidth(r) + 260,
+        RowKind.Segmented or RowKind.Field or RowKind.Slider => w < 640,
+        RowKind.Button when r.Options is { Count: > 0 } => w < PillsWidth(r) + 260,
         _ => false,
     };
 
     /// <summary>Ancho reservado a la derecha para el control de la fila (una sola fuente: el dibujo y el cálculo de alturas).</summary>
-    public static double ControlSpace(SettingsRow r) => IsStacked(r) ? 0 : r.Kind switch { RowKind.Toggle => HasGrip(r) ? 51 + 24 + GripW : r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Button when r.Options is { Count: > 0 } => PillsWidth(r) + 16, RowKind.Segmented => SegmentWidth(r, ColW) + 16, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
+    public static double ControlSpace(SettingsRow r) => ControlSpace(r, ColW);
+    public static double ControlSpace(SettingsRow r, double w) => IsStacked(r, w) ? 0 : r.Kind switch { RowKind.Toggle => HasGrip(r) ? 51 + 24 + GripW : r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Button when r.Options is { Count: > 0 } => PillsWidth(r) + 16, RowKind.Segmented => SegmentWidth(r, w) + 16, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
 
     // ── Piezas del prototipo: asa para arrastrar (⋮⋮) en los iconos de la barra y píldoras azules en las filas de acción
     public const double GripW = 30, PillH = 28, PillGap = 8;
@@ -51,7 +53,7 @@ public static class SettingsLayout
     /// <summary>Píldora <paramref name="i"/> (de izquierda a derecha) de una fila con opciones de acción, pegada a la derecha.</summary>
     public static (double X, double Y, double W, double H) PillRect(RowFrame f, int i)
     {
-        var o = f.Row.Options!; bool st = IsStacked(f.Row); double x = st ? f.X + 16 : f.X + f.W - 16 - PillsWidth(f.Row);
+        var o = f.Row.Options!; bool st = IsStacked(f.Row, f.W); double x = st ? f.X + 16 : f.X + f.W - 16 - PillsWidth(f.Row);
         for (int k = 0; k < i; k++) x += PillWidth(o[k]) + PillGap;
         return (x, st ? f.Y + f.H - PillH - 10 : f.Y + (f.H - PillH) / 2, PillWidth(o[i]), PillH);
     }
@@ -76,16 +78,17 @@ public static class SettingsLayout
     }
     public const double SubLineH = 17;
 
-    public static double RowHeight(SettingsRow r)
+    public static double RowHeight(SettingsRow r) => RowHeight(r, ColW);
+    public static double RowHeight(SettingsRow r, double w)
     {
         string? sub = SubText(r);
         if (r.Kind == RowKind.Hero) return 150;
-        double stack = IsStacked(r) ? ControlH + 14 : 0;
-        if (r.Kind == RowKind.Info) return Math.Max(54, 16 + SubLineH * Lines(r.Title, ColW - 62));
-        if (r.Kind == RowKind.Button) return (r.Options is { Count: > 0 } ? (string.IsNullOrEmpty(sub) ? 48 : 58 + Math.Max(0, Lines(sub, ColW - 32 - ControlSpace(r)) - 1) * SubLineH) : 48) + stack;
-        if (r.Kind == RowKind.Preview) return 58;
+        double stack = IsStacked(r, w) ? ControlH + 14 : 0;
+        if (r.Kind == RowKind.Info) return Math.Max(54, 16 + SubLineH * Lines(r.Title, w - 62));
+        if (r.Kind == RowKind.Button) return (r.Options is { Count: > 0 } ? (string.IsNullOrEmpty(sub) ? 48 : 58 + Math.Max(0, Lines(sub, w - 32 - ControlSpace(r, w)) - 1) * SubLineH) : 48) + stack;
+        if (r.Kind == RowKind.Preview) return r.Id switch { "dock.preview" => 170, "notch.preview" => 200, "gest.preview" => 230, _ => 64 };
         if (r.Kind == RowKind.Slider && string.IsNullOrEmpty(sub)) return 54 + stack;
-        int extra = Math.Max(0, Lines(sub, ColW - 32 - ControlSpace(r)) - 1);
+        int extra = Math.Max(0, Lines(sub, w - 32 - ControlSpace(r, w)) - 1);
         double baseH = r.Kind switch
         {
             RowKind.Toggle => string.IsNullOrEmpty(sub) ? 46 : 58,
@@ -96,40 +99,63 @@ public static class SettingsLayout
     }
 
     public const double CardGap = 12, CardMinW = 290;
-    public static int CardColumns(int count) => Math.Clamp((int)Math.Floor((ColW + CardGap) / (CardMinW + CardGap)), 1, Math.Max(1, Math.Min(3, count)));
+    public static int CardColumns(int count, double w = double.NaN) => Math.Clamp((int)Math.Floor(((double.IsNaN(w) ? ColW : w) + CardGap) / (CardMinW + CardGap)), 1, Math.Max(1, Math.Min(3, count)));
     /// <summary>Alto de una tarjeta de componente: icono, título, descripción en las líneas que haga falta (medida real) e interruptor.</summary>
     public static double CardHeight(SettingsRow r, double cardW) => Math.Max(96, 20 + 22 + 4 + SubLineH * Lines(SubText(r), cardW - 16 - 48 - 14 - SwitchW - 24) + 20);
 
-    public static double FooterHeight(string? footer) => string.IsNullOrWhiteSpace(footer) ? 0 : 8 + 17 * Math.Max(1, Math.Ceiling(footer.Length / 74.0));
+    public static double FooterHeight(string? footer, double w = double.NaN) => string.IsNullOrWhiteSpace(footer) ? 0 : 8 + SubLineH * Math.Max(1, Lines(footer, (double.IsNaN(w) ? ColW : w) - 8));
 
     public static PageFrame Compute(SettingsPage page, double scroll = 0, double viewportH = double.NaN)
     {
         if (double.IsNaN(viewportH)) viewportH = ViewportH;
         var groups = new List<GroupFrame>(); var rows = new List<RowFrame>(); double y = 4;
-        foreach (var g in page.Groups)
+        bool twoCol = ColW >= 900; double halfW = (ColW - GroupGap) / 2;
+
+        // Coloca un grupo en (x, y) con ancho w; devuelve el alto que ocupa (cabecera, tarjeta y pie).
+        double Place(SettingsGroup g, double x, double w, double top0)
         {
-            double headerY = y; if (!string.IsNullOrEmpty(g.Header)) y += HeaderH; else y += 2;
-            double top = y, cardH;
+            double yy = top0, headerY = yy; if (!string.IsNullOrEmpty(g.Header)) yy += HeaderH; else yy += 2;
+            double top = yy, cardH;
             if (g.Cards)
             {   // cuadrícula de tarjetas: tantas columnas como quepan; cada tarjeta es la misma fila (mismo id, misma acción)
-                int cols = CardColumns(g.Rows.Count); double cw = (ColW - CardGap * (cols - 1)) / cols, gy = y;
+                int cols = CardColumns(g.Rows.Count, w); double cw = (w - CardGap * (cols - 1)) / cols, gy = yy;
                 for (int i = 0; i < g.Rows.Count; i += cols)
                 {
                     double rowH = 0; for (int k = i; k < Math.Min(i + cols, g.Rows.Count); k++) rowH = Math.Max(rowH, CardHeight(g.Rows[k], cw));
-                    for (int k = i; k < Math.Min(i + cols, g.Rows.Count); k++) rows.Add(new RowFrame(g.Rows[k], ColX + (k - i) * (cw + CardGap), gy, cw, rowH, false, false, Card: true));
+                    for (int k = i; k < Math.Min(i + cols, g.Rows.Count); k++) rows.Add(new RowFrame(g.Rows[k], x + (k - i) * (cw + CardGap), gy, cw, rowH, false, false, Card: true));
                     gy += rowH + CardGap;
                 }
 
-                cardH = Math.Max(0, gy - CardGap - y); y = gy - CardGap;
+                cardH = Math.Max(0, gy - CardGap - yy); yy = gy - CardGap;
             }
             else
             {
-                cardH = g.Rows.Sum(RowHeight);
-                for (int i = 0; i < g.Rows.Count; i++) { double h = RowHeight(g.Rows[i]); rows.Add(new RowFrame(g.Rows[i], ColX, y, ColW, h, i == 0, i == g.Rows.Count - 1)); y += h; }
+                cardH = g.Rows.Sum(r => RowHeight(r, w));
+                for (int i = 0; i < g.Rows.Count; i++) { double h = RowHeight(g.Rows[i], w); rows.Add(new RowFrame(g.Rows[i], x, yy, w, h, i == 0, i == g.Rows.Count - 1)); yy += h; }
             }
 
-            double footerY = y + 2, footerH = FooterHeight(g.Footer); y += footerH == 0 ? 0 : footerH + 2;
-            groups.Add(new GroupFrame(g, ColX, top, ColW, cardH, headerY, footerY, footerH)); y += GroupGap;
+            double footerY = yy + 2, footerH = FooterHeight(g.Footer, w); yy += footerH == 0 ? 0 : footerH + 2;
+            groups.Add(new GroupFrame(g, x, top, w, cardH, headerY, footerY, footerH));
+            return yy - top0;
+        }
+
+        for (int gi = 0; gi < page.Groups.Count; gi++)
+        {
+            var g = page.Groups[gi];
+            if (g.Half && twoCol)
+            {   // racha de grupos «medios»: dos columnas, cada grupo va a la que esté más corta (como una pared de ladrillos)
+                int end = gi; while (end + 1 < page.Groups.Count && page.Groups[end + 1].Half) end++;
+                double yl = y, yr = y;
+                for (int k = gi; k <= end; k++)
+                {
+                    bool left = yl <= yr; double h = Place(page.Groups[k], left ? ColX : ColX + halfW + GroupGap, halfW, left ? yl : yr);
+                    if (left) yl += h + GroupGap; else yr += h + GroupGap;
+                }
+
+                y = Math.Max(yl, yr); gi = end; continue;
+            }
+
+            y += Place(g, ColX, ColW, y) + GroupGap;
         }
 
         double content = y + 6, max = Math.Max(0, content - viewportH), off = Math.Clamp(scroll, 0, max);
@@ -149,9 +175,9 @@ public static class SettingsLayout
     }
 
     private static double StackedY(RowFrame f) => f.Y + f.H - ControlH - 10;
-    public static (double X, double Y, double W, double H) SegmentRect(RowFrame f) { double w = SegmentWidth(f.Row, f.W); return IsStacked(f.Row) ? (f.X + 16, StackedY(f), Math.Min(w, f.W - 32), ControlH) : (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
-    public static (double X, double Y, double W, double H) FieldRect(RowFrame f) { if (IsStacked(f.Row)) return (f.X + 16, StackedY(f), f.W - 32, ControlH); double w = Math.Min(f.W * 0.56, 290); return (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
-    public static (double X0, double X1, double Cy) SliderTrack(RowFrame f) => IsStacked(f.Row) ? (f.X + 20, f.X + f.W - 16 - 56, StackedY(f) + ControlH / 2) : (f.X + f.W - 16 - 250, f.X + f.W - 16 - 46, f.Y + f.H / 2);
+    public static (double X, double Y, double W, double H) SegmentRect(RowFrame f) { double w = SegmentWidth(f.Row, f.W); return IsStacked(f.Row, f.W) ? (f.X + 16, StackedY(f), Math.Min(w, f.W - 32), ControlH) : (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
+    public static (double X, double Y, double W, double H) FieldRect(RowFrame f) { if (IsStacked(f.Row, f.W)) return (f.X + 16, StackedY(f), f.W - 32, ControlH); double w = Math.Min(f.W * 0.56, 290); return (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
+    public static (double X0, double X1, double Cy) SliderTrack(RowFrame f) => IsStacked(f.Row, f.W) ? (f.X + 20, f.X + f.W - 16 - 56, StackedY(f) + ControlH / 2) : (f.X + f.W - 16 - 250, f.X + f.W - 16 - 46, f.Y + f.H / 2);
     public static double SliderValueAt(RowFrame f, double x) { var (x0, x1, _) = SliderTrack(f); return Math.Clamp((x - x0) / (x1 - x0) * 100, 0, 100); }
 
     // ── Barra lateral

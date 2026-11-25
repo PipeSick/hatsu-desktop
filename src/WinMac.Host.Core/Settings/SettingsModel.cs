@@ -17,7 +17,8 @@ public sealed record SettingsRow(RowKind Kind, string Id, string Title, string? 
 }
 
 /// <param name="Cards">Settings V2: las filas se muestran como tarjetas en cuadrícula (cada una sigue siendo la misma fila con el mismo id y la misma acción).</param>
-public sealed record SettingsGroup(string? Header, IReadOnlyList<SettingsRow> Rows, string? Footer = null, bool Cards = false);
+/// <param name="Half">Settings V2: en ventanas anchas, los grupos «medios» consecutivos se reparten en dos columnas.</param>
+public sealed record SettingsGroup(string? Header, IReadOnlyList<SettingsRow> Rows, string? Footer = null, bool Cards = false, bool Half = false);
 public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOnlyList<SettingsGroup> Groups, string? Section = null, string? Subtitle = null);
 
 /// <summary>Vista del diagnóstico de llamadas (Ajustes › Hatsu Connect): lo da el host; puro para probar la página sin Windows.</summary>

@@ -23,6 +23,58 @@ public static partial class SettingsBuilder
         ["ext"] = "Extensiones, diagnóstico y herramientas de recuperación.",
     };
 
+    // ── Settings V2: composición de cada página (vistas previas, galería de módulos y columnas). Solo añade filas de presentación o duplica interruptores con otro id («card:…» → misma acción);
+    //    ninguna fila real se quita ni cambia de id.
+    private static readonly HashSet<string> HalfPages = ["bar", "dock", "notch", "weather", "capture"];
+
+    private static IReadOnlyList<SettingsPage> Compose(List<SettingsPage> pages)
+    {
+        SettingsRow? Find(string id) => pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).FirstOrDefault(r => r.Id == id);
+        static string After(SettingsRow? r) { var t = r?.Title ?? ""; int i = t.LastIndexOf(": ", StringComparison.Ordinal); return i >= 0 ? t[(i + 2)..] : "Nada"; }
+        var result = new List<SettingsPage>();
+        foreach (var page in pages)
+        {
+            var groups = page.Groups.ToList();
+            switch (page.Id)
+            {
+                case "bar" when Find("bar.preview") is { } bp:
+                    break;   // la tira de vista previa de la Barra ya existe (se redibuja más grande en V2)
+                case "dock":
+                {
+                    var fine = Find("dock.fine"); var mag = Find("dock.magnify");
+                    if (fine is not null) groups.Insert(0, new SettingsGroup(null, [new SettingsRow(RowKind.Preview, "dock.preview", "Vista previa del Dock", Value: fine?.Value ?? 50, On: mag?.On ?? true, SliderMin: fine?.SliderMin ?? 32, SliderMax: fine?.SliderMax ?? 96, Unit: fine?.Unit)]));
+                    break;
+                }
+
+                case "notch" when Find("notch.pos") is { Enabled: true }:
+                    groups.Insert(0, new SettingsGroup(null, [new SettingsRow(RowKind.Preview, "notch.preview", "Vista previa de la Isla", Options: ["Música", "Descarga", "Temporizador", "Notificación"], Text: Find("notch.pos")?.Options is { } po && Find("notch.pos") is { } pr && pr.Selected < po.Count ? po[pr.Selected] : "Centro")]));
+                    break;
+                case "gestures":
+                    groups.Insert(0, new SettingsGroup(null, [new SettingsRow(RowKind.Preview, "gest.preview", "Esquinas activas", Options: [After(Find("gest.pick:gestCornerTL")), After(Find("gest.pick:gestCornerTR")), After(Find("gest.pick:gestCornerBL")), After(Find("gest.pick:gestCornerBR"))], On: Find("bar:gesturesEnabled")?.On ?? false)]));
+                    break;
+                case "modules":
+                {
+                    (string Id, string Icon, string Desc)[] mods =
+                    [
+                        ("mod:bar", "bar", "Reloj, indicadores y el panel de Hatsu."), ("mod:dock", "dock", "Apps abiertas y ancladas, con vista previa."), ("mod:notch", "island", "Música, actividades y avisos en la parte superior."),
+                        ("mod:connect", "phone", "Batería y notificaciones del iPhone por Bluetooth."), ("bar:mcEnabled", "grid", "Vista general de ventanas y escritorios."), ("bar:snapEnabled", "snap", "Ajusta ventanas a zonas al arrastrarlas."),
+                        ("bar:liveTextEnabled", "text", "Reconoce y copia texto de cualquier parte de la pantalla."), ("bar:spotActionsEnabled", "search", "Acciones de Hatsu desde Spotlight."),
+                        ("bar:gesturesEnabled", "gesture", "Esquinas activas, botones del ratón y atajos."), ("shelf.enabled", "shelf", "Estantería de archivos, texto e imágenes en la Isla."),
+                    ];
+                    var cards = mods.Select(m => Find(m.Id) is { } r ? r with { Id = "card:" + m.Id, Icon = m.Icon, Subtitle = m.Desc, CanUp = false, CanDown = false } : null).Where(r => r is not null).Select(r => r!).ToList();
+                    int active = cards.Count(c => c.On && c.Enabled);
+                    if (cards.Count > 0) groups.Insert(0, new SettingsGroup($"{cards.Count} módulos · {active} activos · {cards.Count - active} desactivados", cards, "Cada módulo es un proceso o función aparte. Su configuración está más abajo.", Cards: true));
+                    break;
+                }
+            }
+
+            if (HalfPages.Contains(page.Id)) groups = groups.Select(g => g.Rows.Count == 1 && g.Rows[0].Kind == RowKind.Preview && g.Rows[0].Id != "bar.preview" || g.Rows.Any(r => r.Kind == RowKind.Preview) ? g : g with { Half = true }).ToList();
+            result.Add(page with { Groups = groups });
+        }
+
+        return result;
+    }
+
     internal static IReadOnlyList<SettingsPage> Organize(List<SettingsPage> pages)
     {
         SettingsPage? Get(string id) => pages.FirstOrDefault(p => p.Id == id);
@@ -63,6 +115,6 @@ public static partial class SettingsBuilder
         Add(connect, "Dispositivos", "iPhone (Hatsu Connect)", "phone"); Add(periphPage, "Dispositivos");
         Add(Get("ext"), "Avanzado", "Extensiones y diagnóstico");
         foreach (var p in pages.Where(p => result.All(r => r.Id != p.Id) && p.Id != "clip")) result.Add(p with { Section = "Avanzado" });   // cualquier página nueva no se pierde
-        return result.Select(p => p with { Subtitle = p.Subtitle ?? Subtitles.GetValueOrDefault(p.Id) }).ToList();
+        return Compose(result.Select(p => p with { Subtitle = p.Subtitle ?? Subtitles.GetValueOrDefault(p.Id) }).ToList());
     }
 }
