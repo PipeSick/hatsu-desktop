@@ -119,7 +119,7 @@ public static class PanelOffscreen
         else if (kind.StartsWith("cleanup", StringComparison.Ordinal))
         {   // It8: DATOS DE MUESTRA (tamaños inventados para ver el diseño; no se ha analizado ningún disco)
             var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["LOCALAPPDATA"] = @"C:\Users\muestra\AppData\Local", ["TEMP"] = @"C:\Users\muestra\AppData\Local\Temp", ["USERPROFILE"] = @"C:\Users\muestra" };
-            var cats = WinMac.Bar.Cleanup.CleanupCatalog.Build(env); long[] sizes = [1_340_000_000, 214_000_000, 88_000_000, 0, 12_000_000, 3_000_000, 460_000_000, 0, 0];
+            var cats = WinMac.Bar.Cleanup.CleanupCatalog.Build(env); long[] sizes = [1_340_000_000, 214_000_000, 88_000_000, 0, 12_000_000, 3_000_000, 460_000_000, 0, 0, 0];   // una cifra por categoría del catálogo (10 hoy): con menos cifras que categorías el generador de capturas se caía (IndexOutOfRange)
             var rows = cats.Select((cat, i) => new WinMac.Bar.Cleanup.CleanupRow(cat, sizes[i], sizes[i] > 0 ? 100 : 0, cat.Kind == WinMac.Bar.Cleanup.CleanupKind.Folder && sizes[i] > 0, cat.Kind != WinMac.Bar.Cleanup.CleanupKind.ReviewOnly && sizes[i] > 0, cat.Kind != WinMac.Bar.Cleanup.CleanupKind.ReviewOnly, cat.WhyNotCleanable)).ToList();
             bool done = kind == "cleanup-done", scanning = kind == "cleanup-scanning", idle = kind == "cleanup-idle";
             var phase = idle ? WinMac.Bar.Cleanup.CleanupPhase.Idle : scanning ? WinMac.Bar.Cleanup.CleanupPhase.Scanning : done ? WinMac.Bar.Cleanup.CleanupPhase.Done : WinMac.Bar.Cleanup.CleanupPhase.Ready;
