@@ -98,7 +98,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
 
     private bool ApplyCore(SettingsEdit e)
     {
-        if (e.Id.StartsWith("card:", StringComparison.Ordinal)) e = e with { Id = e.Id[5..] };   // Settings V2: la tarjeta de la galería de módulos hace lo mismo que el interruptor original
+        if (e.Id.StartsWith("card:", StringComparison.Ordinal)) e = e with { Id = e.Id[5..] }; else if (e.Id.StartsWith("hdr:", StringComparison.Ordinal)) e = e with { Id = e.Id[4..] };   // interruptor de cabecera de Barra, Dock e Isla   // Settings V2: la tarjeta de la galería de módulos hace lo mismo que el interruptor original
         string id = e.Id;
         if (Extensions is { } x)
         {

@@ -107,6 +107,16 @@ public static partial class SettingsBuilder
             }
 
             if (HalfPages.Contains(page.Id)) groups = groups.Select(g => g.Rows.Count == 1 && g.Rows[0].Kind == RowKind.Preview && g.Rows[0].Id != "bar.preview" || g.Rows.Any(r => r.Kind == RowKind.Preview) ? g : g with { Half = true }).ToList();
+            // Como en los mockups: arriba de Barra, Dock e Isla, el interruptor del módulo (misma acción que el de Módulos y General).
+            (string Mod, string Title, string Desc)? head = page.Id switch
+            {
+                "bar" => ("mod:bar", "Activar Barra superior", "Mostrar la barra en la parte superior de la pantalla"),
+                "dock" => ("mod:dock", "Activar Dock", "Mostrar el Dock con tus apps abiertas y ancladas"),
+                "notch" => ("mod:notch", "Activar Isla (Hatsu Notch)", "Mostrar la isla en la parte superior de la pantalla"),
+                _ => null,
+            };
+            if (head is { } h && Find(h.Mod) is { } modRow)
+                groups.Insert(0, new SettingsGroup(null, [modRow with { Id = "hdr:" + h.Mod, Title = h.Title, Subtitle = h.Desc, CanUp = false, CanDown = false }]));
             result.Add(page with { Groups = groups });
         }
 

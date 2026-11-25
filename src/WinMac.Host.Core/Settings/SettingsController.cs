@@ -30,7 +30,7 @@ public sealed class SettingsController
         foreach (var p in _pages)
             foreach (var g in p.Groups)
             {
-                var hits = g.Rows.Where(r => r.Kind is not (RowKind.Info or RowKind.Preview or RowKind.Hero) && !r.Id.StartsWith("card:", StringComparison.Ordinal) && words.All(w => Fold(r.Title + " " + r.Subtitle + " " + p.Title + " " + g.Header).Contains(w))).ToList();
+                var hits = g.Rows.Where(r => r.Kind is not (RowKind.Info or RowKind.Preview or RowKind.Hero) && !r.Id.StartsWith("card:", StringComparison.Ordinal) && !r.Id.StartsWith("hdr:", StringComparison.Ordinal) && words.All(w => Fold(r.Title + " " + r.Subtitle + " " + p.Title + " " + g.Header).Contains(w))).ToList();
                 if (hits.Count > 0) groups.Add(new SettingsGroup(p.Title + (string.IsNullOrEmpty(g.Header) ? "" : " · " + g.Header), [.. hits, new SettingsRow(RowKind.Button, "search.go:" + p.Id + ":" + hits[0].Id, "Abrir en " + p.Title)]));
             }
 

@@ -303,6 +303,14 @@ internal sealed class SettingsPainter : IDisposable
             return;
         }
 
+        if (row.Kind == RowKind.Button && row.Id.StartsWith("gest.pick:", StringComparison.Ordinal) && row.Title.IndexOf(": ", StringComparison.Ordinal) is > 0 and int sep)
+        {   // asignación de Gestures: nombre a la izquierda y la acción elegida como selector a la derecha (el clic sigue abriendo la lista)
+            double cw = Math.Min(r.W * 0.45, 260), cx = r.X + r.W - 16 - cw, ch = 32, cy = r.Y + (r.H - ch) / 2;
+            Text(row.Title[..sep], _body, x, r.Y, Math.Max(40, cx - x - 12), r.H, Label(row.Enabled ? 1f : 0.42f));
+            RR(cx, cy, cw, ch, 10, Field); RRStroke(cx, cy, cw, ch, 10, new Color4(0, 0, 0, _dark ? 0.35f : 0.10f), 0.8f);
+            Text(row.Title[(sep + 2)..], _body, cx + 12, cy, cw - 38, ch, Label(row.Enabled ? 1f : 0.42f));
+            Glyph("chevron", cx + cw - 16, cy + ch / 2, 6, Secondary); return;
+        }
         if (row.Kind == RowKind.Button) { Text(row.Title, _body, x, r.Y, r.W - 60, r.H, row.Enabled ? Tint : Label(0.42f)); if (row.Enabled) Glyph("chevron", r.X + r.W - 20, midY, 6, Secondary); return; }
         if (hasSub) { var sub = SettingsLayout.SubText(row); Text(row.Title, _body, x, r.Y + 8, tw, 22, Label(dim)); Text(sub, _sub, x, r.Y + 30, Math.Max(40, tw), SettingsLayout.SubLineH * SettingsLayout.Lines(sub, tw) + 3, Secondary, wrap: true, top: true); }
         else Text(row.Title, _body, x, r.Y, tw, r.H - (SettingsLayout.IsStacked(row, r.W) ? SettingsLayout.ControlH + 14 : 0), Label(dim));
