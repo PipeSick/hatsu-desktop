@@ -19,7 +19,7 @@ internal static class SettingsOffscreen
         double winW = double.TryParse(HostOptions.Arg(args, "--width", "1180"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ww) ? ww : 1180, winH = double.TryParse(HostOptions.Arg(args, "--height", "760"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var wh) ? wh : 760;
         SettingsLayout.Configure(winW, winH);   // Ajustes V2: la ventana es de tamaño libre; --width y --height (DIP) sirven para revisar 1280×720, 900×600, etc.
         double scroll = double.TryParse(HostOptions.Arg(args, "--scroll", "0"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sy) ? sy : 0;
-        try { File.WriteAllText(png + ".txt", Render(png, page, dark, scale, scroll, args.Contains("--suggest"), args.Contains("--no-notch"), args.Contains("--edit"))); return 0; }
+        try { File.WriteAllText(png + ".txt", Render(png, page, dark, scale, scroll, args.Contains("--suggest"), args.Contains("--no-notch"), args.Contains("--edit"), args.Contains("--connect-on"))); return 0; }
         catch (Exception e) { try { File.WriteAllText(png + ".txt", "ERROR: " + e); } catch (IOException) { } return 1; }
     }
 
@@ -32,9 +32,9 @@ internal static class SettingsOffscreen
         return d;
     }
 
-    public static string Render(string pngPath, string pageId, bool dark, double scale, double scroll, bool suggest, bool noNotch, bool edit = false)
+    public static string Render(string pngPath, string pageId, bool dark, double scale, double scroll, bool suggest, bool noNotch, bool edit = false, bool connectOn = false)
     {
-        var cfg = new HostConfig { Bar = new WinMac.Bar.BarConfig { WeatherCity = "Molina|-35.1167|-71.2833", WeatherFavorites = "Santiago|-33.45|-70.67;Valparaíso|-33.05|-71.62", ShowSeconds = false }, Notch = new NotchSettings { GlassLevel = 60, LyricsEnabled = true } };
+        var cfg = new HostConfig { Bar = new WinMac.Bar.BarConfig { WeatherCity = "Molina|-35.1167|-71.2833", WeatherFavorites = "Santiago|-33.45|-70.67;Valparaíso|-33.05|-71.62", ShowSeconds = false }, Notch = new NotchSettings { GlassLevel = 60, LyricsEnabled = true }, Modules = new Dictionary<string, ModuleConfig>(new HostConfig().Modules) { ["connect"] = new ModuleConfig { Enabled = connectOn } } };   // --connect-on: Hatsu Connect encendido para ver la tarjeta del iPhone conectado (datos de muestra)
         var states = noNotch ? new Dictionary<string, ModuleState> { ["notch"] = ModuleState.NotInstalled } : new Dictionary<string, ModuleState>();
         var ctl = new SettingsController(); ctl.SetPages(SettingsBuilder.Build(new SettingsInput(cfg, states, true, suggest ? "" : "Ciudad: Molina, Maule, Chile. Otras: Región de Murcia, España. Para elegir, escribe «Molina, país»") { Devices = SampleDevices(), Dock = WinMac.Dock.DockSettings.Sanitize(WinMac.Dock.Win.Shell.DockDefaults.Create()), LocationPermission = "Permitido" })); ctl.SelectPage(pageId);
         if (scroll > 0) ctl.Scroll(scroll);

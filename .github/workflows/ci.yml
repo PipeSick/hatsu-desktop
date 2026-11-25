@@ -116,6 +116,7 @@ jobs:
           foreach ($t in 'light', 'dark') { foreach ($pg in $pages) { foreach ($sz in $sizes) {
             if ($sz[0] -ne 1280 -and $pg -notin 'general', 'bar', 'connect') { continue }
             $png = "capturas-ajustes-v2/$pg-$t-$($sz[0])x$($sz[1]).png"
+            if ($pg -eq 'connect' -and $sz[0] -eq 1280) { $png2 = "capturas-ajustes-v2/connect-on-$t-1280x720.png"; Start-Process -FilePath $host_ -ArgumentList @('--render-settings', 'connect', '--theme', $t, '--scale', '1', '--width', 1280, '--height', 720, '--connect-on', '--out', "`"$png2`"") -Wait -WindowStyle Hidden | Out-Null }
             $p = Start-Process -FilePath $host_ -ArgumentList @('--render-settings', $pg, '--theme', $t, '--scale', '1', '--width', $sz[0], '--height', $sz[1], '--out', "`"$png`"") -PassThru -Wait -WindowStyle Hidden
             Write-Host "$pg $t $($sz[0])x$($sz[1]) -> código $($p.ExitCode), existe=$(Test-Path $png)"
           } } }

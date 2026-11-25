@@ -101,6 +101,9 @@ internal sealed class SettingsPainter : IDisposable
             case "text": Ln(cx - s * .8, cy - s * .55, cx + s * .8, cy - s * .55, c, 1.8f); Ln(cx, cy - s * .55, cx, cy + s * .8, c, 1.8f); Ln(cx - s * .45, cy + s * .8, cx + s * .45, cy + s * .8, c, 1.5f); break;
             case "gesture": for (int i = 0; i < 3; i++) Dot(cx - s * .6 + i * s * .6, cy + (i == 1 ? -s * .25 : s * .25), 2.2, c); Ln(cx - s * .6, cy + s * .25, cx, cy - s * .25, c, 1.3f); Ln(cx, cy - s * .25, cx + s * .6, cy + s * .25, c, 1.3f); break;
             case "shelf": RRStroke(cx - s * .9, cy - s * .2, s * 1.8, s * .95, s * .2, c, 1.6f); Ln(cx - s * .9, cy - s * .2, cx - s * .5, cy - s * .7, c, 1.5f); Ln(cx - s * .5, cy - s * .7, cx + s * .5, cy - s * .7, c, 1.5f); Ln(cx + s * .5, cy - s * .7, cx + s * .9, cy - s * .2, c, 1.5f); break;
+            case "keyboard": RRStroke(cx - s, cy - s * .6, s * 2, s * 1.2, s * .2, c, 1.5f); for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) Dot(cx - s * .55 + i * s * .55, cy - s * .2 + j * s * .42, 1.3, c); break;
+            case "headset": _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)(cy + s * .1)), (float)(s * .8), (float)(s * .8)), _b, 1f); Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)cx, (float)(cy + s * .05)), (float)(s * .78), (float)(s * .78)), _b, 1.6f); RR(cx - s * .98, cy + s * .05, s * .38, s * .75, s * .15, c); RR(cx + s * .6, cy + s * .05, s * .38, s * .75, s * .15, c); break;
+            case "gamepad": RRStroke(cx - s, cy - s * .55, s * 2, s * 1.1, s * .5, c, 1.5f); Ln(cx - s * .55, cy, cx - s * .15, cy, c, 1.6f); Ln(cx - s * .35, cy - s * .2, cx - s * .35, cy + s * .2, c, 1.6f); Dot(cx + s * .35, cy - s * .08, 1.5, c); Dot(cx + s * .6, cy + s * .12, 1.5, c); break;
             case "periph": RRStroke(cx - s * .55, cy - s * .9, s * 1.1, s * 1.8, s * .55, c, 1.6f); Ln(cx, cy - s * .9, cx, cy - s * .15, c, 1.5f); break;
             case "chevron": Ln(cx - s * .3, cy - s * .62, cx + s * .3, cy, c, 1.8f); Ln(cx + s * .3, cy, cx - s * .3, cy + s * .62, c, 1.8f); break;
             case "up": Ln(cx - s * .55, cy + s * .25, cx, cy - s * .3, c, 1.8f); Ln(cx, cy - s * .3, cx + s * .55, cy + s * .25, c, 1.8f); break;
@@ -334,7 +337,7 @@ internal sealed class SettingsPainter : IDisposable
         Gradient(x, y, w, h, C(0x4B2FA6), C(0x9A74F0), radius); Gradient(x, y, w, h, new Color4(1, 1, 1, 0.0f), new Color4(1, 1, 1, 0.14f), radius, vertical: false);
     }
 
-    private static string DeviceGlyph(string? type) => type switch { "keyboard" => "gear", "headset" => "bell", _ => "periph" };
+    private static string DeviceGlyph(string? type) => type switch { "keyboard" => "keyboard", "headset" => "headset", "gamepad" => "gamepad", _ => "periph" };
 
     /// <summary>Tarjeta de un periférico detectado: nombre y conexión reales y su batería SOLO si el dispositivo la informa (si no, «Sin dato»).</summary>
     private void DrawDeviceCard(RowFrame r)
@@ -344,10 +347,10 @@ internal sealed class SettingsPainter : IDisposable
         Tile(r.X + 16, r.Y + 16, 48, row.Icon == "keyboard" ? 0x3B82F6 : row.Icon == "headset" ? 0xA855F7 : row.Icon == "gamepad" ? 0xF59E0B : 0x14A38B, DeviceGlyph(row.Icon));
         double tx = r.X + 16 + 48 + 14, tw = r.W - (tx - r.X) - 16;
         Text(row.Title, _cardTitle, tx, r.Y + 14, tw, 22, Label(dim)); Text(row.Subtitle, _sub, tx, r.Y + 38, tw, 18, Secondary);
-        double by = r.Y + r.H - 34, bw = r.W - 32 - 70;
+        double by = r.Y + 70, bw = r.W - 32;
         RR(r.X + 16, by, bw, 8, 4, Off);
         if (row.Value >= 0 && row.Enabled) { var col = row.Value <= 20 ? K(_p.Danger) : Tint; RR(r.X + 16, by, Math.Max(8, bw * row.Value / 100), 8, 4, col); }
-        Text(row.Text, _head, r.X + 16 + bw + 8, by - 8, 62, 24, row.Value >= 0 && row.Enabled ? Label() : Secondary, right: true);
+        Text(row.Text, _small, r.X + 16, by + 12, bw, 22, row.Value >= 0 && row.Enabled ? Label() : Secondary);
     }
 
     /// <summary>Vista previa del Dock: representativa (colores de muestra, no tus apps); el tamaño y la ampliación reflejan los ajustes reales.</summary>
