@@ -449,3 +449,37 @@ public sealed class SpotlightPasteTests
         Assert.Equal(199, c.Query.Length);
     }
 }
+
+public sealed class SpotlightSelectionTests
+{
+    private static SpotlightController With(string text) { var c = new SpotlightController(); foreach (var ch in text) c.Char(ch); return c; }
+
+    [Fact]
+    public void Ctrl_A_selects_all_and_typing_or_pasting_replaces_it()
+    {
+        var c = With("hola"); var (cmd, _) = c.Key(0x41, ctrl: true); Assert.Equal(SpotCommandKind.Redraw, cmd.Kind); Assert.True(c.AllSelected);
+        Assert.True(c.Char('x')); Assert.Equal("x", c.Query); Assert.False(c.AllSelected);
+        c.Key(0x41, true); Assert.True(c.Paste("nuevo")); Assert.Equal("nuevo", c.Query); Assert.False(c.AllSelected);
+    }
+
+    [Fact]
+    public void Backspace_or_Delete_with_everything_selected_clears_the_field()
+    {
+        foreach (var vk in new[] { 0x08, 0x2E }) { var c = With("hola"); c.Key(0x41, true); var (cmd, changed) = c.Key(vk, false); Assert.Equal("", c.Query); Assert.True(changed); Assert.False(c.AllSelected); }
+    }
+
+    [Fact]
+    public void Ctrl_C_copies_what_was_typed_and_Ctrl_X_also_clears_it()
+    {
+        var c = With("hola"); var (copy, changed) = c.Key(0x43, ctrl: true);
+        Assert.Equal(SpotCommandKind.CopyText, copy.Kind); Assert.Equal("hola", copy.Action); Assert.False(changed); Assert.Equal("hola", c.Query);
+        var (cut, cutChanged) = c.Key(0x58, ctrl: true); Assert.Equal("hola", cut.Action); Assert.True(cutChanged); Assert.Equal("", c.Query);
+    }
+
+    [Fact]
+    public void An_empty_field_has_nothing_to_select_or_copy_and_other_keys_end_the_selection()
+    {
+        var c = new SpotlightController(); c.Key(0x41, true); Assert.False(c.AllSelected); Assert.Equal(SpotCommandKind.None, c.Key(0x43, true).Command.Kind);
+        var d = With("ab"); d.Key(0x41, true); d.Key(0x25, false); Assert.False(d.AllSelected); Assert.Equal("ab", d.Query);   // una flecha acaba la selección sin tocar el texto
+    }
+}

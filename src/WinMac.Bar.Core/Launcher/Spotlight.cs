@@ -223,9 +223,9 @@ public static class SpotlightEngine
             .Select(x => new SpotItem(SpotKind.File, x.r.Name, "Reciente", x.r.LinkPath)).ToList();
 }
 
-public enum SpotCommandKind { None, Redraw, Close, Open, OpenAdmin, Reveal, Delete, ToolAction }
+public enum SpotCommandKind { None, Redraw, Close, Open, OpenAdmin, Reveal, Delete, ToolAction, CopyText }
 
-/// <summary><see cref="Action"/>: for <see cref="SpotCommandKind.ToolAction"/>, the tool button pressed («repeat», «cancel», «copy»).</summary>
+/// <summary><see cref="Action"/>: for <see cref="SpotCommandKind.ToolAction"/>, the tool button pressed («repeat», «cancel», «copy»); for <see cref="SpotCommandKind.CopyText"/>, the text to put on the clipboard.</summary>
 public readonly record struct SpotCommand(SpotCommandKind Kind, SpotItem? Item = null, string? Action = null)
 {
     public static readonly SpotCommand None = new(SpotCommandKind.None), Redraw = new(SpotCommandKind.Redraw), Close = new(SpotCommandKind.Close);
@@ -254,7 +254,10 @@ public sealed class SpotlightController
     public LpRect PreviewRect => new(ListW, FieldH + 8, Width - ListW - 8, Height - FieldH - 16);
     public SpotItem? Current => Selected >= 0 && Selected < Results.Count ? Results[Selected] : null;
 
-    public void Reset() { Query = ""; Results = []; Selected = -1; Hover = -1; Pending = -1; Menu = null; MenuHover = -1; }
+    /// <summary>Ctrl+A: todo el texto del campo está seleccionado (no hay selección parcial). Escribir, pegar o borrar lo reemplaza; Ctrl+C / Ctrl+X lo copian / cortan.</summary>
+    public bool AllSelected { get; private set; }
+
+    public void Reset() { AllSelected = false; Query = ""; Results = []; Selected = -1; Hover = -1; Pending = -1; Menu = null; MenuHover = -1; }
 
     // ── menú de clic derecho sobre una app: «Abrir» / «Abrir como administrador»
     public const double MenuW = 230, MenuItemH = 30;
@@ -298,7 +301,9 @@ public sealed class SpotlightController
     /// <summary>Devuelve true si el texto cambió (el anfitrión vuelve a buscar).</summary>
     public bool Char(char c)
     {
-        if (char.IsControl(c) || Query.Length >= 200) return false;
+        if (char.IsControl(c)) return false;
+        if (AllSelected) { Query = ""; AllSelected = false; }
+        if (Query.Length >= 200) return false;
         Query += c; Pending = -1; return true;
     }
 
@@ -312,6 +317,7 @@ public sealed class SpotlightController
         var clean = new System.Text.StringBuilder(text.Length);
         foreach (var ch in text) clean.Append(ch is '\r' or '\n' or '\t' ? ' ' : char.IsControl(ch) ? '\0' : ch);
         var line = System.Text.RegularExpressions.Regex.Replace(clean.ToString().Replace("\0", ""), " {2,}", " ").Trim(); if (line.Length == 0) return false;
+        if (AllSelected) { Query = ""; AllSelected = false; }   // pegar sobre una selección total la reemplaza
         var room = 200 - Query.Length; if (room <= 0) return false;
         if (line.Length > room) { line = line[..room]; if (line.Length > 0 && char.IsHighSurrogate(line[^1])) line = line[..^1]; }   // no partir un par sustituto
         if (line.Length == 0) return false;
@@ -323,6 +329,20 @@ public sealed class SpotlightController
     public (SpotCommand Command, bool TextChanged) Key(int vk, bool ctrl, bool shift)
     {
         if (Menu is not null) { Menu = null; MenuHover = -1; if (vk == 0x1B) return (SpotCommand.Redraw, false); }   // Esc cierra solo el menú; otra tecla lo cierra y sigue
+        if (ctrl && !shift && vk == 0x41 && Query.Length > 0) { AllSelected = true; return (SpotCommand.Redraw, false); }   // Ctrl+A
+        if (ctrl && !shift && vk is 0x43 or 0x58 && Query.Length > 0 && (AllSelected || Current is not { Kind: SpotKind.Tool, Details.Count: > 0 }))
+        {   // Ctrl+C / Ctrl+X sobre lo escrito (con una herramienta con resultado y sin selección, Ctrl+C sigue copiando el resultado)
+            var copy = new SpotCommand(SpotCommandKind.CopyText, null, Query);
+            if (vk == 0x58) { Query = ""; AllSelected = false; Pending = -1; return (copy, true); }
+            return (copy, false);
+        }
+
+        if (AllSelected && vk is not (0x10 or 0x11 or 0x12 or 0x5B or 0x5C))   // Mayús, Ctrl, Alt, Windows: solo modifican; cualquier otra tecla acaba la selección
+        {
+            AllSelected = false;
+            if (vk is 0x08 or 0x2E) { Query = ""; Pending = -1; return (SpotCommand.Redraw, true); }   // Retroceso / Supr borran todo lo seleccionado
+        }
+
         switch (vk)
         {
             case 0x1B: if (Query.Length > 0) { Reset(); return (SpotCommand.Redraw, true); } return (SpotCommand.Close, false);

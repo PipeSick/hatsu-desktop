@@ -187,6 +187,7 @@ internal sealed class SpotlightWindow : IDisposable
             Brush(new Color4(1, 1, 1, empty ? 0.45f : 0.96f));
             using (var l = _dw.CreateTextLayout(empty ? "Búsqueda de Spotlight" : _ctl.Query, _field!, (float)(W - 76), (float)SpotlightController.FieldH))
             {
+                if (!empty && _ctl.AllSelected) { var tw = l.Metrics.WidthIncludingTrailingWhitespace; Brush(new Color4(0.04f, 0.52f, 1f, 0.45f)); _ctx.FillRectangle(R(54, 14, Math.Max(4, tw), 30), _solid!); Brush(new Color4(1, 1, 1, 0.96f)); }   // Ctrl+A: texto seleccionado
                 _ctx.DrawTextLayout(new Vector2(54, 0), l, _solid!);
                 if (!empty) { l.HitTestTextPosition((uint)_ctl.Query.Length, false, out float cx, out _, out _); Brush(new Color4(0.04f, 0.52f, 1f, 1)); _ctx.FillRectangle(R(54 + cx + 1, 16, 2, 26), _solid!); }
             }

@@ -73,6 +73,7 @@ public sealed partial class BarHost
         switch (c.Kind)
         {
             case SpotCommandKind.Close: _spot.Hide(); return;
+            case SpotCommandKind.CopyText when c.Action is { Length: > 0 } txt: CopyText(txt); return;
             case SpotCommandKind.ToolAction when c.Item is { } tool && c.Action is { } act: ToolAction(tool, act); return;
             case SpotCommandKind.Open when c.Item is { Kind: SpotKind.Clipboard } cb: ClipAction(cb, "copy"); _spot.Hide(); return;
             case SpotCommandKind.Reveal when c.Item is { Kind: SpotKind.Clipboard } cb: ClipAction(cb, "plain"); _spot.Hide(); return;
