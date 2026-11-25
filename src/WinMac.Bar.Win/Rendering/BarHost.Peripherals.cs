@@ -23,7 +23,7 @@ public sealed partial class BarHost
     }
 
     /// <summary>La Isla abrió su pestaña Inicio y pide lecturas frescas para su tarjeta «Periféricos» (tópico periph.refresh). Respeta el mínimo entre lecturas y solo vale con el módulo activo.</summary>
-    public void OnPeripheralsRefreshRequested() => Post(() => { if (_cfg.ShowPeripherals) RefreshPeripherals(force: false); });
+    public void OnPeripheralsRefreshRequested() => Post(() => { ResendNotchQuick(); if (_cfg.ShowPeripherals) RefreshPeripherals(force: false); });
 
     private void StopPeripherals()
     {

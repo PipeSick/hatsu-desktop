@@ -44,6 +44,10 @@ public sealed partial class BarHost
         _notchQuickKey = key; Send(NotchQuick.Payload(avail));
     }
 
+    private DateTime _nextQuickResend = DateTime.MinValue;
+    /// <summary>La Isla puede conectarse DESPUÉS del primer anuncio (arranque, reinicio de la Isla, Inicio recién abierto): sin esto los accesos solo aparecían al cambiar algo en Ajustes. Se vuelve a anunciar al abrir Inicio y cada 20 s.</summary>
+    private void ResendNotchQuick() { _notchQuickKey = null; SendNotchQuick(); _nextQuickResend = DateTime.UtcNow.AddSeconds(20); }
+
     /// <summary>La Isla pidió un acceso rápido (tópico notch.quick). Solo la LISTA CERRADA de <see cref="NotchQuick"/>: nada que venga por el canal se ejecuta como comando; se traduce a una acción del registro.</summary>
     public void OnNotchQuick(System.Text.Json.JsonElement? data)
     {
@@ -75,7 +79,7 @@ public sealed partial class BarHost
     {
         if (NotchEvent is null) return;
         if (!_notchStarted) StartNotchFeed();
-        SendNotchQuick();   // barato: solo envía si cambió la lista de accesos disponibles (un módulo se encendió o apagó)
+        if (DateTime.UtcNow >= _nextQuickResend) ResendNotchQuick(); else SendNotchQuick();   // barato: solo envía si cambió la lista de accesos disponibles (un módulo se encendió o apagó)
         var now = DateTime.UtcNow;
         if (now < _nextNotchRead || _notchReading) return;
         _nextNotchRead = now + NotchNotifyEvery;
