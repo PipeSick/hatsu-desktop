@@ -1,0 +1,208 @@
+id	kind	title	página actual	grupo actual	default	PÁGINA V2	SECCIÓN V2
+mod:bar	Toggle	Barra superior	general	Módulos	on	General	Componentes de Hatsu
+mod:dock	Toggle	Dock	general	Módulos	on	General	Componentes de Hatsu
+mod:connect	Toggle	Hatsu Connect	general	Módulos	off	General	Componentes de Hatsu
+mod:notch	Toggle	Hatsu Notch	general	Módulos	on	General	Componentes de Hatsu
+autostart	Toggle	Iniciar con Windows	general	Sistema	on	General	Comportamiento
+onboarding.rerun	Button	Abrir el asistente de configuración	general	Sistema		Extensiones y diagnóstico	Herramientas (y acceso desde General)
+diagnose.run	Button	Generar informe de diagnóstico	general	Sistema		Extensiones y diagnóstico	Herramientas (y acceso desde General)
+logs.open	Button	Abrir la carpeta de registros	general	Sistema		Extensiones y diagnóstico	Herramientas (y acceso desde General)
+bar:confirmDestructive	Toggle	Confirmar reiniciar, apagar y cerrar sesión	general	Sistema	on	General	Comportamiento
+bar.bg	Segmented	Fondo	bar	Apariencia	Vidrio	Barra superior	Apariencia
+bar.preview	Preview	Así queda tu barra	bar	En la barra		Barra superior	Elementos de la barra
+baritem:Volume	Toggle	Sonido	bar	En la barra	on	Barra superior	Elementos de la barra
+baritem:HubSystem	Toggle	Rendimiento	bar	En la barra	on	Barra superior	Elementos de la barra
+baritem:HubNetwork	Toggle	Red	bar	En la barra	on	Barra superior	Elementos de la barra
+baritem:HubDisks	Toggle	Discos	bar	En la barra	on	Barra superior	Elementos de la barra
+baritem:Weather	Toggle	Tiempo	bar	En la barra	on	Barra superior	Elementos de la barra
+baritem:Network	Toggle	Wi-Fi / red	bar	En la barra	on	Barra superior	Elementos de la barra
+baritem:Bluetooth	Toggle	Bluetooth	bar	En la barra	on	Barra superior	Elementos de la barra
+baritem:Battery	Toggle	Batería	bar	En la barra	on	Barra superior	Elementos de la barra
+baritem:TrayMenu	Toggle	Apps en segundo plano	bar	En la barra	on	Barra superior	Elementos de la barra
+baritem.add:Vpn	Button	VPN	bar	Disponibles para agregar		Barra superior	Elementos de la barra
+baritem.add:Cleanup	Button	Limpieza	bar	Disponibles para agregar		Barra superior	Elementos de la barra
+baritem.add:Peripherals	Button	Periféricos	bar	Disponibles para agregar		Barra superior	Elementos de la barra
+baritem.add:TaskManager	Button	Administrador de tareas	bar	Disponibles para agregar		Barra superior	Elementos de la barra
+bar:showBatteryPercent	Toggle	Porcentaje de batería	bar	Elementos	on	Barra superior	Reloj y elementos
+bar:showControlCenter	Toggle	Control Center	bar	Elementos	on	Barra superior	Reloj y elementos
+bar:showSeconds	Toggle	Segundos en el reloj	bar	Elementos	off	Barra superior	Reloj y elementos
+bar:showDate	Toggle	Fecha junto a la hora	bar	Elementos	on	Barra superior	Reloj y elementos
+bar:use24Hour	Toggle	Reloj de 24 horas	bar	Elementos	on	Barra superior	Reloj y elementos
+bar:showPhonePercent	Toggle	Porcentaje junto al iPhone	bar	Elementos	on	Barra superior	Reloj y elementos
+bar:showPowerWithoutBattery	Toggle	Icono de corriente en equipos sin batería	bar	Elementos	off	Barra superior	Reloj y elementos
+bar.orderreset	Button	Restaurar orden predeterminado	bar	Elementos		Barra superior	Reloj y elementos
+bar:reserveSpace	Toggle	Reservar el borde superior	bar	Comportamiento	on	Barra superior	Comportamiento avanzado
+bar:wifiDetails	Toggle	Detalle de Wi-Fi al tocar una red	bar	Comportamiento	off	Barra superior	Comportamiento avanzado
+bar:appMenus	Toggle	Menús de la app en la barra (avanzado)	bar	Comportamiento	off	Barra superior	Comportamiento avanzado
+bar:soundMixer	Toggle	Mezclador en el menú Sonido	bar	Sonido	on	Barra superior	Comportamiento avanzado
+bar:appOutputRouting	Toggle	Salida por aplicación (experimental)	bar	Sonido	on	Barra superior	Comportamiento avanzado
+bar:ccWifi	Toggle	Wi-Fi	bar	Centro de control	on	Barra superior	Comportamiento avanzado
+bar:ccBluetooth	Toggle	Bluetooth	bar	Centro de control	on	Barra superior	Comportamiento avanzado
+bar:ccSound	Toggle	Sonido	bar	Centro de control	on	Barra superior	Comportamiento avanzado
+bar:ccBrightness	Toggle	Brillo	bar	Centro de control	on	Barra superior	Comportamiento avanzado
+bar:ccPower	Toggle	Energía	bar	Centro de control	on	Barra superior	Comportamiento avanzado
+bar:ccAppearance	Toggle	Apariencia	bar	Centro de control	on	Barra superior	Comportamiento avanzado
+bar:ccDisplay	Toggle	Pantallas	bar	Centro de control	on	Barra superior	Comportamiento avanzado
+bar:ccNotifications	Toggle	Notificaciones	bar	Centro de control	on	Barra superior	Comportamiento avanzado
+bar:showCleanup	Toggle	Icono de Limpieza en la barra	bar	Limpieza	off	Barra superior	Elementos de la barra (indicadores)
+bar:cleanupIsland	Toggle	Mostrar el progreso de la limpieza en Hatsu Notch	bar	Limpieza	on	Barra superior	Elementos de la barra (indicadores)
+bar:showVpn	Toggle	Icono de VPN en la barra (conexiones VPN de Windows)	bar	VPN	off	Barra superior	Elementos de la barra (indicadores)
+bar:showHub	Toggle	Iconos de Rendimiento, Red y Discos	bar	Panel de Hatsu Desktop	on	Barra superior	Comportamiento avanzado
+hub.ms	Field	Leer sensores cada (ms)	bar	Panel de Hatsu Desktop	1000	Barra superior	Comportamiento avanzado
+hub.rate	Segmented	Unidad de red	bar	Panel de Hatsu Desktop	Auto	Barra superior	Comportamiento avanzado
+bar.capmods	Segmented	Modificadores de las capturas	bar	Atajos de teclado	Ctrl+Mayús	Atajos y gestos	Atajos de teclado (capturas)
+bar.keys.none	Info	La Barra todavía no ha informado de sus atajos (se muestra al arrancar	bar	Atajos de teclado		Atajos y gestos	Atajos de teclado
+bar.keysreset	Button	Restaurar los atajos predeterminados	bar	Atajos de teclado		Atajos y gestos	Atajos de teclado
+dock.size	Segmented	Tamaño de los iconos	dock	Tamaño	Mediano	Dock	Tamaño y ampliación
+dock.fine	Slider	Ajuste fino	dock	Tamaño	48 pt	Dock	Tamaño y ampliación
+dock.magnify	Toggle	Ampliación al pasar el ratón	dock	Tamaño	on	Dock	Tamaño y ampliación
+dock.autohide	Toggle	Ocultar automáticamente	dock	Comportamiento	off	Dock	Comportamiento
+dock.reserve	Toggle	Reservar espacio para el Dock	dock	Comportamiento	on	Dock	Comportamiento
+dock.game	Toggle	Modo juego	dock	Comportamiento	on	Dock	Comportamiento
+dock.gameapps	Field	Más juegos (ejecutables)	dock	Comportamiento		Dock	Comportamiento
+dock.previews	Toggle	Vista previa de ventanas	dock	Comportamiento	on	Dock	Comportamiento
+dock.minimize	Toggle	Clic en la app activa la minimiza	dock	Comportamiento	off	Dock	Comportamiento
+host.hidetaskbar	Toggle	Ocultar barra de tareas de Windows	dock	Barra de tareas de Windows	off	Dock	Barra de tareas de Windows (se conserva)
+notch.pos	Segmented	Posición	notch	Apariencia	Centro	Isla (Hatsu Notch)	Apariencia
+notch.glass	Slider	Vidrio	notch	Apariencia	60	Isla (Hatsu Notch)	Apariencia
+notch.music	Toggle	Música	notch	Música	on	Isla (Hatsu Notch)	Integraciones › Música
+notch.player	Segmented	Reproductor	notch	Música	Spotify	Isla (Hatsu Notch)	Integraciones › Música
+notch.path	Field	Ruta del reproductor	notch	Música		Isla (Hatsu Notch)	Integraciones › Música
+notch.lyrics	Toggle	Letras sincronizadas	notch	Música	off	Isla (Hatsu Notch)	Integraciones › Música
+notch.pill	Toggle	Letra en el notch cerrado	notch	Música	off	Isla (Hatsu Notch)	Integraciones › Música
+notch.pillvol	Toggle	Volumen	notch	Notch cerrado	on	Isla (Hatsu Notch)	Comportamiento (notch cerrado)
+notch.pillbright	Toggle	Brillo	notch	Notch cerrado	on	Isla (Hatsu Notch)	Comportamiento (notch cerrado)
+notch.pillnotif	Toggle	Notificaciones	notch	Notch cerrado	on	Isla (Hatsu Notch)	Comportamiento (notch cerrado)
+notch.hudsec	Field	Indicadores durante (s)	notch	Notch cerrado	2	Isla (Hatsu Notch)	Comportamiento (notch cerrado)
+notch.notifsec	Field	Notificaciones durante (s)	notch	Notch cerrado	5	Isla (Hatsu Notch)	Comportamiento (notch cerrado)
+notch.pillanim	Toggle	Animaciones	notch	Notch cerrado	on	Isla (Hatsu Notch)	Comportamiento (notch cerrado)
+notch.sec:0	Toggle	Inicio	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:1	Toggle	En curso	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:2	Toggle	Capturas	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:3	Toggle	Portapapeles	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:4	Toggle	Descargas	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:5	Toggle	Historial	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:6	Toggle	Música	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:7	Toggle	Temporizador	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:8	Toggle	Calendario	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:9	Toggle	Notificaciones	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:10	Toggle	Estantería	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:11	Toggle	Cámara (espejo)	notch	Pestañas	off	Isla (Hatsu Notch)	Pestañas de la isla
+notch.sec:12	Toggle	Recursos del sistema	notch	Pestañas	on	Isla (Hatsu Notch)	Pestañas de la isla
+notch.local	Button	Rutas y datos de Hatsu Notch…	notch			Isla (Hatsu Notch)	Ajustes avanzados
+mod.intro	Info	Cada módulo se enciende y se apaga al momento. Apagado no deja atajos,	modules			Módulos	Tarjeta del módulo + panel de configuración
+bar:spotActionsEnabled	Toggle	Spotlight Actions	modules		on	Módulos	Tarjeta del módulo + panel de configuración
+mod.status:spotactions	Info	Estado: sin informar todavía (la Barra lo comunica al arrancar)	modules			Módulos	Tarjeta del módulo + panel de configuración
+mod.spotactions.info	Info	Escribe, por ejemplo, «mission», «snap», «live text», «bloquear» o «ca	modules			Módulos	Tarjeta del módulo + panel de configuración
+bar:mcEnabled	Toggle	Hatsu Mission Control	modules		off	Módulos	Tarjeta del módulo + panel de configuración
+mod.status:mission	Info	Estado: apagado	modules			Módulos	Tarjeta del módulo + panel de configuración
+mod.key:mcHotkey	Field	Atajo	modules		Ctrl+Alt+Up	Módulos	Tarjeta del módulo + panel de configuración
+mod.mission.limit	Info	Muestra las ventanas del escritorio virtual actual (Windows no ofrece 	modules			Módulos	Tarjeta del módulo + panel de configuración
+bar:snapEnabled	Toggle	Hatsu Snap	modules		off	Módulos	Tarjeta del módulo + panel de configuración
+mod.status:snap	Info	Estado: apagado	modules			Módulos	Tarjeta del módulo + panel de configuración
+snap.mod	Segmented	Tecla al arrastrar	modules		Mayús	Módulos	Tarjeta del módulo + panel de configuración
+snap.layout	Segmented	Distribución	modules		Mitades	Módulos	Tarjeta del módulo + panel de configuración
+snap.gap	Field	Separación entre ventanas (px)	modules		0	Módulos	Tarjeta del módulo + panel de configuración
+mod.key:snapNextHotkey	Field	Atajo: ventana activa a la zona siguiente	modules			Módulos	Tarjeta del módulo + panel de configuración
+snap.edit	Button	Crear una distribución nueva (editor de zonas)…	modules			Módulos	Tarjeta del módulo + panel de configuración
+mod.snap.limit	Info	No mueve ventanas sin marco redimensionable, a pantalla completa ni de	modules			Módulos	Tarjeta del módulo + panel de configuración
+bar:liveTextEnabled	Toggle	Hatsu Live Text	modules		off	Módulos	Tarjeta del módulo + panel de configuración
+mod.status:livetext	Info	Estado: apagado	modules			Módulos	Tarjeta del módulo + panel de configuración
+mod.key:ltHotkey	Field	Atajo	modules		Ctrl+Alt+Space	Módulos	Tarjeta del módulo + panel de configuración
+bar:ltAutoCopy	Toggle	Copiar el texto al reconocerlo	modules		on	Módulos	Tarjeta del módulo + panel de configuración
+bar:ltAutoShelf	Toggle	Guardarlo también en la estantería	modules		off	Módulos	Tarjeta del módulo + panel de configuración
+bar:ltKeepLineBreaks	Toggle	Conservar los saltos de línea	modules		on	Módulos	Tarjeta del módulo + panel de configuración
+mod.lang	Field	Idioma de reconocimiento	modules			Módulos	Tarjeta del módulo + panel de configuración
+mod.livetext.limit	Info	Usa los paquetes de reconocimiento de texto que Windows tenga instalad	modules			Módulos	Tarjeta del módulo + panel de configuración
+shelf.enabled	Toggle	Hatsu Shelf+	modules		on	Módulos	Tarjeta del módulo + panel de configuración
+mod.status:shelf	Info	Estado: activa en la Isla (pestaña «Estantería»)	modules			Módulos	Tarjeta del módulo + panel de configuración
+shelf.max	Field	Elementos que guarda (1–100)	modules		20	Módulos	Tarjeta del módulo + panel de configuración
+mod.shelf.info	Info	Archivos y carpetas se guardan por referencia: nunca se copian, mueven	modules			Módulos	Tarjeta del módulo + panel de configuración
+bar:gesturesEnabled	Toggle	Hatsu Gestures	gestures		off	Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+mod.status:gestures	Info	Estado: apagado	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+gest.pick:gestCornerTL	Button	Esquina superior izquierda: Nada	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+gest.pick:gestCornerTR	Button	Esquina superior derecha: Nada	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+gest.pick:gestCornerBL	Button	Esquina inferior izquierda: Nada	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+gest.pick:gestCornerBR	Button	Esquina inferior derecha: Nada	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+gest.delay	Field	Espera en la esquina (ms)	gestures		450	Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+gest.pick:gestMouseX1	Button	Botón lateral «atrás» del ratón: Nada	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+gest.pick:gestMouseX2	Button	Botón lateral «adelante» del ratón: Nada	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+mod.key:gestKey1	Field	Atajo 1	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+gest.pick:gestKey1Action	Button	Acción del atajo 1: Nada	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+mod.key:gestKey2	Field	Atajo 2	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+gest.pick:gestKey2Action	Button	Acción del atajo 2: Nada	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+mod.gest.limit	Info	No captura gestos del panel táctil (los de 3 y 4 dedos son de Windows 	gestures			Atajos y gestos	Esquinas / ratón / atajos del módulo Gestures
+bar.spot	Segmented	Atajo	spot	Spotlight	Alt+Espacio	Spotlight	Búsqueda y herramientas
+bar:spotlightFiles	Toggle	Buscar también archivos	spot	Spotlight	on	Spotlight	Búsqueda y herramientas
+bar.spotpro	Info	Acciones de Hatsu Desktop, «ip», «red», «ping …» y «dns …» (solo con I	spot	Herramientas		Spotlight	Búsqueda y herramientas
+bar.scripts	Info	Scripts propios: %APPDATA%\Hatsu\spotlight-scripts.json. Se ejecutan c	spot	Herramientas		Spotlight	Búsqueda y herramientas
+bar.workspaces	Info	Espacios de trabajo: «Guardar espacio de trabajo», «Restaurar …», «Ven	spot	Herramientas		Spotlight	Búsqueda y herramientas
+bar:launchpadOnWinKey	Toggle	La tecla Windows abre Launchpad	spot	Launchpad	on	Spotlight	Launchpad
+bar:notificationCenter	Toggle	El reloj abre el Centro de Notificaciones	nc	Centro de Notificaciones	on	Notificaciones y portapapeles	Notificaciones › Centro de Notificaciones
+bar:notificationsFromWindows	Toggle	Mostrar notificaciones de Windows	nc	Centro de Notificaciones	off	Notificaciones y portapapeles	Notificaciones › Centro de Notificaciones
+bar:notifRemoveFromWindows	Toggle	Borrar también en Windows	nc	Centro de Notificaciones	on	Notificaciones y portapapeles	Notificaciones › Centro de Notificaciones
+nc.w:calendar	Toggle	Calendario	nc	Widgets	on	Notificaciones y portapapeles	Notificaciones › Widgets
+nc.w:weather	Toggle	Tiempo	nc	Widgets	on	Notificaciones y portapapeles	Notificaciones › Widgets
+nc.w:battery	Toggle	Batería	nc	Widgets	on	Notificaciones y portapapeles	Notificaciones › Widgets
+bar.ics	Field	Archivo .ics	nc	Calendario		Notificaciones y portapapeles	Notificaciones › Calendario
+notch.cliplimit	Field	Elementos en el historial	nc	Historial	50	Notificaciones y portapapeles	Portapapeles › Historial
+notch.clippersist	Toggle	Conservar al reiniciar	nc	Historial	off	Notificaciones y portapapeles	Portapapeles › Historial
+notch.clipclear	Button	Borrar el historial del portapapeles	nc	Historial		Notificaciones y portapapeles	Portapapeles › Historial
+notch.clipsecrets	Toggle	No guardar contraseñas ni claves	nc	Privacidad	on	Notificaciones y portapapeles	Portapapeles › Privacidad
+notch.clipexcl	Toggle	Ignorar las apps de la lista	nc	Privacidad	on	Notificaciones y portapapeles	Portapapeles › Privacidad
+notch.clipapps	Field	Apps excluidas	nc	Privacidad	KeePass, KeePassXC, 	Notificaciones y portapapeles	Portapapeles › Privacidad
+bar:captureHotkeys	Toggle	Atajos Ctrl+Mayús+3 / 4 / 5	capture	Capturas	on	Capturas y grabación	Capturas
+bar.capdelay	Segmented	Retardo	capture	Capturas	No	Capturas y grabación	Capturas
+bar.capfmt	Segmented	Formato	capture	Capturas	PNG	Capturas y grabación	Capturas
+bar:captureCopyToClipboard	Toggle	Copiar también al portapapeles	capture	Capturas	on	Capturas y grabación	Capturas
+bar:captureQuickLook	Toggle	Miniatura flotante al guardar	capture	Capturas	on	Capturas y grabación	Capturas
+bar.capdir	Field	Carpeta	capture	Capturas		Capturas y grabación	Capturas
+bar.rec	Info	Solo vídeo (nunca el micrófono ni el sonido), siempre con indicador vi	capture	Grabación de pantalla		Capturas y grabación	Grabación de pantalla
+wx.src	Segmented	Origen	weather	Ubicación principal	Ciudad elegida	Clima	Ubicación principal
+hub.city	Field	Ciudad	weather	Ubicación principal		Clima	Ubicación principal
+wx.state	Info	Ahora: Sin ciudad: el Tiempo no hace peticiones.	weather	Ubicación principal		Clima	Ubicación principal
+wx.nofavs	Info	Sin ciudades adicionales. Añade una abajo: aparecerán en el panel del 	weather	Ciudades adicionales		Clima	Ciudades adicionales
+hub.favadd	Field	Añadir ciudad	weather	Ciudades adicionales		Clima	Ciudades adicionales
+bar:weatherFahrenheit	Toggle	Grados Fahrenheit	weather	Unidades y barra	off	Clima	Unidades y barra
+bar:showWeather	Toggle	Icono del Tiempo	weather	Unidades y barra	on	Clima	Unidades y barra
+connect.module	Toggle	Conectar con el iPhone	connect	Hatsu Connect	off	iPhone (Hatsu Connect)	Hatsu Connect
+connect.device	Field	Nombre del iPhone	connect	iPhone		iPhone (Hatsu Connect)	iPhone
+connect.bt	Button	Emparejar o quitar en Configuración de Bluetooth…	connect	iPhone		iPhone (Hatsu Connect)	iPhone
+connect.pair	Info	Para emparejar: Configuración › Bluetooth y dispositivos › Agregar dis	connect	iPhone		iPhone (Hatsu Connect)	iPhone
+connect.battery	Toggle	Batería y estado de conexión	connect	Qué mostrar	on	iPhone (Hatsu Connect)	Qué mostrar
+bar:showPhone	Toggle	Indicador del iPhone en la barra superior	connect	Qué mostrar	on	iPhone (Hatsu Connect)	Qué mostrar
+connect.notifs	Toggle	Notificaciones del iPhone	connect	Qué mostrar	on	iPhone (Hatsu Connect)	Qué mostrar
+connect.calls	Toggle	Avisos de llamadas	connect	Qué mostrar	on	iPhone (Hatsu Connect)	Qué mostrar
+connect.island	Toggle	También en Hatsu Notch	connect	Qué mostrar	on	iPhone (Hatsu Connect)	Qué mostrar
+connect.alerts	Toggle	Aviso emergente para las nuevas	connect	Qué mostrar	on	iPhone (Hatsu Connect)	Qué mostrar
+connect.callcontrol	Toggle	Contestar, rechazar y colgar desde Hatsu Notch, con el audio en el PC	connect	Llamadas completas desde el PC	off	iPhone (Hatsu Connect)	Llamadas completas desde el PC
+connect.callcontrol.status	Info	Estado del control de llamadas: sin información (el módulo Connect no 	connect	Llamadas completas desde el PC		iPhone (Hatsu Connect)	Llamadas completas desde el PC
+connect.callcontrol.why	Info	Necesita el teléfono emparejado en Windows (manos libres/HFP) y que Wi	connect	Llamadas completas desde el PC		iPhone (Hatsu Connect)	Llamadas completas desde el PC
+connect.callcontrol.audio	Info	Audio: Windows usa tus dispositivos predeterminados de COMUNICACIONES 	connect	Llamadas completas desde el PC		iPhone (Hatsu Connect)	Llamadas completas desde el PC
+connect.callcontrol.focus	Info	Si la llamada se corta al abrir un juego o una app a pantalla completa	connect	Llamadas completas desde el PC		iPhone (Hatsu Connect)	Llamadas completas desde el PC
+connect.content	Segmented	Contenido de las notificaciones	connect	Privacidad	Completo	iPhone (Hatsu Connect)	Privacidad
+connect.diag.run	Button	Ejecutar diagnóstico de Bluetooth y llamadas	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.status	Info	Estado: Sin ejecutar	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.open	Button	Abrir el informe completo	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.copy	Button	Copiar el informe al portapapeles	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.save	Button	Guardar una copia…	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.observe	Toggle	Observar llamadas del sistema (temporal)	connect	Diagnóstico de llamadas (avanzado)	off	iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.exp:hfp	Button	Experimento: registrar y conectar HFP…	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.exp:audio	Button	Experimento: pasar el audio de una llamada activa al PC…	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.exp:restore	Button	Deshacer el registro de Hatsu Desktop en el transporte telefónico…	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.ios	Info	Prueba con iPhone: 1) comprueba que está conectado por Bluetooth; 2) e	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.diag.android	Info	Prueba con Android: 1) empareja el teléfono por Bluetooth en Windows; 	connect	Diagnóstico de llamadas (avanzado)		iPhone (Hatsu Connect)	Diagnóstico de conexión (desplegable avanzado)
+connect.m1	Info	Mensajes (SMS e iMessage): fase posterior. Ahora Hatsu Desktop no lee,	connect	Qué no hace (todavía)		iPhone (Hatsu Connect)	Qué no hace (todavía)
+connect.m2	Info	Hablar por el PC (micrófono y altavoces): solo con «Llamadas completas	connect	Qué no hace (todavía)		iPhone (Hatsu Connect)	Qué no hace (todavía)
+connect.m3	Info	Estado de carga del iPhone: Bluetooth solo da el porcentaje. Portapape	connect	Qué no hace (todavía)		iPhone (Hatsu Connect)	Qué no hace (todavía)
+bar:showPeripherals	Toggle	Icono de Periféricos en la barra	connect	Periféricos	off	Periféricos	Opciones de visualización y lectura
+bar:peripheralAsusRog	Toggle	Leer la batería de periféricos ASUS ROG (receptor 2,4 GHz)	connect	Periféricos	off	Periféricos	Opciones de visualización y lectura
+bar:peripheralLogitech	Toggle	Leer la batería de periféricos Logitech (receptor)	connect	Periféricos	off	Periféricos	Opciones de visualización y lectura
+bar:peripheralVendors	Toggle	Leer la batería de más marcas (Razer, SteelSeries, Corsair, HyperX…)	connect	Periféricos	off	Periféricos	Opciones de visualización y lectura
+bar:peripheralAlerts	Toggle	Avisar cuando la batería de un periférico esté baja	connect	Periféricos	off	Periféricos	Opciones de visualización y lectura
+periph.asus.kb	Field	Nombre del teclado ROG (si no se identifica)	connect	Periféricos		Periféricos	Opciones de visualización y lectura
+periph.asus.mouse	Field	Nombre del ratón ROG (si no se identifica)	connect	Periféricos		Periféricos	Opciones de visualización y lectura
+periph.thr	Field	Umbral de batería baja (%)	connect	Periféricos	20	Periféricos	Opciones de visualización y lectura
+periph.unhide	Button	Mostrar los dispositivos ocultos	connect	Periféricos		Periféricos	Opciones de visualización y lectura
+ext.empty	Info	No hay extensiones instaladas.	ext	Instaladas		Extensiones y diagnóstico	Instaladas
+ext.install	Field	Carpeta de la extensión	ext	Instalar		Extensiones y diagnóstico	Instalar
