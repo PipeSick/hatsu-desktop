@@ -38,7 +38,11 @@ public static partial class SettingsBuilder
             switch (page.Id)
             {
                 case "bar" when Find("bar.preview") is { } bp:
-                    break;   // la tira de vista previa de la Barra ya existe (se redibuja más grande en V2)
+                {   // la vista previa pasa a su propio grupo (ancho completo) para que las demás secciones se repartan en dos columnas
+                    groups = groups.Select(g => g.Rows.Contains(bp) ? g with { Rows = g.Rows.Where(r => r != bp).ToList() } : g).ToList();
+                    groups.Insert(0, new SettingsGroup(null, [bp]));
+                    break;
+                }
                 case "dock":
                 {
                     var fine = Find("dock.fine"); var mag = Find("dock.magnify");

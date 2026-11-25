@@ -293,14 +293,14 @@ internal sealed class SettingsPainter : IDisposable
         {   // fila de acción con píldoras azules (Agregar, Cancelar / Guardar)
             double ptw = r.W - 32 - SettingsLayout.ControlSpace(row, r.W);
             if (!string.IsNullOrEmpty(row.Subtitle)) { Text(row.Title, _body, x, r.Y + 8, ptw, 22, Label()); Text(row.Subtitle, _sub, x, r.Y + 30, Math.Max(40, ptw), SettingsLayout.SubLineH * SettingsLayout.Lines(row.Subtitle, ptw) + 3, Secondary, wrap: true, top: true); }
-            else Text(row.Title, _body, x, r.Y, ptw, r.H, Label());
+            else Text(row.Title, _body, x, r.Y, ptw, r.H - (SettingsLayout.IsStacked(row, r.W) ? SettingsLayout.ControlH + 14 : 0), Label());
             for (int i = 0; i < pills.Count; i++) { var pr = SettingsLayout.PillRect(r, i); Pill(pr.X, pr.Y, pr.W, pr.H, pills[i], primary: i == pills.Count - 1); }
             return;
         }
 
         if (row.Kind == RowKind.Button) { Text(row.Title, _body, x, r.Y, r.W - 60, r.H, row.Enabled ? Tint : Label(0.42f)); if (row.Enabled) Glyph("chevron", r.X + r.W - 20, midY, 6, Secondary); return; }
         if (hasSub) { var sub = SettingsLayout.SubText(row); Text(row.Title, _body, x, r.Y + 8, tw, 22, Label(dim)); Text(sub, _sub, x, r.Y + 30, Math.Max(40, tw), SettingsLayout.SubLineH * SettingsLayout.Lines(sub, tw) + 3, Secondary, wrap: true, top: true); }
-        else Text(row.Title, _body, x, r.Y, tw, r.H, Label(dim));
+        else Text(row.Title, _body, x, r.Y, tw, r.H - (SettingsLayout.IsStacked(row, r.W) ? SettingsLayout.ControlH + 14 : 0), Label(dim));
         switch (row.Kind)
         {
             case RowKind.Toggle:
@@ -317,7 +317,7 @@ internal sealed class SettingsPainter : IDisposable
                 var (x0, x1, cy) = SettingsLayout.SliderTrack(r); double v = c.Dragging is { } dg && dg.Id == row.Id ? dg.Value : row.Value, px = x0 + (x1 - x0) * v / 100;
                 RR(x0, cy - 2, x1 - x0, 4, 2, Off); RR(x0, cy - 2, px - x0, 4, 2, new Color4(Tint.R, Tint.G, Tint.B, dim));
                 Dot(px, cy + 1, 13, new Color4(0, 0, 0, 0.18f)); Dot(px, cy, 12, new Color4(1, 1, 1, dim)); RRStroke(px - 12, cy - 12, 24, 24, 12, new Color4(0, 0, 0, _dark ? 0.35f : 0.12f), 0.8f);
-                Text(row.SliderLabel(v), _small, x1 + 2, r.Y, 44, r.H, Secondary, right: true); break;
+                Text(row.SliderLabel(v), _small, x1 + 2, cy - 14, 44, 28, Secondary, right: true); break;
             }
         }
     }

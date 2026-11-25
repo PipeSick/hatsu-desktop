@@ -35,7 +35,8 @@ public static class SettingsLayout
     public static bool IsStacked(SettingsRow r) => IsStacked(r, ColW);
     public static bool IsStacked(SettingsRow r, double w) => r.Id != "search" && r.Kind switch
     {
-        RowKind.Segmented or RowKind.Field or RowKind.Slider => w < 640,
+        RowKind.Segmented => w < 640 || NaturalSegmentWidth(r) + 16 + 170 > w,
+        RowKind.Field or RowKind.Slider => w < 640,
         RowKind.Button when r.Options is { Count: > 0 } => w < PillsWidth(r) + 260,
         _ => false,
     };
@@ -101,7 +102,11 @@ public static class SettingsLayout
     public const double CardGap = 12, CardMinW = 290;
     public static int CardColumns(int count, double w = double.NaN) => Math.Clamp((int)Math.Floor(((double.IsNaN(w) ? ColW : w) + CardGap) / (CardMinW + CardGap)), 1, Math.Max(1, Math.Min(3, count)));
     /// <summary>Alto de una tarjeta de componente: icono, título, descripción en las líneas que haga falta (medida real) e interruptor.</summary>
-    public static double CardHeight(SettingsRow r, double cardW) => Math.Max(96, 20 + 22 + 4 + SubLineH * Lines(SubText(r), cardW - 16 - 48 - 14 - SwitchW - 24) + 20);
+    public static double CardHeight(SettingsRow r, double cardW)
+    {
+        double text = SubLineH * Lines(SubText(r), cardW - 16 - 48 - 14 - SwitchW - 24);
+        return r.Id.StartsWith("card:", StringComparison.Ordinal) ? Math.Max(110, 18 + 26 + text + 10 + 22 + 16) : Math.Max(96, 20 + 22 + 4 + text + 20);
+    }
 
     public static double FooterHeight(string? footer, double w = double.NaN) => string.IsNullOrWhiteSpace(footer) ? 0 : 8 + SubLineH * Math.Max(1, Lines(footer, (double.IsNaN(w) ? ColW : w) - 8));
 
@@ -168,14 +173,11 @@ public static class SettingsLayout
     public static (double X, double Y, double W, double H) DownRect(RowFrame f) { var s = SwitchRect(f); return (s.X - 10 - ArrowW, f.Y + (f.H - ControlH) / 2, ArrowW, ControlH); }
     public static (double X, double Y, double W, double H) UpRect(RowFrame f) { var d = DownRect(f); return (d.X - 4 - ArrowW, d.Y, ArrowW, ControlH); }
     /// <summary>Equal segments wide enough for the longest label (WM-013: «Ciudad elegida» was cut), at most 62 % of the row.</summary>
-    public static double SegmentWidth(SettingsRow r, double rowW)
-    {
-        int n = Math.Max(1, r.Options?.Count ?? 1); int longest = r.Options is { Count: > 0 } o ? o.Max(t => t.Length) : 4;
-        return Math.Min(rowW * 0.62, n * Math.Max(84.0, longest * 7.4 + 24));
-    }
+    public static double NaturalSegmentWidth(SettingsRow r) { int n = Math.Max(1, r.Options?.Count ?? 1); int longest = r.Options is { Count: > 0 } o ? o.Max(t => t.Length) : 4; return n * Math.Max(84.0, longest * 7.4 + 24); }
+    public static double SegmentWidth(SettingsRow r, double rowW, bool stacked = false) => stacked ? Math.Min(NaturalSegmentWidth(r), rowW - 32) : Math.Min(rowW * 0.62, NaturalSegmentWidth(r));
 
     private static double StackedY(RowFrame f) => f.Y + f.H - ControlH - 10;
-    public static (double X, double Y, double W, double H) SegmentRect(RowFrame f) { double w = SegmentWidth(f.Row, f.W); return IsStacked(f.Row, f.W) ? (f.X + 16, StackedY(f), Math.Min(w, f.W - 32), ControlH) : (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
+    public static (double X, double Y, double W, double H) SegmentRect(RowFrame f) { bool st = IsStacked(f.Row, f.W); double w = SegmentWidth(f.Row, f.W, st); return st ? (f.X + 16, StackedY(f), w, ControlH) : (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
     public static (double X, double Y, double W, double H) FieldRect(RowFrame f) { if (IsStacked(f.Row, f.W)) return (f.X + 16, StackedY(f), f.W - 32, ControlH); double w = Math.Min(f.W * 0.56, 290); return (f.X + f.W - 16 - w, f.Y + (f.H - ControlH) / 2, w, ControlH); }
     public static (double X0, double X1, double Cy) SliderTrack(RowFrame f) => IsStacked(f.Row, f.W) ? (f.X + 20, f.X + f.W - 16 - 56, StackedY(f) + ControlH / 2) : (f.X + f.W - 16 - 250, f.X + f.W - 16 - 46, f.Y + f.H / 2);
     public static double SliderValueAt(RowFrame f, double x) { var (x0, x1, _) = SliderTrack(f); return Math.Clamp((x - x0) / (x1 - x0) * 100, 0, 100); }
