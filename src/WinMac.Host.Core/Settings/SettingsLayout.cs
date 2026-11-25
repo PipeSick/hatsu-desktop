@@ -10,7 +10,11 @@ public static class SettingsLayout
 {
     // Settings V2: la ventana es redimensionable; el tamaño del área de cliente (DIP) lo fija la ventana con <see cref="Configure"/>. Todo lo demás se deriva de él.
     [ThreadStatic] private static double _winW, _winH;   // por hilo: la ventana de Ajustes vive en su hilo y las pruebas no se pisan entre sí (0 = tamaño por defecto)
-    public static void Configure(double winW, double winH) { _winW = Math.Max(SettingsV2.SettingsShell.MinWindowW * 0.7, winW); _winH = Math.Max(300, winH); }
+    public static void Configure(double winW, double winH)
+    {
+        if (winW <= 0 && winH <= 0) { _winW = 0; _winH = 0; return; }   // restablece el tamaño por defecto
+        _winW = Math.Max(SettingsV2.SettingsShell.MinWindowW * 0.7, winW); _winH = Math.Max(300, winH);
+    }
     public static double WinW => _winW == 0 ? 1100 : _winW;
     public static double WinH => _winH == 0 ? 720 : _winH;
     public static double SidebarW => SettingsV2.SettingsShell.SidebarWidth(WinW);
