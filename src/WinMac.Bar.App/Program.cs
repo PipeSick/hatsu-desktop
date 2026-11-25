@@ -156,6 +156,7 @@ internal static class Program
             host.NotchActivity = payload => link.Event("notch.activity", payload);
             host.NotchCommand = payload => link.Event("notch.cmd", payload);
             host.ModuleEvent = (topic, payload) => link.Event(topic, payload);
+            link.Subscribe(WinMac.Bar.Notch.NotchQuick.Topic, d => host.OnNotchQuick(d));   // accesos rápidos de Inicio (lista cerrada)
             link.Subscribe("periph.refresh", _ => host.OnPeripheralsRefreshRequested());   // la Isla abrió Inicio: lecturas frescas para su tarjeta de periféricos
             link.Subscribe("clip.results", d => { if (d is { } e) host.OnClipResults(e); });   // p. ej. cerrar la Isla abierta antes de capturar   // API interna de actividades de la Isla (docs/25)
             host.HostCommand = (cmd, section) => link.Event("host.cmd", new { cmd, section });   // «Ajustes» y «Salir» del panel: las ejecuta el host (cierre ordenado)

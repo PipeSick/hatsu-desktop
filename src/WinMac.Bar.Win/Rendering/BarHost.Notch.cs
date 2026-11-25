@@ -24,7 +24,7 @@ public sealed partial class BarHost
     private IDisposable? _volWatch, _brightWatch;
     private bool _notchStarted, _notchReading;
     private DateTime _nextNotchRead = DateTime.MinValue;
-    private readonly NewNotificationTracker _notchTracker = new(); private string? _notchSnapshotKey, _notchPeriphKey;
+    private readonly NewNotificationTracker _notchTracker = new(); private string? _notchSnapshotKey, _notchPeriphKey, _notchQuickKey;
 
     /// <summary>Envía un evento a la Isla (lo pone Program en modo integrado). Se llama desde cualquier hilo.</summary>
     public Action<object>? NotchEvent { get; set; }
@@ -33,7 +33,28 @@ public sealed partial class BarHost
     public Action<object>? NotchActivity { get; set; }
 
     /// <summary>Ajustes centrales de la Isla (tópico retenido): qué quiere recibir.</summary>
-    public void ApplyNotchOptions(NotchFeedOptions o) { _notchOpts = o; _notchSnapshotKey = null; _notchPeriphKey = null; Post(SendNotchPeripherals); if (!o.Notifications) Post(_notchTracker.Reset); Post(SendNotchSnapshot); }   // the Island (re)connected: it gets the snapshot again
+    public void ApplyNotchOptions(NotchFeedOptions o) { _notchOpts = o; _notchSnapshotKey = null; _notchPeriphKey = null; _notchQuickKey = null; Post(SendNotchPeripherals); Post(SendNotchQuick); if (!o.Notifications) Post(_notchTracker.Reset); Post(SendNotchSnapshot); }   // the Island (re)connected: it gets the snapshot again
+
+    /// <summary>Accesos rápidos de Inicio: se anuncia a la Isla cuáles están disponibles AHORA (acción registrada y disponible); solo si cambió. Ver <see cref="NotchQuick"/>.</summary>
+    private void SendNotchQuick()
+    {
+        if (NotchEvent is null) return;
+        var avail = NotchQuick.Available(id => _actionRegistry.Find(id) is { } a && _actionRegistry.IsAvailable(a), HostCommand is not null);
+        var key = NotchQuick.Key(avail); if (key == _notchQuickKey) return;
+        _notchQuickKey = key; Send(NotchQuick.Payload(avail));
+    }
+
+    /// <summary>La Isla pidió un acceso rápido (tópico notch.quick). Solo la LISTA CERRADA de <see cref="NotchQuick"/>: nada que venga por el canal se ejecuta como comando; se traduce a una acción del registro.</summary>
+    public void OnNotchQuick(System.Text.Json.JsonElement? data)
+    {
+        var id = NotchQuick.ParseId(data); if (id is null) { _log("[isla] acceso rápido ignorado: no está en la lista cerrada"); return; }
+        Post(() =>
+        {
+            if (id == NotchQuick.Gestures) { if (HostCommand is { } hc) hc("settings", "gestures"); return; }
+            var r = _actionRegistry.Execute(NotchQuick.Actions[id]);
+            _log(r.Ok ? $"[isla] acceso rápido «{id}» ejecutado" : $"[isla] acceso rápido «{id}»: {r.Error}");
+        });
+    }
 
     /// <summary>Inicio de la Isla: la batería de los periféricos YA leídos (la lectura sigue siendo la del panel y las alertas; aquí no se lee nada nuevo). Solo si cambió.</summary>
     private void SendNotchPeripherals()
@@ -54,6 +75,7 @@ public sealed partial class BarHost
     {
         if (NotchEvent is null) return;
         if (!_notchStarted) StartNotchFeed();
+        SendNotchQuick();   // barato: solo envía si cambió la lista de accesos disponibles (un módulo se encendió o apagó)
         var now = DateTime.UtcNow;
         if (now < _nextNotchRead || _notchReading) return;
         _nextNotchRead = now + NotchNotifyEvery;

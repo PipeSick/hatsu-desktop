@@ -186,3 +186,35 @@ public sealed class NotchPeripheralsFeedTests
         Assert.Equal(NotchFeed.PeripheralsKey(all), NotchFeed.PeripheralsKey(all.ToList()));
     }
 }
+
+public sealed class NotchQuickTests
+{
+    private static JsonElement J(string s) => JsonDocument.Parse(s).RootElement.Clone();
+
+    [Fact]
+    public void Only_ids_of_the_closed_list_are_accepted_from_the_channel()
+    {
+        foreach (var id in new[] { "capture", "snap", "mission", "livetext", "gestures" }) Assert.Equal(id, NotchQuick.ParseId(J($"{{\"id\":\"{id}\"}}")));
+        foreach (var bad in new[] { "{\"id\":\"winmac:sys:shutdown\"}", "{\"id\":\"clipboard\"}", "{\"id\":\"\"}", "{\"id\":5}", "{\"cmd\":\"capture\"}", "[]", "\"capture\"", "{\"id\":\"capture \"}", "{\"id\":\"CAPTURE\"}" }) Assert.Null(NotchQuick.ParseId(J(bad)));
+        Assert.Null(NotchQuick.ParseId(null));
+    }
+
+    [Fact]
+    public void Each_quick_id_maps_to_an_existing_registry_action_never_to_a_system_power_action()
+    {
+        Assert.Equal("winmac:capture:region", NotchQuick.Actions["capture"]); Assert.Equal("mission:open", NotchQuick.Actions["mission"]); Assert.Equal("livetext:run", NotchQuick.Actions["livetext"]); Assert.Equal("snap:edit", NotchQuick.Actions["snap"]);
+        Assert.DoesNotContain(NotchQuick.Actions.Values, a => a.Contains(":sys:"));   // nada de apagar, reiniciar ni cerrar sesión
+        Assert.All(NotchQuick.Actions.Keys, k => Assert.Contains(k, NotchQuick.Closed));
+    }
+
+    [Fact]
+    public void Availability_follows_the_registry_so_a_switched_off_module_is_not_offered()
+    {
+        var all = NotchQuick.Available(a => true, canOpenSettings: true); Assert.Equal(["capture", "snap", "mission", "livetext", "gestures"], all);
+        Assert.Equal(["capture", "gestures"], NotchQuick.Available(a => a == "winmac:capture:region", true));   // Mission, Snap y Live Text apagados
+        Assert.Equal(["capture"], NotchQuick.Available(a => a == "winmac:capture:region", canOpenSettings: false));
+        Assert.Empty(NotchQuick.Available(_ => false, false));
+        var json = JsonSerializer.Serialize(NotchQuick.Payload(["capture", "gestures"])); Assert.Contains("\"kind\":\"quick\"", json); Assert.Contains("\"available\":[\"capture\",\"gestures\"]", json);
+        Assert.Equal("a,b", NotchQuick.Key(["a", "b"]));
+    }
+}
