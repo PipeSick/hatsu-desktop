@@ -56,6 +56,17 @@ internal sealed class TaskbarHider
         _hideAt = DateTime.UtcNow.AddSeconds(1.5); _limiter.Reset(); _graceUntil = DateTime.UtcNow + TaskbarPolicy.StartupGrace;
     }
 
+    /// <summary>
+    /// Windows reanudó de la suspensión: Explorer, las pantallas y la Barra (que reafirma su reserva en varios pasos durante ~30 s) provocan una ráfaga de «Explorer mostró su barra».
+    /// Eso NO es una pelea: durante <see cref="TaskbarPolicy.ResumeGrace"/> no cuenta para rendirse, se levanta cualquier rendición anterior y se vuelve a ocultar enseguida.
+    /// </summary>
+    public void OnResume(bool enabled)
+    {
+        if (!enabled) return;
+        var now = DateTime.UtcNow; _log("[barra de tareas] Windows reanudó de la suspensión: se vuelve a ocultar y no se cuenta la ráfaga de reapariciones");
+        _graceUntil = now + TaskbarPolicy.ResumeGrace; _limiter.Reset(); _suspendedUntil = DateTime.MinValue; _giveUps = 0; _hideAt = now.AddSeconds(2); _nextTick = DateTime.MinValue;
+    }
+
     private void Step(bool enabled, DateTime now)
     {
         if (enabled && _hideAt != DateTime.MaxValue) { if (now < _hideAt) return; _hideAt = DateTime.MaxValue; }
@@ -76,7 +87,7 @@ internal sealed class TaskbarHider
                 foreach (var h in bars) ShowWindow(h, SW_HIDE);
                 _bars.Clear(); _bars.UnionWith(bars); InstallHook();
                 ReportWorkArea();
-                if (!_hiddenByUs) { if (_graceUntil == default) _graceUntil = DateTime.UtcNow + TaskbarPolicy.StartupGrace; _log($"[barra de tareas] oculta en {bars.Count} pantalla(s)"); }
+                if (!_hiddenByUs) { var g = DateTime.UtcNow + TaskbarPolicy.StartupGrace; if (g > _graceUntil) _graceUntil = g; _log($"[barra de tareas] oculta en {bars.Count} pantalla(s)"); }
                 else if (bars.Count != _lastBarCount) _log($"[barra de tareas] ahora hay {bars.Count} barra(s) de Explorer (antes {_lastBarCount}): se ocultan todas");
                 _lastBarCount = bars.Count;
                 _hiddenByUs = true; Status = bars.Count == 1 ? "Oculta" : $"Oculta en {bars.Count} pantallas";

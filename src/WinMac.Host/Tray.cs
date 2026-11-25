@@ -30,6 +30,8 @@ internal sealed class Tray : IDisposable
 
     /// <summary>Explorer se reinició (WM-034: su barra de tareas nueva aparece visible).</summary>
     public Action? TaskbarCreated { get; set; }
+    /// <summary>Windows reanudó de la suspensión o la hibernación (WM_POWERBROADCAST).</summary>
+    public Action? Resumed { get; set; }
     /// <summary>Causa conocida de cada módulo que no arrancó (para la fila de la bandeja).</summary>
     public Func<IReadOnlyDictionary<string, ModuleFailure>>? Failures { get; set; }
 
@@ -60,6 +62,7 @@ internal sealed class Tray : IDisposable
     private IntPtr WndProcImpl(IntPtr h, uint msg, IntPtr w, IntPtr l)
     {
         if (_taskbarCreated != 0 && msg == _taskbarCreated) { if (_showIcon) AddIcon(); try { TaskbarCreated?.Invoke(); } catch (Exception) { } return IntPtr.Zero; }   // Explorer se reinició
+        if (msg == 0x218 /* WM_POWERBROADCAST */ && (long)w is 0x7 /* PBT_APMRESUMESUSPEND */ or 0x12 /* PBT_APMRESUMEAUTOMATIC */) { try { Resumed?.Invoke(); } catch (Exception) { } }   // sin return: Windows sigue su curso normal
         switch (msg)
         {
             case WM_TRAY when (uint)(long)l is Native.WM_RBUTTONUP or Native.WM_CONTEXTMENU: ShowMenu(); return IntPtr.Zero;

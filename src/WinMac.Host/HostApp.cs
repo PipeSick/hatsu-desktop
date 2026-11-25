@@ -180,6 +180,7 @@ internal static class HostApp
             var win = settings; controller.SettingsRequested = section => uiActions.Enqueue(() => win.Show(section));
             tray = new Tray(() => sup.States, RequestQuit, id => { if (sup.States.TryGetValue(id, out var st) && st == ModuleState.Disabled) config.SetModuleEnabled(id, true); else sup.Restart(id); }, settings.Show, log, showIcon: !o.NoTray);
             tray.TaskbarCreated = () => taskbar.OnTaskbarCreated(config.Current.HideTaskbar);
+            tray.Resumed = () => taskbar.OnResume(config.Current.HideTaskbar);
             tray.Failures = () => sup.Failures;
             settings.TaskbarStatus = () => taskbar.Status;
         }

@@ -137,4 +137,15 @@ public class ConnectSettingsTests
         }
         finally { File.Delete(f); }
     }
+
+    [Fact]
+    public void The_resume_grace_covers_the_bar_reassert_steps_and_the_reshow_burst_does_not_trip_the_limiter()
+    {
+        // La Barra reafirma su reserva a 1,5/5/12/30 s tras reanudar (ResumeRecovery) y cada paso hace que Explorer muestre su barra: la gracia debe cubrirlos todos
+        Assert.True(TaskbarPolicy.ResumeGrace.TotalSeconds > 30);
+        // La ráfaga real del registro (20+ reapariciones en pocos segundos) SÍ rinde al limitador: por eso durante la gracia ni se consulta
+        var l = new ReshowLimiter(); var t = DateTime.UtcNow; bool allowed = true; for (int i = 0; i < 25; i++) allowed &= l.Allow(t.AddMilliseconds(i * 100));
+        Assert.False(allowed);
+        l.Reset(); Assert.True(l.Allow(t));   // y OnResume lo reinicia
+    }
 }

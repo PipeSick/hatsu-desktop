@@ -71,6 +71,9 @@ public static class TaskbarPolicy
     /// <summary>Margen tras arrancar el host o tras TaskbarCreated: Explorer aún se está montando y muestra su barra muchas veces seguidas; eso no es una pelea y no cuenta para rendirse.</summary>
     public static readonly TimeSpan StartupGrace = TimeSpan.FromSeconds(30);
 
+    /// <summary>Tras reanudar de la suspensión la ráfaga (Explorer + pantallas + reafirmación de la Barra en pasos de hasta 30 s) no cuenta para rendirse.</summary>
+    public static readonly TimeSpan ResumeGrace = TimeSpan.FromSeconds(60);
+
     public static bool Suspended(DateTime now, DateTime suspendedUntil) => now < suspendedUntil;
 
     /// <param name="enabled">El ajuste está activado.</param>
