@@ -213,3 +213,19 @@ public class SettingsV2LayoutTests
         foreach (var id in matrix.Where(id => !id.StartsWith("bar.key:", StringComparison.Ordinal))) Assert.Contains(id, ids);
     }
 }
+
+public class SettingsV2TextVsControlTests
+{
+    [Fact]
+    public void A_field_never_covers_its_own_description()
+    {
+        foreach (double w in new[] { 640.0, 700, 900, 1280 })
+        {
+            var row = new SettingsRow(RowKind.Field, "x", "Nombre del teclado", "Un texto largo que ocupa varias líneas junto al campo de la derecha", Text: "Teclado ROG");
+            var f = new RowFrame(row, 0, 0, w, SettingsLayout.RowHeight(row, w), true, true);
+            if (SettingsLayout.IsStacked(row, w)) continue;
+            double textRight = f.X + 16 + (w - 32 - SettingsLayout.ControlSpace(row, w)), fieldLeft = SettingsLayout.FieldRect(f).X;
+            Assert.True(textRight <= fieldLeft - 8, $"el texto llega a {textRight:0} y el campo empieza en {fieldLeft:0} con ancho {w}");
+        }
+    }
+}

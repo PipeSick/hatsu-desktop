@@ -43,7 +43,7 @@ public static class SettingsLayout
 
     /// <summary>Ancho reservado a la derecha para el control de la fila (una sola fuente: el dibujo y el cálculo de alturas).</summary>
     public static double ControlSpace(SettingsRow r) => ControlSpace(r, ColW);
-    public static double ControlSpace(SettingsRow r, double w) => IsStacked(r, w) ? 0 : r.Kind switch { RowKind.Toggle => HasGrip(r) ? 51 + 24 + GripW : r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Button when r.Options is { Count: > 0 } => PillsWidth(r) + 16, RowKind.Segmented => SegmentWidth(r, w) + 16, RowKind.Field => 220, RowKind.Slider => 300, _ => 0 };
+    public static double ControlSpace(SettingsRow r, double w) => IsStacked(r, w) ? 0 : r.Kind switch { RowKind.Toggle => HasGrip(r) ? 51 + 24 + GripW : r.CanUp || r.CanDown ? 51 + 16 + 76 : 51 + 24, RowKind.Button when r.Options is { Count: > 0 } => PillsWidth(r) + 16, RowKind.Segmented => SegmentWidth(r, w) + 16, RowKind.Field => Math.Min(w * 0.56, 290) + 16, RowKind.Slider => 300, _ => 0 };
 
     // ── Piezas del prototipo: asa para arrastrar (⋮⋮) en los iconos de la barra y píldoras azules en las filas de acción
     public const double GripW = 30, PillH = 28, PillGap = 8;
