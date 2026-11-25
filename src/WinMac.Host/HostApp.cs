@@ -97,6 +97,7 @@ internal static class HostApp
         Supervisor? sup = null;
         var server = new IpcServer(new ServerOptions(pipe, token) { PeerValidator = pid => sup?.IsKnownPid(pid) ?? false });
         server.Start(); var bus = new IpcHostBus(server);
+        var devices = new SettingsDevices(); bus.Event += (_, topic, data) => devices.OnEvent(topic, data);   // Ajustes V2: iPhone y periféricos en vivo (solo lectura)
         var launcher = new SystemProcessLauncher
         {
             OnStarted = p => { try { job?.Assign(p); } catch (Exception e) { log($"[host] AVISO: no se pudo asignar {p.ProcessName} al Job Object: {e.Message}"); } },
@@ -163,7 +164,8 @@ internal static class HostApp
         config.Changed += (old, now) => { if (old.HideTaskbar && !now.HideTaskbar) uiActions.Enqueue(taskbar.RestoreNow); };   // al desactivar: al instante, en el hilo de interfaz
         try
         {
-            settings = new SettingsWindow(config, () => sup.States, controller.OpenNotchLocalSettings, exePath, log);
+            settings = new SettingsWindow(config, () => sup.States, controller.OpenNotchLocalSettings, exePath, log) { Devices = devices };
+            devices.Changed += settings.Refresh;
             settings.RunOnboarding = () => uiActions.Enqueue(() => OpenWizard(OnboardingMode.Rerun));
             settings.ModuleFailures = () => sup.Failures;
             settings.RetryModule = id => { bool ok = sup.Restart(id); log(ok ? $"[host] reintento manual de {id} pedido desde Ajustes" : $"[host] reintento de {id}: nada que reintentar ahora"); return ok; };

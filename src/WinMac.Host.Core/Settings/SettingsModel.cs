@@ -2,7 +2,7 @@ using WinMac.Bar;
 
 namespace WinMac.Host;
 
-public enum RowKind { Toggle, Segmented, Field, Slider, Button, Info, Preview, Hero }
+public enum RowKind { Toggle, Segmented, Field, Slider, Button, Info, Preview, Hero, Device }
 
 /// <summary>
 /// Una fila de la ventana de Ajustes. No hay controles decorativos: lo que no se puede usar aparece atenuado con su <see cref="Reason"/>.
@@ -29,6 +29,8 @@ public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, M
 {
     /// <summary>Versión instalada (Settings V2: tarjeta de General). Vacío en pruebas.</summary>
     public string AppVersion { get; init; } = "";
+    /// <summary>Estado en vivo del iPhone y de los periféricos para sus tarjetas (null = sin datos: se explica, no se inventa).</summary>
+    public SettingsDevices? Devices { get; init; }
     /// <summary>Configuración del Dock (su propio archivo dock.json). Null: no se pudo leer; la página lo dice y no muestra controles falsos.</summary>
     public WinMac.Dock.DockConfig? Dock { get; init; }
     /// <summary>Hatsu Desktop: ruta de OTRA instalación (p. ej. el WinMac antiguo) que Windows inicia hoy con la sesión; null si no hay. Con valor, Ajustes ofrece cambiarla a esta (con confirmación).</summary>
@@ -159,8 +161,11 @@ public static partial class SettingsBuilder
         if (rows.Count > 0) yield return new("Módulos con problemas", rows, "El informe de diagnóstico (más abajo) incluye el detalle técnico. Hatsu Desktop no cambia las protecciones de Windows.");
     }
 
+    [ThreadStatic] private static SettingsDevices? _devices;
+
     public static IReadOnlyList<SettingsPage> Build(SettingsInput input)
     {
+        _devices = input.Devices;
         var cfg = input.Cfg; var n = cfg.Notch ?? NotchSettings.Factory; _bar = cfg.Bar ?? new BarConfig(); var bar = _bar;
         bool installed = !(input.States.TryGetValue("notch", out var ns) && ns == ModuleState.NotInstalled);
         const string noNotch = "Hatsu Notch no está instalado junto a Hatsu Desktop.";

@@ -229,3 +229,56 @@ public class SettingsV2TextVsControlTests
         }
     }
 }
+
+public class SettingsV2DevicePagesTests
+{
+    private static IReadOnlyList<SettingsPage> Build(SettingsDevices? dev, bool connectOn = true, bool periphOn = true)
+    {
+        var mods = new Dictionary<string, ModuleConfig>(new HostConfig().Modules) { ["connect"] = new ModuleConfig { Enabled = connectOn } };
+        var cfg = new HostConfig { Bar = new WinMac.Bar.BarConfig { ShowPeripherals = periphOn }, Modules = mods };
+        return SettingsBuilder.Build(new SettingsInput(cfg, new Dictionary<string, ModuleState>(), false) { Dock = new WinMac.Dock.DockConfig(), Extensions = [], Devices = dev });
+    }
+
+    [Fact]
+    public void The_iphone_card_shows_each_state_with_real_data_only()
+    {
+        var card = (SettingsDevices? d, bool on) => Build(d, on).Single(p => p.Id == "connect").Groups[0].Rows[0];
+        Assert.Contains("Desactivado", card(null, false).Options!);
+        var dev = new SettingsDevices(); Assert.Contains("Iniciando", card(dev, true).Options!);
+        dev.Seed(new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Connected, DeviceName = "iPhone de Ana", Battery = 82, BatteryAtUtc = DateTime.UtcNow }, []);
+        var c = card(dev, true); Assert.Equal("iPhone de Ana", c.Title); Assert.Contains("Conectado", c.Options!); Assert.Contains("Batería 82 %", c.Options!); Assert.DoesNotContain(c.Options!, o => o.Contains("Carg"));   // la carga no se informa por Bluetooth: no se inventa
+        dev.Seed(new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Connected, DeviceName = "iPhone", NotificationsStatus = WinMac.Connect.PhoneFeatureStatus.NotAuthorized }, []);
+        var d2 = card(dev, true); Assert.Contains("Batería sin lectura", d2.Options!); Assert.Contains(d2.Options!, o => o.StartsWith("Permiso"));
+        dev.Seed(new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.NoDevice }, []); Assert.Contains("Sin emparejar", card(dev, true).Options!);
+        dev.Seed(new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.NoBluetooth }, []); Assert.Contains("Sin Bluetooth", card(dev, true).Options!);
+        dev.Seed(new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Error, Message = "No se pudo abrir la conexión" }, []); Assert.Contains("Error de conexión", card(dev, true).Options!);
+    }
+
+    [Fact]
+    public void Peripheral_cards_never_invent_a_battery_level()
+    {
+        var dev = new SettingsDevices(); dev.Seed(null, [new("Teclado", "keyboard", "bluetooth", true, 64, false), new("Auriculares", "headset", "bluetooth", true, null, false), new("Mando", "gamepad", "usb", false, null, false)]);
+        var rows = Build(dev).Single(p => p.Id == "periph").Groups[0].Rows; Assert.All(rows, r => Assert.Equal(RowKind.Device, r.Kind));
+        Assert.Equal("64 %", rows[0].Text); Assert.Equal(64, rows[0].Value);
+        Assert.Equal("Sin dato de batería", rows[1].Text); Assert.True(rows[1].Value < 0);
+        Assert.Equal("Desconectado", rows[2].Text); Assert.False(rows[2].Enabled);
+    }
+
+    [Fact]
+    public void Without_data_the_peripherals_page_explains_why_instead_of_showing_cards()
+    {
+        Assert.Contains("Activa", Build(null, periphOn: false).Single(p => p.Id == "periph").Groups[0].Rows[0].Title);
+        Assert.Contains("Esperando", Build(new SettingsDevices()).Single(p => p.Id == "periph").Groups[0].Rows[0].Title);
+        var d = new SettingsDevices(); d.Seed(null, []); Assert.Contains("No se detectó", Build(d).Single(p => p.Id == "periph").Groups[0].Rows[0].Title);
+    }
+
+    [Fact]
+    public void The_devices_feed_round_trips_and_ignores_garbage()
+    {
+        var all = new List<WinMac.Bar.Peripherals.DeviceView>();
+        var json = System.Text.Json.JsonSerializer.SerializeToElement(new { kind = "devices", items = new object[] { new { name = "Ratón", type = "mouse", connection = "dongle", connected = true, percent = 23, charging = true }, new { name = "", type = "x" }, new { name = "Sin batería", percent = 150 } } });
+        var parsed = WinMac.Bar.Notch.DevicesFeed.Parse(json); Assert.Equal(2, parsed.Count); Assert.Equal(23, parsed[0].Percent); Assert.True(parsed[0].Charging); Assert.Null(parsed[1].Percent);   // 150 no es un porcentaje válido
+        Assert.Empty(WinMac.Bar.Notch.DevicesFeed.Parse(null)); Assert.Empty(WinMac.Bar.Notch.DevicesFeed.Parse(System.Text.Json.JsonSerializer.SerializeToElement("basura")));
+        Assert.NotNull(WinMac.Bar.Notch.DevicesFeed.Payload(all));
+    }
+}

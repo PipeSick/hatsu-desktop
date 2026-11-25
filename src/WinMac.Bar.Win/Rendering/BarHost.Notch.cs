@@ -44,9 +44,20 @@ public sealed partial class BarHost
         _notchQuickKey = key; Send(NotchQuick.Payload(avail));
     }
 
+    /// <summary>Lista de periféricos para la ventana de Ajustes (host). Se envía solo si cambió (o cada 20 s para quien se conecte después).</summary>
+    public Action<object>? DevicesEvent { get; set; }
+    private string? _devicesKey;
+    private void SendDevices(bool force = false)
+    {
+        if (DevicesEvent is null) return;
+        var all = _cfg.ShowPeripherals && _periph is { } st ? st.View(DateTime.UtcNow, PeripheralSettings.ParseHidden(_cfg.PeripheralHidden)) : [];
+        var key = DevicesFeed.Key(all); if (!force && key == _devicesKey) return;
+        _devicesKey = key; try { DevicesEvent(DevicesFeed.Payload(all)); } catch (Exception e) { _log("[ajustes] envío de dispositivos: " + e.GetType().Name); }
+    }
+
     private DateTime _nextQuickResend = DateTime.MinValue;
     /// <summary>La Isla puede conectarse DESPUÉS del primer anuncio (arranque, reinicio de la Isla, Inicio recién abierto): sin esto los accesos solo aparecían al cambiar algo en Ajustes. Se vuelve a anunciar al abrir Inicio y cada 20 s.</summary>
-    private void ResendNotchQuick() { _notchQuickKey = null; SendNotchQuick(); _nextQuickResend = DateTime.UtcNow.AddSeconds(20); }
+    private void ResendNotchQuick() { _notchQuickKey = null; SendNotchQuick(); SendDevices(force: true); _nextQuickResend = DateTime.UtcNow.AddSeconds(20); }
 
     /// <summary>La Isla pidió un acceso rápido (tópico notch.quick). Solo la LISTA CERRADA de <see cref="NotchQuick"/>: nada que venga por el canal se ejecuta como comando; se traduce a una acción del registro.</summary>
     public void OnNotchQuick(System.Text.Json.JsonElement? data)
@@ -63,6 +74,7 @@ public sealed partial class BarHost
     /// <summary>Inicio de la Isla: la batería de los periféricos YA leídos (la lectura sigue siendo la del panel y las alertas; aquí no se lee nada nuevo). Solo si cambió.</summary>
     private void SendNotchPeripherals()
     {
+        SendDevices();
         if (NotchEvent is null || !_cfg.ShowPeripherals || _periph is not { } store) return;
         var all = store.View(DateTime.UtcNow, PeripheralSettings.ParseHidden(_cfg.PeripheralHidden));
         var key = NotchFeed.PeripheralsKey(all);

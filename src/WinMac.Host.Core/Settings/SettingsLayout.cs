@@ -104,6 +104,7 @@ public static class SettingsLayout
     /// <summary>Alto de una tarjeta de componente: icono, título, descripción en las líneas que haga falta (medida real) e interruptor.</summary>
     public static double CardHeight(SettingsRow r, double cardW)
     {
+        if (r.Kind == RowKind.Device) return 112;
         double text = SubLineH * Lines(SubText(r), cardW - 16 - 48 - 14 - SwitchW - 24);
         return r.Id.StartsWith("card:", StringComparison.Ordinal) ? Math.Max(110, 18 + 26 + text + 10 + 22 + 16) : Math.Max(96, 20 + 22 + 4 + text + 20);
     }

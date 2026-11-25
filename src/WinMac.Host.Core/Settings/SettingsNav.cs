@@ -27,6 +27,10 @@ public static partial class SettingsBuilder
     //    ninguna fila real se quita ni cambia de id.
     private static readonly HashSet<string> HalfPages = ["bar", "dock", "notch", "weather", "capture"];
 
+    private static (string, string, List<string>) R(string t, string s, params string[] chips) => (t, s, [.. chips]);
+
+    private static string ConnectionText(WinMac.Bar.Notch.DeviceInfo d) => d.Connection switch { "bluetooth" => "Bluetooth", "usb" => "USB", "dongle" => "Receptor 2,4 GHz", _ => "Conexión desconocida" } + (d.Type switch { "mouse" => " · Ratón", "keyboard" => " · Teclado", "headset" => " · Auriculares", "gamepad" => " · Mando", _ => "" });
+
     private static IReadOnlyList<SettingsPage> Compose(List<SettingsPage> pages)
     {
         SettingsRow? Find(string id) => pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).FirstOrDefault(r => r.Id == id);
@@ -56,6 +60,36 @@ public static partial class SettingsBuilder
                 case "gestures":
                     groups.Insert(0, new SettingsGroup(null, [new SettingsRow(RowKind.Preview, "gest.preview", "Esquinas activas", Options: [After(Find("gest.pick:gestCornerTL")), After(Find("gest.pick:gestCornerTR")), After(Find("gest.pick:gestCornerBL")), After(Find("gest.pick:gestCornerBR"))], On: Find("bar:gesturesEnabled")?.On ?? false)]));
                     break;
+                case "connect":
+                {
+                    bool on = Find("mod:connect")?.On ?? false; var ph = _devices?.Phone; string? nm = string.IsNullOrWhiteSpace(ph?.DeviceName) ? null : ph!.DeviceName;
+                    string battery = ph?.Battery is { } b && ph.BatteryAtUtc is { } at && DateTime.UtcNow - at < TimeSpan.FromMinutes(15) ? $"Batería {b} %" : ph?.Battery is { } old ? $"Última lectura {old} %" : "Batería sin lectura";
+                    (string t, string s, List<string> chips) = !on ? R("Hatsu Connect desactivado", "Actívalo para ver aquí tu iPhone: batería y notificaciones por Bluetooth, sin apps adicionales.", "Desactivado")
+                        : ph is null ? R("Esperando a Hatsu Connect", "Todavía no hay información del módulo.", "Iniciando")
+                        : ph.Status switch
+                        {
+                            WinMac.Connect.PhoneLinkStatus.NoDevice => R("Sin iPhone emparejado", "Empareja tu iPhone en la configuración de Bluetooth de Windows (la guía está más abajo).", "Sin emparejar"),
+                            WinMac.Connect.PhoneLinkStatus.Connecting => R(nm ?? "iPhone", "Conectando…", "Conectando"),
+                            WinMac.Connect.PhoneLinkStatus.Connected => R(nm ?? "iPhone", "Conectado por Bluetooth", "Conectado", battery),
+                            WinMac.Connect.PhoneLinkStatus.Disconnected => R(nm ?? "iPhone", "Fuera de alcance, apagado o con el Bluetooth desactivado.", "Desconectado", battery),
+                            WinMac.Connect.PhoneLinkStatus.NoBluetooth => R("Bluetooth no disponible", "El Bluetooth del PC está apagado o no existe.", "Sin Bluetooth"),
+                            _ => R(nm ?? "iPhone", string.IsNullOrWhiteSpace(ph.Message) ? "No se pudo conectar." : ph.Message!, "Error de conexión"),
+                        };
+                    if (on && ph is { NotificationsStatus: WinMac.Connect.PhoneFeatureStatus.NotAuthorized }) chips = [.. chips, "Permiso de notificaciones pendiente en el iPhone"];
+                    groups.Insert(0, new SettingsGroup(null, [new SettingsRow(RowKind.Hero, "iphone.card", t, s, Options: chips, Icon: "phone")]));
+                    break;
+                }
+
+                case "periph":
+                {
+                    var devs = _devices?.Devices ?? []; bool periphOn = Find("bar:showPeripherals")?.On ?? false;
+                    if (devs.Count > 0)
+                        groups.Insert(0, new SettingsGroup("Dispositivos detectados", devs.Select((d, i) => new SettingsRow(RowKind.Device, "periph.dev:" + i, d.Name, ConnectionText(d), Value: d.Percent ?? -1, On: d.Charging, Enabled: d.Connected, Icon: d.Type,
+                            Text: !d.Connected ? "Desconectado" : d.Percent is { } p ? p + " %" + (d.Charging ? " · Cargando" : "") : "Sin dato de batería")).ToList(), "Solo se muestra lo que el dispositivo informa. Sin dato de batería no se pone ningún porcentaje.", Cards: true));
+                    else groups.Insert(0, new SettingsGroup("Dispositivos detectados", [new SettingsRow(RowKind.Info, "periph.none", !periphOn ? "Activa «Icono de Periféricos en la barra» (más abajo) para que Hatsu lea tus dispositivos; apagado no se lee nada." : _devices is { DevicesReceived: true } ? "No se detectó ningún periférico (o están ocultos)." : "Esperando la primera lectura de la Barra…")]));
+                    break;
+                }
+
                 case "modules":
                 {
                     (string Id, string Icon, string Desc)[] mods =

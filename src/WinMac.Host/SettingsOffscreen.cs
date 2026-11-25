@@ -23,11 +23,20 @@ internal static class SettingsOffscreen
         catch (Exception e) { try { File.WriteAllText(png + ".txt", "ERROR: " + e); } catch (IOException) { } return 1; }
     }
 
+    /// <summary>DATOS DE MUESTRA (no es tu equipo): un iPhone conectado y cuatro periféricos, uno sin dato de batería y uno desconectado.</summary>
+    private static SettingsDevices SampleDevices()
+    {
+        var d = new SettingsDevices(); var now = DateTime.UtcNow;
+        d.Seed(new WinMac.Connect.PhoneState { Status = WinMac.Connect.PhoneLinkStatus.Connected, DeviceName = "iPhone de Ana", Battery = 82, BatteryAtUtc = now.AddMinutes(-1), BatteryStatus = WinMac.Connect.PhoneFeatureStatus.Active },
+            [new("Teclado MX Keys", "keyboard", "bluetooth", true, 64, false), new("Ratón G Pro", "mouse", "dongle", true, 23, true), new("Auriculares WH-1000", "headset", "bluetooth", true, null, false), new("Mando Xbox", "gamepad", "usb", false, null, false)]);
+        return d;
+    }
+
     public static string Render(string pngPath, string pageId, bool dark, double scale, double scroll, bool suggest, bool noNotch, bool edit = false)
     {
         var cfg = new HostConfig { Bar = new WinMac.Bar.BarConfig { WeatherCity = "Molina|-35.1167|-71.2833", WeatherFavorites = "Santiago|-33.45|-70.67;Valparaíso|-33.05|-71.62", ShowSeconds = false }, Notch = new NotchSettings { GlassLevel = 60, LyricsEnabled = true } };
         var states = noNotch ? new Dictionary<string, ModuleState> { ["notch"] = ModuleState.NotInstalled } : new Dictionary<string, ModuleState>();
-        var ctl = new SettingsController(); ctl.SetPages(SettingsBuilder.Build(new SettingsInput(cfg, states, true, suggest ? "" : "Ciudad: Molina, Maule, Chile. Otras: Región de Murcia, España. Para elegir, escribe «Molina, país»") { Dock = WinMac.Dock.DockSettings.Sanitize(WinMac.Dock.Win.Shell.DockDefaults.Create()), LocationPermission = "Permitido" })); ctl.SelectPage(pageId);
+        var ctl = new SettingsController(); ctl.SetPages(SettingsBuilder.Build(new SettingsInput(cfg, states, true, suggest ? "" : "Ciudad: Molina, Maule, Chile. Otras: Región de Murcia, España. Para elegir, escribe «Molina, país»") { Devices = SampleDevices(), Dock = WinMac.Dock.DockSettings.Sanitize(WinMac.Dock.Win.Shell.DockDefaults.Create()), LocationPermission = "Permitido" })); ctl.SelectPage(pageId);
         if (scroll > 0) ctl.Scroll(scroll);
         if (suggest) ctl.SetSuggestions("hub.city", ["Molina, Maule, Chile", "Molina de Segura, Región de Murcia, España", "Molina de Aragón, Castilla-La Mancha, España", "Molina, Cataluña, España"]);
         int pw = (int)Math.Ceiling(SettingsLayout.WinW * scale), ph = (int)Math.Ceiling(SettingsLayout.WinH * scale);

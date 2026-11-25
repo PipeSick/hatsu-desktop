@@ -237,7 +237,7 @@ internal sealed class SettingsPainter : IDisposable
         double x = r.X, y = r.Y + 4, w = r.W, h = r.H - 8;
         Shadow(x, y, w, h, 22); Gradient(x, y, w, h, K(_p.AccentSoft, _p.Dark ? 1f : 0.95f), K(_p.Surface), 22, vertical: false); RRStroke(x, y, w, h, 22, Sep, 0.9f);
         double ts = Math.Min(92, h - 28), tx = x + 24, ty = y + (h - ts) / 2;
-        Gradient(tx, ty, ts, ts, C(0x8B5CF6), C(0x5B34C7), ts * 0.26); Text("H", _title, tx, ty, ts, ts, new Color4(1, 1, 1, 1), center: true);
+        if (r.Row.Icon == "phone") Tile(tx, ty, ts, 0x3B82F6, "phone"); else { Gradient(tx, ty, ts, ts, C(0x8B5CF6), C(0x5B34C7), ts * 0.26); Text("H", _title, tx, ty, ts, ts, new Color4(1, 1, 1, 1), center: true); }
         double bx = tx + ts + 22, bw = Math.Max(60, w - (bx - x) - 24);
         Text(r.Row.Title, _title, bx, ty + 2, bw, 38, Label());
         Text(r.Row.Subtitle, _small, bx, ty + 42, bw, 22, Secondary);
@@ -245,8 +245,9 @@ internal sealed class SettingsPainter : IDisposable
         foreach (var (chip, i) in (r.Row.Options ?? []).Select((t, i) => (t, i)))
         {
             double cwid = Measure(chip, _small) + (i == 0 ? 40 : 26);
-            RR(cx, cy, cwid, 26, 13, i == 0 ? new Color4(Green.R, Green.G, Green.B, 0.16f) : Label(0.07f));
-            if (i == 0) { Dot(cx + 14, cy + 13, 4, Green); Text(chip, _small, cx + 24, cy, cwid - 24, 26, Label()); } else Text(chip, _small, cx, cy, cwid, 26, Label(0.85f), center: true);
+            bool good = chip is "Ejecutándose" or "Conectado"; bool bad = chip is "Error de conexión" or "Sin Bluetooth" or "Desactivado" or "Sin emparejar" or "Desconectado"; var tone = good ? Green : bad ? K(_p.Warning) : Tint;
+            RR(cx, cy, cwid, 26, 13, i == 0 ? new Color4(tone.R, tone.G, tone.B, 0.16f) : Label(0.07f));
+            if (i == 0) { Dot(cx + 14, cy + 13, 4, tone); Text(chip, _small, cx + 24, cy, cwid - 24, 26, Label()); } else Text(chip, _small, cx, cy, cwid, 26, Label(0.85f), center: true);
             cx += cwid + 10;
         }
     }
@@ -254,6 +255,7 @@ internal sealed class SettingsPainter : IDisposable
     /// <summary>Tarjeta de un componente (la misma fila Toggle, con el mismo id): icono, nombre, descripción medida y su interruptor.</summary>
     private void DrawCard(RowFrame r, SettingsController c)
     {
+        if (r.Row.Kind == RowKind.Device) { DrawDeviceCard(r); return; }
         var row = r.Row; float dim = row.Enabled ? 1f : 0.5f; bool hover = c.Hover is { } hv && hv.Id == row.Id;
         Shadow(r.X, r.Y, r.W, r.H, 16); RR(r.X, r.Y, r.W, r.H, 16, hover ? Raised : Card); RRStroke(r.X, r.Y, r.W, r.H, 16, hover ? new Color4(Tint.R, Tint.G, Tint.B, 0.5f) : Sep, hover ? 1.3f : 0.9f);
         Tile(r.X + 16, r.Y + 18, 48, ColorOfGlyph(row.Icon), row.Icon ?? "gear");
@@ -330,6 +332,22 @@ internal sealed class SettingsPainter : IDisposable
     private void Wallpaper(double x, double y, double w, double h, double radius)
     {
         Gradient(x, y, w, h, C(0x4B2FA6), C(0x9A74F0), radius); Gradient(x, y, w, h, new Color4(1, 1, 1, 0.0f), new Color4(1, 1, 1, 0.14f), radius, vertical: false);
+    }
+
+    private static string DeviceGlyph(string? type) => type switch { "keyboard" => "gear", "headset" => "bell", _ => "periph" };
+
+    /// <summary>Tarjeta de un periférico detectado: nombre y conexión reales y su batería SOLO si el dispositivo la informa (si no, «Sin dato»).</summary>
+    private void DrawDeviceCard(RowFrame r)
+    {
+        var row = r.Row; float dim = row.Enabled ? 1f : 0.55f;
+        Shadow(r.X, r.Y, r.W, r.H, 16); RR(r.X, r.Y, r.W, r.H, 16, Card); RRStroke(r.X, r.Y, r.W, r.H, 16, Sep, 0.9f);
+        Tile(r.X + 16, r.Y + 16, 48, row.Icon == "keyboard" ? 0x3B82F6 : row.Icon == "headset" ? 0xA855F7 : row.Icon == "gamepad" ? 0xF59E0B : 0x14A38B, DeviceGlyph(row.Icon));
+        double tx = r.X + 16 + 48 + 14, tw = r.W - (tx - r.X) - 16;
+        Text(row.Title, _cardTitle, tx, r.Y + 14, tw, 22, Label(dim)); Text(row.Subtitle, _sub, tx, r.Y + 38, tw, 18, Secondary);
+        double by = r.Y + r.H - 34, bw = r.W - 32 - 70;
+        RR(r.X + 16, by, bw, 8, 4, Off);
+        if (row.Value >= 0 && row.Enabled) { var col = row.Value <= 20 ? K(_p.Danger) : Tint; RR(r.X + 16, by, Math.Max(8, bw * row.Value / 100), 8, 4, col); }
+        Text(row.Text, _head, r.X + 16 + bw + 8, by - 8, 62, 24, row.Value >= 0 && row.Enabled ? Label() : Secondary, right: true);
     }
 
     /// <summary>Vista previa del Dock: representativa (colores de muestra, no tus apps); el tamaño y la ampliación reflejan los ajustes reales.</summary>

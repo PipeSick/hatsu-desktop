@@ -26,6 +26,7 @@ internal sealed class SettingsWindow : IDisposable
     private readonly Native.WndProc _proc, _editSub; private readonly SettingsController _ctl = new(); private readonly SettingsActions _actions;
     private IntPtr _hwnd, _edit, _editOld, _editFont; private string? _editId, _editInitial; private bool _editDirty, _tracking, _clickLogged;
     private D2DDevice? _dev; private SettingsPainter? _painter; private IDXGISwapChain1? _swap; private ID2D1Bitmap1? _bmp; private double _scale = 1; private bool _dark; private int _wPx, _hPx;
+    public SettingsDevices? Devices { get; set; }
     public IntPtr Handle => _hwnd;
     public bool IsOpen => _hwnd != IntPtr.Zero;
     private IReadOnlyList<WinMac.Apps.InstalledApp>? _appsCache; private DateTime _appsAt;
@@ -223,7 +224,7 @@ internal sealed class SettingsWindow : IDisposable
         ApplyThemeIfChanged();
         IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension, string)>? exts = null;
         try { exts = ExtensionList?.Invoke(); } catch (Exception e) { _log("[extensiones] lista no disponible: " + e.Message); }
-        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { AppVersion = AppVersionText(), ModuleFailures = ModuleFailures?.Invoke() ?? new Dictionary<string, ModuleFailure>(), AutostartForeignPath = Autostart.ForeignPath(_exe), Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "", ConnectDiag = _connectDiag?.View() ?? new() }));
+        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { AppVersion = AppVersionText(), Devices = Devices, ModuleFailures = ModuleFailures?.Invoke() ?? new Dictionary<string, ModuleFailure>(), AutostartForeignPath = Autostart.ForeignPath(_exe), Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "", ConnectDiag = _connectDiag?.View() ?? new() }));
         PositionEdit();
     }
 
