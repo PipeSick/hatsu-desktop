@@ -7,6 +7,8 @@
     <RootNamespace>WinMac.Connect.App</RootNamespace>
     <AssemblyName>HatsuDesktop.Connect</AssemblyName>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <!-- CA1416: PhoneCall/PhoneLineTransportDevice solo existen desde 10.0.20348 y el mínimo es 19041. Es intencional (ver arriba): cada llamada va dentro de try/catch y el diagnóstico informa si el Windows no las tiene. El analizador del SDK actual del CI las marca como error. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- It9 (Hatsu Desktop): lo que el Administrador de tareas y las propiedades del archivo muestran. Fase 2: el ejecutable público ya se llama HatsuDesktop*.exe; los espacios de nombres, el IPC, los mutex y las clases de ventana conservan «WinMac» por compatibilidad. -->
     <AssemblyTitle>Hatsu Desktop — Connect</AssemblyTitle>
