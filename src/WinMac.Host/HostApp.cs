@@ -158,6 +158,7 @@ internal static class HostApp
         Tray? tray = null; SettingsWindow? settings = null; ConnectDiagnosticsService? connectDiag = null;
         if (Autostart.Heal(exePath) is { } healed) log("[host] el inicio automático apuntaba a una carpeta que ya no existe: ahora apunta a esta instalación.");
         var taskbar = new TaskbarHider(exePath, log);   // WM-034
+        taskbar.Notify = (title, body) => bus.Emit("notch.feed", new { kind = "notification", app = "Hatsu Desktop", title, body });   // la Isla lo muestra (si sus avisos están activados)
         try { taskbar.RecoverStale(); } catch (Exception e) { log("[barra de tareas] no se pudo revisar la sesión anterior: " + e.Message); }
         config.Changed += (old, now) => { if (old.HideTaskbar && !now.HideTaskbar) uiActions.Enqueue(taskbar.RestoreNow); };   // al desactivar: al instante, en el hilo de interfaz
         try

@@ -23,6 +23,10 @@ internal sealed class TaskbarHider
     private IntPtr _hook; private uint _hookPid; private readonly WinEventProc _hookProc; private readonly HashSet<IntPtr> _bars = [];
     public string Status { get; private set; } = "";
 
+    /// <summary>Aviso visible (la Isla lo muestra como notificación): título y texto. Lo pone el host; null = solo registro y Ajustes.</summary>
+    public Action<string, string>? Notify { get; set; }
+    private DateTime _lastNotice = DateTime.MinValue;
+
     public TaskbarHider(string exe, Action<string> log, string? leasePath = null) { _exe = exe; _log = log; _leasePath = leasePath ?? TaskbarLease.DefaultPath; _hookProc = OnWinEvent; }
 
     /// <summary>Al arrancar el host: si quedó un registro de un WinMac que ya no está (cierre forzado, apagado), primero se restaura.</summary>
@@ -86,6 +90,12 @@ internal sealed class TaskbarHider
     {
         _giveUps++; _suspendedUntil = DateTime.UtcNow + TaskbarPolicy.RetryDelay(_giveUps); RemoveHook(); _limiter.Reset(); Status = "Suspendida: " + why;
         _log("[barra de tareas] se deja de ocultar en esta sesión: " + why);
+        // Aviso visible, como mucho una vez cada 30 min (antes la barra de Windows quedaba visible en silencio y solo se veía en Ajustes › Escritorio)
+        if (Notify is { } notify && DateTime.UtcNow - _lastNotice > TimeSpan.FromMinutes(30))
+        {
+            _lastNotice = DateTime.UtcNow;
+            try { notify("Barra de tareas de Windows visible", "Windows la mostró varias veces seguidas; Hatsu la deja visible un momento y vuelve a ocultarla sola."); } catch (Exception) { }
+        }
         if (TaskbarLease.Load(_leasePath) is { } l) Restore(l, _leasePath, _log);
         else foreach (var h in ExplorerTaskbars()) ShowWindow(h, SW_SHOWNA);
         TaskbarLease.Delete(_leasePath); _hiddenByUs = false;
