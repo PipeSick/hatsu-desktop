@@ -16,6 +16,7 @@ public sealed record NotchSettings
     public const string Topic = "config.notch", SetTopic = "config.notch.set", CommandTopic = "notch.cmd", RectsTopic = "notch.rects";   // RectsTopic: espacio que ocupa la Isla (lo publica ella; lo lee la Barra)
 
     public static readonly string[] Positions = ["TopCenter", "TopLeft", "TopRight"];
+    public static readonly string[] Accents = ["Violet", "Blue", "Green", "Pink", "Orange", "Graphite"];
     public static readonly string[] Players = ["Spotify", "Feishin", "Custom"];
     /// <summary>Mismo orden que NotchWin (NotchSections.AllIds): el Centro de actividades de WinMac 2.0 primero (docs/25).</summary>
     // «home» (Inicio, propuesta A+B de la Isla) es nueva: quien ya tenía un orden guardado la recibe PRIMERA y encendida (igual que NotchWin: NotchSections.Normalize).
@@ -24,6 +25,8 @@ public sealed record NotchSettings
 
     public string Position { get; init; } = "TopCenter";
     public int GlassLevel { get; init; } = 60;
+    /// <summary>Color de acento de la Isla (uno de <see cref="Accents"/>); «Violet» es el de siempre.</summary>
+    public string AccentColor { get; init; } = "Violet";
     public IReadOnlyList<NotchSection> Sections { get; init; } = DefaultSections();
     public bool MusicEnabled { get; init; } = true;
     /// <summary>El monitor de agentes de IA se quitó en 2.0.10; el campo sigue en el protocolo con NotchWin y queda apagado.</summary>
@@ -89,6 +92,7 @@ public sealed record NotchSettings
     {
         Position = Positions.FirstOrDefault(p => string.Equals(p, Position, StringComparison.OrdinalIgnoreCase)) ?? "TopCenter",
         GlassLevel = Math.Clamp(GlassLevel, 0, 100),
+        AccentColor = Accents.FirstOrDefault(a => string.Equals(a, AccentColor, StringComparison.OrdinalIgnoreCase)) ?? "Violet",
         Sections = NormalizeSections(Sections),
         MusicPlayer = Players.FirstOrDefault(p => string.Equals(p, MusicPlayer, StringComparison.OrdinalIgnoreCase)) ?? "Spotify",
         CustomPlayerPath = string.IsNullOrWhiteSpace(CustomPlayerPath) ? null : CustomPlayerPath.Trim().Trim('"'),
@@ -112,6 +116,7 @@ public sealed record NotchSettings
             {
                 case "position" when v.ValueKind == JsonValueKind.String: n = n with { Position = v.GetString()! }; break;
                 case "glasslevel" when v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int g): n = n with { GlassLevel = g }; break;
+                case "accentcolor" when v.ValueKind == JsonValueKind.String: n = n with { AccentColor = v.GetString()! }; break;
                 case "musicenabled" when IsBool(v): n = n with { MusicEnabled = v.GetBoolean() }; break;
                 case "agentsenabled" when IsBool(v): n = n with { AgentsEnabled = v.GetBoolean() }; break;
                 case "musicplayer" when v.ValueKind == JsonValueKind.String: n = n with { MusicPlayer = v.GetString()! }; break;
@@ -158,7 +163,7 @@ public sealed record NotchSettings
     /// <summary>Lo que se envía por el canal (camelCase).</summary>
     public object ToWire() => new
     {
-        position = Position, glassLevel = GlassLevel, sections = Sections.Select(s => new { id = s.Id, enabled = s.Enabled }).ToArray(), musicEnabled = MusicEnabled, agentsEnabled = AgentsEnabled,
+        position = Position, glassLevel = GlassLevel, accentColor = AccentColor, sections = Sections.Select(s => new { id = s.Id, enabled = s.Enabled }).ToArray(), musicEnabled = MusicEnabled, agentsEnabled = AgentsEnabled,
         musicPlayer = MusicPlayer, customPlayerPath = CustomPlayerPath, lyricsEnabled = LyricsEnabled, lyricsInPill = LyricsInPill, pollIntervalSeconds = PollIntervalSeconds, shelfMaxItems = ShelfMaxItems,
         pillVolume = PillVolume, pillBrightness = PillBrightness, pillNotifications = PillNotifications, pillHudSeconds = PillHudSeconds, pillNotifySeconds = PillNotifySeconds, pillAnimations = PillAnimations,
         clipboardLimit = ClipboardLimit, clipboardPersist = ClipboardPersist, clipboardSkipSecrets = ClipboardSkipSecrets,

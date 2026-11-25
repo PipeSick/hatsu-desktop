@@ -247,6 +247,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("hub.ms", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int ms)) cfg.ApplyBarPatch(Patch("hubRefreshMs", ms)); return true;   // un valor no numérico se ignora (la ventana vuelve a mostrar el vigente)
             case ("notch.pos", "segment") when e.Index >= 0 && e.Index < NotchSettings.Positions.Length: cfg.UpdateNotch(n => n with { Position = NotchSettings.Positions[e.Index] }); return true;
             case ("notch.player", "segment") when e.Index >= 0 && e.Index < NotchSettings.Players.Length: cfg.UpdateNotch(n => n with { MusicPlayer = NotchSettings.Players[e.Index] }); return true;
+            case ("notch.accent", "segment") when e.Index >= 0 && e.Index < NotchSettings.Accents.Length: cfg.UpdateNotch(n => n with { AccentColor = NotchSettings.Accents[e.Index] }); return true;
             case ("notch.glass", "slider"): cfg.UpdateNotch(n => n with { GlassLevel = (int)Math.Clamp(Math.Round(e.Number), 0, 100) }); return true;
             case ("notch.path", "text"): { var t = e.Text ?? ""; cfg.UpdateNotch(n => n with { CustomPlayerPath = t }); return true; }
             case ("notch.poll", "text"): if (int.TryParse((e.Text ?? "").Trim(), out int s)) cfg.UpdateNotch(n => n with { PollIntervalSeconds = s }); return true;

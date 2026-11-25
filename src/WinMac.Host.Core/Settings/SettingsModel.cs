@@ -116,6 +116,7 @@ public static partial class SettingsBuilder
 
     public static readonly string[] RateNames = ["Auto", "KB/s", "MB/s", "Mb/s"], RateValues = ["Auto", "KBps", "MBps", "Mbps"];
     public static readonly string[] BackgroundNames = ["Vidrio", "Transparente"], BackgroundValues = ["Glass", "Transparent"], ThemeNames = ["Sistema", "Claro", "Oscuro"], ThemeValues = ["System", "Light", "Dark"];
+    public static readonly string[] AccentNames = ["Violeta", "Azul", "Verde", "Rosa", "Naranja", "Grafito"];
     public static readonly string[] PositionNames = ["Centro", "Izquierda", "Derecha"], PlayerNames = ["Spotify", "Feishin", "Otro"];
     public static readonly Dictionary<string, string> SectionNames = new()
     {
@@ -309,6 +310,7 @@ public static partial class SettingsBuilder
         notch.Add(new("Apariencia", [
             new(RowKind.Segmented, "notch.pos", "Posición", Enabled: installed, Reason: why, Options: PositionNames, Selected: Index(NotchSettings.Positions, n.Position)),
             new(RowKind.Slider, "notch.glass", "Vidrio", Enabled: installed, Reason: why, Value: n.GlassLevel),
+            new(RowKind.Segmented, "notch.accent", "Color de acento", "Pestaña activa, botones y barras de la Isla", Enabled: installed, Reason: why, Options: AccentNames, Selected: Index(NotchSettings.Accents, n.AccentColor)),
         ]));
         notch.Add(new("Música", [
             new(RowKind.Toggle, "notch.music", "Música", "Muestra lo que suena en tu reproductor", n.MusicEnabled, installed, why),

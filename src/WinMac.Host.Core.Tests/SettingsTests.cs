@@ -259,6 +259,8 @@ public class SettingsActionsTests
             Assert.True(a.Apply(new SettingsEdit("autostart", "toggle", On: true))); Assert.Equal(["autostart:True"], calls); Assert.True(cfg.Current.Autostart);
             Assert.True(a.Apply(new SettingsEdit("notch.pos", "segment", Index: 1))); Assert.Equal("TopLeft", cfg.Notch.Position);
             Assert.True(a.Apply(new SettingsEdit("notch.glass", "slider", Number: 71.6))); Assert.Equal(72, cfg.Notch.GlassLevel);
+            Assert.True(a.Apply(new SettingsEdit("notch.accent", "segment", Index: 1))); Assert.Equal("Blue", cfg.Notch.AccentColor); Assert.Contains("\"accentColor\":\"Blue\"", System.Text.Json.JsonSerializer.Serialize(cfg.Notch.ToWire(), new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = null }));
+            Assert.False(a.Apply(new SettingsEdit("notch.accent", "segment", Index: 99)));
             Assert.True(a.Apply(new SettingsEdit("notch.player", "segment", Index: 2))); Assert.Equal("Custom", cfg.Notch.MusicPlayer);
             Assert.True(a.Apply(new SettingsEdit("notch.lyrics", "toggle", On: true))); Assert.True(cfg.Notch.LyricsEnabled); a.Apply(new SettingsEdit("notch.pill", "toggle", On: true)); Assert.True(cfg.Notch.LyricsInPill);
             a.Apply(new SettingsEdit("notch.lyrics", "toggle", On: false)); Assert.False(cfg.Notch.LyricsInPill);   // sin letras no hay letra en el notch
