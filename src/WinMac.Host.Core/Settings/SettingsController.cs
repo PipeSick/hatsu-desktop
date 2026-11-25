@@ -31,7 +31,7 @@ public sealed class SettingsController
             foreach (var g in p.Groups)
             {
                 var hits = g.Rows.Where(r => r.Kind is not (RowKind.Info or RowKind.Preview or RowKind.Hero) && !r.Id.StartsWith("card:", StringComparison.Ordinal) && words.All(w => Fold(r.Title + " " + r.Subtitle + " " + p.Title + " " + g.Header).Contains(w))).ToList();
-                if (hits.Count > 0) groups.Add(new SettingsGroup(p.Title + (string.IsNullOrEmpty(g.Header) ? "" : " · " + g.Header), hits));
+                if (hits.Count > 0) groups.Add(new SettingsGroup(p.Title + (string.IsNullOrEmpty(g.Header) ? "" : " · " + g.Header), [.. hits, new SettingsRow(RowKind.Button, "search.go:" + p.Id + ":" + hits[0].Id, "Abrir en " + p.Title)]));
             }
 
         if (groups.Count == 0) groups.Add(new SettingsGroup(null, [new SettingsRow(RowKind.Info, "search.none", $"No encontré ningún ajuste con «{SearchText}». Prueba con otra palabra, por ejemplo «atajo», «batería» o «VPN».")]));
@@ -75,6 +75,13 @@ public sealed class SettingsController
     public void SetPages(IReadOnlyList<SettingsPage> pages)
     {
         string? keep = _page >= 0 && _page < _pages.Count ? _pages[_page].Id : null; _pages = pages; int i = keep is null ? 0 : pages.ToList().FindIndex(p => p.Id == keep); _page = i < 0 ? 0 : i; Recompute();
+    }
+
+    /// <summary>Salta a un ajuste concreto: abre su página (saliendo de la búsqueda) y lo deja a la vista.</summary>
+    public void GoToRow(string pageId, string rowId)
+    {
+        SearchText = ""; _results = null; SelectPage(pageId); Recompute();
+        if (Frame.Rows.FirstOrDefault(r => r.Row.Id == rowId) is { } row) { _scroll = Math.Clamp(_scroll + row.Y - 24, 0, Frame.MaxScroll); Recompute(); }
     }
 
     /// <summary>Tras cambiar el tamaño de la ventana: recalcula la disposición de la página actual (conserva el desplazamiento).</summary>

@@ -307,6 +307,7 @@ internal sealed class SettingsWindow : IDisposable
             case "suggest": if (e.Id.StartsWith("gest.pick:", StringComparison.Ordinal)) ChoosePick(e.Id, e.Index); else if (e.Id == "gest.find") ChooseApp(e.Index); else ChooseSuggestion(e.Index); return;
         }
 
+        if (e.Kind == "button" && e.Id.StartsWith("search.go:", StringComparison.Ordinal)) { var parts = e.Id.Split(':', 3); EndEdit(commit: false); _ctl.GoToRow(parts[1], parts[2]); PositionEdit(); return; }
         if (e.Kind == "button" && e.Id == "bar.preview") { _ctl.ScrollToGroup("Disponibles para agregar"); return; }   // «Personalizar iconos…»
         if (e.Kind == "button" && e.Id == "gest.pick.actions")
         {   // Cancelar (0) descarta; Guardar (1) confirma lo escrito en el campo de la página web
