@@ -9,10 +9,10 @@ public class SettingsModelTests
         SettingsBuilder.Build(new SettingsInput(cfg ?? new HostConfig(), notchInstalled ? new Dictionary<string, ModuleState>() : new Dictionary<string, ModuleState> { ["notch"] = ModuleState.NotInstalled }, false, status));
 
     [Fact]
-    public void There_are_twelve_pages_row_ids_are_unique_and_every_bar_option_appears_exactly_once()
+    public void There_are_thirteen_pages_row_ids_are_unique_and_every_bar_option_appears_exactly_once()
     {
-        var pages = Pages(); Assert.Equal(["general", "bar", "dock", "notch", "modules", "gestures", "spot", "nc", "capture", "weather", "connect", "ext"], pages.Select(p => p.Id));   // propuesta A: 12 secciones en 5 grupos
-        Assert.Equal([null, "Escritorio", "Escritorio", "Escritorio", "Funciones", "Funciones", "Funciones", "Contenido", "Contenido", "Contenido", "Dispositivos", "Avanzado"], pages.Select(p => p.Section));
+        var pages = Pages(); Assert.Equal(["general", "bar", "dock", "notch", "modules", "gestures", "spot", "nc", "capture", "weather", "connect", "periph", "ext"], pages.Select(p => p.Id));   // Settings V2: 13 páginas; iPhone y Periféricos son independientes
+        Assert.Equal([null, "Escritorio", "Escritorio", "Escritorio", "Funciones", "Funciones", "Funciones", "Contenido", "Contenido", "Contenido", "Dispositivos", "Dispositivos", "Avanzado"], pages.Select(p => p.Section));
         var ids = pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).Select(r => r.Id).ToList(); Assert.Equal(ids.Count, ids.Distinct().Count());
         // los iconos que se agregan, quitan y ordenan viven en «Personalizar los iconos de la barra» (baritem:); el resto sigue en su sitio
         var moved = new HashSet<string> { "showNetwork", "showVolume", "showBattery", "showBluetooth", "showTrayIcons", "showTaskManager", "showHubSystem", "showHubNetwork", "showHubDisks" };
@@ -40,7 +40,7 @@ public class SettingsModelTests
     {
         var n = Pages(notchInstalled: false).Single(p => p.Id == "notch"); var rows = n.Groups.SelectMany(g => g.Rows).ToList();
         Assert.Contains(rows, r => r.Kind == RowKind.Info); Assert.All(rows.Where(r => r.Kind != RowKind.Info), r => { Assert.False(r.Enabled); if (!r.Id.StartsWith("notch.sec:", StringComparison.Ordinal)) Assert.False(string.IsNullOrEmpty(r.Reason)); });   // las pestañas van atenuadas bajo el aviso de arriba (sin repetir el motivo 10 veces)
-        Assert.False(Pages(notchInstalled: false).Single(p => p.Id == "general").Groups[0].Rows.Single(r => r.Id == "mod:notch").Enabled);
+        Assert.False(Pages(notchInstalled: false).Single(p => p.Id == "general").Groups.SelectMany(g => g.Rows).Single(r => r.Id == "mod:notch").Enabled);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class SettingsLayoutTests
         {
             var f = SettingsLayout.Compute(page); Assert.True(f.ContentHeight > 50, page.Id);
             foreach (var g in f.Groups) Assert.True(g.H > 0);
-            for (int i = 1; i < f.Rows.Count; i++) Assert.True(f.Rows[i].Y >= f.Rows[i - 1].Y + f.Rows[i - 1].H - 0.01, page.Id + " " + f.Rows[i].Row.Id);
+            for (int i = 0; i < f.Rows.Count; i++) for (int j = i + 1; j < f.Rows.Count; j++) Assert.False(f.Rows[i].X < f.Rows[j].X + f.Rows[j].W - 0.01 && f.Rows[j].X < f.Rows[i].X + f.Rows[i].W - 0.01 && f.Rows[i].Y < f.Rows[j].Y + f.Rows[j].H - 0.01 && f.Rows[j].Y < f.Rows[i].Y + f.Rows[i].H - 0.01, page.Id + " " + f.Rows[i].Row.Id + " / " + f.Rows[j].Row.Id);   // ninguna fila ni tarjeta se superpone con otra
             for (int i = 1; i < f.Groups.Count; i++) Assert.True(f.Groups[i].HeaderY >= f.Groups[i - 1].Y + f.Groups[i - 1].H + f.Groups[i - 1].FooterH + SettingsLayout.GroupGap - 0.5, page.Id + " grupo " + i);   // aire entre grupos: nada «pegado»
             Assert.All(f.Rows, r => { Assert.True(r.X >= SettingsLayout.Pad && r.X + r.W <= SettingsLayout.ContentW - SettingsLayout.Pad + 0.01); });
         }

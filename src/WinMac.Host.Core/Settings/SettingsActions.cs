@@ -202,6 +202,7 @@ public sealed class SettingsActions(ConfigService cfg, Action openLocal, Action<
             case ("logs.open", _): if (OpenLogsFolder is null) return false; OpenLogsFolder(); return true;
             case ("dock.size", "segment") when e.Index >= 0 && e.Index < WinMac.Dock.DockSettings.Presets.Length: return Dock(d => WinMac.Dock.DockSettings.WithIconSize(d, WinMac.Dock.DockSettings.Presets[e.Index].Size));
             case ("dock.fine", "slider"): return Dock(d => WinMac.Dock.DockSettings.WithIconSize(d, SettingsBuilder.DockFineSize(e.Number)));
+            case ("settings.theme", "segment") when e.Index is >= 0 and <= 2: { string v = ((SettingsV2.SettingsThemeMode)e.Index).ToString(); cfg.Update(c => c with { SettingsTheme = v }); return true; }
             case ("dock.magnify", "toggle"): return Dock(d => d with { MagnificationEnabled = e.On });
             case ("dock.autohide", "toggle"): return Dock(d => d with { AutoHide = e.On });
             case ("dock.reserve", "toggle"): return Dock(d => d with { ReserveSpace = e.On });

@@ -144,3 +144,72 @@ public class SettingsV2Tests
         if (!compact) Assert.InRange(f.Sidebar.W, SettingsShell.SidebarMin, SettingsShell.SidebarMax);
     }
 }
+
+/// <summary>Layout de Ajustes V2 sobre el modelo REAL: a cualquier tamaño de ventana nada se sale de su fila ni se dibuja encima de su texto.</summary>
+public class SettingsV2LayoutTests
+{
+    private static IReadOnlyList<SettingsPage> Pages() => SettingsBuilder.Build(new SettingsInput(new HostConfig(), new Dictionary<string, ModuleState>(), true) { Dock = new WinMac.Dock.DockConfig(), Extensions = [] });
+
+    [Theory]
+    [InlineData(700, 500)] [InlineData(900, 600)] [InlineData(1280, 720)] [InlineData(1920, 1080)] [InlineData(2560, 1440)] [InlineData(3840, 2160)]
+    public void Every_page_fits_without_overlaps_at_any_window_size(int w, int h)
+    {
+        SettingsLayout.Configure(w, h); SettingsLayout.Measurer = new FakeMeasurer();
+        try
+        {
+            foreach (var page in Pages())
+            {
+                var f = SettingsLayout.Compute(page); Assert.True(f.ContentHeight > 40, page.Id);
+                for (int i = 0; i < f.Rows.Count; i++)
+                {
+                    var r = f.Rows[i]; Assert.True(r.X >= SettingsLayout.Pad - 0.01 && r.X + r.W <= SettingsLayout.ContentW - SettingsLayout.Pad + 0.01, $"{page.Id} {r.Row.Id} fuera de la columna a {w}");
+                    for (int j = i + 1; j < f.Rows.Count; j++) { var q = f.Rows[j]; Assert.False(r.X < q.X + q.W - 0.01 && q.X < r.X + r.W - 0.01 && r.Y < q.Y + q.H - 0.01 && q.Y < r.Y + r.H - 0.01, $"{page.Id} {r.Row.Id} / {q.Row.Id} a {w}"); }
+                    void Inside((double X, double Y, double W, double H) c, string what) => Assert.True(c.X >= r.X - 0.01 && c.Y >= r.Y - 0.01 && c.X + c.W <= r.X + r.W + 0.01 && c.Y + c.H <= r.Y + r.H + 0.01, $"{page.Id} {r.Row.Id} {what} se sale de su fila a {w}");
+                    if (r.Row.Kind == RowKind.Field) { var c = SettingsLayout.FieldRect(r); Inside(c, "campo"); if (SettingsLayout.IsStacked(r.Row)) Assert.True(c.Y >= r.Y + 28, $"{r.Row.Id} campo sobre el texto a {w}"); else Assert.True(c.X >= r.X + 16 + 120, $"{r.Row.Id} campo sin sitio para el texto a {w}"); }
+                    if (r.Row.Kind == RowKind.Segmented) { var c = SettingsLayout.SegmentRect(r); Inside(c, "selector"); if (SettingsLayout.IsStacked(r.Row)) Assert.True(c.Y >= r.Y + 28, $"{r.Row.Id} selector sobre el texto a {w}"); else Assert.True(c.X >= r.X + 16 + 120, $"{r.Row.Id} selector sin sitio para el texto a {w}"); }
+                    if (r.Row.Kind == RowKind.Toggle) Inside(SettingsLayout.SwitchRect(r), "interruptor");
+                }
+
+                if (SettingsLayout.CompactSidebar == false) { var side = SettingsLayout.SideEntries(Pages()); Assert.True(side[^1].Rect.Y + side[^1].Rect.H <= h + 0.5, $"barra lateral cortada a {w}x{h}"); }
+            }
+        }
+        finally { SettingsLayout.Configure(0, 0); SettingsLayout.Measurer = null; }
+    }
+
+    [Fact]
+    public void Component_cards_reflow_from_three_columns_to_one()
+    {
+        var page = Pages().Single(p => p.Id == "general");
+        try
+        {
+            SettingsLayout.Configure(1920, 1080); var wide = SettingsLayout.Compute(page).Rows.Where(r => r.Card).ToList();
+            SettingsLayout.Configure(900, 700); var narrow = SettingsLayout.Compute(page).Rows.Where(r => r.Card).ToList();
+            Assert.Equal(4, wide.Count); Assert.Equal(4, narrow.Count);
+            Assert.True(wide.Select(r => r.X).Distinct().Count() > narrow.Select(r => r.X).Distinct().Count());
+            SettingsLayout.Configure(700, 700); Assert.Single(SettingsLayout.Compute(page).Rows.Where(r => r.Card).Select(r => r.X).Distinct());
+        }
+        finally { SettingsLayout.Configure(0, 0); }
+    }
+
+    [Fact]
+    public void Theme_choice_round_trips_and_old_configs_still_load()
+    {
+        var cfg = new HostConfig { SettingsTheme = "Dark" }; var json = System.Text.Json.JsonSerializer.Serialize(cfg);
+        Assert.Equal("Dark", System.Text.Json.JsonSerializer.Deserialize<HostConfig>(json)!.SettingsTheme);
+        var old = System.Text.Json.JsonSerializer.Deserialize<HostConfig>("{\"autostart\":true}")!; Assert.Equal("System", old.SettingsTheme);
+        var row = Pages().Single(p => p.Id == "general").Groups.SelectMany(g => g.Rows).Single(r => r.Id == "settings.theme"); Assert.Equal(0, row.Selected);
+    }
+
+    [Fact]
+    public void Iphone_and_peripherals_are_independent_pages_and_no_option_was_lost()
+    {
+        var pages = Pages(); var ids = pages.SelectMany(p => p.Groups).SelectMany(g => g.Rows).Select(r => r.Id).ToHashSet();
+        Assert.Contains("connect.module", pages.Single(p => p.Id == "connect").Groups.SelectMany(g => g.Rows).Select(r => r.Id));
+        Assert.DoesNotContain("bar:showPeripherals", pages.Single(p => p.Id == "connect").Groups.SelectMany(g => g.Rows).Select(r => r.Id));
+        Assert.Contains("bar:showPeripherals", pages.Single(p => p.Id == "periph").Groups.SelectMany(g => g.Rows).Select(r => r.Id));
+        // la matriz de la auditoría lista cada id actual: todos deben seguir existiendo en V2
+        var matrix = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "settings-v2-matriz.tsv")).Skip(1).Select(l => l.Split('\t')[0]).ToList();
+        Assert.Equal(207, matrix.Count);
+        foreach (var id in matrix.Where(id => !id.StartsWith("bar.key:", StringComparison.Ordinal))) Assert.Contains(id, ids);
+    }
+}

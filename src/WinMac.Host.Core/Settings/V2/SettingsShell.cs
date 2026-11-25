@@ -5,6 +5,9 @@ public static class SettingsShell
 {
     public const double MinWindowW = 900, MinWindowH = 600, SidebarMin = 220, SidebarMax = 300, SidebarCompact = 76, TitleBarH = 40, ContentPad = 28, ContentMax = 1280;
 
+    /// <summary>Ancho de la barra lateral para una ventana de ancho <paramref name="windowW"/> (DIP).</summary>
+    public static double SidebarWidth(double windowW) => windowW < 760 ? SidebarCompact : Math.Clamp(windowW * 0.22, SidebarMin, SidebarMax);
+
     public sealed record Frame(Rect Sidebar, Rect Content, bool CompactSidebar, double ContentInnerW, double ContentInnerX);
 
     public static Frame Compute(double windowW, double windowH)

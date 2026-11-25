@@ -14,4 +14,5 @@
     <ProjectReference Include="..\WinMac.FakeModule\WinMac.FakeModule.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup><Compile Include="..\Shared\AppFolder.cs" Link="Shared\AppFolder.cs" /></ItemGroup>
+  <ItemGroup><None Include="..\..\docs\settings-v2-matriz.tsv" Link="settings-v2-matriz.tsv" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

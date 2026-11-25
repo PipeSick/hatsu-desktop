@@ -22,6 +22,8 @@ public sealed record HostConfig
     public bool Autostart { get; init; } = false;
     /// <summary>WM-034: ocultar la barra de tareas de Windows mientras WinMac está abierto. APAGADO por defecto; se restaura al desactivarlo, al salir y, si WinMac falla, desde el guardián.</summary>
     public bool HideTaskbar { get; init; } = false;
+    /// <summary>Settings V2: tema de la ventana de Ajustes («System», «Light» o «Dark»). Un valor desconocido se trata como «System». Las configuraciones anteriores no lo traen y siguen valiendo.</summary>
+    public string SettingsTheme { get; init; } = "System";
     public Dictionary<string, ModuleConfig> Modules { get; init; } = new()
     {
         ["bar"] = new ModuleConfig(), ["dock"] = new ModuleConfig(), ["notch"] = new ModuleConfig(),

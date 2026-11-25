@@ -2,7 +2,7 @@ using WinMac.Bar;
 
 namespace WinMac.Host;
 
-public enum RowKind { Toggle, Segmented, Field, Slider, Button, Info, Preview }
+public enum RowKind { Toggle, Segmented, Field, Slider, Button, Info, Preview, Hero }
 
 /// <summary>
 /// Una fila de la ventana de Ajustes. No hay controles decorativos: lo que no se puede usar aparece atenuado con su <see cref="Reason"/>.
@@ -10,14 +10,15 @@ public enum RowKind { Toggle, Segmented, Field, Slider, Button, Info, Preview }
 /// </summary>
 public sealed record SettingsRow(RowKind Kind, string Id, string Title, string? Subtitle = null, bool On = false, bool Enabled = true, string? Reason = null,
     IReadOnlyList<string>? Options = null, int Selected = 0, string? Text = null, string? Placeholder = null, double Value = 0, bool CanUp = false, bool CanDown = false,
-    double SliderMin = 0, double SliderMax = 100, string? Unit = null)
+    double SliderMin = 0, double SliderMax = 100, string? Unit = null, string? Icon = null)
 {
     /// <summary>What the slider shows for a 0–100 position: the real value in its unit (WM-019: the Dock's fine size showed «29» for 48 points).</summary>
     public string SliderLabel(double v) => Math.Round(SliderMin + Math.Clamp(v, 0, 100) / 100 * (SliderMax - SliderMin)) + (Unit is null ? "" : " " + Unit);
 }
 
-public sealed record SettingsGroup(string? Header, IReadOnlyList<SettingsRow> Rows, string? Footer = null);
-public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOnlyList<SettingsGroup> Groups, string? Section = null);
+/// <param name="Cards">Settings V2: las filas se muestran como tarjetas en cuadrícula (cada una sigue siendo la misma fila con el mismo id y la misma acción).</param>
+public sealed record SettingsGroup(string? Header, IReadOnlyList<SettingsRow> Rows, string? Footer = null, bool Cards = false);
+public sealed record SettingsPage(string Id, string Title, string Glyph, IReadOnlyList<SettingsGroup> Groups, string? Section = null, string? Subtitle = null);
 
 /// <summary>Vista del diagnóstico de llamadas (Ajustes › Hatsu Connect): lo da el host; puro para probar la página sin Windows.</summary>
 public sealed record ConnectDiagView(string Status = "Sin ejecutar", IReadOnlyList<string>? Summary = null, bool Running = false, bool HasReport = false, bool Observing = false, string ObserveStatus = "Detenida", string CallControlStatus = "sin información (el módulo Connect no ha informado)");
@@ -25,6 +26,8 @@ public sealed record ConnectDiagView(string Status = "Sin ejecutar", IReadOnlyLi
 /// <param name="WeatherStatus">Texto de estado de la búsqueda de ciudad (qué se eligió, cómo pedir otra).</param>
 public sealed record SettingsInput(HostConfig Cfg, IReadOnlyDictionary<string, ModuleState> States, bool Autostart, string WeatherStatus = "")
 {
+    /// <summary>Versión instalada (Settings V2: tarjeta de General). Vacío en pruebas.</summary>
+    public string AppVersion { get; init; } = "";
     /// <summary>Configuración del Dock (su propio archivo dock.json). Null: no se pudo leer; la página lo dice y no muestra controles falsos.</summary>
     public WinMac.Dock.DockConfig? Dock { get; init; }
     /// <summary>Hatsu Desktop: ruta de OTRA instalación (p. ej. el WinMac antiguo) que Windows inicia hoy con la sesión; null si no hay. Con valor, Ajustes ofrece cambiarla a esta (con confirmación).</summary>
@@ -89,6 +92,7 @@ public static partial class SettingsBuilder
         ("ltAutoCopy", "Copiar el texto al reconocerlo", b => b.LtAutoCopy),
         ("ltAutoShelf", "Guardar el texto reconocido en la estantería", b => b.LtAutoShelf),
     ];
+    public static readonly string[] ThemeModeNames = ["Automático", "Claro", "Oscuro"];
     public static readonly string[] CaptureDelayNames = ["No", "3 s", "5 s", "10 s"];
     public static readonly int[] CaptureDelayValues = [0, 3, 5, 10];
     public static readonly string[] CaptureFormatNames = ["PNG", "JPG"], CaptureFormatValues = ["Png", "Jpg"];
@@ -164,14 +168,18 @@ public static partial class SettingsBuilder
         // WM-013/014: una sección por tema, en el orden en que se usan. Cada fila está en UN sitio; los textos se parten en líneas (sin «…»).
         var general = new SettingsPage("general", "General", "gear",
         [
-            new("Módulos", [
-                new(RowKind.Toggle, "mod:bar", "Barra superior", "Reloj, indicadores y el panel de Hatsu Desktop", On("bar")),
-                new(RowKind.Toggle, "mod:dock", "Dock", "Apps abiertas y ancladas, con vista previa de ventanas", On("dock")),
-                new(RowKind.Toggle, "mod:connect", "Hatsu Connect", "Batería y notificaciones del iPhone (opcional)", On("connect")),
-                new(RowKind.Toggle, "mod:notch", "Hatsu Notch", "Música, actividades y más en la parte superior", installed && On("notch"), installed, installed ? null : noNotch),
-            ], "Cada módulo es un proceso aparte: si uno falla, los demás siguen."),
+            new(null, [new(RowKind.Hero, "general.hero", "Hatsu Desktop", "Tu centro de productividad para Windows.", Options: input.AppVersion.Length > 0 ? ["Ejecutándose", "v" + input.AppVersion] : ["Ejecutándose"])]),
+            new("Componentes de Hatsu", [
+                new(RowKind.Toggle, "mod:bar", "Barra superior", "Reloj, indicadores y el panel de Hatsu Desktop", On("bar"), Icon: "bar"),
+                new(RowKind.Toggle, "mod:dock", "Dock", "Apps abiertas y ancladas, con vista previa de ventanas", On("dock"), Icon: "dock"),
+                new(RowKind.Toggle, "mod:connect", "Hatsu Connect", "Batería y notificaciones del iPhone (opcional)", On("connect"), Icon: "phone"),
+                new(RowKind.Toggle, "mod:notch", "Isla (Hatsu Notch)", "Música, actividades y más en la parte superior", installed && On("notch"), installed, installed ? null : noNotch, Icon: "island"),
+            ], "Cada módulo es un proceso aparte: si uno falla, los demás siguen.", Cards: true),
             .. ProblemGroups(input),
-            new("Sistema", [
+            new("Apariencia", [
+                new(RowKind.Segmented, "settings.theme", "Tema de Ajustes", "Automático sigue el tema de Windows; Claro y Oscuro lo fijan solo en esta ventana", Options: ThemeModeNames, Selected: (int)SettingsV2.SettingsPalette.ParseMode(cfg.SettingsTheme)),
+            ]),
+            new("Comportamiento", [
                 new(RowKind.Toggle, "autostart", "Iniciar con Windows", "Abre Hatsu Desktop al iniciar sesión", input.Autostart),
                 new(RowKind.Button, "onboarding.rerun", "Abrir el asistente de configuración", "No cambia nada hasta que confirmes"),
                 new(RowKind.Button, "diagnose.run", "Generar informe de diagnóstico", "Se guarda en tu equipo y se abre para que lo revises; no se envía nada"),

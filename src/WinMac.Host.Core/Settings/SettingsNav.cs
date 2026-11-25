@@ -6,6 +6,23 @@ namespace WinMac.Host;
 /// </summary>
 public static partial class SettingsBuilder
 {
+    private static readonly Dictionary<string, string> Subtitles = new()
+    {
+        ["general"] = "Configura el comportamiento general de Hatsu y sus componentes.",
+        ["bar"] = "Elementos, indicadores y comportamiento de la barra superior.",
+        ["dock"] = "Acceso rápido a tus aplicaciones y ventanas.",
+        ["notch"] = "Centro contextual con tus actividades, controles y avisos.",
+        ["modules"] = "Activa, desactiva y configura las funciones adicionales de Hatsu.",
+        ["gestures"] = "Esquinas activas, botones del ratón y atajos de teclado.",
+        ["spot"] = "Búsqueda rápida de aplicaciones, archivos y acciones.",
+        ["nc"] = "Centro de notificaciones y historial del portapapeles.",
+        ["capture"] = "Capturas de pantalla y grabación: atajos, formato y destino.",
+        ["weather"] = "Ubicación, unidades y dónde se muestra el tiempo.",
+        ["connect"] = "Batería y notificaciones del iPhone por Bluetooth, sin apps adicionales.",
+        ["periph"] = "Teclados, ratones y auriculares del PC: batería y avisos.",
+        ["ext"] = "Extensiones, diagnóstico y herramientas de recuperación.",
+    };
+
     internal static IReadOnlyList<SettingsPage> Organize(List<SettingsPage> pages)
     {
         SettingsPage? Get(string id) => pages.FirstOrDefault(p => p.Id == id);
@@ -28,7 +45,8 @@ public static partial class SettingsBuilder
             if (periph is not null) bar = bar with { Groups = bar.Groups.Where(x => x != periph).ToList() };
         }
 
-        if (connect is not null) connect = connect with { Groups = periph is null ? connect.Groups : [.. connect.Groups, periph] };
+        // Settings V2: iPhone y Periféricos son páginas independientes (las filas conservan sus ids; solo cambian de página).
+        SettingsPage? periphPage = periph is null ? null : new SettingsPage("periph", "Periféricos", "periph", [periph with { Header = null }]);
 
         // Notificaciones y portapapeles: dos páginas pequeñas pasan a una.
         var nc = Get("nc"); var clip = Get("clip"); SettingsPage? both = null;
@@ -42,9 +60,9 @@ public static partial class SettingsBuilder
         Add(bar, "Escritorio"); Add(Get("dock"), "Escritorio", "Dock"); Add(Get("notch"), "Escritorio", "Isla (Hatsu Notch)");
         Add(modules, "Funciones"); Add(gestures, "Funciones"); Add(Get("spot"), "Funciones", "Búsqueda (Spotlight)");
         Add(both ?? nc, "Contenido"); Add(Get("capture"), "Contenido"); Add(Get("weather"), "Contenido", "Clima");
-        Add(connect, "Dispositivos", "iPhone y periféricos", "phone");
+        Add(connect, "Dispositivos", "iPhone (Hatsu Connect)", "phone"); Add(periphPage, "Dispositivos");
         Add(Get("ext"), "Avanzado", "Extensiones y diagnóstico");
         foreach (var p in pages.Where(p => result.All(r => r.Id != p.Id) && p.Id != "clip")) result.Add(p with { Section = "Avanzado" });   // cualquier página nueva no se pierde
-        return result;
+        return result.Select(p => p with { Subtitle = p.Subtitle ?? Subtitles.GetValueOrDefault(p.Id) }).ToList();
     }
 }
