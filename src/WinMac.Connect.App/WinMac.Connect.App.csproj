@@ -16,4 +16,5 @@
     <ProjectReference Include="..\WinMac.Connect.Core\WinMac.Connect.Core.csproj" />
     <ProjectReference Include="..\WinMac.Ipc\WinMac.Ipc.csproj" />
   </ItemGroup>
+  <ItemGroup><Compile Include="..\Shared\AppFolder.cs" Link="Shared\AppFolder.cs" /></ItemGroup>
 </Project>

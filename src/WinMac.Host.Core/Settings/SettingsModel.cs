@@ -249,7 +249,7 @@ public static partial class SettingsBuilder
             ], "Alt+Espacio sustituye al menú de ventana de Windows mientras Hatsu Desktop está abierto."),
             new("Herramientas", [
                 new(RowKind.Info, "bar.spotpro", "Acciones de Hatsu Desktop, «ip», «red», «ping …» y «dns …» (solo con Intro), «ssh usuario@equipo», «> …» (nunca se ejecuta: abre la terminal o lo copia) y cálculos como «20% de 150»."),
-                new(RowKind.Info, "bar.scripts", "Scripts propios: %APPDATA%\\WinMac\\spotlight-scripts.json. Se ejecutan con doble Intro y tus permisos, nunca elevados."),
+                new(RowKind.Info, "bar.scripts", "Scripts propios: %APPDATA%\\Hatsu\\spotlight-scripts.json. Se ejecutan con doble Intro y tus permisos, nunca elevados."),
                 new(RowKind.Info, "bar.workspaces", "Espacios de trabajo: «Guardar espacio de trabajo», «Restaurar …», «Ventanas lado a lado» o «en cuadrícula». Ninguna app se abre sola."),
             ]),
             new("Launchpad", [Bar(29, "Solo al pulsarla sola; los atajos con Windows siguen igual. Ctrl+Esc abre el menú Inicio")], "Desactivado, la tecla Windows vuelve a abrir el menú Inicio."),

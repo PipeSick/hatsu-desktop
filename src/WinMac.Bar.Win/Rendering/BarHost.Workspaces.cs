@@ -12,7 +12,7 @@ namespace WinMac.Bar.Win.Rendering;
 /// </summary>
 public sealed partial class BarHost
 {
-    public static string WorkspacesFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "workspaces.json");
+    public static string WorkspacesFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolder.Name, "workspaces.json");
 
     private IReadOnlyList<Workspace> LoadWorkspaces()
     {

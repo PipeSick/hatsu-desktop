@@ -7,7 +7,7 @@ internal static class HfpLock
     {
         try
         {
-            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "hfp.lock"); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "hfp.lock"); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose);
         }
         catch (IOException) { return null; }   // lo tiene otro proceso

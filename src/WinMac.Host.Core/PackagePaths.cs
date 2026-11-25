@@ -1,8 +1,8 @@
 namespace WinMac.Host;
 
 /// <summary>
-/// Con el paquete de la Store (MSIX) Windows redirige las escrituras en AppData: el programa «ve» <c>AppData\Local\WinMac\logs</c>, pero en disco el archivo está en
-/// <c>AppData\Local\Packages\&lt;familia&gt;\LocalCache\Local\WinMac\logs</c>. Cualquier OTRO proceso (el Bloc de notas moderno, el Explorador) no ve la ruta virtual:
+/// Con el paquete de la Store (MSIX) Windows redirige las escrituras en AppData: el programa «ve» <c>AppData\Local\Hatsu\logs</c>, pero en disco el archivo está en
+/// <c>AppData\Local\Packages\&lt;familia&gt;\LocalCache\Local\Hatsu\logs</c>. Cualquier OTRO proceso (el Bloc de notas moderno, el Explorador) no ve la ruta virtual:
 /// «no se encuentra la ruta». Por eso los informes que el usuario debe abrir se guardan fuera de AppData cuando hay paquete. Puro: sin Windows.
 /// </summary>
 public static class PackagePaths
@@ -16,10 +16,10 @@ public static class PackagePaths
     }
 
     /// <summary>Carpeta real (en disco) de los registros con paquete; sin paquete es la de siempre.</summary>
-    public static string RealLogsDir(string localAppData, string? packageFullName) =>
-        FamilyName(packageFullName) is { } fam ? Path.Combine(localAppData, "Packages", fam, "LocalCache", "Local", "WinMac", "logs") : Path.Combine(localAppData, "WinMac", "logs");
+    public static string RealLogsDir(string localAppData, string? packageFullName, string appFolder = "Hatsu") =>
+        FamilyName(packageFullName) is { } fam ? Path.Combine(localAppData, "Packages", fam, "LocalCache", "Local", appFolder, "logs") : Path.Combine(localAppData, appFolder, "logs");
 
     /// <summary>Dónde se guardan los informes que el usuario abrirá: con paquete, Documentos\Hatsu Desktop (visible para todos los procesos); sin paquete, la carpeta de registros.</summary>
-    public static string ReportsDir(string localAppData, string documents, string? packageFullName) =>
-        FamilyName(packageFullName) is not null ? Path.Combine(documents, "Hatsu Desktop") : Path.Combine(localAppData, "WinMac", "logs");
+    public static string ReportsDir(string localAppData, string documents, string? packageFullName, string appFolder = "Hatsu") =>
+        FamilyName(packageFullName) is not null ? Path.Combine(documents, "Hatsu Desktop") : Path.Combine(localAppData, appFolder, "logs");
 }

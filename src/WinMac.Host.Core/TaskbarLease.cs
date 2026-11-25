@@ -10,7 +10,7 @@ namespace WinMac.Host;
 /// </summary>
 public sealed record TaskbarLease(int HostPid, bool OriginalAutoHide, DateTime SinceUtc)
 {
-    public static string DefaultPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "taskbar-restore.json");
+    public static string DefaultPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "taskbar-restore.json");
 
     public static TaskbarLease? Load(string path)
     {

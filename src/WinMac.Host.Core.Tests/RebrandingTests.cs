@@ -142,10 +142,10 @@ public class RebrandingTests
     [InlineData("src/WinMac.Host/HostApp.cs", @"@""Local\WinMac.Host""")]
     [InlineData("src/WinMac.Host/HostApp.cs", @"@""Local\WinMac.Host.Quit""")]
     [InlineData("src/WinMac.Host/HostApp.cs", @"@""Local\WinMac.Host.Reopen""")]
-    [InlineData("src/WinMac.Host/HostApp.cs", "\"WinMac\", \"winmac.json\"")]                 // %APPDATA%\WinMac\winmac.json
-    [InlineData("src/WinMac.Host/HostApp.cs", "\"WinMac\", \"bar.json\"")]
+    [InlineData("src/WinMac.Host/HostApp.cs", "AppFolder.Name, \"winmac.json\"")]               // %APPDATA%\Hatsu\winmac.json (antes WinMac: AppFolder migra la carpeta antigua copiándola)
+    [InlineData("src/WinMac.Host/HostApp.cs", "AppFolder.Name, \"bar.json\"")]
     [InlineData("src/WinMac.Host/Autostart.cs", "DefaultName = \"WinMac\"")]                    // valor HKCU\...\Run
-    [InlineData("src/WinMac.Dock.Win/Shell/DockDefaults.cs", "\"WinMac\", \"dock.json\"")]
+    [InlineData("src/WinMac.Dock.Win/Shell/DockDefaults.cs", "AppFolder.Name, \"dock.json\"")]
     [InlineData("src/WinMac.Dock.App/Program.cs", "\"WinMac.Dock.SingleInstance\"")]
     [InlineData("src/WinMac.Bar.App/Program.cs", "\"WinMac.Bar.SingleInstance\"")]
     [InlineData("src/WinMac.Connect.App/Program.cs", "\"WinMac.Connect.SingleInstance\"")]

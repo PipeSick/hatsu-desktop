@@ -95,7 +95,7 @@ internal sealed class PhoneLink : IAsyncDisposable, IAncsCallActions
             _telephony = new WindowsTelephonyProvider(
                 c => { Post(async () => { var dev = _state.Status == PhoneLinkStatus.Connected ? "iPhone" : "Teléfono"; if (await _coord.OnProviderCallAsync(c, dev)) { _log("[connect] llamada (sistema): " + _call.State.Phase); CallChanged(); } }); return Task.CompletedTask; },   // todo el estado se toca en el hilo lógico único
                 _log, () => Post(() => { CallChanged(); PublishCallStatusNow(); return Task.CompletedTask; }),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "hfp-wedge.json"), stage => OnTransportWedged?.Invoke(stage));
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "hfp-wedge.json"), stage => OnTransportWedged?.Invoke(stage));
             _log("[connect] control de llamadas desde el PC activado");
         }
         else if (!on && _telephony is not null)

@@ -1,3 +1,4 @@
+using WinMac;
 // WinMac Barra superior — primera iteración (PROVISIONAL). Reserva el borde superior con un AppBar real (opcional); NO toca la barra de tareas ni el Explorador.
 //
 // Uso:
@@ -23,8 +24,8 @@ internal static class Program
 {
     private static string? Arg(string[] a, string n) { int i = Array.IndexOf(a, n); return i >= 0 && i + 1 < a.Length ? a[i + 1] : null; }
     private static StreamWriter? _log;
-    private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac");
-    private static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "bar.json");
+    private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name);
+    private static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolder.Name, "bar.json");
     private static void Log(string m)
     {
         var line = $"{DateTime.Now:HH:mm:ss.fff} {m}";

@@ -24,7 +24,7 @@ internal sealed class SnapFeature : IHatsuFeature
 {
     public const string Owner = "snap";
     private const uint WINEVENT_OUTOFCONTEXT = 0, EVENT_SYSTEM_MOVESIZESTART = 0x000A, EVENT_SYSTEM_MOVESIZEEND = 0x000B;
-    public static string LayoutsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "snap-layouts.json");
+    public static string LayoutsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolder.Name, "snap-layouts.json");
 
     private readonly BarHost _host; private readonly Action<string> _log;
     private FeatureScope? _scope; private BarConfig _cfg = new(); private IntPtr _hook; private WinEventProc? _proc;

@@ -30,6 +30,15 @@ Todo esto pasa las pruebas automáticas, pero **nadie lo ha visto funcionar en u
 - [ ] «Leer la batería de más marcas»: anota qué aparatos salen y si el número es correcto. Los que no salen, también.
 - [ ] Mandos: DualSense/DualShock por USB y Bluetooth, Xbox, Switch Pro.
 
+## Novedades de la 2.0.13 (todas sin validar en Windows real)
+- [ ] **Carpeta de datos:** tras actualizar, tus ajustes, atajos y extensiones siguen ahí. La carpeta pasa de `WinMac` a `Hatsu` (en `%APPDATA%` y `%LOCALAPPDATA%`; con la Store, dentro de `Packages\…\LocalCache`); la anterior **no se toca**. ¿Abre sin asistente nuevo y con tus ajustes?
+- [ ] Ajustes › General › «Abrir la carpeta de registros» abre la carpeta real. «Generar informe de diagnóstico» abre el Bloc de notas sin error (con la Store se guarda en `Documentos\Hatsu Desktop`).
+- [ ] **Suspender y reanudar** (varias veces, con dos monitores): ¿la Barra y el Dock quedan bien, sin tapar los botones de las ventanas? ¿Se ve bien el notch del segundo monitor? ¿`host.log` ya no muestra «sin latido» de los tres módulos juntos al reanudar?
+- [ ] Spotlight: Ctrl+V pega; Ctrl+A selecciona todo (resaltado), Ctrl+C copia y Ctrl+X corta lo escrito.
+- [ ] Notch: pestaña **Inicio** (tarjetas), color de la carátula en borde y barras, resorte al abrir. Tarjeta de periféricos al abrir Inicio (solo con «Periféricos» activo). Al plegar la isla, ¿siguen los bordes raros en la Barra?
+- [ ] Una notificación en la píldora del notch trae el botón **Ver** y abre la app que la envió.
+- [ ] Si Windows muestra su barra de tareas varias veces seguidas, aparece un aviso en la Isla (una vez cada 30 min).
+
 ## Si algo no sale
 - Un aparato que no aparece: anota marca, modelo, cómo se conecta (receptor, Bluetooth, cable) y si estaba encendido.
 - Un número equivocado: anota el que da el programa del fabricante y el que da Hatsu.

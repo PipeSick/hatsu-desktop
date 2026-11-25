@@ -26,7 +26,7 @@ public sealed partial class BarHost
     private volatile string? _editRequest;
     public static string EditEventName => @"Local\WinMac.Bar.Capture.edit";
     /// <summary>Where <c>--edit &lt;path&gt;</c> leaves the path for the running bar (per user, in LocalAppData).</summary>
-    public static string EditRequestFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "edit-request.txt");
+    public static string EditRequestFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "edit-request.txt");
     private bool _captureKeysOn;
 
     private void StartCapture()

@@ -78,13 +78,13 @@ public sealed class PackagePathsTests
     public void With_the_store_package_reports_go_outside_AppData_and_the_real_logs_are_under_Packages()
     {
         Assert.Equal(Path.Combine("D", "Hatsu Desktop"), WinMac.Host.PackagePaths.ReportsDir("L", "D", Full));
-        Assert.Equal(Path.Combine("L", "Packages", "PipeSick.HatsuDesktop_83tr6qzbbarj8", "LocalCache", "Local", "WinMac", "logs"), WinMac.Host.PackagePaths.RealLogsDir("L", Full));
+        Assert.Equal(Path.Combine("L", "Packages", "PipeSick.HatsuDesktop_83tr6qzbbarj8", "LocalCache", "Local", "Hatsu", "logs"), WinMac.Host.PackagePaths.RealLogsDir("L", Full));
     }
 
     [Fact]
     public void Without_a_package_nothing_changes()
     {
-        Assert.Equal(Path.Combine("L", "WinMac", "logs"), WinMac.Host.PackagePaths.ReportsDir("L", "D", null));
-        Assert.Equal(Path.Combine("L", "WinMac", "logs"), WinMac.Host.PackagePaths.RealLogsDir("L", null));
+        Assert.Equal(Path.Combine("L", "Hatsu", "logs"), WinMac.Host.PackagePaths.ReportsDir("L", "D", null));
+        Assert.Equal(Path.Combine("L", "Hatsu", "logs"), WinMac.Host.PackagePaths.RealLogsDir("L", null));
     }
 }

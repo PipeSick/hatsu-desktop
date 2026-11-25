@@ -36,7 +36,7 @@ public sealed partial class BarHost
             try
             {
                 // SOLO CI (diagnóstico activado + archivo marcador): simula un fallo de inicialización para comprobar que no queda nada retenido
-                if (MenuDiagOn && File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "ci-record-fail"))) throw new InvalidOperationException("fallo simulado de inicialización (solo pruebas del CI)");
+                if (MenuDiagOn && File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "ci-record-fail"))) throw new InvalidOperationException("fallo simulado de inicialización (solo pruebas del CI)");
                 var rec = await ScreenRecorder.StartAsync(area, RecordingsFolder, _log).ConfigureAwait(false);
                 Post(() =>
                 {
@@ -108,7 +108,7 @@ public sealed partial class BarHost
         if (thumb is not { } t) return null;
         try
         {
-            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "posters"); Directory.CreateDirectory(dir);
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "posters"); Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, Path.GetFileNameWithoutExtension(video) + ".jpg");
             if (File.Exists(path)) File.Delete(path);
             await ScreenGrabber.SaveAsync(t.Px.Length == t.W * t.H * 4 ? t.Px : t.Px[..(t.W * t.H * 4)], t.W, t.H, path, jpeg: true).ConfigureAwait(false);

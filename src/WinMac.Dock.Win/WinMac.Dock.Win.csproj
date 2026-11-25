@@ -19,4 +19,5 @@
   </ItemGroup>
   <ItemGroup><ProjectReference Include="..\WinMac.Dock.Core\WinMac.Dock.Core.csproj" />
     <ProjectReference Include="..\WinMac.Apps.Win\WinMac.Apps.Win.csproj" /></ItemGroup>
+  <ItemGroup><Compile Include="..\Shared\AppFolder.cs" Link="Shared\AppFolder.cs" /></ItemGroup>
 </Project>

@@ -44,7 +44,7 @@ public sealed partial class BarHost : IPanelUi
         if (hubServices is null) { var (s, owner) = HubServicesFactory.CreateReal(); _hubSvc = s; _hubOwner = owner; } else _hubSvc = hubServices;
         void Bg(Action a) => Task.Run(a);
         _hubMon = new HubMonitor(_hubSvc, Bg, Post, _log, () => DateTime.UtcNow); _speed = new SpeedTestRunner(_hubSvc.SpeedTest, Bg, Post);
-        string cache = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "weather-cache.json");
+        string cache = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "weather-cache.json");
         _weather = new WeatherService(_hubSvc.Weather, new WeatherCache(cache), () => DateTime.UtcNow, Bg, Post, _log); _rt = new HubRuntime(_hubMon, _speed, _weather);
         try { _ncSrc = new WinNotificationSource(_log); } catch (Exception e) { _log("[notificaciones] fuente no disponible: " + e.GetType().Name + ": " + e.Message); }
         _nc = new NotificationStore(_ncSrc, Bg, Post, _log, () => DateTime.UtcNow); _nc.SetEnabled(_cfg.NotificationsFromWindows); _nc.Changed += OnNcChanged;

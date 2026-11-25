@@ -8,13 +8,13 @@ internal sealed record HostOptions(string ConfigPath, string LogPath, bool NoTra
 {
     public static string Arg(string[] a, string n, string def) { int i = Array.IndexOf(a, n); return i >= 0 && i + 1 < a.Length ? a[i + 1] : def; }
     public static HostOptions Parse(string[] a) => new(
-        Arg(a, "--config", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "winmac.json")),
-        Arg(a, "--log", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "host.log")),
+        Arg(a, "--config", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolder.Name, "winmac.json")),
+        Arg(a, "--log", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "logs", "host.log")),
         a.Contains("--no-tray"),          // PRUEBAS: sin icono de bandeja (runners sin escritorio)
         a.Contains("--fast"),             // PRUEBAS: tiempos de supervisión reducidos
         a.Contains("--pipe-name") ? Arg(a, "--pipe-name", "") : null,
         Arg(a, "--notchwin-settings", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NotchWin", "settings.json")),
-        Arg(a, "--bar-json", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "bar.json")),
+        Arg(a, "--bar-json", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolder.Name, "bar.json")),
         a.Contains("--replace-running"), a.Contains("--background"),
         a.Contains("--no-onboarding"),                                                          // PRUEBAS: sin asistente de primera ejecución
         a.Contains("--onboarding-auto") ? Arg(a, "--onboarding-auto", "skip") : null);          // PRUEBAS: aplica el asistente SIN ventana (skip = valores seguros)   // Hatsu Desktop: cierra la instancia en ejecución (también una de WinMac anterior: mismos nombres de instancia única) y continúa con esta   // origen de la migración única (PRUEBAS: se puede redirigir)
@@ -184,7 +184,7 @@ internal static class HostApp
         catch (Exception e) { log("[host] sin ventana/bandeja: " + e.Message); }
 
         // Extensiones (docs/30): canal propio, un proceso por extensión, solo lo que permite su manifiesto
-        var extCatalog = new WinMac.Host.Extensions.ExtensionCatalog(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "extensions"));
+        var extCatalog = new WinMac.Host.Extensions.ExtensionCatalog(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "extensions"));
         var extHost = new WinMac.Host.Extensions.ExtensionHost(extCatalog, launcher, (topic, payload) => bus.Emit(topic, payload), log, pipe + "-ext");
         try { extHost.Start(); } catch (Exception e) { log("[extensiones] no disponibles: " + e.Message); }
         if (settings is not null)

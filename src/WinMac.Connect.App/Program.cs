@@ -1,3 +1,4 @@
+using WinMac;
 // WinMac Connect — módulo opcional (docs/39). Lo lanza y vigila el host (WinMac.exe) con --hosted; APAGADO por defecto (Ajustes › General).
 // Batería y estado del iPhone (Battery Service) y sus notificaciones (ANCS) por Bluetooth LE, con la API pública de Windows. Sin app en el iPhone, sin Phone Link,
 // sin servidores. No lee, envía ni borra mensajes; no contesta ni rechaza llamadas (solo avisa).
@@ -7,7 +8,7 @@ using WinMac.Ipc;
 
 internal static class Program
 {
-    private static readonly string LogPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "logs", "connect.log");
+    private static readonly string LogPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "logs", "connect.log");
     private static readonly object LogLock = new();
 
     private static void Log(string m)

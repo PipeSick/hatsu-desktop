@@ -17,7 +17,7 @@ public sealed partial class BarHost
     private IReadOnlyList<string> _wsNames = [];
 
     /// <summary>User scripts: <c>%APPDATA%\WinMac\spotlight-scripts.json</c> (<c>[{"name": "...", "path": "C:\\...", "arguments": "..."}]</c>). Read when Spotlight opens.</summary>
-    public static string ScriptsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "spotlight-scripts.json");
+    public static string ScriptsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolder.Name, "spotlight-scripts.json");
 
     private void LoadScripts()
     {

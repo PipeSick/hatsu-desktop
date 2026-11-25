@@ -35,7 +35,7 @@ public sealed partial class BarHost
     private void StartLauncher()
     {
         InitMenuDiag();
-        _lprefsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "launcher.json");
+        _lprefsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "launcher.json");
         _lprefs = LauncherPrefs.Load(_lprefsPath);
         try { _lpEvent = new EventWaitHandle(false, EventResetMode.AutoReset, LaunchpadEventName); } catch (Exception e) { _log("[launchpad] sin evento de apertura: " + e.Message); }
         foreach (var f in new[] { Environment.SpecialFolder.StartMenu, Environment.SpecialFolder.CommonStartMenu })
@@ -178,7 +178,7 @@ public sealed partial class BarHost
 
     private Apps.IconService CreateLauncherIcons()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "icon-cache-launcher");
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name, "icon-cache-launcher");
         // 2 hilos (como el Dock): cada carga bloquea dos hilos del grupo (la tarea y el hilo STA del Shell). Con 4 y la precarga de todo el índice el grupo se agotaba
         // y el canal con el host no podía contestar al latido: el host reiniciaba la barra (visto en el CI). La rapidez viene de la precarga y de la caché en disco.
         var svc = new Apps.IconService(new ShellIconProvider(), new Apps.IconCache(1024, dir), workers: 2);

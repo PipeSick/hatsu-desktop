@@ -16,4 +16,5 @@
     <PackageReference Include="System.Diagnostics.EventLog" Version="9.0.0" />
     <PackageReference Include="System.Data.OleDb" Version="9.0.0" />
   </ItemGroup>
+  <ItemGroup><Compile Include="..\Shared\AppFolder.cs" Link="Shared\AppFolder.cs" /></ItemGroup>
 </Project>

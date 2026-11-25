@@ -13,4 +13,5 @@
     <!-- Se compila para las pruebas de extremo a extremo (se lanza como proceso), no se enlaza -->
     <ProjectReference Include="..\WinMac.FakeModule\WinMac.FakeModule.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+  <ItemGroup><Compile Include="..\Shared\AppFolder.cs" Link="Shared\AppFolder.cs" /></ItemGroup>
 </Project>

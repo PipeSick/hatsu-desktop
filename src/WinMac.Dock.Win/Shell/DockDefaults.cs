@@ -28,8 +28,8 @@ public static class DockDefaults
         return cfg;
     }
 
-    public static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac");
-    public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "dock.json");
+    public static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppFolder.Name);
+    public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolder.Name, "dock.json");
     public static string LogPath => Path.Combine(DataDir, "logs", "dock.log");
     /// <summary>Caché de iconos en disco, compartible con otros módulos (Spotlight, Launchpad).</summary>
     public static string IconCachePath => Path.Combine(DataDir, "icons");

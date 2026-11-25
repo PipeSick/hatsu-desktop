@@ -116,7 +116,7 @@ public static partial class SettingsBuilder
     }
 
     public static readonly string[] SnapMods = ["Mayús", "Ctrl", "Alt"];
-    public static string SnapLayoutsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinMac", "snap-layouts.json");
+    public static string SnapLayoutsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolder.Name, "snap-layouts.json");
 
     /// <summary>Predeterminadas + las del usuario (leídas del archivo; si no se puede leer, solo las predeterminadas).</summary>
     public static string[] SnapLayoutNames()
