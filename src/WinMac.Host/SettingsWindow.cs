@@ -114,29 +114,51 @@ internal sealed class SettingsWindow : IDisposable
     }
 
     // ───────────────────────────── ventana y superficie
+    private static string AppVersionText()
+    {
+        try { var v = System.Reflection.Assembly.GetEntryAssembly()?.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false).OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion; return (v ?? "").Split('+')[0]; }
+        catch (Exception) { return ""; }
+    }
+
+    private SettingsV2.SettingsPalette _palette = SettingsV2.SettingsPalette.Light;
+    private SettingsV2.SettingsPalette CurrentPalette() => SettingsV2.SettingsPalette.Resolve(SettingsV2.SettingsPalette.ParseMode(_cfg.Current.SettingsTheme), SystemDark());
+    private int ChromeRgb() { var c = _palette.BackdropTop; return (c.R << 16) | (c.G << 8) | c.B; }
+
+    /// <summary>Si el tema elegido (o el de Windows, en Automático) cambió, se recrea el pintor con la paleta nueva y se actualiza la barra de título.</summary>
+    private void ApplyThemeIfChanged()
+    {
+        if (_hwnd == IntPtr.Zero || _dev is null) return;
+        var p = CurrentPalette(); if (ReferenceEquals(p, _palette)) return;
+        _palette = p; _dark = p.Dark; _painter?.Dispose(); _painter = new SettingsPainter(_dev, p);
+        int dark = _dark ? 1 : 0; Native.DwmSetWindowAttribute(_hwnd, 20, ref dark, 4); WindowChrome.Apply(_hwnd, _dark, ChromeRgb());
+    }
+
     private static bool SystemDark() { try { return Convert.ToInt32(Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1)) == 0; } catch (Exception) { return false; } }
     private int S(double v) => (int)Math.Round(v * _scale);
 
     private void Create()
     {
-        uint dpi = Native.GetDpiForSystem(); if (dpi < 96) dpi = 96; _scale = dpi / 96.0; _dark = SystemDark();
+        uint dpi = Native.GetDpiForSystem(); if (dpi < 96) dpi = 96; _scale = dpi / 96.0; _palette = CurrentPalette(); _dark = _palette.Dark;
         var inst = Native.GetModuleHandle(null);
         var cls = new Native.WNDCLASSEX { cbSize = (uint)Marshal.SizeOf<Native.WNDCLASSEX>(), lpfnWndProc = _proc, hInstance = inst, lpszClassName = ClassName, hCursor = Native.LoadCursorW(IntPtr.Zero, (IntPtr)32512) };
         Native.RegisterClassEx(ref cls);   // si ya estaba registrada (segunda apertura) falla sin consecuencias
-        const uint style = 0x00CA0000;   // WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX: tamaño fijo
-        var r = new Native.RECT { Right = S(SettingsLayout.WinW), Bottom = S(SettingsLayout.WinH) }; Native.AdjustWindowRectExForDpi(ref r, style, false, 0, dpi);
-        int sw = Native.GetSystemMetrics(0), sh = Native.GetSystemMetrics(1), ww = r.Right - r.Left, wh = r.Bottom - r.Top;
+        const uint style = 0x00CF0000;   // WS_OVERLAPPEDWINDOW: Ajustes V2 se puede redimensionar y maximizar
+        int sw = Native.GetSystemMetrics(0), sh = Native.GetSystemMetrics(1);
+        double wDip = Math.Min(1180, sw / _scale * 0.92), hDip = Math.Min(760, sh / _scale * 0.9);   // tamaño inicial: el de los mockups, sin pasarse de la pantalla
+        var r = new Native.RECT { Right = S(wDip), Bottom = S(hDip) }; Native.AdjustWindowRectExForDpi(ref r, style, false, 0, dpi);
+        int ww = r.Right - r.Left, wh = r.Bottom - r.Top;
         _hwnd = Native.CreateWindowEx(0, ClassName, "Ajustes de Hatsu Desktop", style, Math.Max(0, (sw - ww) / 2), Math.Max(0, (sh - wh) / 2), ww, wh, IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("CreateWindowEx falló: " + Marshal.GetLastWin32Error());
         int dark = _dark ? 1 : 0; Native.DwmSetWindowAttribute(_hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, ref dark, 4);
-        WindowChrome.Apply(_hwnd, _dark, _dark ? 0x161618 : 0xE8E8ED);   // icono de Hatsu y barra de título del color de la barra lateral
-        _dev = new D2DDevice(); _dev.SetDpi(_scale); _painter = new SettingsPainter(_dev, _dark); CreateSurface();
+        WindowChrome.Apply(_hwnd, _dark, ChromeRgb());   // icono de Hatsu y barra de título del color del fondo del tema
+        _dev = new D2DDevice(); _dev.SetDpi(_scale); _painter = new SettingsPainter(_dev, _palette); CreateSurface();
         Native.ShowWindow(_hwnd, 5); _clickLogged = false;
     }
 
     private void CreateSurface()
     {
         Native.GetClientRect(_hwnd, out var rc); _wPx = Math.Max(1, rc.Right - rc.Left); _hPx = Math.Max(1, rc.Bottom - rc.Top); DisposeSurface();
+        SettingsLayout.Configure(_wPx / _scale, _hPx / _scale); _ctl.Relayout();   // la disposición sigue el tamaño real de la ventana
         using var factory = DXGI.CreateDXGIFactory2<IDXGIFactory2>(false);
         _swap = factory.CreateSwapChainForHwnd(_dev!.D3D, _hwnd, new SwapChainDescription1
         {
@@ -198,9 +220,10 @@ internal sealed class SettingsWindow : IDisposable
 
     private void RebuildPages()
     {
+        ApplyThemeIfChanged();
         IReadOnlyList<(WinMac.Host.Extensions.InstalledExtension, string)>? exts = null;
         try { exts = ExtensionList?.Invoke(); } catch (Exception e) { _log("[extensiones] lista no disponible: " + e.Message); }
-        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { ModuleFailures = ModuleFailures?.Invoke() ?? new Dictionary<string, ModuleFailure>(), AutostartForeignPath = Autostart.ForeignPath(_exe), Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "", ConnectDiag = _connectDiag?.View() ?? new() }));
+        _ctl.SetPages(SettingsBuilder.Build(new SettingsInput(_cfg.Current, _states(), Autostart.Current() is not null, _weatherStatus) { AppVersion = AppVersionText(), ModuleFailures = ModuleFailures?.Invoke() ?? new Dictionary<string, ModuleFailure>(), AutostartForeignPath = Autostart.ForeignPath(_exe), Extensions = exts, Dock = _actions.LoadDock?.Invoke(), LocationPermission = LocationConsent(), TaskbarStatus = TaskbarStatus?.Invoke() ?? "", ConnectDiag = _connectDiag?.View() ?? new() }));
         PositionEdit();
     }
 
@@ -216,6 +239,12 @@ internal sealed class SettingsWindow : IDisposable
             {
                 case WM_PAINT: Render(); Native.ValidateRect(h, IntPtr.Zero); return IntPtr.Zero;
                 case WM_ERASEBKGND: return (IntPtr)1;
+                case 0x0005 /* WM_SIZE */ when _swap is not null && (long)w != 1 /* SIZE_MINIMIZED */: CreateSurface(); PositionEdit(); Invalidate(); return IntPtr.Zero;
+                case 0x0024 /* WM_GETMINMAXINFO */:
+                {   // tamaño mínimo de la ventana: por debajo de esto los ajustes dejarían de ser utilizables
+                    var mr = new Native.RECT { Right = S(SettingsV2.SettingsShell.MinWindowW), Bottom = S(SettingsV2.SettingsShell.MinWindowH) }; Native.AdjustWindowRectExForDpi(ref mr, 0x00CF0000, false, 0, (uint)Math.Round(_scale * 96));
+                    Marshal.WriteInt32(l, 24, mr.Right - mr.Left); Marshal.WriteInt32(l, 28, mr.Bottom - mr.Top); return IntPtr.Zero;
+                }
                 case WM_REFRESH: RebuildPages(); Invalidate(); return IntPtr.Zero;
                 case WM_MOUSEMOVE:
                 {

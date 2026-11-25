@@ -4,6 +4,7 @@ using Vortice.Direct2D1;
 using Vortice.DirectWrite;
 using Vortice.Mathematics;
 using WinMac.Dock.Win.Rendering;
+using WinMac.Host.SettingsV2;
 
 namespace WinMac.Host.App;
 
@@ -20,35 +21,43 @@ internal sealed class SettingsPainter : IDisposable
     private readonly IDWriteTextFormat _title, _side, _sideSel, _body, _bodyBold, _sub, _head, _small;
     private readonly ID2D1SolidColorBrush _b; private readonly ID2D1StrokeStyle _round;
     private readonly bool _dark;
+    private readonly IDWriteTextFormat _section, _sideTitle, _cardTitle;
 
-    // paleta (iOS): fondo, barra lateral, tarjeta, separador, etiqueta, secundaria, acento, verde, campo, pista del interruptor
-    private Color4 Bg => _dark ? C(0x000000) : C(0xF2F2F7);
-    private Color4 Side => _dark ? C(0x161618) : C(0xE8E8ED);
-    private Color4 Card => _dark ? C(0x1C1C1E) : C(0xFFFFFF);
-    private Color4 Sep => _dark ? C(0x38383A) : C(0xD1D1D6);
-    private Color4 Label(float a = 1f) => _dark ? new Color4(1, 1, 1, a) : new Color4(0, 0, 0, a);
-    private Color4 Secondary => _dark ? C(0x98989F) : C(0x6C6C70);
-    private Color4 Tint => _dark ? C(0x0A84FF) : C(0x007AFF);
-    private static Color4 Green => C(0x34C759);
-    private Color4 Field => _dark ? C(0x2C2C2E) : C(0xEEEEF3);
-    private Color4 Off => _dark ? C(0x39393D) : C(0xE5E5EA);
-    private Color4 SegSel => _dark ? C(0x636366) : C(0xFFFFFF);
+    // Settings V2: los colores salen de SettingsPalette (claro, oscuro o el tema de Windows); aquí solo se nombran para el dibujo.
+    private readonly SettingsPalette _p;
+    private static Color4 K(Rgba c, float mul = 1f) => new(c.R / 255f, c.G / 255f, c.B / 255f, c.A / 255f * mul);
+    private Color4 Bg => K(_p.BackdropBottom);
+    private Color4 Side => K(_p.Sidebar);
+    private Color4 Card => K(_p.Surface);
+    private Color4 Raised => K(_p.SurfaceRaised);
+    private Color4 Sep => K(_p.Stroke);
+    private Color4 Label(float a = 1f) => K(_p.Text, a);
+    private Color4 Secondary => K(_p.TextSecondary);
+    private Color4 Tint => K(_p.Accent);
+    private Color4 TintSoft => K(_p.AccentSoft);
+    private Color4 OnTint => K(_p.OnAccent);
+    private Color4 Green => K(_p.Success);
+    private Color4 Field => K(_p.Field);
+    private Color4 Off => K(_p.SwitchOff);
+    private Color4 SegSel => K(_p.AccentSoft);
     private static Color4 C(int rgb, float a = 1f) => new(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, a);
     private static RawRectF R(double l, double t, double r, double b) => new((float)l, (float)t, (float)r, (float)b);
 
-    public SettingsPainter(D2DDevice dev, bool dark)
+    public SettingsPainter(D2DDevice dev, SettingsPalette palette)
     {
-        _dev = dev; _ctx = dev.Context; _dark = dark; _b = _ctx.CreateSolidColorBrush(new Color4(1, 1, 1, 1)); _dw = Vortice.DirectWrite.DWrite.DWriteCreateFactory<IDWriteFactory>();
+        _p = palette; _dev = dev; _ctx = dev.Context; _dark = palette.Dark; _b = _ctx.CreateSolidColorBrush(new Color4(1, 1, 1, 1)); _dw = Vortice.DirectWrite.DWrite.DWriteCreateFactory<IDWriteFactory>();
         _title = _dw.CreateTextFormat("Segoe UI Semibold", 28); _side = _dw.CreateTextFormat("Segoe UI", 15); _sideSel = _dw.CreateTextFormat("Segoe UI Semibold", 15);
         _body = _dw.CreateTextFormat("Segoe UI", 15); _bodyBold = _dw.CreateTextFormat("Segoe UI Semibold", 13.5f); _sub = _dw.CreateTextFormat("Segoe UI", 12.5f);
         _head = _dw.CreateTextFormat("Segoe UI", 12); _small = _dw.CreateTextFormat("Segoe UI", 13.5f);
+        _section = _dw.CreateTextFormat("Segoe UI Semibold", 17); _sideTitle = _dw.CreateTextFormat("Segoe UI Semibold", 22); _cardTitle = _dw.CreateTextFormat("Segoe UI Semibold", 14.5f);
+        SettingsLayout.Measurer = new DirectWriteMeasurer(_dw);   // la altura de cada fila se mide con el mismo motor que dibuja
         _round = dev.Factory.CreateStrokeStyle(new StrokeStyleProperties { StartCap = CapStyle.Round, EndCap = CapStyle.Round, LineJoin = LineJoin.Round });
     }
 
     private void Pill(double x, double y, double w, double h, string text, bool primary = true)
     {
         RR(x, y, w, h, h / 2, primary ? Tint : Label(0.10f));
-        Text(text, _small, x, y, w, h, primary ? new Color4(1, 1, 1, 1) : Label(), center: true);
+        Text(text, _small, x, y, w, h, primary ? OnTint : Label(), center: true);
     }
 
     /// <summary>El asa ⋮⋮ (dos columnas de tres puntos) para arrastrar un icono de la barra.</summary>
@@ -87,6 +96,7 @@ internal sealed class SettingsPainter : IDisposable
             case "search": Brush(c); _ctx.DrawEllipse(new Ellipse(new Vector2((float)(cx - s * .18), (float)(cy - s * .18)), (float)(s * .58), (float)(s * .58)), _b, 1.7f); Ln(cx + s * .25, cy + s * .25, cx + s * .85, cy + s * .85, c, 2f); break;
             case "clipboard": RRStroke(cx - s * .72, cy - s * .7, s * 1.44, s * 1.6, s * .2, c, 1.6f); RR(cx - s * .35, cy - s * .9, s * .7, s * .34, s * .1, c); break;
             case "bell": RRStroke(cx - s * .62, cy - s * .78, s * 1.24, s * 1.3, s * .55, c, 1.6f); Ln(cx - s * .9, cy + s * .5, cx + s * .9, cy + s * .5, c, 1.6f); Dot(cx, cy + s * .82, 1.4, c); break;
+            case "periph": RRStroke(cx - s * .55, cy - s * .9, s * 1.1, s * 1.8, s * .55, c, 1.6f); Ln(cx, cy - s * .9, cx, cy - s * .15, c, 1.5f); break;
             case "chevron": Ln(cx - s * .3, cy - s * .62, cx + s * .3, cy, c, 1.8f); Ln(cx + s * .3, cy, cx - s * .3, cy + s * .62, c, 1.8f); break;
             case "up": Ln(cx - s * .55, cy + s * .25, cx, cy - s * .3, c, 1.8f); Ln(cx, cy - s * .3, cx + s * .55, cy + s * .25, c, 1.8f); break;
             case "down": Ln(cx - s * .55, cy - s * .25, cx, cy + s * .3, c, 1.8f); Ln(cx, cy + s * .3, cx + s * .55, cy - s * .25, c, 1.8f); break;
@@ -94,13 +104,39 @@ internal sealed class SettingsPainter : IDisposable
         }
     }
 
-    private static readonly int[] IconColors = [0x8E8E93, 0x0A84FF, 0x30B0C7, 0xAF52DE];
+    private static readonly Dictionary<string, int> PageColors = new()
+    {
+        ["general"] = 0x8B5CF6, ["bar"] = 0x3B82F6, ["dock"] = 0x14B8A6, ["notch"] = 0xA855F7, ["modules"] = 0x8E8AA6, ["gestures"] = 0x0EA5E9, ["spot"] = 0x06B6D4,
+        ["nc"] = 0xDB5EA9, ["capture"] = 0x8E8AA6, ["weather"] = 0x3B9BEF, ["connect"] = 0x3B82F6, ["periph"] = 0x14A38B, ["ext"] = 0x8B5CF6,
+    };
+    private static int ColorOf(string pageId) => PageColors.TryGetValue(pageId, out var c) ? c : 0x8B5CF6;
+
+    /// <summary>Degradado lineal entre dos colores en un rectángulo (vertical u horizontal).</summary>
+    private void Gradient(double x, double y, double w, double h, Color4 a, Color4 b, double radius = 0, bool vertical = true)
+    {
+        using var stops = _ctx.CreateGradientStopCollection([new GradientStop { Position = 0, Color = a }, new GradientStop { Position = 1, Color = b }]);
+        using var br = _ctx.CreateLinearGradientBrush(new LinearGradientBrushProperties { StartPoint = new Vector2((float)x, (float)y), EndPoint = vertical ? new Vector2((float)x, (float)(y + h)) : new Vector2((float)(x + w), (float)y) }, stops);
+        if (radius > 0) _ctx.FillRoundedRectangle(new RoundedRectangle { Rect = R(x, y, x + w, y + h), RadiusX = (float)radius, RadiusY = (float)radius }, br); else _ctx.FillRectangle(R(x, y, x + w, y + h), br);
+    }
+
+    /// <summary>Sombra suave bajo una superficie: capas translúcidas cada vez más grandes.</summary>
+    private void Shadow(double x, double y, double w, double h, double r)
+    {
+        for (int i = 4; i >= 1; i--) RR(x - i, y + i * 1.6, w + 2 * i, h + 2 * i, r + i, K(_p.Shadow, 0.16f));
+    }
+
+    private void Tile(double x, double y, double size, int rgb, string glyph)
+    {
+        var top = C(rgb); var bottom = new Color4(top.R * 0.78f, top.G * 0.78f, top.B * 0.78f, 1f);
+        Gradient(x, y, size, size, top, bottom, size * 0.28); Glyph(glyph, x + size / 2, y + size / 2, size * 0.28, new Color4(1, 1, 1, 1));
+    }
 
     // ───────────────────────────── ventana
     /// <param name="edit">Campo en edición (texto, selección y cursor se dibujan aquí).</param>
     public void Paint(SettingsController c, double w, double h, EditView? edit, bool clear = true)
     {
         _ctx.BeginDraw(); if (clear) _ctx.Clear(Bg);
+        Gradient(0, 0, w, h, K(_p.BackdropTop), K(_p.BackdropBottom));
         _searchEdit = edit is { Id: "search" } ? edit : null;
         DrawSidebar(c, h);
         double ox = SettingsLayout.SidebarW, oy = SettingsLayout.TitleH, cw = SettingsLayout.ContentW;
@@ -111,7 +147,7 @@ internal sealed class SettingsPainter : IDisposable
             _ctx.Transform = Matrix3x2.CreateTranslation((float)ox, (float)oy);
             foreach (var g in f.Groups) DrawGroup(g, f, c, edit);
             if (c.Reordering is { } ro && f.Rows.FirstOrDefault(r => r.Row.Id == ro.Id) is { } dragged)
-            {   // la fila que se arrastra se resalta y una línea azul marca dónde caerá
+            {   // la fila que se arrastra se resalta y una línea marca dónde caerá
                 RR(dragged.X + 2, dragged.Y + 2, dragged.W - 4, dragged.H - 4, 8, new Color4(Tint.R, Tint.G, Tint.B, 0.16f));
                 var grips = f.Rows.Where(r => SettingsLayout.HasGrip(r.Row)).ToList(); var tgt = grips[Math.Clamp(ro.To, 0, grips.Count - 1)];
                 double ly = ro.To > ro.From ? tgt.Y + tgt.H : tgt.Y; Ln(tgt.X + 12, ly, tgt.X + tgt.W - 12, ly, Tint, 3f);
@@ -119,44 +155,105 @@ internal sealed class SettingsPainter : IDisposable
             if (f.MaxScroll > 0.5) { double th = Math.Max(30, SettingsLayout.ViewportH * SettingsLayout.ViewportH / f.ContentHeight), ty = 6 + (SettingsLayout.ViewportH - th - 12) * f.Scroll / f.MaxScroll; RR(cw - 7, ty, 3.5, th, 1.75, Label(0.28f)); }
             DrawSuggestions(c, f);
             _ctx.Transform = Matrix3x2.Identity; _ctx.PopAxisAlignedClip();
-            Text(page.Title, _title, ox + SettingsLayout.Pad, 18, cw - 2 * SettingsLayout.Pad, 44, Label());
-            if (f.Scroll > 1) Ln(ox, oy, w, oy, Sep, 1f);
+            DrawHeader(page, ox, cw, f.Scroll > 1);
         }
 
         _ctx.EndDraw();
     }
 
+    private void DrawHeader(SettingsPage page, double ox, double cw, bool scrolled)
+    {
+        double x = ox + SettingsLayout.ColX, tw = SettingsLayout.ColW;
+        if (scrolled) { Gradient(ox, 0, cw, SettingsLayout.TitleH, K(_p.BackdropTop, 0.96f), K(_p.BackdropTop, 0.0f)); }
+        Tile(x, 22, 52, ColorOf(page.Id), page.Glyph);
+        Text(page.Title, _title, x + 68, 16, tw - 68, 40, Label());
+        if (!string.IsNullOrEmpty(page.Subtitle)) Text(page.Subtitle, _small, x + 68, 56, tw - 68, 36, Secondary, wrap: true, top: true);
+    }
+
     private EditView? _searchEdit;
     private void DrawSidebar(SettingsController c, double h)
     {
-        Brush(Side); _ctx.FillRectangle(R(0, 0, SettingsLayout.SidebarW, h), _b); Ln(SettingsLayout.SidebarW - 0.5, 0, SettingsLayout.SidebarW - 0.5, h, Sep, 1f);
-        Text("Ajustes", _title, 20, 8, SettingsLayout.SidebarW - 32, 44, Label());
-        DrawField(c.SearchFrame, _searchEdit, 1f); Glyph("search", SettingsLayout.FieldRect(c.SearchFrame).X + SettingsLayout.FieldRect(c.SearchFrame).W - 18, SettingsLayout.FieldRect(c.SearchFrame).Y + 16, 6.5, Secondary);
+        double sw = SettingsLayout.SidebarW; bool compact = SettingsLayout.CompactSidebar;
+        Brush(Side); _ctx.FillRectangle(R(0, 0, sw, h), _b); Ln(sw - 0.5, 0, sw - 0.5, h, Sep, 1f);
+        if (!compact)
+        {
+            Text("Ajustes", _sideTitle, 20, 14, sw - 32, 40, Label());
+            var sf = SettingsLayout.FieldRect(c.SearchFrame); DrawSearchBox(c.SearchFrame, _searchEdit, sf);
+        }
+
         foreach (var e in SettingsLayout.SideEntries(c.Pages))
         {
-            int i = e.PageIndex; var r = e.Rect; bool sel = i == c.PageIndex, hov = i == c.HoverSide && !sel;
+            int i = e.PageIndex; var r = e.Rect; bool sel = i == c.PageIndex && c.SearchText.Length == 0, hov = i == c.HoverSide && !sel; var pg = c.Pages[i];
             if (e.Header is { } hd) Text(hd.ToUpperInvariant(), _head, r.X + 10, e.HeaderY, r.W - 12, SettingsLayout.SideHeaderH, Secondary);
-            if (sel) RR(r.X, r.Y, r.W, r.H, 10, new Color4(Tint.R, Tint.G, Tint.B, _dark ? 0.28f : 0.16f)); else if (hov) RR(r.X, r.Y, r.W, r.H, 10, Label(0.06f));
-            RR(r.X + 8, r.Y + 4, 24, 24, 6, C(IconColors[i % IconColors.Length])); Glyph(c.Pages[i].Glyph, r.X + 20, r.Y + 16, 7.5, new Color4(1, 1, 1, 1));
-            Text(c.Pages[i].Title, sel ? _sideSel : _side, r.X + 42, r.Y, r.W - 48, r.H, sel ? Tint : Label());
+            if (sel) { RR(r.X, r.Y, r.W, r.H, 12, TintSoft); RRStroke(r.X, r.Y, r.W, r.H, 12, new Color4(Tint.R, Tint.G, Tint.B, 0.35f), 1f); } else if (hov) RR(r.X, r.Y, r.W, r.H, 12, Label(0.06f));
+            double ts = Math.Min(26, r.H - 6); Tile(compact ? r.X + (r.W - ts) / 2 : r.X + 8, r.Y + (r.H - ts) / 2, ts, ColorOf(pg.Id), pg.Glyph);
+            if (!compact) Text(pg.Title, sel ? _sideSel : _side, r.X + 44, r.Y, r.W - 50, r.H, sel ? Label() : Label(0.92f));
         }
+    }
+
+    /// <summary>La caja de búsqueda de la barra lateral: píldora con lupa, con el estado de edición de siempre.</summary>
+    private void DrawSearchBox(RowFrame frame, EditView? edit, (double X, double Y, double W, double H) f)
+    {
+        DrawField(frame, edit, 1f, radius: f.H / 2);
+        Glyph("search", f.X + f.W - 20, f.Y + f.H / 2, 6.5, Secondary);
     }
 
     private void DrawGroup(GroupFrame g, PageFrame f, SettingsController c, EditView? edit)
     {
-        if (!string.IsNullOrEmpty(g.Group.Header)) Text(g.Group.Header!.ToUpperInvariant(), _head, g.X + 16, g.HeaderY + 4, g.W - 32, 24, Secondary);
-        RR(g.X, g.Y, g.W, g.H, SettingsLayout.Radius, Card); if (!_dark) RRStroke(g.X, g.Y, g.W, g.H, SettingsLayout.Radius, Sep, 0.6f);
+        var rowsOf = f.Rows.Where(r => g.Group.Rows.Contains(r.Row)).ToList();
+        if (g.Group.Rows.Count == 1 && g.Group.Rows[0].Kind == RowKind.Hero) { DrawHero(rowsOf[0]); return; }
+        if (!string.IsNullOrEmpty(g.Group.Header)) Text(g.Group.Header, _section, g.X + 4, g.HeaderY + 2, g.W - 8, 28, Label());
+        if (g.Group.Cards)
+        {
+            foreach (var r in rowsOf) DrawCard(r, c);
+            if (g.FooterH > 0) Text(g.Group.Footer, _sub, g.X + 4, g.FooterY, g.W - 8, g.FooterH, Secondary, wrap: true, top: true);
+            return;
+        }
+
+        Shadow(g.X, g.Y, g.W, g.H, SettingsLayout.Radius); RR(g.X, g.Y, g.W, g.H, SettingsLayout.Radius, Card); RRStroke(g.X, g.Y, g.W, g.H, SettingsLayout.Radius, Sep, 0.9f);
         _ctx.PushAxisAlignedClip(R(g.X, g.Y, g.X + g.W, g.Y + g.H), AntialiasMode.Aliased);   // el resalte de una fila no se sale de las esquinas redondeadas
-        foreach (var r in f.Rows.Where(r => g.Group.Rows.Contains(r.Row)))
+        foreach (var r in rowsOf)
         {
             bool hover = c.Hover is { } hv && hv.Id == r.Row.Id && r.Row.Kind is RowKind.Toggle or RowKind.Button;
             if (hover) { Brush(Label(0.05f)); _ctx.FillRectangle(R(r.X, r.Y, r.X + r.W, r.Y + r.H), _b); }
             DrawRow(r, c, edit);
-            if (!r.Last) Ln(r.X + 16, r.Y + r.H - 0.5, r.X + r.W, r.Y + r.H - 0.5, Sep, 0.8f);
+            if (!r.Last) Ln(r.X + 16, r.Y + r.H - 0.5, r.X + r.W - 16, r.Y + r.H - 0.5, Sep, 0.8f);
         }
 
         _ctx.PopAxisAlignedClip();
         if (g.FooterH > 0) Text(g.Group.Footer, _sub, g.X + 16, g.FooterY, g.W - 32, g.FooterH, Secondary, wrap: true, top: true);
+    }
+
+    /// <summary>Tarjeta principal de General: identidad de la app y su estado real (sin botones que no existen).</summary>
+    private void DrawHero(RowFrame r)
+    {
+        double x = r.X, y = r.Y + 4, w = r.W, h = r.H - 8;
+        Shadow(x, y, w, h, 22); Gradient(x, y, w, h, K(_p.AccentSoft, _p.Dark ? 1f : 0.95f), K(_p.Surface), 22, vertical: false); RRStroke(x, y, w, h, 22, Sep, 0.9f);
+        double ts = Math.Min(92, h - 28), tx = x + 24, ty = y + (h - ts) / 2;
+        Gradient(tx, ty, ts, ts, C(0x8B5CF6), C(0x5B34C7), ts * 0.26); Text("H", _title, tx, ty, ts, ts, new Color4(1, 1, 1, 1), center: true);
+        double bx = tx + ts + 22, bw = Math.Max(60, w - (bx - x) - 24);
+        Text(r.Row.Title, _title, bx, ty + 2, bw, 38, Label());
+        Text(r.Row.Subtitle, _small, bx, ty + 42, bw, 22, Secondary);
+        double cx = bx, cy = ty + ts - 28;
+        foreach (var (chip, i) in (r.Row.Options ?? []).Select((t, i) => (t, i)))
+        {
+            double cwid = Measure(chip, _small) + (i == 0 ? 40 : 26);
+            RR(cx, cy, cwid, 26, 13, i == 0 ? new Color4(Green.R, Green.G, Green.B, 0.16f) : Label(0.07f));
+            if (i == 0) { Dot(cx + 14, cy + 13, 4, Green); Text(chip, _small, cx + 24, cy, cwid - 24, 26, Label()); } else Text(chip, _small, cx, cy, cwid, 26, Label(0.85f), center: true);
+            cx += cwid + 10;
+        }
+    }
+
+    /// <summary>Tarjeta de un componente (la misma fila Toggle, con el mismo id): icono, nombre, descripción medida y su interruptor.</summary>
+    private void DrawCard(RowFrame r, SettingsController c)
+    {
+        var row = r.Row; float dim = row.Enabled ? 1f : 0.5f; bool hover = c.Hover is { } hv && hv.Id == row.Id;
+        Shadow(r.X, r.Y, r.W, r.H, 16); RR(r.X, r.Y, r.W, r.H, 16, hover ? Raised : Card); RRStroke(r.X, r.Y, r.W, r.H, 16, hover ? new Color4(Tint.R, Tint.G, Tint.B, 0.5f) : Sep, hover ? 1.3f : 0.9f);
+        Tile(r.X + 16, r.Y + 18, 48, ColorOf(row.Icon switch { "bar" => "bar", "dock" => "dock", "phone" => "connect", "island" => "notch", _ => "general" }), row.Icon ?? "gear");
+        double tx = r.X + 16 + 48 + 14, sw = SettingsLayout.SwitchW, tw = r.W - (tx - r.X) - sw - 24;
+        Text(row.Title, _cardTitle, tx, r.Y + 18, tw, 22, Label(dim));
+        var sub = SettingsLayout.SubText(row); Text(sub, _sub, tx, r.Y + 44, tw, SettingsLayout.SubLineH * SettingsLayout.Lines(sub, tw) + 3, Secondary, wrap: true, top: true);
+        DrawSwitch(SettingsLayout.SwitchRect(r), row.On, dim);
     }
 
     private void DrawRow(RowFrame r, SettingsController c, EditView? edit)
@@ -214,17 +311,17 @@ internal sealed class SettingsPainter : IDisposable
 
     private void DrawSwitch((double X, double Y, double W, double H) s, bool on, float dim)
     {
-        RR(s.X, s.Y, s.W, s.H, s.H / 2, on ? new Color4(Green.R, Green.G, Green.B, dim) : new Color4(Off.R, Off.G, Off.B, dim));
-        double kx = on ? s.X + s.W - s.H / 2 : s.X + s.H / 2, cy = s.Y + s.H / 2;
-        Dot(kx, cy + 1.2, 13.5, new Color4(0, 0, 0, 0.18f * dim)); Dot(kx, cy, 13.5, new Color4(1, 1, 1, dim));
+        RR(s.X, s.Y, s.W, s.H, s.H / 2, on ? new Color4(Tint.R, Tint.G, Tint.B, dim) : new Color4(Off.R, Off.G, Off.B, dim));
+        double r = s.H / 2 - 3, kx = on ? s.X + s.W - s.H / 2 : s.X + s.H / 2, cy = s.Y + s.H / 2;
+        Dot(kx, cy + 1, r + 0.5, new Color4(0, 0, 0, 0.18f * dim)); Dot(kx, cy, r, on ? new Color4(OnTint.R, OnTint.G, OnTint.B, dim) : new Color4(1, 1, 1, dim));
     }
 
     private void DrawSegmented(RowFrame r, float dim)
     {
         var s = SettingsLayout.SegmentRect(r); var o = r.Row.Options ?? []; if (o.Count == 0) return; double sw = s.W / o.Count;
-        RR(s.X, s.Y, s.W, s.H, 9, new Color4(Field.R, Field.G, Field.B, dim));
-        if (r.Row.Selected >= 0 && r.Row.Selected < o.Count) { RR(s.X + sw * r.Row.Selected + 2, s.Y + 2, sw - 4, s.H - 4, 7, new Color4(SegSel.R, SegSel.G, SegSel.B, dim)); }
-        for (int i = 0; i < o.Count; i++) Text(o[i], i == r.Row.Selected ? _bodyBold : _small, s.X + sw * i, s.Y, sw, s.H, Label(dim * (i == r.Row.Selected ? 1f : 0.78f)), center: true);
+        RR(s.X, s.Y, s.W, s.H, 12, new Color4(Field.R, Field.G, Field.B, dim)); RRStroke(s.X, s.Y, s.W, s.H, 12, Sep, 0.8f);
+        if (r.Row.Selected >= 0 && r.Row.Selected < o.Count) { RR(s.X + sw * r.Row.Selected + 3, s.Y + 3, sw - 6, s.H - 6, 9, new Color4(Tint.R, Tint.G, Tint.B, dim)); }
+        for (int i = 0; i < o.Count; i++) Text(o[i], i == r.Row.Selected ? _bodyBold : _small, s.X + sw * i, s.Y, sw, s.H, i == r.Row.Selected ? new Color4(OnTint.R, OnTint.G, OnTint.B, dim) : Label(dim * 0.85f), center: true);
     }
 
     private const double FieldPadX = 11;
@@ -249,16 +346,16 @@ internal sealed class SettingsPainter : IDisposable
         return Math.Clamp((int)m.TextPosition + (trailing ? 1 : 0), 0, text.Length);
     }
 
-    private void DrawField(RowFrame r, EditView? e, float dim)
+    private void DrawField(RowFrame r, EditView? e, float dim, double radius = 12)
     {
-        var f = SettingsLayout.FieldRect(r); RR(f.X, f.Y, f.W, f.H, 9, new Color4(Field.R, Field.G, Field.B, dim));
+        var f = SettingsLayout.FieldRect(r); RR(f.X, f.Y, f.W, f.H, radius, new Color4(Field.R, Field.G, Field.B, dim)); if (e is null) RRStroke(f.X, f.Y, f.W, f.H, radius, Sep, 0.8f);
         if (e is null)
         {
             bool empty = string.IsNullOrEmpty(r.Row.Text);
             Text(empty ? r.Row.Placeholder : r.Row.Text, _small, f.X + FieldPadX, f.Y, f.W - 2 * FieldPadX, f.H, empty ? Secondary : Label(dim)); return;
         }
 
-        RRStroke(f.X, f.Y, f.W, f.H, 9, Tint, 1.6f);
+        RRStroke(f.X, f.Y, f.W, f.H, radius, Tint, 1.6f);
         double inner = f.W - 2 * FieldPadX, x0 = f.X + FieldPadX; int caret = Math.Clamp(e.SelEnd, 0, e.Text.Length), a = Math.Clamp(Math.Min(e.SelStart, e.SelEnd), 0, e.Text.Length), b = Math.Clamp(Math.Max(e.SelStart, e.SelEnd), 0, e.Text.Length);
         using var l = Layout(e.Text, f.H); double scroll = Math.Max(0, XOf(l, e.Text, caret) - inner + 2);
         _ctx.PushAxisAlignedClip(R(x0, f.Y, x0 + inner, f.Y + f.H), AntialiasMode.Aliased);
@@ -273,7 +370,7 @@ internal sealed class SettingsPainter : IDisposable
     {
         if (c.SuggestFor is null || c.Suggestions.Count == 0 || c.RowOf(c.SuggestFor) is not { } row) return;
         var s = SettingsLayout.SuggestRect(row, c.Suggestions.Count);
-        RR(s.X + 1, s.Y + 3, s.W, s.H, 12, new Color4(0, 0, 0, _dark ? 0.45f : 0.16f)); RR(s.X, s.Y, s.W, s.H, 12, _dark ? C(0x2C2C2E) : C(0xFFFFFF)); RRStroke(s.X, s.Y, s.W, s.H, 12, Sep, 0.8f);
+        RR(s.X + 1, s.Y + 3, s.W, s.H, 12, new Color4(0, 0, 0, _dark ? 0.45f : 0.16f)); RR(s.X, s.Y, s.W, s.H, 12, new Color4(Raised.R, Raised.G, Raised.B, 1f)); RRStroke(s.X, s.Y, s.W, s.H, 12, Sep, 0.8f);
         for (int i = 0; i < c.Suggestions.Count; i++)
         {
             double y = s.Y + 4 + i * SettingsLayout.SuggestRowH; if (i == c.SuggestIndex) RR(s.X + 4, y, s.W - 8, SettingsLayout.SuggestRowH, 8, new Color4(Tint.R, Tint.G, Tint.B, _dark ? 0.35f : 0.16f));
@@ -285,5 +382,25 @@ internal sealed class SettingsPainter : IDisposable
         }
     }
 
-    public void Dispose() { _b.Dispose(); _round.Dispose(); _title.Dispose(); _side.Dispose(); _sideSel.Dispose(); _body.Dispose(); _bodyBold.Dispose(); _sub.Dispose(); _head.Dispose(); _small.Dispose(); _dw.Dispose(); }
+    public void Dispose() { _b.Dispose(); _round.Dispose(); _title.Dispose(); _side.Dispose(); _sideSel.Dispose(); _body.Dispose(); _bodyBold.Dispose(); _sub.Dispose(); _head.Dispose(); _small.Dispose(); _section.Dispose(); _sideTitle.Dispose(); _cardTitle.Dispose(); SettingsLayout.Measurer = null; _dw.Dispose(); }
+}
+
+/// <summary>Medidor de texto con DirectWrite para el layout de Ajustes V2: la altura de cada fila sale del mismo motor que dibuja, no de una estimación.</summary>
+internal sealed class DirectWriteMeasurer(IDWriteFactory dw) : ITextMeasurer
+{
+    private readonly Dictionary<string, IDWriteTextFormat> _formats = [];
+    private IDWriteTextFormat Format(TextStyle s)
+    {
+        string key = s.Key + s.Size + s.Weight;
+        if (!_formats.TryGetValue(key, out var f)) { f = dw.CreateTextFormat(s.Weight == TextWeight.Semibold ? "Segoe UI Semibold" : "Segoe UI", (float)s.Size); _formats[key] = f; }
+        return f;
+    }
+
+    public WinMac.Host.SettingsV2.Size Measure(string text, TextStyle style, double maxWidth)
+    {
+        using var l = dw.CreateTextLayout(string.IsNullOrEmpty(text) ? " " : text, Format(style), (float)Math.Max(1, maxWidth), 10000f); l.WordWrapping = WordWrapping.Wrap;
+        var m = l.Metrics; return new WinMac.Host.SettingsV2.Size(m.Width, m.Height);
+    }
+
+    public double LineHeight(TextStyle style) => Measure("Ag", style, 4000).H;
 }

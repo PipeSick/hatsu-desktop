@@ -105,6 +105,28 @@ jobs:
       - name: Pruebas de NotchWin, arranque real bajo el host y cierre ordenado
         shell: pwsh
         run: ./tools/ci/Test-Notch.ps1 -DistDir dist/WinMac -NotchPath C:\nw -OutDir notch-out
+      - name: "Capturas de Ajustes V2 (el pintor REAL fuera de pantalla con datos de muestra; NO es validación en tu PC: no prueba ratón, foco ni DPI real)"
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force capturas-ajustes-v2 | Out-Null
+          $host_ = (Resolve-Path dist/WinMac/HatsuDesktop.exe).Path
+          $pages = 'general', 'bar', 'dock', 'notch', 'modules', 'gestures', 'spot', 'nc', 'capture', 'weather', 'connect', 'periph', 'ext'
+          $sizes = @(@(1280, 720), @(900, 600), @(1920, 1080))
+          foreach ($t in 'light', 'dark') { foreach ($pg in $pages) { foreach ($sz in $sizes) {
+            if ($sz[0] -ne 1280 -and $pg -notin 'general', 'bar', 'connect') { continue }
+            $png = "capturas-ajustes-v2/$pg-$t-$($sz[0])x$($sz[1]).png"
+            $p = Start-Process -FilePath $host_ -ArgumentList @('--render-settings', $pg, '--theme', $t, '--scale', '1', '--width', $sz[0], '--height', $sz[1], '--out', "`"$png`"") -PassThru -Wait -WindowStyle Hidden
+            Write-Host "$pg $t $($sz[0])x$($sz[1]) -> código $($p.ExitCode), existe=$(Test-Path $png)"
+          } } }
+      - name: "Subir capturas de Ajustes V2 (muestras de CI, no son tu PC)"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-ajustes-v2-${{ github.sha }}
+          path: capturas-ajustes-v2
+          retention-days: 14
+          if-no-files-found: warn
       - name: "Capturas del mezclador con datos de muestra (pintor real fuera de pantalla, NO es validación en hardware)"
         shell: pwsh
         run: |

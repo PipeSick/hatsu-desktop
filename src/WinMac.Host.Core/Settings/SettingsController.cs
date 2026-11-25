@@ -77,6 +77,9 @@ public sealed class SettingsController
         string? keep = _page >= 0 && _page < _pages.Count ? _pages[_page].Id : null; _pages = pages; int i = keep is null ? 0 : pages.ToList().FindIndex(p => p.Id == keep); _page = i < 0 ? 0 : i; Recompute();
     }
 
+    /// <summary>Tras cambiar el tamaño de la ventana: recalcula la disposición de la página actual (conserva el desplazamiento).</summary>
+    public void Relayout() => Recompute();
+
     public void SelectPage(int i) { if (SearchText.Length > 0) { SearchText = ""; _scroll = 0; Recompute(); } if (i < 0 || i >= _pages.Count || i == _page) return; _page = i; _scroll = 0; ClearSuggestions(); Hover = null; Recompute(); }
     public void SelectPage(string id) => SelectPage(_pages.ToList().FindIndex(p => p.Id == id));
     private void Recompute() { _results = SearchText.Length > 0 ? BuildResults() : null; var p = Page; Frame = p is null ? new([], [], 0, 0, 0) : SettingsLayout.Compute(p, _scroll); _scroll = Frame.Scroll; }

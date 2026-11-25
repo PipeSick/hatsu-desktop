@@ -16,6 +16,8 @@ internal static class SettingsOffscreen
         string page = HostOptions.Arg(args, "--render-settings", "general"), png = HostOptions.Arg(args, "--out", "ajustes.png");
         bool dark = !string.Equals(HostOptions.Arg(args, "--theme", "dark"), "light", StringComparison.OrdinalIgnoreCase);
         double scale = double.TryParse(HostOptions.Arg(args, "--scale", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sc) ? sc : 2;
+        double winW = double.TryParse(HostOptions.Arg(args, "--width", "1180"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ww) ? ww : 1180, winH = double.TryParse(HostOptions.Arg(args, "--height", "760"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var wh) ? wh : 760;
+        SettingsLayout.Configure(winW, winH);   // Ajustes V2: la ventana es de tamaño libre; --width y --height (DIP) sirven para revisar 1280×720, 900×600, etc.
         double scroll = double.TryParse(HostOptions.Arg(args, "--scroll", "0"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sy) ? sy : 0;
         try { File.WriteAllText(png + ".txt", Render(png, page, dark, scale, scroll, args.Contains("--suggest"), args.Contains("--no-notch"), args.Contains("--edit"))); return 0; }
         catch (Exception e) { try { File.WriteAllText(png + ".txt", "ERROR: " + e); } catch (IOException) { } return 1; }
@@ -29,7 +31,7 @@ internal static class SettingsOffscreen
         if (scroll > 0) ctl.Scroll(scroll);
         if (suggest) ctl.SetSuggestions("hub.city", ["Molina, Maule, Chile", "Molina de Segura, Región de Murcia, España", "Molina de Aragón, Castilla-La Mancha, España", "Molina, Cataluña, España"]);
         int pw = (int)Math.Ceiling(SettingsLayout.WinW * scale), ph = (int)Math.Ceiling(SettingsLayout.WinH * scale);
-        using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new SettingsPainter(dev, dark);
+        using var dev = new D2DDevice(true); dev.SetDpi(scale); using var painter = new SettingsPainter(dev, dark ? WinMac.Host.SettingsV2.SettingsPalette.DarkPalette : WinMac.Host.SettingsV2.SettingsPalette.Light);
         using var target = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale); dev.Context.Target = target;
         painter.Paint(ctl, SettingsLayout.WinW, SettingsLayout.WinH, suggest ? new EditView("hub.city", "Molina", 6, 6, true) : edit ? new EditView("hub.city", "Molina, Chile", 0, 6, true) : null);   // --suggest y --edit: el campo de ciudad con el cursor o con una selección
         using var cpu = GlassBackdrop.CreateTarget(dev.Context, pw, ph, scale, readable: true); cpu.CopyFromBitmap(target);
