@@ -120,7 +120,7 @@ public static partial class SettingsBuilder
     public static readonly string[] PositionNames = ["Centro", "Izquierda", "Derecha"], PlayerNames = ["Spotify", "Feishin", "Otro"];
     public static readonly Dictionary<string, string> SectionNames = new()
     {
-        ["music"] = "Música", ["timer"] = "Temporizador", ["calendar"] = "Calendario", ["downloads"] = "Descargas", ["notifications"] = "Notificaciones",
+        ["music"] = "Música", ["timer"] = "Temporizador", ["calendar"] = "Calendario", ["notes"] = "Notas", ["downloads"] = "Descargas", ["notifications"] = "Notificaciones",
         ["shelf"] = "Estantería", ["camera"] = "Cámara (espejo)", ["system"] = "Recursos del sistema", ["clipboard"] = "Portapapeles",
         ["home"] = "Inicio", ["activity"] = "En curso", ["captures"] = "Capturas", ["history"] = "Historial",
     };
