@@ -1,5 +1,5 @@
-# BETA PRIVADA (Notch V3): feat/notch-v3 de NotchWin (6466e7a) para probar en la Store con audiencia privada. El pin de Stable (42d61c9) NO se cambia; esto no es una fusion.
+# BETA PRIVADA (Notch V3): feat/notch-v3 de NotchWin (014b356) para probar en la Store con audiencia privada. El pin de Stable (42d61c9) NO se cambia; esto no es una fusion.
 # Commit de PipeSick/notch-win que el CI de Hatsu Desktop compila para validar la integración.
 # RAMA DE TRABAJO feat/hatsu-shelf-plus (be8b666): sobre feat/hatsu-calls (e98863c) añade Shelf+ (estantería de la Isla con archivos, carpetas, texto e imágenes, límite, vaciar y comandos shelf-open / shelf-add-text), banner de descargas adaptable, clic en notificación abre la app, protección del fondo translúcido sin el monitor de agentes de IA con click en la barra de reproduccion para saltar, pestaña Inicio (tablero de tarjetas) y color de la caratula en el borde y las barras de audio, tarjetas de Perifericos y Recursos en Inicio y resorte al abrir.
 # Solo vale para esta rama de Hatsu Desktop; el pin de Stable (42d61c9) NO se cambia hasta que el propietario autorice la fusión y se valide en un PC real.
-6466e7a92703d131988d23483e06ade957f84fb0
+014b3567b41f439123ebded8eb0c0b8a020728b8
